@@ -1593,6 +1593,19 @@ public final class DrugReferenceTestSupport {
 	/** @return the chips' {@code detail} sentences, for asserting membership or the whole set exactly.
 	 *          The counterpart of {@link #detailContains} for the cases that compare a WHOLE detail
 	 *          rather than a substring, which is the stricter of the two. */
+	/**
+	 * @return how many pairs {@code chips} state — one per order an interaction chip names, since a screen states one
+	 *         mechanism once per drug, naming every order it relates that drug to (ADR Decision 190), and one per chip
+	 *         of any other kind. What a pairwise extent's {@code reported} counts, where the chips are one arm's.
+	 */
+	static int pairsStated(List<SafetyWarning> chips) {
+		int pairs = 0;
+		for (SafetyWarning chip : chips) {
+			pairs += SafetyWarning.TYPE_INTERACTION.equals(chip.getType()) ? Math.max(1, chip.namedPartners().size()) : 1;
+		}
+		return pairs;
+	}
+
 	static List<String> details(List<SafetyWarning> warnings) {
 		List<String> out = new ArrayList<String>();
 		for (SafetyWarning warning : warnings) {

@@ -15853,3 +15853,48 @@ Acetaminophen: it lists Acetaminophen against 9 of this patient's orders, none w
 
 Two code-only orders with the same codes share one stand-in display and count once, as two orders sharing a display
 always have.
+
+## Decision 190: A screen states a mechanism once per drug, and a question about interactions only leaves her contraindications apart
+
+**Status: Accepted** (October 2026) — the owner's decision, 2026-10-13. It amends
+[Decision 171](#decision-171-a-screens-answer-counts-its-findings-states-brief-lines-and-says-what-it-does-not-cover)'s
+screen and extends [Decision 99](#decision-99-one-mechanism-is-stated-once-naming-every-active-order-it-covers)'s collapse to the
+screening arm.
+
+### Context
+
+On the 3.7.1 standalone Sarah Taylor's *"does she have any drug interactions?"* was answered *"21 interactions among this
+patient's active medications (the 10 most severe are listed; 11 more are not shown), and 10 contraindications:"*. With
+the cap raised for one query, every one of the 21 was Moderate, and 15 were her three NSAIDs (ibuprofen, celecoxib,
+diclofenac) against her five corticosteroids by one note, so "the 10 most severe" was an arbitrary cut. The proposal arm
+already states such a mechanism once per drug (Decision 99); the screening arm raised a chip per pair. And of the ten
+contraindications, eight were "possible cross-reactivity", each line carrying the same two sentences, under a question
+that asked about interactions.
+
+### The decision
+
+**A.** `DrugSafetyValidator`'s screening arm hands each subject's chips to `collapseSharedMechanisms`, Decision 99's one
+collapse, before the cap: a drug related to several of her orders by one mechanism at one rating is one chip naming them
+all. The cap bounds chips; `PairChipExtent` still counts PAIRS, each chip counting the orders it names
+(`SafetyWarning.namedPartners`), and the cap WARN states pairs as it always has. `DrugReferenceInjector.screenLead` counts
+pairs the same way. Measured on her chart, the screen's 21 pairs fit on ten lines.
+
+**B.** `QueryScopeRouter.asksOnlyAboutInteractions` — an interaction cue, no safety-or-change cue, no allergy or condition
+domain. On such a screen the validator publishes every contraindication about her medications
+`aboutAnotherOfHerMedications` (Decision 188's treatment, drawn behind one neutral line), and the module's answer states
+her interactions alone, closing with `BELOW_FLOOR_SCOPE` — it covers drug interactions. A question asking whether her
+medications are safe asks for both and keeps both.
+
+Five existing cases used an interaction question as the vehicle for a screen's contraindication lines; they now ask
+*"Are her current medications safe to take together?"*. The extent cases' "the statement must match the chips raised"
+now reads "the pairs the chips raised state" (`DrugReferenceTestSupport.pairsStated`), with "either the chips fill the cap
+or nothing was cut" in place of `reported == min(candidates, cap)`, which a collapsed chip at the cut makes false.
+
+Pinned by `ScreenSharedMechanismContextTest` (red with the collapse removed) and `ScreenInteractionsOnlyContextTest` (red
+with `asksOnlyAboutInteractions` false).
+
+### Residue
+
+Which drug of a pair is a screen chip's subject is the order the arm meets them in, so one mechanism can still take a line
+per drug (ibuprofen's, celecoxib's and diclofenac's corticosteroid lines are three). A question about interactions only
+that relates no pair is still the model's, as before.

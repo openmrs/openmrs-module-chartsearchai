@@ -98,6 +98,10 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 
 	private static final String SCREEN = "Are there any drug interactions with her current medications?";
 
+	/** A screen asking whether her medications are SAFE, which states her contraindications beside her interactions; a
+	 *  question asking only about interactions draws them apart (ADR Decision 190). */
+	private static final String SAFETY_SCREEN = "Are her current medications safe to take together?";
+
 	/** One numbered finding line of the chart the model is handed. */
 	private static final Pattern FINDING_LINE = Pattern.compile(
 			"\\[(\\d+)\\] " + Pattern.quote(DrugReferenceInjector.FINDING_PREFIX) + "([^:\\n]+): ([^\\n]*)");
@@ -341,7 +345,7 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		executeDataSet(WARFARIN_ORDER);
 		DrugReferenceTestSupport.recordFreeTextAllergy(patient, 88, "Aspirin");
 		RecordingProvider provider = new RecordingProvider();
-		ChartAnswer answer = serviceWith(provider).search(patient, SCREEN);
+		ChartAnswer answer = serviceWith(provider).search(patient, SAFETY_SCREEN);
 
 		assertTrue(answer.isAnsweredByTheModule(), "precondition: the module composed this answer");
 		assertStatedExactlyWhereTheAnswerCarriesTheDetail(answer);
@@ -371,7 +375,7 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		executeDataSet(WARFARIN_ORDER);
 		DrugReferenceTestSupport.recordFreeTextAllergy(patient, 88, "Aspirin");
 		RecordingProvider provider = new RecordingProvider();
-		ChartAnswer answer = serviceWith(provider).searchStreaming(patient, SCREEN, text -> { },
+		ChartAnswer answer = serviceWith(provider).searchStreaming(patient, SAFETY_SCREEN, text -> { },
 				reasoning -> { }, citations -> { }, early -> { });
 
 		assertTrue(answer.isAnsweredByTheModule(), "precondition: the module composed this answer");
@@ -2068,7 +2072,7 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	public void aContraindicationAboutAMedicationSheAlreadyTakesSaysSo() throws Exception {
 		executeDataSet(WARFARIN_ORDER);
 		DrugReferenceTestSupport.recordFreeTextAllergy(patient, 88, "Aspirin");
-		List<Finding> findings = findingsInThePromptFor(SCREEN);
+		List<Finding> findings = findingsInThePromptFor(SAFETY_SCREEN);
 		Finding allergy = null;
 		for (Finding finding : findings) {
 			if (finding.text.startsWith("The patient has a recorded allergy to ")) {
@@ -2080,7 +2084,7 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 						+ findings);
 
 		RecordingProvider provider = new RecordingProvider();
-		ChartAnswer answer = serviceWith(provider).search(patient, SCREEN);
+		ChartAnswer answer = serviceWith(provider).search(patient, SAFETY_SCREEN);
 
 		assertEquals(0, provider.calls);
 		assertTrue(answer.getAnswer().contains(answerFacingBody(allergy) + CURRENT_MEDICATION_REFERENT
@@ -2399,7 +2403,7 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		DrugReferenceTestSupport.recordFreeTextAllergy(patient, 88, "Aspirin");
 		answerFromFindings(true);
 		RecordingProvider provider = new RecordingProvider();
-		ChartAnswer answer = serviceWith(provider).search(patient, SCREEN);
+		ChartAnswer answer = serviceWith(provider).search(patient, SAFETY_SCREEN);
 
 		assertEquals(0, provider.calls, "the module answers: " + answer.getAnswer());
 		String[] lines = answer.getAnswer().split("\n");

@@ -951,9 +951,25 @@ public class DrugReferenceInjector {
 						context.chartReadForSafety())) {
 			// The records each line's orders ARE, cited by the line whatever citeOrderRecords says: that flag
 			// gates what the MODEL reads (ADR Decision 77), and no model reads this answer (ADR Decision 140).
-			moduleAnswer = composeFromFindings(findings, findingNumbers, orderRecordNumbers,
+			// A screen asked only about her interactions states them and not her contraindications, which the validator
+			// drew apart (ADR Decision 190); the answer then says it covers interactions.
+			boolean interactionsOnly = questionDrugs.isEmpty() && QueryScopeRouter.asksOnlyAboutInteractions(question);
+			List<SafetyWarning> stated = findings;
+			List<Integer> statedNumbers = findingNumbers;
+			if (interactionsOnly) {
+				stated = new ArrayList<SafetyWarning>();
+				statedNumbers = new ArrayList<Integer>();
+				for (int n = 0; n < findings.size(); n++) {
+					if (!SafetyWarning.TYPE_CONTRAINDICATION.equals(findings.get(n).getType())) {
+						stated.add(findings.get(n));
+						statedNumbers.add(findingNumbers.get(n));
+					}
+				}
+			}
+			moduleAnswer = composeFromFindings(stated, statedNumbers, orderRecordNumbers,
 					orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers,
-					!questionDrugs.isEmpty(), pairExtent.stated(), Lead.of(question, questionDrugs));
+					!questionDrugs.isEmpty(), pairExtent.stated(), Lead.of(question, questionDrugs),
+					interactionsOnly ? BELOW_FLOOR_SCOPE : SCREEN_SCOPE);
 		} else if (onlyHerOwnOrdersSharingASubstance(findings) && context != null
 				&& ChartSearchAiUtils.getBooleanGlobalProperty(
 						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
@@ -3760,8 +3776,9 @@ public class DrugReferenceInjector {
 	 *
 	 * <p><b>A screen's lead counts, and chooses nothing.</b> A lead saying which of two medications to change would
 	 * state a choice no finding makes, which issue #469 measured the model adding in three cells; a screen's answer
-	 * opens with how many of each kind of finding follow ({@link #screenLead}) and closes with {@link #SCREEN_SCOPE}
-	 * (ADR Decision 171).
+	 * opens with how many of each kind of finding follow ({@link #screenLead}) and closes with {@code screenScope} —
+	 * {@link #SCREEN_SCOPE}, or {@link #BELOW_FLOOR_SCOPE} where the question asks only about interactions and its
+	 * contraindications are not stated (ADR Decisions 171, 190).
 	 *
 	 * @return the answer, or {@code null} where a finding states a clause {@link #strengthRank} does not
 	 *         rank — no strength clause at all, which no reachable type does today, or an ended-order
@@ -3770,7 +3787,7 @@ public class DrugReferenceInjector {
 	 */
 	private static String composeFromFindings(List<SafetyWarning> findings, List<Integer> numbers,
 			Map<String, Integer> orderRecordNumbers, Map<String, Integer> herOrderRecords, boolean proposal,
-			PairChipExtent pairs, Lead lead) {
+			PairChipExtent pairs, Lead lead, String screenScope) {
 		final String[] clauses = new String[findings.size()];
 		List<Integer> order = new ArrayList<Integer>(findings.size());
 		for (int i = 0; i < findings.size(); i++) {
@@ -3813,13 +3830,15 @@ public class DrugReferenceInjector {
 		} else if (!proposal) {
 			// A screen opens with what it found, counted, and closes with what it does not cover (ADR Decision 171).
 			lines.add(0, screenLead(findings, pairs));
-			lines.add(SCREEN_SCOPE);
+			lines.add(screenScope);
 		}
 		return String.join("\n", lines);
 	}
 
 	/** What a screen's answer does not cover, stated under its findings (ADR Decision 171). A screen states her
-	 *  contraindications as well as her interactions, so {@link #BELOW_FLOOR_SCOPE}'s words would be false of it. */
+	 *  contraindications as well as her interactions, so {@link #BELOW_FLOOR_SCOPE}'s words would be false of it —
+	 *  except where the question asks only about interactions, which states none and closes with those (ADR Decision
+	 *  190). */
 	static final String SCREEN_SCOPE = "Interactions the data does not rate, and anything beyond drug interactions and "
 			+ "contraindications, are not covered.";
 
@@ -3844,7 +3863,9 @@ public class DrugReferenceInjector {
 			if (finding.statesOrdersSharingASubstance()) {
 				sharing++;
 			} else if (SafetyWarning.TYPE_INTERACTION.equals(finding.getType())) {
-				interactions++;
+				// A pair per order it names: a mechanism collapsed onto one line names every order it relates the drug
+				// to (ADR Decision 190), and the lead counts pairs, as the extent beside it does.
+				interactions += Math.max(1, finding.namedPartners().size());
 			} else {
 				contraindications++;
 			}

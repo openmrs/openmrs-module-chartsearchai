@@ -248,11 +248,20 @@ public class PairChipExtentContextTest extends BaseModuleContextSensitiveTest {
 		assertEquals(candidates, pass.extent.getFound(),
 				"the " + arm + " arm at cap " + cap + ": the candidate count is a property of the data, "
 						+ "not of the cap");
-		assertEquals(Math.min(candidates, cap), pass.extent.getReported(),
-				"the " + arm + " arm at cap " + cap + ": the stated reported count must be the cut that "
-						+ "happened, never the configured cap");
-		assertEquals(pass.chips.size(), pass.extent.getReported(),
-				"the " + arm + " arm at cap " + cap + ": the statement must match the chips raised");
+		assertTrue(pass.chips.size() <= cap,
+				"the " + arm + " arm at cap " + cap + ": the cap bounds the chips raised, was: " + pass.chips.size());
+		assertTrue(pass.chips.size() == cap || pass.extent.getReported() == candidates,
+				"the " + arm + " arm at cap " + cap + ": either the chips fill the cap or nothing was cut, was "
+						+ pass.chips.size() + " chips stating " + pass.extent.getReported() + " of " + candidates);
+		if (candidates <= cap) {
+			assertEquals(candidates, pass.extent.getReported(),
+					"the " + arm + " arm at cap " + cap + ": a cap at or above the candidate count cuts nothing — the "
+							+ "stated reported count is the cut that happened, never the configured cap");
+		}
+		// The statement counts the PAIRS the chips raised state, never the chips: on the screen one chip states a
+		// mechanism once per drug, naming every order it relates (ADR Decision 190).
+		assertEquals(DrugReferenceTestSupport.pairsStated(pass.chips), pass.extent.getReported(),
+				"the " + arm + " arm at cap " + cap + ": the statement must match the pairs the chips raised state");
 	}
 
 	@Test
@@ -665,11 +674,12 @@ public class PairChipExtentContextTest extends BaseModuleContextSensitiveTest {
 		Pass partial = passWithAnswer("Warfarin is on the list.", SCREENING_QUESTION,
 				DrugReferenceTestSupport.screenedSixOrderChart());
 
-		assertEquals(10 + 5, partial.chips.size(),
+		assertEquals(10 + 5, DrugReferenceTestSupport.pairsStated(partial.chips),
 				"precondition: the screen's ten and the drug-in-play arm's five, so the cede is partial "
 						+ "rather than total. Spelled as the sum and not as SCREENED_PAIRS, which counts "
-						+ "PAIRS of one arm and coincides with this total only because every ceded pair "
-						+ "yielded one chip and the cap cut nothing: "
+						+ "PAIRS of one arm and coincides with this total only because the cap cut nothing; "
+						+ "counted as the pairs the chips state, a chip stating a mechanism for several orders "
+						+ "(ADR Decision 190): "
 						+ DrugReferenceTestSupport.details(partial.chips));
 		assertNotNull(partial.extent, "the arm kept a list, so it describes it — and unlike the "
 				+ "question-pair arm's partial case this is discriminating on its own, no fallback "

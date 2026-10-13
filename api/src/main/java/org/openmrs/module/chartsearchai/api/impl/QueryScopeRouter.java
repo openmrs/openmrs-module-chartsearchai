@@ -691,6 +691,20 @@ public final class QueryScopeRouter {
 	 * FINDING side. A question about her allergies makes her recorded allergies the subject matter, so a
 	 * drug one of them contraindicates is worth a chip even where the answer names neither.
 	 */
+	/**
+	 * Whether the question asks about drug INTERACTIONS and nothing a contraindication answers: an interaction cue
+	 * ({@link #DDI_CUES}, {@link #INTERACTION_CUES}), no safety-or-change cue ({@link #MEDICATION_SAFETY_CUES} —
+	 * "safe", "contraindicated", "problems", "stop" and the rest), and no allergy or condition domain. <em>"Does she
+	 * have any drug interactions?"</em> is one; <em>"Are her medications safe to take together?"</em> and <em>"Do her
+	 * medicines interact with her allergies?"</em> are not. A screen answering one states her interactions and draws her
+	 * contraindications apart (ADR Decision 190).
+	 */
+	public static boolean asksOnlyAboutInteractions(String question) {
+		return question != null && (DDI_CUES.matcher(question).find() || INTERACTION_CUES.matcher(question).find())
+				&& !MEDICATION_SAFETY_CUES.matcher(question).find() && !asksAboutAllergies(question)
+				&& !asksAboutConditions(question);
+	}
+
 	public static boolean asksAboutAllergies(String question) {
 		return matchedIntents(question).contains(Intent.ALLERGIES);
 	}

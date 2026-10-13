@@ -191,8 +191,9 @@ public class PairChipCapContextTest extends BaseModuleContextSensitiveTest {
 				"and keep the most severe pairs: " + DrugReferenceTestSupport.details(capped));
 
 		configureCap("15");
-		assertEquals(15, screeningChips().size(),
-				"and a cap at the candidate count must show every screened pair");
+		assertEquals(15, DrugReferenceTestSupport.pairsStated(screeningChips()),
+				"and a cap at the candidate count must show every screened pair — on fewer chips where one states a "
+						+ "mechanism for several orders (ADR Decision 190)");
 	}
 
 	@Test

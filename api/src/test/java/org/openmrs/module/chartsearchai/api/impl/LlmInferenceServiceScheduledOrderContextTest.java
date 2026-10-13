@@ -178,7 +178,7 @@ public class LlmInferenceServiceScheduledOrderContextTest extends BaseModuleCont
 				.setGlobalProperty(ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS, "true");
 
 		ChartAnswer answer = serviceAnswering("The model was called.").service.search(patient,
-				"Are there any drug interactions among her current medications?");
+				"Are her current medications safe to take together?");
 
 		List<String> lines = Arrays.asList(answer.getAnswer().split("\n"));
 		assertTrue(lines.stream().anyMatch(l -> l.matches(Pattern.quote("The patient has a recorded allergy to "

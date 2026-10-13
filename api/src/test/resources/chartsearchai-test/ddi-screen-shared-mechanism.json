@@ -1,0 +1,320 @@
+{
+ "metadata": {
+  "note": "Verbatim DDInter slice for ADR Decision 190: an interaction screen of her own orders where one drug relates to two of them by one mechanism at one rating (ibuprofen and celecoxib, each against prednisone and dexamethasone - the corticosteroid and NSAID row). Rows are field-for-field their rows in the shipped ddi-knowledge-base.json, in KB order, and the interaction rows are every KB pair among these four drugs, with the mechanisms they cite."
+ },
+ "mechanisms": {
+  "-1": {
+   "text": null,
+   "categories": []
+  },
+  "3212": {
+   "text": "The combined use of corticosteroids and nonsteroidal anti-inflammatory drugs (NSAIDs) may increase the potential for serious gastrointestinal (GI) toxicity, including inflammation, bleeding, ulceration, and perforation.",
+   "categories": [
+    "synergistic_effect"
+   ]
+  },
+  "3927": {
+   "text": "Concomitant use of COX-2 inhibitors with other nonsteroidal anti-inflammatory drugs (NSAIDs) may increase the potential for serious gastrointestinal toxicity including inflammation, bleeding, ulceration, and perforation. The risk is dependent on both dosage and duration of therapy.",
+   "categories": [
+    "synergistic_effect"
+   ]
+  }
+ },
+ "drugs": [
+  {
+   "id": "DDInter1515",
+   "name": "Prednisone",
+   "rxcui": "8640",
+   "rxnorm_name": "prednisone",
+   "drugbank_id": "DB00635",
+   "atc": [
+    "A07EA03",
+    "H02AB07"
+   ],
+   "brand_names": [
+    "Deltasone",
+    "Rayos"
+   ],
+   "international_names": [],
+   "abbreviations": [],
+   "ciel": [
+    {
+     "code": "82453",
+     "uuid": "82453AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Prednisone"
+    }
+   ]
+  },
+  {
+   "id": "DDInter336",
+   "name": "Celecoxib",
+   "rxcui": "140587",
+   "rxnorm_name": "celecoxib",
+   "drugbank_id": "DB00482",
+   "atc": [
+    "L01XX33",
+    "M01AH01"
+   ],
+   "brand_names": [
+    "Celebrex",
+    "Consensi",
+    "Elyxyb",
+    "Seglentis",
+    "Vyscoxa"
+   ],
+   "international_names": [],
+   "abbreviations": [],
+   "ciel": [
+    {
+     "code": "73048",
+     "uuid": "73048AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Celecoxib"
+    }
+   ]
+  },
+  {
+   "id": "DDInter513",
+   "name": "Dexamethasone",
+   "rxcui": "3264",
+   "rxnorm_name": "dexamethasone",
+   "drugbank_id": "DB01234",
+   "atc": [
+    "A01AC02",
+    "C05AA09",
+    "D07AB19",
+    "D07XB05",
+    "D10AA03",
+    "H02AB02",
+    "R01AD03",
+    "S01BA01",
+    "S01CB01",
+    "S02BA06",
+    "S03BA01"
+   ],
+   "brand_names": [
+    "Ciprodex",
+    "Decadron",
+    "Dexasone",
+    "Dexium",
+    "Dexlyt",
+    "Dextenza",
+    "Dexycu",
+    "Hemady",
+    "Maxidex",
+    "Maxitrol",
+    "Ozurdex",
+    "Poly-Dex",
+    "Tobradex",
+    "Tresaderm"
+   ],
+   "international_names": [],
+   "abbreviations": [],
+   "ciel": [
+    {
+     "code": "104317",
+     "uuid": "104317AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ciprofloxacin / dexamethasone"
+    },
+    {
+     "code": "104422",
+     "uuid": "104422AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone / hypromellose"
+    },
+    {
+     "code": "104423",
+     "uuid": "104423AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone / lidocaine"
+    },
+    {
+     "code": "104424",
+     "uuid": "104424AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone / neomycin"
+    },
+    {
+     "code": "104425",
+     "uuid": "104425AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone / neomycin / polymyxin B"
+    },
+    {
+     "code": "104426",
+     "uuid": "104426AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone / tobramycin"
+    },
+    {
+     "code": "104427",
+     "uuid": "104427AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone / tramazoline"
+    },
+    {
+     "code": "168548",
+     "uuid": "f5c7c86c-2b95-42d4-95f2-6d9e8949f39e",
+     "name": "Dexamethasone / gentamicin"
+    },
+    {
+     "code": "170697",
+     "uuid": "d2a620d9-138d-4125-a84a-7ddbf3b2ee45",
+     "name": "Dexamethasone / framycetin"
+    },
+    {
+     "code": "74609",
+     "uuid": "74609AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone"
+    },
+    {
+     "code": "74610",
+     "uuid": "74610AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone acetate"
+    },
+    {
+     "code": "74612",
+     "uuid": "74612AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone isonicotinate"
+    },
+    {
+     "code": "74613",
+     "uuid": "74613AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone phosphate"
+    },
+    {
+     "code": "74614",
+     "uuid": "74614AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone sodium phosphate"
+    },
+    {
+     "code": "74615",
+     "uuid": "74615AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone trimethyl acetate"
+    }
+   ]
+  },
+  {
+   "id": "DDInter900",
+   "name": "Ibuprofen",
+   "rxcui": "5640",
+   "rxnorm_name": "ibuprofen",
+   "drugbank_id": "DB01050",
+   "atc": [
+    "C01EB16",
+    "G02CC01",
+    "M01AE01",
+    "M02AA13",
+    "R02AX02"
+   ],
+   "brand_names": [
+    "Addaprin",
+    "Advil",
+    "Caldolor",
+    "Combogesic",
+    "Counteract IB",
+    "Duexis",
+    "Genpril",
+    "Ibudone",
+    "Ibuprohm",
+    "Motrin",
+    "Motrin PM",
+    "Neoprofen",
+    "Proprinal",
+    "Reprexain",
+    "Vicoprofen",
+    "Wal-Profen"
+   ],
+   "international_names": [],
+   "abbreviations": [],
+   "ciel": [
+    {
+     "code": "104246",
+     "uuid": "104246AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Chlorpheniramine / ibuprofen / pseudoephedrine"
+    },
+    {
+     "code": "104370",
+     "uuid": "104370AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Codeine / ibuprofen"
+    },
+    {
+     "code": "104513",
+     "uuid": "104513AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Diphenhydramine / ibuprofen"
+    },
+    {
+     "code": "104847",
+     "uuid": "104847AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocodone / ibuprofen"
+    },
+    {
+     "code": "104893",
+     "uuid": "104893AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ibuprofen / levomenthol"
+    },
+    {
+     "code": "104894",
+     "uuid": "104894AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ibuprofen / oxycodone"
+    },
+    {
+     "code": "104895",
+     "uuid": "104895AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ibuprofen / pseudoephedrine"
+    },
+    {
+     "code": "104896",
+     "uuid": "104896AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ibuprofen / pseudoisocytidine"
+    },
+    {
+     "code": "170013",
+     "uuid": "58b26824-eb90-4585-abd3-e9ce096e2010",
+     "name": "Acetaminophen / ibuprofen"
+    },
+    {
+     "code": "77897",
+     "uuid": "77897AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ibuprofen"
+    },
+    {
+     "code": "84137",
+     "uuid": "84137AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Solufenum"
+    }
+   ]
+  }
+ ],
+ "interactions": [
+  [
+   "DDInter1515",
+   "DDInter336",
+   "Moderate",
+   "3212"
+  ],
+  [
+   "DDInter1515",
+   "DDInter513",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1515",
+   "DDInter900",
+   "Moderate",
+   "3212"
+  ],
+  [
+   "DDInter336",
+   "DDInter513",
+   "Moderate",
+   "3212"
+  ],
+  [
+   "DDInter336",
+   "DDInter900",
+   "Moderate",
+   "3927"
+  ],
+  [
+   "DDInter513",
+   "DDInter900",
+   "Moderate",
+   "3212"
+  ]
+ ]
+}

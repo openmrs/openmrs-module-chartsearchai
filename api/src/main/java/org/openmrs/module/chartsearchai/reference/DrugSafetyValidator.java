@@ -1231,6 +1231,17 @@ public class DrugSafetyValidator {
 		if (pairExtent == null && questionDrugScreened && hasActiveMedicationRecords(context)) {
 			pairExtent = PairChipExtent.of(questionDrugPairs, questionDrugPairs, questionDrugBelowFloor);
 		}
+		// A screen asked only about her interactions draws her contraindications apart: they are findings about her
+		// medications, not what was asked (ADR Decision 190). In place, so every position the passes number is kept.
+		if (questionDrugs.isEmpty() && QueryScopeRouter.asksOnlyAboutInteractions(question)
+				&& QueryScopeRouter.isInteractionScreening(question)) {
+			for (int n = 0; n < warnings.size(); n++) {
+				SafetyWarning chip = warnings.get(n);
+				if (SafetyWarning.TYPE_CONTRAINDICATION.equals(chip.getType()) && chip.isAboutACurrentMedication()) {
+					warnings.set(n, chip.asAboutAnotherOfHerMedications());
+				}
+			}
+		}
 		if (!warnings.isEmpty()) {
 			log.info("Drug-safety validator raised {} warning(s)", warnings.size());
 		}
@@ -9537,6 +9548,9 @@ public class DrugSafetyValidator {
 			// Whether the subject has STARTED (issue #553), over every order as the bridge asks it — per
 			// SUBSTANCE, beside the witnesses it mirrors, rather than once per pair.
 			Date subjectStart = scheduledStartOf(substance, context.getActiveDrugOrders(), bridgedOrders);
+			// This subject's chips, collapsed by mechanism before the cap as the drug-in-play arm's are (ADR
+			// Decisions 99, 190): the cap then counts what a clinician reads, and the extent still counts pairs.
+			List<MechanismStatement> statements = new ArrayList<MechanismStatement>();
 			// bestRulePerPartner applies the severity floor and the hasActiveDrug join and returns at
 			// most ONE rule per partner label, most severe first (#121) — the same grouping, the same
 			// predicate and now the same subject unit the drug-in-play arm gets, asked of the OTHER
@@ -9677,9 +9691,12 @@ public class DrugSafetyValidator {
 				// dataset's own severity goes through verbatim, so a candidate carrying none prints as
 				// `null`, while here it prints as `unrated`. That is a difference in how a MISSING
 				// rating renders, not in what either line says about the patient. → ADR Decision 102.
-				pairs.add(new ScreenedPair(chip,
-						severityPriority(i.getSeverity()),
-						ChartSearchAiUtils.firstNonBlank(i.getSeverity(), "unrated")));
+				statements.add(new MechanismStatement(chip, i, chipPartnerName, false, bridges));
+			}
+			for (SafetyWarning chip : collapseSharedMechanisms(subjects.subjectOf(ref), statements, true, subjectStart)) {
+				pairs.add(new ScreenedPair(chip, severityPriority(chip.getSeverity()),
+						ChartSearchAiUtils.firstNonBlank(chip.getSeverity(), "unrated"),
+						Math.max(1, chip.namedPartners().size())));
 			}
 		}
 		if (pairs.isEmpty()) {
@@ -9728,7 +9745,16 @@ public class DrugSafetyValidator {
 		// The same cap the question-pair arm applies, from the same GP — the two gates are mutually
 		// exclusive, so one question can never meet both, and two limits for one concept would be
 		// arbitrary (issue #131).
+		// The cap bounds the CHIPS, each a mechanism stated once (ADR Decision 190); the extent counts the pairs.
 		int reported = Math.min(pairs.size(), maxPairChips());
+		int foundPairs = 0;
+		int shownPairs = 0;
+		for (int n = 0; n < pairs.size(); n++) {
+			foundPairs += pairs.get(n).pairCount;
+			if (n < reported) {
+				shownPairs += pairs.get(n).pairCount;
+			}
+		}
 		if (pairs.size() > reported) {
 			// Counted here, counted on the response. A clinician reading the reported chips could not
 			// tell a capped screen from a complete one, which is issue #336 — and the count that closes
@@ -9746,17 +9772,20 @@ public class DrugSafetyValidator {
 			// QUESTION. → ADR Decision 102.
 			List<String> withheld = new ArrayList<String>();
 			for (int n = reported; n < pairs.size(); n++) {
-				withheld.add(pairs.get(n).severityLabel);
+				// Once per pair the chip states, so the line counts PAIRS as it always has (ADR Decision 190).
+				for (int k = 0; k < pairs.get(n).pairCount; k++) {
+					withheld.add(pairs.get(n).severityLabel);
+				}
 			}
 			log.warn("Interaction screening across {} active-order reference entries found {} pair(s) "
 					+ "above the severity floor; reporting the {} most severe and WITHHOLDING {}, "
 					+ "rated, least severe last: {}",
-					orderDrugs.size(), pairs.size(), reported, withheld.size(), withheld);
+					orderDrugs.size(), foundPairs, shownPairs, withheld.size(), withheld);
 		}
 		for (int n = 0; n < reported; n++) {
 			warnings.add(pairs.get(n).warning);
 		}
-		return PairChipExtent.of(pairs.size(), reported);
+		return PairChipExtent.of(foundPairs, shownPairs);
 	}
 
 	/**
@@ -10643,10 +10672,14 @@ public class DrugSafetyValidator {
 
 		final String severityLabel;
 
-		ScreenedPair(SafetyWarning warning, int severityPriority, String severityLabel) {
+		/** How many pairs the chip states: one, or every partner of a mechanism collapsed onto it (ADR Decision 190). */
+		final int pairCount;
+
+		ScreenedPair(SafetyWarning warning, int severityPriority, String severityLabel, int pairCount) {
 			this.warning = warning;
 			this.severityPriority = severityPriority;
 			this.severityLabel = severityLabel;
+			this.pairCount = pairCount;
 		}
 	}
 

@@ -982,6 +982,17 @@ public class DrugReferenceInjector {
 			List<Integer> about = aboutHerOwnMedication(question, questionDrugs, screenedSubstances, findings);
 			moduleAnswer = composeAboutHerOwnMedication(findings, findingNumbers, about, orderRecordNumbers,
 					orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers);
+		} else if (!findings.isEmpty() && context != null
+				&& ChartSearchAiUtils.getBooleanGlobalProperty(
+						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
+						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS)
+				&& context.chartReadForSafety()
+				&& theOneOfTwoDrugsNotHers(question, questionDrugs, screenedSubstances, findings) != null) {
+			// Two drugs asked about together, one hers: the other is the proposal (ADR Decision 196).
+			moduleAnswer = composeTogetherWithHerOwn(question, questionDrugs, screenedSubstances, findings, findingNumbers,
+					orderRecordNumbers,
+					orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers,
+					pairExtent.stated());
 		} else if (onlyHerOwnOrdersSharingASubstance(findings) && context != null
 				&& ChartSearchAiUtils.getBooleanGlobalProperty(
 						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
@@ -3627,7 +3638,7 @@ public class DrugReferenceInjector {
 	 * ("Aleve Arthritis Pain" is one of diclofenac's names, and removing its words from any diclofenac
 	 * question once admitted "… for her arthritis pain").
 	 */
-	private static List<String> wordsBesideItsNames(String question, List<DrugReference> entries) {
+	static List<String> wordsBesideItsNames(String question, List<DrugReference> entries) {
 		String folded = DrugReference.foldedLower(question);
 		return markedWordsFrom(folded, namedCharacters(folded, entries), 0);
 	}
@@ -4191,6 +4202,95 @@ public class DrugReferenceInjector {
 		}
 		lines.add(contraindications > 0 ? SCREEN_SCOPE : BELOW_FLOOR_SCOPE);
 		return String.join("\n", lines);
+	}
+
+	/**
+	 * Of a question asking whether two drugs may be given together ({@code QueryScopeRouter.asksWhetherToGiveDrugsTogether},
+	 * ADR Decision 169) naming two substances, exactly one of which her orders carry, the substance that is NOT hers —
+	 * where its own findings would answer a proposal of it alone (a rated interaction licensing the module's "No", or
+	 * cautions about it only, as {@link #answersFromFindings} asks); otherwise {@code null}, and the model answers (ADR
+	 * Decision 196).
+	 */
+	private static Object theOneOfTwoDrugsNotHers(String question, List<DrugReference> questionDrugs,
+			Set<Object> herSubstances, List<SafetyWarning> findings) {
+		Set<Object> asked = new LinkedHashSet<Object>();
+		for (DrugReference entry : questionDrugs) {
+			asked.add(entry.substanceGroupKey());
+		}
+		if (asked.size() != 2
+				|| !QueryScopeRouter.asksWhetherToGiveDrugsTogether(wordsBesideItsNames(question, questionDrugs))) {
+			return null;
+		}
+		Object proposed = null;
+		int hers = 0;
+		for (Object substance : asked) {
+			if (herSubstances.contains(substance)) {
+				hers++;
+			} else {
+				proposed = substance;
+			}
+		}
+		if (hers != 1 || proposed == null) {
+			return null;
+		}
+		List<SafetyWarning> ofIt = new ArrayList<SafetyWarning>();
+		for (SafetyWarning finding : findings) {
+			if (isAbout(finding, proposed)) {
+				ofIt.add(finding);
+			}
+		}
+		for (SafetyWarning finding : ofIt) {
+			if (licensesTheModulesNo(finding)) {
+				return proposed;
+			}
+		}
+		return cautionsOnlyAbout(Collections.singleton(proposed), notHerOwnOrdersSharingASubstance(ofIt)) ? proposed : null;
+	}
+
+	/** Whether every subject row of {@code finding} is of {@code substance} — the finding is about that drug. */
+	private static boolean isAbout(SafetyWarning finding, Object substance) {
+		if (finding.subjectRows().isEmpty()) {
+			return false;
+		}
+		for (DrugReference row : finding.subjectRows()) {
+			if (!substance.equals(row.substanceGroupKey())) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/**
+	 * The module's answer to two drugs asked about together where one is hers (ADR Decision 196): <em>"Ibuprofen is one of
+	 * this patient's active medications."</em>, then the answer a proposal of the other drug alone gets from its own
+	 * findings ({@link #composeFromFindings}) — its "No", licensed by a rated interaction as always, or its cautions —
+	 * which carries the pair asked about among them. Her own drug's findings against her other medications are not its
+	 * lines; the validator draws their chips apart.
+	 */
+	private static String composeTogetherWithHerOwn(String question, List<DrugReference> questionDrugs,
+			Set<Object> herSubstances, List<SafetyWarning> findings, List<Integer> numbers,
+			Map<String, Integer> orderRecordNumbers, Map<String, Integer> herOrderRecords, PairChipExtent pairs) {
+		Object proposed = theOneOfTwoDrugsNotHers(question, questionDrugs, herSubstances, findings);
+		String hers = null;
+		List<DrugReference> proposedRows = new ArrayList<DrugReference>();
+		for (DrugReference entry : questionDrugs) {
+			if (entry.substanceGroupKey().equals(proposed)) {
+				proposedRows.add(entry);
+			} else if (hers == null) {
+				hers = entry.displayLabel();
+			}
+		}
+		List<SafetyWarning> ofIt = new ArrayList<SafetyWarning>();
+		List<Integer> ofItNumbers = new ArrayList<Integer>();
+		for (int i = 0; i < findings.size(); i++) {
+			if (isAbout(findings.get(i), proposed)) {
+				ofIt.add(findings.get(i));
+				ofItNumbers.add(numbers.get(i));
+			}
+		}
+		String composed = composeFromFindings(ofIt, ofItNumbers, orderRecordNumbers, herOrderRecords, true, pairs,
+				Lead.of(question, proposedRows), SCREEN_SCOPE);
+		return composed == null ? null : hers + OWN_MEDICATION_LEAD + ".\n" + composed;
 	}
 
 	/** What follows the drug's name in the lead of {@link #composeAboutHerOwnMedication} — read by

@@ -16054,3 +16054,31 @@ module's "No" (Decision 108). Celecoxib and naproxen were unchanged.
 lib cache aside and restarting served the jar's file.
 
 Pinned by `NsaidCrossReactivityGroupTest`, over the bundled file and a verbatim slice of the shipped knowledge base.
+
+## Decision 196: Two drugs asked about together, one of them hers, are answered for the other, and her drug's other findings are drawn apart
+
+**Status: Accepted** (October 2026) — the owner's decision, 2026-10-13. It extends
+[Decision 169](#decision-169-a-question-whether-two-drugs-can-be-given-together-states-their-findings-against-her-own-orders)'s together
+question.
+
+### Context
+
+On the 3.7.1 standalone Sarah Taylor's *"Can warfarin and ibuprofen be given together?"* — ibuprofen being her Advil —
+was answered by the model *"No — Warfarin should not be given with Ibuprofen: …"*, with the module appending what it had
+left out (*"Also covered by those findings and not named above: active order Diclofenac."*). It never said she already
+takes ibuprofen, and four chips relating her ibuprofen to her diclofenac, corticosteroids, celecoxib and heparin were drawn
+beside it as findings about the question.
+
+### The decision
+
+**Drawn apart.** On a together question, `DrugSafetyValidator.validate` publishes `aboutAnotherOfHerMedications` on every
+interaction about a medication she takes whose subject is a drug the question names and whose partners are none of them —
+her drug against her OTHER medications. A chip carrying no subject or partner rows is left where it is.
+
+**Composed.** Where the two substances asked about are one of hers and one not, and the other's own findings answer a
+proposal of it alone (a rated interaction licensing the module's "No", or cautions about it only, as
+`answersFromFindings` asks), `DrugReferenceInjector.composeTogetherWithHerOwn` answers: *"Ibuprofen is one of this
+patient's active medications."*, then the other drug's composed proposal answer, whose lines carry the pair asked about.
+Otherwise the model answers, as before.
+
+Pinned by `TogetherWithHerOwnMedicationContextTest`.

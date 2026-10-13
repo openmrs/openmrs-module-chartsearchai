@@ -1242,6 +1242,23 @@ public class DrugSafetyValidator {
 				}
 			}
 		}
+		// A question whether two drugs may be given together is about them and their pair: a finding relating one she
+		// already takes to her OTHER medications is drawn apart, as one about another of her medications (ADR Decision
+		// 196). Fail-closed: a chip that names no partner rows is left where it is.
+		if (questionDrugs.size() >= 2 && QueryScopeRouter.asksWhetherToGiveDrugsTogether(
+				DrugReferenceInjector.wordsBesideItsNames(question, new ArrayList<DrugReference>(questionDrugs)))) {
+			Set<Object> asked = new HashSet<Object>();
+			for (DrugReference drug : questionDrugs) {
+				asked.add(drug.substanceGroupKey());
+			}
+			for (int n = 0; n < warnings.size(); n++) {
+				SafetyWarning chip = warnings.get(n);
+				if (SafetyWarning.TYPE_INTERACTION.equals(chip.getType()) && chip.isAboutACurrentMedication()
+						&& !chip.isAboutAnotherOfHerMedications() && relatesHerAskedDrugToNoneAsked(chip, asked)) {
+					warnings.set(n, chip.asAboutAnotherOfHerMedications());
+				}
+			}
+		}
 		if (!warnings.isEmpty()) {
 			log.info("Drug-safety validator raised {} warning(s)", warnings.size());
 		}
@@ -1252,6 +1269,30 @@ public class DrugSafetyValidator {
 			pairExtentSink.recordPerQuestionSubstance(questionDrugExtents);
 		}
 		return warnings;
+	}
+
+	/** Whether {@code chip}'s subject is a substance the question asks about and none of its partners is (ADR Decision
+	 *  196) — false where it carries no subject or partner rows to say either. */
+	private static boolean relatesHerAskedDrugToNoneAsked(SafetyWarning chip, Set<Object> asked) {
+		if (chip.subjectRows().isEmpty() || chip.partnerRows().isEmpty()) {
+			return false;
+		}
+		for (DrugReference row : chip.subjectRows()) {
+			if (!asked.contains(row.substanceGroupKey())) {
+				return false;
+			}
+		}
+		for (List<DrugReference> rows : chip.partnerRows().values()) {
+			if (rows == null || rows.isEmpty()) {
+				return false;
+			}
+			for (DrugReference row : rows) {
+				if (asked.contains(row.substanceGroupKey())) {
+					return false;
+				}
+			}
+		}
+		return true;
 	}
 
 	/**

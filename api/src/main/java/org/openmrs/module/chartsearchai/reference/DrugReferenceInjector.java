@@ -971,7 +971,8 @@ public class DrugReferenceInjector {
 			moduleAnswer = composeFromFindings(stated, statedNumbers, orderRecordNumbers,
 					orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers,
 					!questionDrugs.isEmpty(), pairExtent.stated(), Lead.of(question, questionDrugs),
-					interactionsOnly ? BELOW_FLOOR_SCOPE : SCREEN_SCOPE);
+					interactionsOnly ? BELOW_FLOOR_SCOPE : SCREEN_SCOPE,
+					questionDrugs.isEmpty() ? duplicateTherapyLines(orderEntries) : Collections.<String> emptyList());
 		} else if (!findings.isEmpty() && context != null
 				&& ChartSearchAiUtils.getBooleanGlobalProperty(
 						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
@@ -3811,6 +3812,14 @@ public class DrugReferenceInjector {
 	private static String composeFromFindings(List<SafetyWarning> findings, List<Integer> numbers,
 			Map<String, Integer> orderRecordNumbers, Map<String, Integer> herOrderRecords, boolean proposal,
 			PairChipExtent pairs, Lead lead, String screenScope) {
+		return composeFromFindings(findings, numbers, orderRecordNumbers, herOrderRecords, proposal, pairs, lead, screenScope,
+				Collections.<String> emptyList());
+	}
+
+	/** As above; on a screen, {@code groupLines} — {@link #duplicateTherapyLines} — follow its count (ADR Decision 197). */
+	private static String composeFromFindings(List<SafetyWarning> findings, List<Integer> numbers,
+			Map<String, Integer> orderRecordNumbers, Map<String, Integer> herOrderRecords, boolean proposal,
+			PairChipExtent pairs, Lead lead, String screenScope, List<String> groupLines) {
 		final String[] clauses = new String[findings.size()];
 		List<Integer> order = new ArrayList<Integer>(findings.size());
 		for (int i = 0; i < findings.size(); i++) {
@@ -3881,6 +3890,7 @@ public class DrugReferenceInjector {
 		} else if (!proposal) {
 			// A screen opens with what it found, counted, and closes with what it does not cover (ADR Decision 171).
 			lines.add(0, screenLead(findings, pairs, saidOnce));
+			lines.addAll(1, groupLines);
 			lines.add(screenScope);
 		}
 		return String.join("\n", lines);
@@ -4291,6 +4301,49 @@ public class DrugReferenceInjector {
 		String composed = composeFromFindings(ofIt, ofItNumbers, orderRecordNumbers, herOrderRecords, true, pairs,
 				Lead.of(question, proposedRows), SCREEN_SCOPE);
 		return composed == null ? null : hers + OWN_MEDICATION_LEAD + ".\n" + composed;
+	}
+
+	/**
+	 * For a screen, one line per curated drug group that two or more of her ordered substances share for duplicate
+	 * therapy — <em>"Ibuprofen, Diclofenac and Celecoxib are in one drug group (NSAID) — possible duplicate therapy."</em>
+	 * (ADR Decision 197). The pairs among them are each a line of the screen already; three NSAIDs read only as pairs.
+	 * Membership is the group's duplicate-therapy prefixes ({@link CrossReactivityGroup#containsAnyCodeForDuplicateTherapy}),
+	 * each substance once, in her orders' order, by the name the data gives it. A group whose members are all members of
+	 * a larger one's is not stated again.
+	 */
+	private List<String> duplicateTherapyLines(List<DrugReference> orderEntries) {
+		List<String> lines = new ArrayList<String>();
+		if (orderEntries == null || orderEntries.isEmpty()) {
+			return lines;
+		}
+		List<Map<Object, String>> memberships = new ArrayList<Map<Object, String>>();
+		List<CrossReactivityGroup> groups = new ArrayList<CrossReactivityGroup>();
+		for (CrossReactivityGroup group : drugReferenceService.getCrossReactivityGroups()) {
+			Map<Object, String> members = new LinkedHashMap<Object, String>();
+			for (DrugReference entry : orderEntries) {
+				if (group.containsAnyCodeForDuplicateTherapy(entry.normalizedAtcCodes())) {
+					members.putIfAbsent(entry.substanceGroupKey(), entry.displayLabel());
+				}
+			}
+			if (members.size() >= 2) {
+				memberships.add(members);
+				groups.add(group);
+			}
+		}
+		for (int g = 0; g < groups.size(); g++) {
+			boolean inALarger = false;
+			for (int h = 0; h < groups.size(); h++) {
+				if (h != g && memberships.get(h).keySet().containsAll(memberships.get(g).keySet())
+						&& (memberships.get(h).size() > memberships.get(g).size() || h < g)) {
+					inALarger = true;
+				}
+			}
+			if (!inALarger) {
+				lines.add(DrugSafetyValidator.joinPartners(new ArrayList<String>(memberships.get(g).values()))
+						+ " are in one drug group (" + groups.get(g).getName() + ") — possible duplicate therapy.");
+			}
+		}
+		return lines;
 	}
 
 	/** What follows the drug's name in the lead of {@link #composeAboutHerOwnMedication} — read by

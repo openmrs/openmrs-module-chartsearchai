@@ -38,6 +38,14 @@ public class CrossReactivityGroup {
 
 	private List<String> atcPrefixes = Collections.emptyList();
 
+	/**
+	 * Prefixes that join the group for the screen's duplicate-therapy summary only — never for an allergy's
+	 * cross-reactivity, nor for a proposal's class relationship (ADR Decision 197). The NSAID group's COX-2 inhibitors:
+	 * the alternative patients with NSAID hypersensitivity are usually given, and still an NSAID beside another. Absent in
+	 * a file that predates it, which then behaves as before.
+	 */
+	private List<String> duplicateTherapyAtcPrefixes = Collections.emptyList();
+
 	public String getName() {
 		return name;
 	}
@@ -81,6 +89,34 @@ public class CrossReactivityGroup {
 	 */
 	public Set<String> normalizedAtcPrefixes() {
 		return DrugReference.normalizeAtcTokens(atcPrefixes);
+	}
+
+	public List<String> getDuplicateTherapyAtcPrefixes() {
+		return duplicateTherapyAtcPrefixes;
+	}
+
+	public void setDuplicateTherapyAtcPrefixes(List<String> duplicateTherapyAtcPrefixes) {
+		this.duplicateTherapyAtcPrefixes = duplicateTherapyAtcPrefixes != null ? duplicateTherapyAtcPrefixes
+				: Collections.<String> emptyList();
+	}
+
+	/** Every prefix that makes a drug a member for duplicate therapy: {@link #getAtcPrefixes()} and
+	 *  {@link #getDuplicateTherapyAtcPrefixes()} (ADR Decision 197). */
+	public Set<String> normalizedDuplicateTherapyPrefixes() {
+		Set<String> prefixes = new java.util.LinkedHashSet<String>(normalizedAtcPrefixes());
+		prefixes.addAll(DrugReference.normalizeAtcTokens(duplicateTherapyAtcPrefixes));
+		return prefixes;
+	}
+
+	/** Whether any of {@code normalizedAtcCodes} makes a drug a member for duplicate therapy (ADR Decision 197). */
+	public boolean containsAnyCodeForDuplicateTherapy(Set<String> normalizedAtcCodes) {
+		Set<String> prefixes = normalizedDuplicateTherapyPrefixes();
+		for (String code : normalizedAtcCodes) {
+			if (fallsUnder(code, prefixes)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/** @return true when the given normalized (upper-cased) ATC code falls under any of this group's prefixes. */

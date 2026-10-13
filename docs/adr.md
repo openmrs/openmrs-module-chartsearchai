@@ -16082,3 +16082,38 @@ patient's active medications."*, then the other drug's composed proposal answer,
 Otherwise the model answers, as before.
 
 Pinned by `TogetherWithHerOwnMedicationContextTest`.
+
+## Decision 197: A screen says once which of her medications share a drug group, and a group may name members for that alone
+
+**Status: Accepted** (October 2026) — the owner's decision, 2026-10-13. It extends the curated groups file of
+[Decision 195](#decision-195-the-nsaid-cross-reactivity-group-spans-the-cox-1-inhibiting-branches-and-leaves-the-cox-2-inhibitors-out).
+
+### Context
+
+Sarah Taylor's interactions screen lists her three NSAIDs — ibuprofen, celecoxib and diclofenac — only as pairs, and
+nothing says she is on three drugs of one class. The one source of class membership is the curated group file, and its
+NSAID group serves two claims at once: an allergy's cross-reactivity, and duplicate therapy between orders. Decision 195
+left the selective COX-2 inhibitors out of it for the first claim, so a line built on it would have named two of her three
+NSAIDs and implied celecoxib is not one. An ATC level coarse enough to hold all three also holds three `J05A` antiretrovirals,
+a standard regimen, so it was not used.
+
+### The decision
+
+A group may carry `duplicateTherapyAtcPrefixes`: members for the duplicate-therapy summary only, never for an allergy's
+cross-reactivity (`CrossReactivityGroup.containsAnyCodeForDuplicateTherapy`). The NSAID group adds `M01AH` there. A screen
+answered by the module states, under its count, one line per group two or more of her ordered substances share by
+either prefix list — *"Ibuprofen, Celecoxib and Diclofenac are in one drug group (NSAID) — possible duplicate therapy."*
+(`DrugReferenceInjector.duplicateTherapyLines`). One group with one name, rather than a second group, because
+`DrugClassTerms` reads group names and two NSAID groups would answer "an NSAID" twice.
+
+**The proposal arm does not read the new prefixes**, deliberately. A first version had `classRelationships` read them, and
+measured on the 3.7.1 standalone that folded an unrated "same drug group" relationship onto every celecoxib proposal beside
+an NSAID: four patients' "1 interaction caution for Celecoxib" over a Moderate row became the model's "No — Celecoxib
+should not be given", and one patient's answer lost two allergy chips its fewer citations no longer scoped in. That was not
+what was asked, and it was reverted.
+
+Measured before and after on the same nine NSAID patients and seven questions (63 answers): four screen answers gained the
+line — Sarah's three NSAIDs, and patient e30bc8f0's aspirin and ibuprofen — and nothing else moved; no chip was added or
+removed.
+
+Pinned by `NsaidCrossReactivityGroupTest.aScreenOfThreeNsaidsSaysSoOnce` and the cross-reactivity case beside it.

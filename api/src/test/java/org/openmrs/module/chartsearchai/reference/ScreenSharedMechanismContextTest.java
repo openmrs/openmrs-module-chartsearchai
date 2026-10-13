@@ -49,8 +49,10 @@ public class ScreenSharedMechanismContextTest extends BaseModuleContextSensitive
 
 		// Five pairs on two lines: both NSAIDs against both corticosteroids by one row is one grid, stated once with
 		// every finding it covers and every order (ADR Decision 191); the COX-2 row is its own. The question asks only
-		// about interactions, so the scope says the answer covers those (ADR Decision 190).
+		// about interactions, so the scope says the answer covers those (ADR Decision 190). Her two NSAIDs are said once
+		// as one drug group under the count (ADR Decision 197).
 		assertEquals("5 interactions among this patient's active medications:\n"
+				+ "Ibuprofen and Celecoxib are in one drug group (NSAID) — possible duplicate therapy.\n"
 				+ "Each of Ibuprofen and Celecoxib interacts with active order Prednisone and Dexamethasone — Moderate. "
 				+ "[6] [8] [2] [4] [5] [3]\n"
 				+ "Ibuprofen interacts with active order Celecoxib — Moderate. [7] [2] [3]\n"
@@ -64,6 +66,7 @@ public class ScreenSharedMechanismContextTest extends BaseModuleContextSensitive
 		String answer = screen("chartsearchai-test/ddi-screen-shared-mechanism-not-a-grid.json").getModuleAnswer();
 
 		assertEquals("4 interactions among this patient's active medications:\n"
+				+ "Ibuprofen and Celecoxib are in one drug group (NSAID) — possible duplicate therapy.\n"
 				+ "Ibuprofen interacts with active order Prednisone and Dexamethasone — Moderate. [6] [2] [4] [5]\n"
 				+ "Ibuprofen interacts with active order Celecoxib — Moderate. [7] [2] [3]\n"
 				+ "Celecoxib interacts with active order Prednisone — Moderate. [8] [3] [4]\n"

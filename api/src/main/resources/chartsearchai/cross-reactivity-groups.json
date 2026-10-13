@@ -1,12 +1,13 @@
 {
-  "version": "1.0",
+  "version": "1.1",
   "description": "Curated cross-reactivity groups, consumed alongside any drug-reference source (json, atc or ddinter). ATC classification cannot express cross-branch pharmacological cross-reactivity — aspirin (N02BA01, salicylates) and ibuprofen (M01AE01, propionic-acid derivatives) sit in different ATC branches yet share the NSAID hypersensitivity family — so that linkage is carried here as data (the boundary documented in ADR Decision 24, closed by this file). A group links every drug whose ATC code falls under any of its atcPrefixes; the safety validator warns when a checked drug shares a group with a recorded allergy (cross-reactivity) or with an active order (additive / duplicate-class therapy), and the injector treats group-related active orders as relevant to a drug-specific question. Seed data — expand per deployment.",
   "groups": [
     {
       "name": "NSAID",
       "note": "Non-steroidal anti-inflammatory drugs: hypersensitivity commonly cross-reacts across chemically distinct NSAID branches, including salicylates",
       "atcPrefixes": ["M01AA", "M01AB", "M01AC", "M01AE", "M01AG", "N02BA", "N02BB"],
-      "rationale": "The COX-1-inhibiting NSAID branches - butylpyrazolidines (M01AA), acetic acids such as diclofenac and indometacin (M01AB), oxicams (M01AC), propionic acids such as ibuprofen and naproxen (M01AE), fenamates (M01AG), salicylates (N02BA) and pyrazolones such as metamizole (N02BB) - because cross-reactive NSAID hypersensitivity follows COX-1 inhibition across chemical families. Left out: the selective COX-2 inhibitors (M01AH), the alternative such patients are usually given; M01AX, which mixes in non-NSAIDs; and paracetamol (N02BE). ADR Decision 195."
+      "duplicateTherapyAtcPrefixes": ["M01AH"],
+      "rationale": "The COX-1-inhibiting NSAID branches - butylpyrazolidines (M01AA), acetic acids such as diclofenac and indometacin (M01AB), oxicams (M01AC), propionic acids such as ibuprofen and naproxen (M01AE), fenamates (M01AG), salicylates (N02BA) and pyrazolones such as metamizole (N02BB) - because cross-reactive NSAID hypersensitivity follows COX-1 inhibition across chemical families. Left out: the selective COX-2 inhibitors (M01AH), the alternative such patients are usually given; M01AX, which mixes in non-NSAIDs; and paracetamol (N02BE). ADR Decision 195. The COX-2 inhibitors are still NSAIDs beside another, so they join for the screen's duplicate-therapy summary only (duplicateTherapyAtcPrefixes) - never for an allergy's cross-reactivity, nor a proposal's class relationship. ADR Decision 197."
     }
   ]
 }

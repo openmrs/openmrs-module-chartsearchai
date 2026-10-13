@@ -19,6 +19,8 @@ import java.util.LinkedHashSet;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
+import org.openmrs.api.context.Context;
+import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 
 /**
@@ -44,6 +46,30 @@ public class NsaidCrossReactivityGroupTest extends BaseModuleContextSensitiveTes
 		for (String detail : details) {
 			assertFalse(detail.startsWith("Celecoxib"), "a selective COX-2 inhibitor is left out: " + detail);
 		}
+	}
+
+	@Test
+	public void aScreenOfThreeNsaidsSaysSoOnce() throws IOException {
+		Context.getAdministrationService().setGlobalProperty(
+			ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS, "true");
+		String answer = DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.ddiFixtureService(FIXTURE))
+				.injectRecords(DrugReferenceTestSupport.oneRecordChart(), context(Arrays.asList(
+					DrugReferenceTestSupport.activeOrder("order-ibuprofen", "Ibuprofen 400mg"),
+					DrugReferenceTestSupport.activeOrder("order-diclofenac", "Diclofenac 50mg"),
+					DrugReferenceTestSupport.activeOrder("order-celecoxib", "Celecoxib 200mg")), null),
+					"Does she have any drug interactions?").getModuleAnswer();
+
+		assertTrue(answer != null && answer.split("\n")[1].equals("Ibuprofen, Diclofenac and Celecoxib are in one drug "
+				+ "group (NSAID) — possible duplicate therapy."), "under the count, once: " + answer);
+	}
+
+	private static PatientClinicalContext context(List<PatientClinicalContext.ActiveDrugOrder> orders,
+			java.util.Set<String> allergies) {
+		List<String> names = new ArrayList<String>();
+		for (PatientClinicalContext.ActiveDrugOrder order : orders) {
+			names.addAll(order.getNames());
+		}
+		return DrugReferenceTestSupport.ctx(40, null, new LinkedHashSet<String>(names), null, allergies, null, orders);
 	}
 
 	private static PatientClinicalContext context() {

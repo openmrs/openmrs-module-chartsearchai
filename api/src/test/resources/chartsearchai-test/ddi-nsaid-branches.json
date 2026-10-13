@@ -1,0 +1,225 @@
+{
+ "metadata": {
+  "note": "Verbatim DDInter slice for ADR Decision 195: ibuprofen, diclofenac (M01AB) and celecoxib (M01AH), for the NSAID cross-reactivity group. Rows are field-for-field their rows in the shipped ddi-knowledge-base.json, in KB order, and the interaction rows are every KB pair among these three drugs, with the mechanisms they cite."
+ },
+ "mechanisms": {
+  "3927": {
+   "text": "Concomitant use of COX-2 inhibitors with other nonsteroidal anti-inflammatory drugs (NSAIDs) may increase the potential for serious gastrointestinal toxicity including inflammation, bleeding, ulceration, and perforation. The risk is dependent on both dosage and duration of therapy.",
+   "categories": [
+    "synergistic_effect"
+   ]
+  },
+  "551": {
+   "text": "Concomitant use of more than one nonsteroidal anti-inflammatory drug (NSAID) at a time may increase the potential for serious gastrointestinal toxicity including inflammation, bleeding, ulceration, and perforation of the esophagus, stomach, or intestines. These events can occur at any time during NSAID use, with or without warning symptoms. The risk is dependent on both dosage and duration of therapy.",
+   "categories": [
+    "synergistic_effect"
+   ]
+  }
+ },
+ "drugs": [
+  {
+   "id": "DDInter336",
+   "name": "Celecoxib",
+   "rxcui": "140587",
+   "rxnorm_name": "celecoxib",
+   "drugbank_id": "DB00482",
+   "atc": [
+    "L01XX33",
+    "M01AH01"
+   ],
+   "brand_names": [
+    "Celebrex",
+    "Consensi",
+    "Elyxyb",
+    "Seglentis",
+    "Vyscoxa"
+   ],
+   "international_names": [],
+   "abbreviations": [],
+   "ciel": [
+    {
+     "code": "73048",
+     "uuid": "73048AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Celecoxib"
+    }
+   ]
+  },
+  {
+   "id": "DDInter537",
+   "name": "Diclofenac",
+   "rxcui": "3355",
+   "rxnorm_name": "diclofenac",
+   "drugbank_id": "DB00586",
+   "atc": [
+    "D11AX18",
+    "M01AB05",
+    "M02AA15",
+    "S01BC03"
+   ],
+   "brand_names": [
+    "Aleve Arthritis Pain",
+    "Arthrotec",
+    "Cambia",
+    "Cataflam",
+    "Licart",
+    "Lofena",
+    "Pennsaid",
+    "Trifena",
+    "Voltaren",
+    "Xiclo",
+    "Zipsor",
+    "Zorvolex"
+   ],
+   "international_names": [],
+   "abbreviations": [],
+   "ciel": [
+    {
+     "code": "104486",
+     "uuid": "104486AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Diclofenac / misoprostol"
+    },
+    {
+     "code": "170036",
+     "uuid": "a9240a1f-1f8c-44be-b292-a2959509c554",
+     "name": "Acetaminophen / diclofenac / methocarbamol"
+    },
+    {
+     "code": "74778",
+     "uuid": "74778AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Diclofenac"
+    },
+    {
+     "code": "74779",
+     "uuid": "74779AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Diclofenac diethylammonium"
+    },
+    {
+     "code": "74780",
+     "uuid": "74780AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Diclofenac hydroxyethylpyrrolidine"
+    },
+    {
+     "code": "74781",
+     "uuid": "74781AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Diclofenac potassium"
+    },
+    {
+     "code": "74782",
+     "uuid": "74782AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Diclofenac sodium"
+    }
+   ]
+  },
+  {
+   "id": "DDInter900",
+   "name": "Ibuprofen",
+   "rxcui": "5640",
+   "rxnorm_name": "ibuprofen",
+   "drugbank_id": "DB01050",
+   "atc": [
+    "C01EB16",
+    "G02CC01",
+    "M01AE01",
+    "M02AA13",
+    "R02AX02"
+   ],
+   "brand_names": [
+    "Addaprin",
+    "Advil",
+    "Caldolor",
+    "Combogesic",
+    "Counteract IB",
+    "Duexis",
+    "Genpril",
+    "Ibudone",
+    "Ibuprohm",
+    "Motrin",
+    "Motrin PM",
+    "Neoprofen",
+    "Proprinal",
+    "Reprexain",
+    "Vicoprofen",
+    "Wal-Profen"
+   ],
+   "international_names": [],
+   "abbreviations": [],
+   "ciel": [
+    {
+     "code": "104246",
+     "uuid": "104246AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Chlorpheniramine / ibuprofen / pseudoephedrine"
+    },
+    {
+     "code": "104370",
+     "uuid": "104370AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Codeine / ibuprofen"
+    },
+    {
+     "code": "104513",
+     "uuid": "104513AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Diphenhydramine / ibuprofen"
+    },
+    {
+     "code": "104847",
+     "uuid": "104847AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocodone / ibuprofen"
+    },
+    {
+     "code": "104893",
+     "uuid": "104893AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ibuprofen / levomenthol"
+    },
+    {
+     "code": "104894",
+     "uuid": "104894AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ibuprofen / oxycodone"
+    },
+    {
+     "code": "104895",
+     "uuid": "104895AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ibuprofen / pseudoephedrine"
+    },
+    {
+     "code": "104896",
+     "uuid": "104896AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ibuprofen / pseudoisocytidine"
+    },
+    {
+     "code": "170013",
+     "uuid": "58b26824-eb90-4585-abd3-e9ce096e2010",
+     "name": "Acetaminophen / ibuprofen"
+    },
+    {
+     "code": "77897",
+     "uuid": "77897AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ibuprofen"
+    },
+    {
+     "code": "84137",
+     "uuid": "84137AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Solufenum"
+    }
+   ]
+  }
+ ],
+ "interactions": [
+  [
+   "DDInter336",
+   "DDInter537",
+   "Moderate",
+   "3927"
+  ],
+  [
+   "DDInter336",
+   "DDInter900",
+   "Moderate",
+   "3927"
+  ],
+  [
+   "DDInter537",
+   "DDInter900",
+   "Moderate",
+   "551"
+  ]
+ ]
+}

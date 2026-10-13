@@ -5,7 +5,8 @@
     {
       "name": "NSAID",
       "note": "Non-steroidal anti-inflammatory drugs: hypersensitivity commonly cross-reacts across chemically distinct NSAID branches, including salicylates",
-      "atcPrefixes": ["M01AE", "N02BA"]
+      "atcPrefixes": ["M01AA", "M01AB", "M01AC", "M01AE", "M01AG", "N02BA", "N02BB"],
+      "rationale": "The COX-1-inhibiting NSAID branches - butylpyrazolidines (M01AA), acetic acids such as diclofenac and indometacin (M01AB), oxicams (M01AC), propionic acids such as ibuprofen and naproxen (M01AE), fenamates (M01AG), salicylates (N02BA) and pyrazolones such as metamizole (N02BB) - because cross-reactive NSAID hypersensitivity follows COX-1 inhibition across chemical families. Left out: the selective COX-2 inhibitors (M01AH), the alternative such patients are usually given; M01AX, which mixes in non-NSAIDs; and paracetamol (N02BE). ADR Decision 195."
     }
   ]
 }

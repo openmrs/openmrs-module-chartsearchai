@@ -16018,3 +16018,39 @@ them with no severity rated"* — leaving `FINDING_NO_SEVERITY` off those lines.
 
 Pinned by `OwnMedicationSafetyContextTest.anUnratedLineSaysNothingTheCountDoesNotSayOnce` and
 `LlmInferenceServiceAnswerFromFindingsContextTest.aDrugSheAlreadyTakesIsAnsweredAsHerOwnMedicationAndNeverAsAProposal`.
+
+## Decision 195: The NSAID cross-reactivity group spans the COX-1-inhibiting branches and leaves the COX-2 inhibitors out
+
+**Status: Accepted** (October 2026) — the owner's decision, 2026-10-13. A change to the bundled
+`cross-reactivity-groups.json`, which [Decision 24](#decision-24-drug-reference-as-a-pluggable-consumer-of-authoritative-datasets) introduced as seed data.
+
+### Context
+
+The group's note says NSAID hypersensitivity "commonly cross-reacts across chemically distinct NSAID branches", but its
+prefixes were two branches, propionic acids (`M01AE`) and salicylates (`N02BA`). So an ibuprofen allergy raised nothing
+against a diclofenac order, and on the 3.7.1 standalone *"Is aspirin safe for her?"* noted duplicate-class therapy against
+Sarah Taylor's ibuprofen and not her diclofenac.
+
+### The decision
+
+The group adds `M01AA` (butylpyrazolidines), `M01AB` (acetic acids: diclofenac, indometacin, ketorolac), `M01AC`
+(oxicams), `M01AG` (fenamates) and `N02BB` (pyrazolones: metamizole) — the branches whose cross-reactive hypersensitivity
+follows COX-1 inhibition. It leaves out `M01AH`, the selective COX-2 inhibitors, which such patients are usually given as
+the alternative (their duplicate-therapy risk with other NSAIDs is the interaction data's, which rates those pairs);
+`M01AX`, which mixes in non-NSAIDs; and paracetamol (`N02BE`). The file records the reasoning as each group's
+`rationale`. This is reasoning from the pharmacology, not a clinician's review, and the drug-specific (IgE) form of NSAID
+hypersensitivity is over-warned by any class group.
+
+Measured on the 3.7.1 standalone, before and after, over the nine patients carrying an NSAID order or an NSAID allergy and
+five questions each (a safety screen, "any allergies?", and proposals of diclofenac, naproxen and celecoxib): only the
+diclofenac proposals moved. Each of the five patients allergic to aspirin or ibuprofen gained *"Diclofenac is in the same
+cross-reactivity group (NSAID) as the patient's allergy to …"*, and the four patients on aspirin had the duplicate-class
+relationship folded onto their aspirin interaction. Seven of those eight answers moved from the module to the model,
+each now *"No — Diclofenac should not be given"*: a contraindication or an unrated relationship never licenses the
+module's "No" (Decision 108). Celecoxib and naproxen were unchanged.
+
+**Rig note.** The first "after" run measured nothing, because the standalone's module lib cache served an extracted
+`chartsearchai/cross-reactivity-groups.json` from an earlier build of the same SNAPSHOT, shadowing the jar's. Moving the
+lib cache aside and restarting served the jar's file.
+
+Pinned by `NsaidCrossReactivityGroupTest`, over the bundled file and a verbatim slice of the shipped knowledge base.

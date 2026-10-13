@@ -141,7 +141,7 @@ public class LlmInferenceServiceScheduledOrderContextTest extends BaseModuleCont
 		// The placeholder concept the free-text allergen needs (88) is her aspirin's, so the answer states her
 		// aspirin order as well; this case is about the Rifampicin statement.
 		// Each order cites the record it is (ADR Decision 168) — the one reference carrying its uuid.
-		assertEquals(modelAnswer + "\n\nCurrent orders that conflict with the patient's records:\n- ASPIRIN ["
+		assertEquals(modelAnswer + "\n\nCurrent orders that directly conflict with the patient's records:\n- ASPIRIN ["
 				+ orderRecordOf(answer, "ASPIRIN") + "]: recorded allergy to this drug.\n- Rifampicin (" + STARTS + ") ["
 				+ orderRecordOf(answer, "Rifampicin") + "]: recorded allergy to this drug.", answer.getAnswer(),
 				"the order is stated with its start date");

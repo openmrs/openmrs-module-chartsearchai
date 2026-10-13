@@ -11,6 +11,7 @@ package org.openmrs.module.chartsearchai.api.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -65,7 +66,7 @@ public class AllergyQuestionConflictingOrderContextTest extends BaseModuleContex
 	private static final String MODEL_ANSWER = "Yes — the patient has a recorded allergy to Aspirin [1].";
 
 	/** What opens the module's statement, set apart from the model's answer by a blank line. */
-	private static final String HEADING = "\n\nCurrent orders that conflict with the patient's records:";
+	private static final String HEADING = "\n\nCurrent orders that directly conflict with the patient's records:";
 
 	/** What an order whose every finding is an allergy recorded to its very drug is followed by. */
 	private static final String OWN_ALLERGY = ": recorded allergy to this drug.";
@@ -226,12 +227,12 @@ public class AllergyQuestionConflictingOrderContextTest extends BaseModuleContex
 	}
 
 	/**
-	 * A chip raised by an allergy to a DIFFERENT drug of the same class is not "a recorded allergy" to her
-	 * order, so the short line would say something the chart does not: her order is named and the chip's own
-	 * sentence quoted after it, as before ADR Decision 167.
+	 * A chip raised by an allergy to a DIFFERENT drug of the same class is not an answer to "any allergies?": her
+	 * order is not one of her allergies, so the answer is the model's alone and the finding stays a chip (ADR Decision
+	 * 188, which narrowed Decision 124's statement to an allergy recorded to the ordered drug itself).
 	 */
 	@Test
-	public void search_aCrossReactiveAllergyIsStatedInTheChipsOwnWords() throws IOException {
+	public void search_aCrossReactiveAllergyAloneIsLeftToItsChip() throws IOException {
 		Context.getPatientService().voidAllergy(Context.getPatientService().getAllergyByUuid(aspirinAllergyUuid),
 				"this case's only allergy is clopidogrel");
 		Context.flushSession();
@@ -245,41 +246,44 @@ public class AllergyQuestionConflictingOrderContextTest extends BaseModuleContex
 		SafetyWarning chip = theAspirinChip(answer);
 		assertTrue(chip.getDetail().contains("same ATC class") && chip.getDetail().contains("Clopidogrel"),
 				"precondition: the chip is the cross-reactivity finding, was: " + chip.getDetail());
-		RecordReference order = theOrderRecord(answer, Context.getOrderService().getOrder(111).getUuid());
-		assertEquals(modelAnswer + HEADING + "\n- " + ORDER_DISPLAY + " [" + order.getIndex() + "]: "
-				+ chip.getDetail() + ".", answer.getAnswer(),
-				"the order is named, cited and the finding quoted, claiming no allergy to the order itself");
-		assertTheModuleAttachedHerOrder(answer);
-		assertTrue(chip.isStatedInTheAnswer(), "and the chip is still marked stated");
+		assertEquals(modelAnswer, answer.getAnswer(), "nothing is appended to the allergy list");
+		assertFalse(chip.isStatedInTheAnswer(), "the finding stays a chip the clinician has not read in the answer");
+		for (RecordReference reference : answer.getReferences()) {
+			assertFalse(reference.isAttachedByTheModule(), "no order is cited by the module, was: " + reference.getIndex());
+		}
 	}
 
 	/**
-	 * Both kinds about ONE order: the order is named once, in the form that quotes every finding about it, so
-	 * the cross-reactivity finding is not marked stated while the answer drops it.
+	 * Both kinds about ONE order: the order is named for the allergy recorded to its own drug, and only that finding
+	 * is stated and cited; the cross-reactivity finding stays a chip (ADR Decision 188).
 	 */
 	@Test
-	public void search_anOrderWithACrossReactiveFindingBesideItsOwnAllergyQuotesEveryFinding() throws IOException {
+	public void search_anOrderWithACrossReactiveFindingBesideItsOwnAllergyStatesOnlyTheOwnAllergy() throws IOException {
 		DrugReferenceTestSupport.recordFreeTextAllergy(patient, SECOND_PLACEHOLDER_CONCEPT, "Clopidogrel");
 
 		ChartAnswer answer = serviceAnswering(MODEL_ANSWER, CROSS_REACTIVE_SLICE).search(patient, ALLERGY_QUESTION);
 
-		List<String> details = new ArrayList<String>();
+		SafetyWarning own = null;
+		SafetyWarning crossReactive = null;
 		for (SafetyWarning chip : answer.getSafetyWarnings()) {
-			assertTrue(chip.isStatedInTheAnswer(), "every chip is stated, was: " + chip);
-			details.add(chip.getDetail());
+			if (chip.getDetail().contains("same ATC class")) {
+				crossReactive = chip;
+			} else {
+				own = chip;
+			}
 		}
-		assertEquals(2, details.size(), "precondition: her own aspirin allergy and the clopidogrel cross-reactivity "
-				+ "both raise a chip, chips were: " + answer.getSafetyWarnings());
+		assertEquals(2, answer.getSafetyWarnings().size(), "precondition: her own aspirin allergy and the clopidogrel "
+				+ "cross-reactivity both raise a chip, chips were: " + answer.getSafetyWarnings());
+		assertNotNull(own, "precondition: one chip is her allergy to aspirin itself");
+		assertNotNull(crossReactive, "precondition: one chip is the cross-reactivity");
 		RecordReference order = theOrderRecord(answer, Context.getOrderService().getOrder(111).getUuid());
-		assertEquals(MODEL_ANSWER + HEADING + "\n- " + ORDER_DISPLAY + " [" + order.getIndex() + "]: "
-				+ details.get(0) + " " + details.get(1) + ".", answer.getAnswer(),
-				"the order once, cited, then each finding about it in its own words");
-		List<Integer> findings = new ArrayList<Integer>();
-		for (SafetyWarning chip : answer.getSafetyWarnings()) {
-			findings.add(chip.getFindingCitation());
-		}
+		assertEquals(MODEL_ANSWER + HEADING + "\n- " + ORDER_DISPLAY + " [" + order.getIndex() + "]" + OWN_ALLERGY,
+			answer.getAnswer(), "the order once, cited, for the allergy to its own drug alone");
+		assertTrue(own.isStatedInTheAnswer(), "the own-drug allergy is stated");
+		assertFalse(crossReactive.isStatedInTheAnswer(), "the cross-reactivity is not, so it stays a chip");
 		assertTrue(order.isAttachedByTheModule(), "the module cited it");
-		assertEquals(findings, order.getAttachedFor(), "for every finding the line states about the order");
+		assertEquals(Collections.singletonList(own.getFindingCitation()), order.getAttachedFor(),
+			"for the one finding the line states");
 	}
 
 	@Test

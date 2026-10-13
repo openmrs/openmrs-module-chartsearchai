@@ -15777,3 +15777,39 @@ verdicts themselves are the model's, so no test pins them; the table is the evid
 One measured false acceptance, on a self-contradictory header, where the glued form refused it. A header naming a
 category ("eye problems") was supported here, but that rests on the judge's reading of the category, which its prompt
 tells it not to bring outside knowledge to.
+
+## Decision 188: An allergy answer states only the orders her records directly conflict with
+
+**Status: Accepted** (October 2026) — the owner's decision, 2026-10-13. It narrows
+[Decision 124](#decision-124-an-allergy-question-states-her-conflicting-orders-in-the-answer)'s statement and keeps
+[167](#decision-167-an-order-conflicting-only-with-its-own-recorded-allergy-is-named-in-one-short-line),
+[168](#decision-168-the-allergy-answers-conflicting-orders-cite-the-records-they-are) and
+[173](#decision-173-the-allergy-answers-conflicting-orders-are-a-headed-list-one-item-per-order) as they are.
+
+### Context
+
+On the 3.7.1 standalone Sarah Taylor's *"Does she have any allergies?"* was answered with her allergy list and then
+five orders under *"Current orders that conflict with the patient's records:"* — dexamethasone and hydrocortisone,
+each ordered beside a recorded allergy to that drug, and prednisone, budesonide and methylprednisolone, each only in the
+same ATC class as one of those allergies ("possible cross-reactivity"). The owner asked what the orders had to do with
+the question: the statement doubled the answer, and the class findings are furthest from what was asked.
+
+### The decision
+
+A contraindication chip that is one of the allergen arm's two cross-reactivity sentences is no longer stated; it stays
+a chip, `statedInTheAnswer` false. `SafetyWarning.AllergyToItsDrug` records which allergen-arm finding a chip is, written
+only by `SafetyWarning.recordedAllergenContraindication`, and `SafetyWarning.isACrossReactivityFinding` is what
+`ConflictingOrderStatement` reads. Every other finding is stated as before — an allergy recorded to the very drug as
+the short line, a rule finding or an allergy recorded under another name in its own words — and an order only
+cross-reactivity chips are about is not named. The heading becomes *"Current orders that directly conflict with the
+patient's records:"* so that a list leaving those chips out does not read as every order her records touch, the
+concern Decision 124's "When" paragraph states for a partial statement.
+
+A first draft stated only allergen-arm identity findings; it dropped a curated rule's *"Ibuprofen is contraindicated
+by an active allergy: documented ibuprofen allergy"*, a direct conflict, from the text
+(`CurrentMedicationOrdersTest.theAnswerStillNamesEachPrintableDisplayOnce`), and was replaced by excluding the
+cross-reactivity sentences alone.
+
+Pinned by `AllergyQuestionConflictingOrderContextTest.search_aCrossReactiveAllergyAloneIsLeftToItsChip` and
+`search_anOrderWithACrossReactiveFindingBesideItsOwnAllergyStatesOnlyTheOwnAllergy`, both red when
+`isACrossReactivityFinding` answers false.

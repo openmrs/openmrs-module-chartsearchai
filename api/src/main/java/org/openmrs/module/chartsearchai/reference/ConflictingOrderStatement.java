@@ -11,6 +11,7 @@ package org.openmrs.module.chartsearchai.reference;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -20,8 +21,8 @@ import java.util.Set;
 import org.openmrs.module.chartsearchai.api.impl.QueryScopeRouter;
 
 /**
- * The module's own statement, in the answer, of which of the patient's active orders conflict with her
- * records — on a question that asks only for her ALLERGIES. ADR Decision 124.
+ * The module's own statement, in the answer, of which of the patient's active orders directly conflict with her
+ * records — on a question that asks only for her ALLERGIES. ADR Decisions 124, 188.
  *
  * <p><b>The gap this closes.</b> <em>"any allergies?"</em>, asked of a patient prescribed two drugs she is
  * recorded as allergic to, came back with a complete allergy list and two red contraindication chips
@@ -31,20 +32,19 @@ import org.openmrs.module.chartsearchai.api.impl.QueryScopeRouter;
  * drugs she is prescribed — is the one fact about her allergies the list does not carry. It reached the
  * clinician only as a drug-safety alert beside an answer to a question that asked for none.
  *
- * <p><b>What it does.</b> Each contraindication chip about a medication she already takes whose orders
- * the arm could name ({@link SafetyWarning#currentOrderDisplays()}) is stated after the answer, set apart
- * from it by a blank line under {@link #HEADING}, one item per set of her orders as her chart spells them
- * (ADR Decision 173), and one per order where the item says only {@link #OWN_ALLERGY}. An order whose every finding is an allergy recorded to its very drug
- * ({@link SafetyWarning#isARecordedAllergyToItsOwnDrug()}) is followed by {@link #OWN_ALLERGY} alone,
- * <em>"- Lidocaine [4]: recorded allergy to this drug."</em> — the chips' own sentences repeat the allergy
- * list the answer just gave, and the conflict is the one fact the list lacks (ADR Decision 167). Any other
- * order is followed by each chip's own {@link SafetyWarning#getDetail()} verbatim, as Decision 124 states
- * it: a cross-reactivity or rule finding is an allergy to ANOTHER drug or no allergy at all, so only its
- * own words claim exactly what it does — which is also why the heading says "records" and not
- * "allergies", and "current" and not "active", since an order that has not started is named with its
- * start date. Every such chip is then
- * {@link SafetyWarning#asStatedInTheAnswer() marked}, and still published: the wire keeps every finding,
- * and a client reads {@code statedInTheAnswer} to know the clinician has read it.
+ * <p><b>What it does.</b> Each of her orders a contraindication chip is about is stated after the answer, set apart
+ * from it by a blank line under {@link #HEADING}, one item per set of her orders as her chart spells them (ADR
+ * Decision 173) — except for a chip that is a cross-reactivity finding ({@link SafetyWarning#isACrossReactivityFinding()}):
+ * an allergy to ANOTHER drug of the class is not an answer to a question asking for her allergies, so it stays a chip
+ * (ADR Decision 188, which narrowed Decision 124's statement to this), and an order only such chips are about is not
+ * named. Where every finding stated about an order is an allergy recorded to its very drug
+ * ({@link SafetyWarning#isARecordedAllergyToItsOwnDrug()}) the order is followed by {@link #OWN_ALLERGY} alone,
+ * <em>"- Lidocaine [4]: recorded allergy to this drug."</em> (ADR Decision 167); otherwise by each finding's own
+ * sentence verbatim, since a rule finding or an allergy recorded under another name claims only what its own words
+ * do — which is also why the heading says "records" and not "allergies". It says "directly", so a list leaving the
+ * cross-reactivity chips out does not read as every order her records touch. Only the chips it states are
+ * {@link SafetyWarning#asStatedInTheAnswer() marked}, and every chip is still published: the wire keeps every
+ * finding, and a client reads {@code statedInTheAnswer} to know the clinician has read it.
  * APPENDS, as {@code EndedOrderStatement} does: no prompt change, and never a word about whether any drug may
  * be given. Each order it names cites the record that order IS, where one record unambiguously is
  * ({@link org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart#getOrderRecordNumbers()},
@@ -56,12 +56,13 @@ import org.openmrs.module.chartsearchai.api.impl.QueryScopeRouter;
  * such a finding. A chip of any other kind — a drug the question proposes, an interaction, a finding the
  * arm could name no order for — means the response is carrying a drug-safety reading, and then every
  * chip stays a chip and the answer is untouched: a statement covering some of a response's findings
- * would read as covering all of them.
+ * would read as covering all of them. (Within a qualifying response the statement leaves the cross-reactivity
+ * findings to their chips, and says "directly" in its heading for that reason — ADR Decision 188.)
  */
 public final class ConflictingOrderStatement {
 
 	/** The line that opens the statement, after a blank line, above one item per set of her orders. */
-	static final String HEADING = "Current orders that conflict with the patient's records:";
+	static final String HEADING = "Current orders that directly conflict with the patient's records:";
 
 	/** What opens each item, on its own line. */
 	static final String ITEM = "\n- ";
@@ -130,17 +131,24 @@ public final class ConflictingOrderStatement {
 			}
 			chips.add(chip);
 		}
+		// A cross-reactivity finding is an allergy to ANOTHER drug of the class, and stays a chip (ADR Decision 188);
+		// every other finding is stated. Short-line items first, each one order, then the quoted ones, each in chip
+		// order, as Decision 167's line led the statement.
 		Map<Integer, List<Integer>> cited = new LinkedHashMap<Integer, List<Integer>>();
-		// Own-allergy items first, then the rest, each in chip order: Decision 167's line led the statement. An
-		// own-allergy item is one order, so an order two such findings name is named once.
 		Set<String> ownAllergy = new LinkedHashSet<String>();
 		StringBuilder quoted = new StringBuilder();
+		Set<SafetyWarning> statedChips = new HashSet<SafetyWarning>();
 		for (Map.Entry<List<String>, List<SafetyWarning>> group : chipsByOrders.entrySet()) {
+			List<SafetyWarning> own = notCrossReactive(group.getValue());
+			if (own.isEmpty()) {
+				continue;
+			}
+			statedChips.addAll(own);
 			List<String> orders = new ArrayList<String>(group.getKey().size());
 			for (String printed : group.getKey()) {
-				orders.add(cite(printed, group.getValue(), orderRecordNumbers, cited));
+				orders.add(cite(printed, own, orderRecordNumbers, cited));
 			}
-			if (everyOneIsAnAllergyToItsOwnDrug(group.getValue())) {
+			if (everyOneNamesItsDrug(own)) {
 				for (String order : orders) {
 					ownAllergy.add(ITEM + order + OWN_ALLERGY);
 				}
@@ -148,9 +156,12 @@ public final class ConflictingOrderStatement {
 			}
 			// Semicolons between orders, since a display can carry a comma.
 			quoted.append(ITEM).append(String.join("; ", orders)).append(':');
-			for (SafetyWarning chip : group.getValue()) {
+			for (SafetyWarning chip : own) {
 				quoted.append(' ').append(DrugSafetyValidator.endSentence(chip.getDetail().trim()));
 			}
+		}
+		if (statedChips.isEmpty()) {
+			return unchanged;
 		}
 		StringBuilder sb = new StringBuilder(DrugSafetyValidator.endSentence(answer.trim())).append("\n\n").append(HEADING);
 		for (String item : ownAllergy) {
@@ -159,7 +170,7 @@ public final class ConflictingOrderStatement {
 		sb.append(quoted);
 		List<SafetyWarning> stated = new ArrayList<SafetyWarning>(warnings.size());
 		for (SafetyWarning chip : warnings) {
-			stated.add(chip.asStatedInTheAnswer());
+			stated.add(statedChips.contains(chip) ? chip.asStatedInTheAnswer() : chip);
 		}
 		// Trimmed so a blank answer takes the statement without a leading space.
 		return new Stated(sb.toString().trim(), Collections.unmodifiableList(stated), Collections.unmodifiableMap(cited));
@@ -191,8 +202,19 @@ public final class ConflictingOrderStatement {
 		return printed + " [" + number + "]";
 	}
 
-	/** Whether every one of {@code chips}, all about one set of her orders, is an allergy to its own drug. */
-	private static boolean everyOneIsAnAllergyToItsOwnDrug(List<SafetyWarning> chips) {
+	/** The ones of {@code chips}, all about one set of her orders, that are not a cross-reactivity finding. */
+	private static List<SafetyWarning> notCrossReactive(List<SafetyWarning> chips) {
+		List<SafetyWarning> direct = new ArrayList<SafetyWarning>();
+		for (SafetyWarning chip : chips) {
+			if (!chip.isACrossReactivityFinding()) {
+				direct.add(chip);
+			}
+		}
+		return direct;
+	}
+
+	/** Whether every one of {@code chips} says the recorded allergy NAMES its drug, so the short line is true. */
+	private static boolean everyOneNamesItsDrug(List<SafetyWarning> chips) {
 		for (SafetyWarning chip : chips) {
 			if (!chip.isARecordedAllergyToItsOwnDrug()) {
 				return false;

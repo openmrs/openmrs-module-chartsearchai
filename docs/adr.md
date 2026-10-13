@@ -7436,7 +7436,7 @@ Decision 83's own residue sentences are written in terms of MARKERS — *"an ans
 
 ### Rejected alternatives
 
-- **Narrowing `extractCitedReferences` so the reference list matches the prose.** It is what #409's Expected-behavior sentence literally asks for, and it is refused: the union is the specification, pinned with an explicit *"This locks that decision"*, and the same resolution feeds grounding, the client's citation chips and every other consumer. A change of that size is not licensed by a ticket whose measured harm is a wrong number.
+- **Narrowing `extractCitedReferences` so the reference list matches the prose.** (**Since adopted, for an answer whose prose cites a record that resolves, by [Decision 185](#decision-185-once-the-answers-prose-cites-a-record-that-resolves-a-record-only-the-citations-array-lists-is-not-published).**) It is what #409's Expected-behavior sentence literally asks for, and it is refused: the union is the specification, pinned with an explicit *"This locks that decision"*, and the same resolution feeds grounding, the client's citation chips and every other consumer. A change of that size is not licensed by a ticket whose measured harm is a wrong number.
 - **Re-deriving `cited` from the markers alone.** Not because of the clinical value — `carried` membership already excludes `[120, 80]`, the chart having no record at that index, and for a non-blank answer the resolution test is measurably inert beside it. What the resolution is still needed for is the BLANK branch, which has no markers to read, and the issue #305 filter, which would otherwise make this the one counter in the family that does not apply it. `SafetyFindingCitationExtentCheck.citedFindingIndexes` is canonical for that split.
 - **Splitting an uncorroborated compact group so its parts become markers.** It would close the Mode B residue above and re-open the defect `normalizeSlashCitations` exists to prevent. Validating a group against record INDEXES instead is refused in that method's own javadoc: *"a 150-record chart would wrongly split a `[120/80]` value"*.
 - **Publishing the uncited indexes on the wire.** Decision 83 refused the accusation form for residues that run in both directions, and this change does not remove them — it moves which shapes fall on which side. The WARN still names them for a maintainer.
@@ -15651,3 +15651,39 @@ The model's own prose may still state the pair from both sides; it reads both fi
 do not reach this shape (a question naming two of her own drugs is not a composed proposal).
 
 Pinned by `RestatedReversePairsTest`.
+
+## Decision 185: Once the answer's prose cites a record that resolves, a record only the citations array lists is not published
+
+**Status: Accepted** (October 2026) — implemented on the owner's decision, 2026-10-13. It reverses the union
+`LlmInferenceService.extractCitedReferences` took (pinned until now by
+`LlmInferenceServiceTest.extractCitedReferences_shouldKeepTheArrayWhenTheOnlyInlineMarkerIsUnmapped`, which stays
+green) and the first rejected alternative of
+[Decision 94](#decision-94-a-screened-finding-counts-as-cited-where-the-answers-own-text-anchors-a-marker-for-it-and-not-where-only-the-models-citations-array-names-it).
+
+### Context
+
+On the 3.7.1 standalone, Sarah Taylor's *"any eye problems?"* was answered *"Yes — eye problems are recorded:
+Conjunctivitis [133]."* and `references[]` carried two allergy records beside [133], both `grounded: false`, neither
+`attachedByTheModule`: the model had listed them in its structured `citations` array and no sentence was about them.
+A clinician was shown click-through records unrelated to the answer.
+
+### The decision
+
+The inline markers that resolve to a record are what the answer cites. Where at least one does, an array entry no
+marker anchors is not published. The array is read only where no marker resolves — a mistyped `[99]` beside real
+array entries keeps them, the case the pinned test above locks — and a blank answer still resolves the array alone,
+the abstention carve-out (prose citing nothing inline publishes nothing) unchanged. Everything downstream of the
+resolution — grounding, the #305 derivations, the module-stated records of Decision 168, and the keys that select off
+the resolution — now reads this narrower set. `findingCitations` and `unstatedFindingSeverities` were already
+marker-anchored (Decisions 94, 97) and do not move.
+
+Two pinned cases were rewritten for the new rule, each keeping the mutation it exists for:
+`extractCitedReferences_shouldNotClaimARecordTheModelCitedInlineOnly` cites its finding inline as well as in the
+array, and `UnfoundedFindingSeverityTest.aFindingOnlyTheStructuredArrayNamesIsNotAccused` reaches the array through a
+marker that names no record. Pinned by
+`LlmInferenceServiceTest.extractCitedReferences_shouldNotPublishAnArrayCitationTheProseNeverAnchorsBesideOneItDoes`.
+
+### Residue
+
+A record the prose states without its marker, while marking another, is no longer a reference — a click-through the
+union used to give is lost. The prose itself is never rewritten, and a safety finding stays a chip.

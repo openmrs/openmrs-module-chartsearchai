@@ -333,7 +333,7 @@ public interface ChartSearchService {
 	 * reading; ADR Decision 94 for what it supersedes.
 	 *
 	 * <p><b>It is NOT the number of {@code safety_finding} entries in {@code references}</b>, which
-	 * stays that resolution's own union and can therefore be larger — the two answer different
+	 * stays that resolution's own (ADR Decision 185) and can therefore be larger — the two answer different
 	 * questions, and a client that reads one off the other is wrong on exactly the response #409
 	 * reports.
 	 *
@@ -1560,7 +1560,7 @@ public interface ChartSearchService {
 		 * the shared word for a shared population.</b> Since issue
 		 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/409">#409</a> round
 		 * two {@link #getUnstatedFindingSeverities()} asks it the way this key does — the markers the
-		 * prose anchors — while a key selecting off the resolution's union instead can judge a
+		 * prose anchors — while a key selecting off the resolution instead can judge a
 		 * citation {@code answer} never anchored. ADR Decision 97 records the reading per key and
 		 * publishes no rule over the family; mutate a check's selection and read the failures.
 		 *
@@ -1730,7 +1730,7 @@ public interface ChartSearchService {
 		 *         and in no sentence is not accused here. It is therefore consistent with
 		 *         {@code findingCitations} by construction: an entry cannot name a finding that key
 		 *         did not count as cited. It is NOT the same population as {@code references[]},
-		 *         which stays the resolution's union.
+		 *         which stays the resolution's (ADR Decision 185).
 		 */
 		public List<UnstatedFindingSeverity> getUnstatedFindingSeverities() {
 			return unstatedFindingSeverities;

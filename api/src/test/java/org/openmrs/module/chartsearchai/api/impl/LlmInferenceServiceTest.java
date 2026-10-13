@@ -174,6 +174,25 @@ public class LlmInferenceServiceTest {
 	}
 
 	@Test
+	public void extractCitedReferences_shouldNotPublishAnArrayCitationTheProseNeverAnchorsBesideOneItDoes() {
+		List<RecordMapping> mappings = Arrays.asList(
+				new RecordMapping(6, "allergy", uuid(6), null),
+				new RecordMapping(7, "allergy", uuid(7), null),
+				new RecordMapping(133, "condition", uuid(133), null));
+
+		// Measured on :8081 (Sarah Taylor, "any eye problems?"): the prose cites [133] alone, and the array also
+		// lists two allergy records no sentence is about. Once the prose anchors a citation that resolves, the
+		// markers are what the answer cites, so an array entry they do not anchor is not published.
+		String answer = "Yes — eye problems are recorded: Conjunctivitis [133].";
+
+		List<RecordReference> result = LlmInferenceService.extractCitedReferences(
+				answer, Arrays.asList(133, 6, 7), mappings);
+
+		assertEquals(1, result.size(), "was: " + result);
+		assertEquals(133, result.get(0).getIndex());
+	}
+
+	@Test
 	public void extractCitedReferences_shouldNotAddInlineMarkersWithNoMapping() {
 		List<RecordMapping> mappings = Arrays.asList(
 				new RecordMapping(9, "obs", uuid(9), null));
@@ -222,7 +241,8 @@ public class LlmInferenceServiceTest {
 	 *
 	 * <p>This is the case that pins WHERE the attach step sits, and the mutation it reddens on is
 	 * precise: not moving the block, but having its {@code !seen.contains(derived)} check read the
-	 * citations array alone — the state before {@code seen.addAll(inline)}. Record [1] is then not yet
+	 * citations array alone — the state before {@code seen.addAll(inline)}. Record [1], which the array does
+	 * not list, is then not yet
 	 * one of the model's citations, so it is admitted and published as
 	 * {@code attachedByTheModule} — the module claiming a citation the model wrote, which a client
 	 * would render without the {@code [N]} highlight the prose does carry. Iterating a pre-inline
@@ -240,14 +260,14 @@ public class LlmInferenceServiceTest {
 						"Safety finding", null, 0, null, null, null, null, null, null, null, null, null, null, Arrays.asList(Integer.valueOf(1))));
 
 		List<RecordReference> result = LlmInferenceService.extractCitedReferences(
-				"Ibuprofen should not be given: she is allergic to aspirin [1].",
+				"Ibuprofen should not be given [2]: she is allergic to aspirin [1].",
 				Arrays.asList(Integer.valueOf(2)), mappings);
 
 		assertEquals(2, result.size(), "both records resolve, was: " + result.size());
 		for (RecordReference reference : result) {
 			assertFalse(reference.isAttachedByTheModule(), "reference [" + reference.getIndex()
-					+ "] was cited by the model — inline for [1], in the array for [2] — so neither is "
-					+ "the module's citation");
+					+ "] was cited by the model — inline for [1], inline and in the array for [2] — so neither "
+					+ "is the module's citation");
 		}
 	}
 

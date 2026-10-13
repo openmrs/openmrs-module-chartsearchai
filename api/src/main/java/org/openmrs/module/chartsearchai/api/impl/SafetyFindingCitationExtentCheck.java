@@ -92,9 +92,9 @@ import org.slf4j.LoggerFactory;
  *       resolve — {@link #citedFindingIndexes} carries why. Counting what did resolve is a fact;
  *       reporting it as a dropped hazard would not be;</li>
  *   <li>it narrows no list a client receives. The reference list stays
- *       {@code extractCitedReferences}' union, so an answer whose array named a finding its prose
- *       did not publishes that finding as a reference beside a {@code cited} that excludes it —
- *       divergence by design, and ADR Decision 94 carries why the union is not narrowed with it.
+ *       {@code extractCitedReferences}' resolution. Since ADR Decision 185 that publishes an
+ *       array-only finding only where no marker in the prose names a record, so the divergence
+ *       Decision 94 accepted remains on that fallback alone.
  *       What its READING narrows is no longer this count alone: {@link SafetyFindingSeverityFidelityCheck}
  *       takes {@link #citedFindingIndexes} as well, so an accusation there cannot name a finding
  *       this count called uncited (ADR Decision 97);</li>
@@ -268,10 +268,9 @@ final class SafetyFindingCitationExtentCheck {
 	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/409">#409</a>.
 	 * {@code carried} is what keeps a bracketed clinical value out: a chart has no record at that
 	 * index, so no membership test against the resolution is doing that work. The MARKERS are what
-	 * #409 added, and they are what decides a non-blank answer — the resolution admits the UNION of
-	 * the model's structured array and its inline markers, deliberately and for the reference list's
-	 * sake, so on its own it counted a finding the model listed in the array and named in no
-	 * sentence. The RESOLUTION is what a blank answer is read by, below, and it carries the #305
+	 * #409 added, and they are what decides a non-blank answer — the resolution admits the model's
+	 * structured array where no inline marker names a record (ADR Decision 185), so on its own it
+	 * counts a finding the model listed in the array and named in no sentence. The RESOLUTION is what a blank answer is read by, below, and it carries the #305
 	 * filter.
 	 *
 	 * <p><b>So for a NON-BLANK answer the resolution test is inert today, and that is measured

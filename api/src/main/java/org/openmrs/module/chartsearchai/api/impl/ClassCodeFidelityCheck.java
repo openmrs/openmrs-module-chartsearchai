@@ -200,8 +200,9 @@ final class ClassCodeFidelityCheck {
 	 * @param question the clinician's own question — its codes count as support, see the body
 	 * @param answer the answer prose, unchanged by this method
 	 * @param cited the references the answer cites, as resolved by
-	 *            {@link LlmInferenceService#extractCitedReferences} — the union of the inline
-	 *            {@code [N]} markers and the structured citations array — plus, since issue #305, the
+	 *            {@link LlmInferenceService#extractCitedReferences} — the inline {@code [N]}
+	 *            markers that name a record, or the structured citations array where none does
+	 *            (ADR Decision 185) — plus, since issue #305, the
 	 *            chart records the module attached. Taking
 	 *            the accessor's own output rather than re-deriving it from the prose is what keeps
 	 *            "which records were cited" a single answer, and it is also what the clinician can

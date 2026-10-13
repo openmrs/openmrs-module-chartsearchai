@@ -1389,12 +1389,14 @@ public class LlmInferenceService implements ChartSearchService {
 	 * sources of citation indices the MODEL can disagree with itself about: its
 	 * structured {@code citations} array and the {@code [N]} markers it writes
 	 * inline in the prose. (A third source, which is not the model's at all, is
-	 * the last paragraph below.) We take the UNION of the
-	 * two (restricted to indices that map to a real
-	 * retrieved record), so a record the model cited inline but omitted from the
-	 * array — or one it listed in the array while citing at least one record
-	 * inline — still resolves to a reference. The one exception is the
-	 * abstention-dump carve-out below: an answer whose prose cites nothing inline
+	 * the last paragraph below.) The inline markers that map to a real retrieved
+	 * record are what the answer cites: a record the model cited inline but omitted
+	 * from the array still resolves to a reference, and one it listed in the array
+	 * but anchored in no sentence does NOT, once any marker resolves — the model
+	 * lists records it merely reviewed there (ADR Decision 185, which reversed the
+	 * union this method took before). The array is read only where no inline marker
+	 * resolves: a mistyped {@code [99]} beside real array entries keeps them. And
+	 * the abstention-dump carve-out below: an answer whose prose cites nothing inline
 	 * discards the array entirely. Indices with no matching record are dropped and
 	 * logged, exactly as the array path already drops unmapped indices; the
 	 * prose itself is never rewritten.
@@ -1447,6 +1449,12 @@ public class LlmInferenceService implements ChartSearchService {
 			// !isBlank guard exempts a blank answer — see the method javadoc.
 			if (inline.isEmpty() && !ChartSearchAiUtils.isBlank(answer)) {
 				return new ArrayList<RecordReference>();
+			}
+			// Prose that anchors a citation which RESOLVES says what the answer cites, so an array
+			// entry no marker anchors is a record the model reviewed and not one a sentence is about
+			// (ADR Decision 185). Where no marker resolves — a mistyped [99] — the array stands.
+			if (!Collections.disjoint(inline, indexMap.keySet())) {
+				seen.clear();
 			}
 			seen.addAll(inline);
 		}

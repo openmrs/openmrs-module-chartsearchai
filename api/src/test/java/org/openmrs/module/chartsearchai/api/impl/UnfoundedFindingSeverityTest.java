@@ -328,12 +328,17 @@ public class UnfoundedFindingSeverityTest extends BaseModuleContextSensitiveTest
 	public void aFindingOnlyTheStructuredArrayNamesIsNotAccused() {
 		// The #409 reading: a finding the model listed in its structured citations array and anchored in
 		// no sentence was not cited by the answer, so no sentence of it can have attached a rating to it.
+		// The resolution admits an array-only citation only where no marker in the prose resolves (ADR
+		// Decision 185), so the prose's one marker here names no record.
 		PatientChart chart = sarahTaylor(CAN_I_GIVE, false);
 		int dexamethasone = unratedFindingNaming(chart, "Dexamethasone");
-		int hydrocortisone = unratedFindingNaming(chart, "Hydrocortisone");
+		int noRecord = 0;
+		for (RecordMapping mapping : chart.getMappings()) {
+			noRecord = Math.max(noRecord, mapping.getIndex() + 1);
+		}
 		LlmInferenceService service = serviceOver(chart,
 				"Her dexamethasone allergy is a Major finding. Her hydrocortisone allergy is a possible "
-						+ "cross-reactivity [" + hydrocortisone + "].",
+						+ "cross-reactivity [" + noRecord + "].",
 				Collections.singletonList(Integer.valueOf(dexamethasone)));
 		ChartAnswer answer = service.search(patient(), CAN_I_GIVE);
 		assertTrue(ChartAnswerTestSupport.referenceIndexes(answer).contains(Integer.valueOf(dexamethasone)),

@@ -1295,6 +1295,12 @@ public class LlmProvider {
 		 * @param citations the merged citation array, composed by the caller that knows both
 		 * @return the continued response
 		 */
+		/** This response with its answer text replaced — ADR Decision 186's marker removal; everything else kept. */
+		LlmResponse withAnswer(String replaced) {
+			return replaced == null || replaced.equals(answer) ? this
+					: new LlmResponse(replaced, citations, inputTokens, outputTokens, cachedTokens);
+		}
+
 		LlmResponse continuedWith(LlmResponse continuation, List<Integer> citations) {
 			return new LlmResponse(answer + " " + continuation.getAnswer().trim(), citations,
 					inputTokens + continuation.inputTokens, outputTokens + continuation.outputTokens,

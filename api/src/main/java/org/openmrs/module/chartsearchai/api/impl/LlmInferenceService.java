@@ -195,6 +195,7 @@ public class LlmInferenceService implements ChartSearchService {
 			LlmResponse response = llmProvider.search(chartTextOrPlaceholder(chart),
 					chart.getFocusIndices(), question, kvCacheScope, uninjectedRecords, enumerateFindings,
 					referenceRecords, chart.getDrugsAlreadyOrdered());
+			response = withMisplacedMarkersRemoved(response, chart);
 			llmMs = System.currentTimeMillis() - llmStart;
 			inputTokens = response.getInputTokens();
 			cachedTokens = response.getCachedTokens();
@@ -216,6 +217,7 @@ public class LlmInferenceService implements ChartSearchService {
 								findingEnumerationRepairQuestion(owedRepair), kvCacheScope, uninjectedRecords, false,
 								referenceRecords, noDrugsAlreadyOrdered()),
 						owedRepair, chart.getMappings());
+				response = withMisplacedMarkersRemoved(response, chart);
 				llmMs += System.currentTimeMillis() - repairStart;
 				cited = extractCitedReferences(response.getAnswer(), response.getCitations(),
 						chart.getMappings());
@@ -735,6 +737,7 @@ public class LlmInferenceService implements ChartSearchService {
 					chartTextOrPlaceholder(chart), chart.getFocusIndices(), question, tokenConsumer,
 					reasoningConsumer, kvCacheScope, uninjectedRecords, enumerateFindings, referenceRecords,
 					chart.getDrugsAlreadyOrdered());
+			response = withMisplacedMarkersRemoved(response, chart);
 			llmMs = System.currentTimeMillis() - llmStart;
 			inputTokens = response.getInputTokens();
 			cachedTokens = response.getCachedTokens();
@@ -762,6 +765,7 @@ public class LlmInferenceService implements ChartSearchService {
 								reasoningConsumer, kvCacheScope, uninjectedRecords, false, referenceRecords,
 								noDrugsAlreadyOrdered()),
 						owedRepair, chart.getMappings());
+				response = withMisplacedMarkersRemoved(response, chart);
 				llmMs += System.currentTimeMillis() - repairStart;
 				cited = extractCitedReferences(response.getAnswer(), response.getCitations(),
 						chart.getMappings());
@@ -1302,6 +1306,15 @@ public class LlmInferenceService implements ChartSearchService {
 	 */
 	private static List<PatientChartSerializer.AlreadyOrderedDrug> noDrugsAlreadyOrdered() {
 		return Collections.<PatientChartSerializer.AlreadyOrderedDrug> emptyList();
+	}
+
+	/**
+	 * The model's answer with each citation marker it put on an item another item's own marker shows belongs elsewhere
+	 * removed (ADR Decision 186) — before anything reads the answer, so every check, the references and both answers
+	 * a streaming request produces describe the one text the caller receives.
+	 */
+	private static LlmResponse withMisplacedMarkersRemoved(LlmResponse response, PatientChart chart) {
+		return response.withAnswer(MisplacedCitationMarkers.removed(response.getAnswer(), chart.getMappings()));
 	}
 
 	static boolean isWarmupEnabled() {

@@ -15687,3 +15687,38 @@ marker that names no record. Pinned by
 
 A record the prose states without its marker, while marking another, is no longer a reference — a click-through the
 union used to give is lost. The prose itself is never rewritten, and a safety finding stays a chip.
+
+## Decision 186: A citation marker another item of the answer shows belongs to it is removed from the item it was put on
+
+**Status: Accepted** (October 2026) — implemented on the owner's decision, 2026-10-13. It is the second place the
+module rewrites the model's prose, after `LlmAnswerExtractor.normalizeSlashCitations`; the rule that
+`LlmInferenceService.extractCitedReferences` never rewrites the prose is unchanged, the rewrite happening before it.
+
+### Context
+
+On the 3.7.1 standalone Sarah Taylor's *"any allergies?"* was answered *"... Personal history of allergy to shellfish
+[229] [232], and Allergy to sufentanil [231] [232]."* on all three runs measured: [232] is the shellfish diagnosis, so
+the sufentanil item cited a record about shellfish. The grounding verdict is per record, so it published [232]
+`grounded: false` — against the shellfish item's correct citation as well. *"Does she have any allergies?"* cited
+correctly.
+
+### The decision
+
+`MisplacedCitationMarkers.removed` runs on the model's answer as soon as it is returned, and again after the #398
+repair, so every check, the references and both answers a streaming request produces read the one text the caller
+receives (the UI replaces the streamed text with the `done` answer). Its class javadoc states the rule: a marker is
+removed from a run of markers only where it is also in another run, its own run carries another marker the run's words
+name, and the other run's words name its record by every word this run's do and at least one more. Words are the
+module's query terms, so no medical vocabulary is involved. The last condition makes "removed because of" a strict
+subset relation over the words each run shares with the record, so a marker is never removed from every run it is in.
+Nor is an item left citing nothing (each of its markers can be named better by a different item; it then keeps them
+all), and a failure of the rule — a record that cannot be read — publishes the answer as the model wrote it, at WARN.
+
+Pinned by `MisplacedCitationMarkerTest`, over the full patient dataset through `search` and `searchStreaming`. Each
+narrowing condition has a case that reddens when the condition is removed.
+
+### Residue
+
+A wrong marker that is its item's only one is kept, as is a marker cited once: nothing else in the answer says where
+it belongs, and the grounding verdict remains the signal there. The streamed tokens still carry the marker until
+`done` replaces them.

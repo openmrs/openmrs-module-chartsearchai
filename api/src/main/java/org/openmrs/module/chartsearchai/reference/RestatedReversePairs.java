@@ -103,8 +103,9 @@ public final class RestatedReversePairs {
 		return keys;
 	}
 
-	/** The mechanism note: the detail after its first sentence — "X interacts with active order Y — Major." */
-	private static String note(SafetyWarning chip) {
+	/** The mechanism note: the detail after its first sentence — "X interacts with active order Y — Major." The one
+	 *  reading of it, which {@code DrugReferenceInjector}'s screen grid also asks (ADR Decision 191). */
+	static String note(SafetyWarning chip) {
 		String detail = chip.getDetail() == null ? "" : chip.getDetail().trim();
 		String marker = " — " + chip.getSeverity() + ".";
 		int at = detail.indexOf(marker);

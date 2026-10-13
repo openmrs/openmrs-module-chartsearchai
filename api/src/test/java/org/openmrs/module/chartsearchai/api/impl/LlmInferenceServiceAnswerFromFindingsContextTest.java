@@ -2066,7 +2066,8 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	 * A contraindication about a medication she already takes says so in the composed answer. Its
 	 * record said so only in the strength clause, which stays out of the answer; what that clause
 	 * carries besides the call — its REFERENT, set by the arm (ADR Decision 72) — is a fact about her
-	 * chart, and the line keeps it, without naming a drug the clause never named either.
+	 * chart, and the answer keeps it, without naming a drug the clause never named either: on a screen,
+	 * where every contraindication is one, in the count (ADR Decision 191).
 	 */
 	@Test
 	public void aContraindicationAboutAMedicationSheAlreadyTakesSaysSo() throws Exception {
@@ -2087,9 +2088,14 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		ChartAnswer answer = serviceWith(provider).search(patient, SAFETY_SCREEN);
 
 		assertEquals(0, provider.calls);
-		assertTrue(answer.getAnswer().contains(answerFacingBody(allergy) + CURRENT_MEDICATION_REFERENT
-				+ " [" + allergy.index + "]"),
-				"the allergy line says the drug is one she already takes: " + answer.getAnswer());
+		// On a screen every contraindication is about a medication she already takes, so the count says it once rather
+		// than every line (ADR Decision 191); the line is the finding.
+		assertTrue(answer.getAnswer().split("\n")[0].endsWith(" contraindication about a medication this patient is "
+				+ "already taking, with no severity rated:"),
+				"the count says the drug is one she already takes: " + answer.getAnswer());
+		assertTrue(answer.getAnswer().contains("\n" + answerFacingBody(allergy).replace(
+				" No severity is rated for this finding.", "") + " [" + allergy.index + "]"),
+				"and the allergy line is the finding alone: " + answer.getAnswer());
 		assertStatesEveryFindingBriefly(answer, findings);
 	}
 
@@ -2408,7 +2414,8 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		assertEquals(0, provider.calls, "the module answers: " + answer.getAnswer());
 		String[] lines = answer.getAnswer().split("\n");
 		assertEquals(4, lines.length, "a count, two findings and the scope: " + answer.getAnswer());
-		assertEquals("1 interaction among this patient's active medications, and 1 contraindication:", lines[0]);
+		assertEquals("1 interaction among this patient's active medications, and 1 contraindication about a medication "
+				+ "this patient is already taking, with no severity rated:", lines[0]);
 		assertTrue(lines[1].startsWith("Acetylsalicylic acid (aspirin) interacts with active order Warfarin — Major. ["),
 				"the interaction's brief line — its first sentence, then its markers: " + lines[1]);
 		assertTrue(lines[2].startsWith("The patient has a recorded allergy to Acetylsalicylic acid (aspirin)."),

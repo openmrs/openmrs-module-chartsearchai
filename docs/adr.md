@@ -15898,3 +15898,38 @@ with `asksOnlyAboutInteractions` false).
 Which drug of a pair is a screen chip's subject is the order the arm meets them in, so one mechanism can still take a line
 per drug (ibuprofen's, celecoxib's and diclofenac's corticosteroid lines are three). A question about interactions only
 that relates no pair is still the model's, as before.
+
+## Decision 191: A screen's answer states a mechanism across a grid of drugs once, and says once what is true of every contraindication line
+
+**Status: Accepted** (October 2026) — the owner's decision, 2026-10-13. It amends
+[Decision 171](#decision-171-a-screens-answer-counts-its-findings-states-brief-lines-and-says-what-it-does-not-cover)'s
+lines and follows
+[Decision 190](#decision-190-a-screen-states-a-mechanism-once-per-drug-and-a-question-about-interactions-only-leaves-her-contraindications-apart).
+Presentation only: no chip, finding record or extent changes.
+
+### Context
+
+After Decision 190, Sarah Taylor's screen still stated one corticosteroid-and-NSAID mechanism on three lines (one per
+NSAID, plus a fourth where the arm met dexamethasone before diclofenac), because a chip has one subject and which drug of
+a pair is the subject is the order the arm meets them in. And her safety screen's ten contraindication lines each closed
+with the same two sentences — *"No severity is rated for this finding. This finding is about a medication this patient is
+already taking."*
+
+### The decision
+
+**Grids.** `DrugReferenceInjector.interactionGrids` groups a screen's interaction findings by rating and mechanism note
+(`RestatedReversePairs.note`, the one reading of it), and where a group's pairs are exactly every drug of one side against
+every drug of the other, `gridLine` states them once — *"Each of Ibuprofen, Celecoxib and Diclofenac interacts with active
+order Methylprednisolone, Prednisone, Budesonide, Dexamethasone and Hydrocortisone — Moderate."* — the smaller side
+first, through `DrugSafetyValidator.ACTIVE_ORDER_INTERACTION_PHRASE`, citing every finding it covers and every order record
+they name. A group that is not such a grid — a drug missing one order, a pair twice — keeps its lines: a line naming the
+drugs together would claim a pair the data does not relate. Findings about an order not yet started, a substance carried
+by several orders, and lines naming an interacting substance are never grouped.
+
+**Said once.** Where every contraindication of a screen is about a medication she already takes and states no severity,
+the count says so — *"and 10 contraindications about medications this patient is already taking, none with a severity
+rated"* — and the lines leave both sentences out. Where any one is not (an order not yet started, a rated rule), every
+line keeps both. The record the model reads is unchanged.
+
+Pinned by `ScreenSharedMechanismContextTest` (the grid; a not-a-grid slice, red with the cross-pair count removed) and
+`ScreenInteractionsOnlyContextTest.aQuestionAboutSafetyStillStatesThem` (the count).

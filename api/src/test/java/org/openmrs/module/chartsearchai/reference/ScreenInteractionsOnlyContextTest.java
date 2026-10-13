@@ -70,8 +70,11 @@ public class ScreenInteractionsOnlyContextTest extends BaseModuleContextSensitiv
 	public void aQuestionAboutSafetyStillStatesThem() throws IOException {
 		String answer = answer(SAFETY);
 
-		assertTrue(answer.split("\n")[0].contains("1 contraindication"), "was: " + answer);
-		assertTrue(answer.contains("The patient has a recorded allergy to Ibuprofen."), "was: " + answer);
+		// What is true of every contraindication line is said once, in the count (ADR Decision 191).
+		assertTrue(answer.split("\n")[0].endsWith(", and 1 contraindication about a medication this patient is already "
+				+ "taking, with no severity rated:"), "was: " + answer);
+		assertTrue(answer.matches("(?s).*\nThe patient has a recorded allergy to Ibuprofen\\. \\[\\d+\\]\n.*"),
+			"the line is the finding alone: " + answer);
 		for (SafetyWarning chip : contraindications(SAFETY)) {
 			assertFalse(chip.isAboutAnotherOfHerMedications(), "what was asked: " + chip.getDetail());
 		}

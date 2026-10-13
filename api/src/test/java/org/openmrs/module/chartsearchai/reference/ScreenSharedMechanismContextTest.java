@@ -47,13 +47,26 @@ public class ScreenSharedMechanismContextTest extends BaseModuleContextSensitive
 	public void aDrugRelatedToSeveralOfHerOrdersByOneMechanismIsOneLineNamingThemAll() throws IOException {
 		String answer = screen().getModuleAnswer();
 
-		// Five pairs on three lines: each NSAID's corticosteroid row names both corticosteroids, the COX-2 row its own.
-		// Each line cites its finding and the records of the orders it is about. The question asks only about
-		// interactions, so the scope says the answer covers those (ADR Decision 190).
+		// Five pairs on two lines: both NSAIDs against both corticosteroids by one row is one grid, stated once with
+		// every finding it covers and every order (ADR Decision 191); the COX-2 row is its own. The question asks only
+		// about interactions, so the scope says the answer covers those (ADR Decision 190).
 		assertEquals("5 interactions among this patient's active medications:\n"
+				+ "Each of Ibuprofen and Celecoxib interacts with active order Prednisone and Dexamethasone — Moderate. "
+				+ "[6] [8] [2] [4] [5] [3]\n"
+				+ "Ibuprofen interacts with active order Celecoxib — Moderate. [7] [2] [3]\n"
+				+ DrugReferenceInjector.BELOW_FLOOR_SCOPE, answer);
+	}
+
+	@Test
+	public void pairsOfOneMechanismThatAreNotAGridKeepALinePerDrug() throws IOException {
+		// Ibuprofen against both corticosteroids and celecoxib against prednisone alone: no two drugs each against
+		// the same orders, so a line naming them together would claim a pair the data does not relate (ADR Decision 191).
+		String answer = screen("chartsearchai-test/ddi-screen-shared-mechanism-not-a-grid.json").getModuleAnswer();
+
+		assertEquals("4 interactions among this patient's active medications:\n"
 				+ "Ibuprofen interacts with active order Prednisone and Dexamethasone — Moderate. [6] [2] [4] [5]\n"
 				+ "Ibuprofen interacts with active order Celecoxib — Moderate. [7] [2] [3]\n"
-				+ "Celecoxib interacts with active order Prednisone and Dexamethasone — Moderate. [8] [3] [4] [5]\n"
+				+ "Celecoxib interacts with active order Prednisone — Moderate. [8] [3] [4]\n"
 				+ DrugReferenceInjector.BELOW_FLOOR_SCOPE, answer);
 	}
 
@@ -69,6 +82,10 @@ public class ScreenSharedMechanismContextTest extends BaseModuleContextSensitive
 	}
 
 	private static PatientChart screen() throws IOException {
+		return screen(FIXTURE);
+	}
+
+	private static PatientChart screen(String fixture) throws IOException {
 		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
 			DrugReferenceTestSupport.activeOrder("order-ibuprofen", "Ibuprofen 400mg"),
 			DrugReferenceTestSupport.activeOrder("order-celecoxib", "Celecoxib 200mg"),
@@ -80,7 +97,7 @@ public class ScreenSharedMechanismContextTest extends BaseModuleContextSensitive
 		}
 		PatientClinicalContext context = DrugReferenceTestSupport.ctx(40, null, new LinkedHashSet<String>(names), null,
 			null, null, orders);
-		return DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.ddiFixtureService(FIXTURE))
+		return DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.ddiFixtureService(fixture))
 				.injectRecords(DrugReferenceTestSupport.oneRecordChart(), context, DrugReferenceTestSupport.SCREENING_QUESTION);
 	}
 }

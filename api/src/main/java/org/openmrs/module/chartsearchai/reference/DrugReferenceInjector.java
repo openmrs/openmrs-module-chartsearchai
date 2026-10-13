@@ -9,11 +9,13 @@
  */
 package org.openmrs.module.chartsearchai.reference;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
@@ -3808,9 +3810,23 @@ public class DrugReferenceInjector {
 		boolean cautions = proposal && !STRENGTH_WITHHOLD.equals(clauses[order.get(0)]);
 		List<String> lines = new ArrayList<String>(order.size());
 		Map<SafetyWarning, String> substances = interactingSubstancesOfSharedOrders(findings);
+		// On a screen, what is true of every contraindication line — about a medication she already takes, with no
+		// severity rated — is said once, in the count, and not on each line (ADR Decision 191).
+		boolean saidOnce = !proposal && contraindicationsAllCurrentAndUnrated(findings);
+		Map<Integer, List<Integer>> grids = proposal ? Collections.<Integer, List<Integer>> emptyMap()
+				: interactionGrids(findings, order, substances);
+		Set<Integer> merged = new HashSet<Integer>();
+		for (List<Integer> grid : grids.values()) {
+			merged.addAll(grid.subList(1, grid.size()));
+		}
 		for (Integer i : order) {
-			lines.add(findingLine(findings.get(i), numbers.get(i), orderRecordNumbers, herOrderRecords, true,
-					substances.get(findings.get(i))));
+			if (merged.contains(i)) {
+				continue;
+			}
+			List<Integer> grid = grids.get(i);
+			lines.add(grid != null ? gridLine(findings, numbers, grid, herOrderRecords)
+					: findingLine(findings.get(i), numbers.get(i), orderRecordNumbers, herOrderRecords, true,
+							substances.get(findings.get(i)), saidOnce));
 		}
 		SafetyWarning first = findings.get(order.get(0));
 		if (proposal && lead == Lead.INTERACTS) {
@@ -3829,7 +3845,7 @@ public class DrugReferenceInjector {
 			lines.add(0, cautionLead(notHerOwnOrdersSharingASubstance(findings).size(), first.getDrug()));
 		} else if (!proposal) {
 			// A screen opens with what it found, counted, and closes with what it does not cover (ADR Decision 171).
-			lines.add(0, screenLead(findings, pairs));
+			lines.add(0, screenLead(findings, pairs, saidOnce));
 			lines.add(screenScope);
 		}
 		return String.join("\n", lines);
@@ -3855,7 +3871,7 @@ public class DrugReferenceInjector {
 	 * clinician the patient had 10 interactions when the module had found 13. The screening arm ranks before it caps,
 	 * so what it withholds is rated no higher than what it lists.
 	 */
-	private static String screenLead(List<SafetyWarning> findings, PairChipExtent pairs) {
+	private static String screenLead(List<SafetyWarning> findings, PairChipExtent pairs, boolean saidOnce) {
 		int interactions = 0;
 		int contraindications = 0;
 		int sharing = 0;
@@ -3882,7 +3898,10 @@ public class DrugReferenceInjector {
 									+ " not shown)"));
 		}
 		if (contraindications > 0) {
-			counts.add(contraindications + (contraindications == 1 ? " contraindication" : " contraindications"));
+			counts.add(contraindications + (contraindications == 1 ? " contraindication" : " contraindications")
+					+ (!saidOnce ? ""
+							: contraindications == 1 ? " about " + CURRENT_MEDICATION + ", with no severity rated"
+									: " about medications this patient is already taking, none with a severity rated"));
 		}
 		if (sharing > 0) {
 			counts.add(sharing + (sharing == 1 ? " substance" : " substances") + " carried by more than one of this patient's orders");
@@ -3993,12 +4012,18 @@ public class DrugReferenceInjector {
 	 *  #INTERACTING_SUBSTANCE_OPENING}{@code + substance + "."}: see {@link #interactingSubstancesOfSharedOrders}. */
 	private static String findingLine(SafetyWarning finding, Integer number, Map<String, Integer> orderRecordNumbers,
 			Map<String, Integer> herOrderRecords, boolean proposal, String interactingSubstance) {
-		boolean currentMedicationContraindication = finding.isAboutACurrentMedication()
-				&& SafetyWarning.TYPE_CONTRAINDICATION.equals(finding.getType())
-				&& finding.orderScheduledStart() == null;
+		return findingLine(finding, number, orderRecordNumbers, herOrderRecords, proposal, interactingSubstance, false);
+	}
+
+	/** As above; {@code saidOnce} leaves out the two sentences a screen's count says of every contraindication line
+	 *  instead ({@link #contraindicationsAllCurrentAndUnrated}, ADR Decision 191). */
+	private static String findingLine(SafetyWarning finding, Integer number, Map<String, Integer> orderRecordNumbers,
+			Map<String, Integer> herOrderRecords, boolean proposal, String interactingSubstance, boolean saidOnce) {
+		boolean currentMedicationContraindication = isCurrentMedicationContraindication(finding);
+		boolean onceForThis = saidOnce && SafetyWarning.TYPE_CONTRAINDICATION.equals(finding.getType());
 		String line = findingBody(finding, proposal ? briefDetail(finding) : finding.getDetail(),
-				orderRecordNumbers, true)
-				+ (currentMedicationContraindication ? COMPOSED_CURRENT_MEDICATION_REFERENT : "")
+				orderRecordNumbers, true, onceForThis)
+				+ (currentMedicationContraindication && !onceForThis ? COMPOSED_CURRENT_MEDICATION_REFERENT : "")
 				+ (interactingSubstance == null ? "" : INTERACTING_SUBSTANCE_OPENING + interactingSubstance + ".")
 				+ " [" + number + "]";
 		return line + orderRecordMarkers(finding, herOrderRecords, ChartSearchAiUtils.citedIndexes(line));
@@ -4007,6 +4032,145 @@ public class DrugReferenceInjector {
 	/** How a composed line names the substance of a combination order it is about — see {@link
 	 *  #interactingSubstancesOfSharedOrders}. */
 	static final String INTERACTING_SUBSTANCE_OPENING = " The interacting substance is ";
+
+	/** A contraindication about an order of hers that has started — the finding a composed line names with
+	 *  {@link #COMPOSED_CURRENT_MEDICATION_REFERENT}. */
+	private static boolean isCurrentMedicationContraindication(SafetyWarning finding) {
+		return finding.isAboutACurrentMedication() && SafetyWarning.TYPE_CONTRAINDICATION.equals(finding.getType())
+				&& finding.orderScheduledStart() == null;
+	}
+
+	/**
+	 * Whether {@code findings} carry a contraindication and every one of them is about a medication she already takes
+	 * and states no severity — so a screen's count can say both once, in place of two sentences on every line (ADR
+	 * Decision 191). One that does not — an order not yet started, a rated rule — keeps both on every line.
+	 */
+	private static boolean contraindicationsAllCurrentAndUnrated(List<SafetyWarning> findings) {
+		boolean any = false;
+		for (SafetyWarning finding : findings) {
+			if (SafetyWarning.TYPE_CONTRAINDICATION.equals(finding.getType())) {
+				if (!isCurrentMedicationContraindication(finding) || !statesNoSeverity(finding)) {
+					return false;
+				}
+				any = true;
+			}
+		}
+		return any;
+	}
+
+	/**
+	 * A screen's interaction findings that state one mechanism at one rating across a GRID of drugs — every drug of one
+	 * side against every order of the other — keyed by the first of them in {@code order}, the rest after it (ADR
+	 * Decision 191). The screening arm already states a mechanism once per drug
+	 * ({@code DrugSafetyValidator.collapseSharedMechanisms}, ADR Decision 190); which drug of a pair is a chip's subject
+	 * is the order it met them in, so three NSAIDs against five corticosteroids still took three or four lines. A group
+	 * whose pairs are not exactly such a grid — a drug missing one order, a pair stated twice — is left as its lines.
+	 * The mechanism is {@link RestatedReversePairs#note}'s reading; a finding without one, a finding about an order not
+	 * yet started, a substance carried by several orders, and one naming its interacting substance are never grouped.
+	 */
+	private static Map<Integer, List<Integer>> interactionGrids(List<SafetyWarning> findings, List<Integer> order,
+			Map<SafetyWarning, String> substances) {
+		Map<String, List<Integer>> byMechanism = new LinkedHashMap<String, List<Integer>>();
+		for (Integer i : order) {
+			SafetyWarning finding = findings.get(i);
+			String note = RestatedReversePairs.note(finding);
+			if (!SafetyWarning.TYPE_INTERACTION.equals(finding.getType()) || finding.statesOrdersSharingASubstance()
+					|| finding.getSeverity() == null || note.isEmpty() || finding.namedPartners().isEmpty()
+					|| substances.containsKey(finding) || finding.orderScheduledStart() != null
+					|| !finding.partnerScheduledStarts().isEmpty()) {
+				continue;
+			}
+			String key = finding.getSeverity() + "\u0000" + note;
+			List<Integer> group = byMechanism.get(key);
+			if (group == null) {
+				group = new ArrayList<Integer>();
+				byMechanism.put(key, group);
+			}
+			group.add(i);
+		}
+		Map<Integer, List<Integer>> grids = new LinkedHashMap<Integer, List<Integer>>();
+		for (List<Integer> group : byMechanism.values()) {
+			if (group.size() > 1 && sidesOfAGrid(findings, group) != null) {
+				grids.put(group.get(0), group);
+			}
+		}
+		return grids;
+	}
+
+	/**
+	 * The two sides of the grid {@code group}'s pairs form — the smaller first, each in the order its names first
+	 * appear — or {@code null} where they form none: every drug of one side paired with every drug of the other, once.
+	 */
+	private static List<List<String>> sidesOfAGrid(List<SafetyWarning> findings, List<Integer> group) {
+		Map<String, Set<String>> neighbours = new LinkedHashMap<String, Set<String>>();
+		int edges = 0;
+		for (Integer i : group) {
+			String drug = findings.get(i).getDrug();
+			for (String partner : findings.get(i).namedPartners()) {
+				if (drug.equals(partner)) {
+					return null;
+				}
+				Set<String> ofDrug = neighbours.computeIfAbsent(drug, k -> new LinkedHashSet<String>());
+				Set<String> ofPartner = neighbours.computeIfAbsent(partner, k -> new LinkedHashSet<String>());
+				if (!ofDrug.add(partner) || !ofPartner.add(drug)) {
+					return null;
+				}
+				edges++;
+			}
+		}
+		// Two-colour from the first drug; a grid is one connected piece whose edges are every cross pair.
+		Map<String, Boolean> side = new LinkedHashMap<String, Boolean>();
+		Deque<String> queue = new ArrayDeque<String>();
+		String start = neighbours.keySet().iterator().next();
+		side.put(start, Boolean.TRUE);
+		queue.add(start);
+		while (!queue.isEmpty()) {
+			String node = queue.poll();
+			for (String next : neighbours.get(node)) {
+				Boolean known = side.get(next);
+				if (known == null) {
+					side.put(next, !side.get(node));
+					queue.add(next);
+				} else if (known.equals(side.get(node))) {
+					return null;
+				}
+			}
+		}
+		if (side.size() != neighbours.size()) {
+			return null;
+		}
+		List<String> one = new ArrayList<String>();
+		List<String> other = new ArrayList<String>();
+		for (Map.Entry<String, Boolean> node : side.entrySet()) {
+			(node.getValue() ? one : other).add(node.getKey());
+		}
+		if (edges != one.size() * other.size()) {
+			return null;
+		}
+		return other.size() < one.size() ? Arrays.asList(other, one) : Arrays.asList(one, other);
+	}
+
+	/**
+	 * One line for a grid ({@link #interactionGrids}): <em>"Each of Ibuprofen and Celecoxib interacts with active order
+	 * Prednisone and Dexamethasone — Moderate."</em>, then every finding it states and every order record they name —
+	 * the markers each of its lines would have carried. Where one side is one drug the line is that drug's, as a chip
+	 * names it. Brief, as a screen's lines are: the mechanism stays on the chips.
+	 */
+	private static String gridLine(List<SafetyWarning> findings, List<Integer> numbers, List<Integer> grid,
+			Map<String, Integer> herOrderRecords) {
+		List<List<String>> sides = sidesOfAGrid(findings, grid);
+		List<String> drugs = sides.get(0);
+		String line = (drugs.size() == 1 ? drugs.get(0) : "Each of " + DrugSafetyValidator.joinPartners(drugs))
+				+ DrugSafetyValidator.ACTIVE_ORDER_INTERACTION_PHRASE + DrugSafetyValidator.joinPartners(sides.get(1))
+				+ " — " + findings.get(grid.get(0)).getSeverity() + ".";
+		for (Integer i : grid) {
+			line += " [" + numbers.get(i) + "]";
+		}
+		for (Integer i : grid) {
+			line += orderRecordMarkers(findings.get(i), herOrderRecords, ChartSearchAiUtils.citedIndexes(line));
+		}
+		return line;
+	}
 
 	/**
 	 * For each interaction finding that shares its drug and its one named order with another finding of {@code
@@ -4205,6 +4369,13 @@ public class DrugReferenceInjector {
 	 *  detail — the composed caution answer's brief line ({@link #briefDetail}); every clause after it as there. */
 	private static String findingBody(SafetyWarning finding, String detailText, Map<String, Integer> orderRecordNumbers,
 			boolean clauseFollows) {
+		return findingBody(finding, detailText, orderRecordNumbers, clauseFollows, false);
+	}
+
+	/** As above; {@code severitySaidOnce} leaves out {@link #FINDING_NO_SEVERITY}, which a screen's count says of every
+	 *  contraindication line instead (ADR Decision 191). Never for a record the model reads. */
+	private static String findingBody(SafetyWarning finding, String detailText, Map<String, Integer> orderRecordNumbers,
+			boolean clauseFollows, boolean severitySaidOnce) {
 		// Between the detail and the strength clause, so the clause stays SENTENCE-FINAL — which is
 		// where the prompt's own two format demonstrations put it, and what its graded-safety rule
 		// reads to decide how the answer opens. Provenance is about the evidence and belongs beside
@@ -4224,7 +4395,7 @@ public class DrugReferenceInjector {
 		String chartOrders = chartOrderClause(finding, orderRecordNumbers);
 		// Last before the call: it is about the finding as a whole, not about any name inside it (issue
 		// #402's residue (a)).
-		String noSeverity = statesNoSeverity(finding) ? FINDING_NO_SEVERITY : "";
+		String noSeverity = statesNoSeverity(finding) && !severitySaidOnce ? FINDING_NO_SEVERITY : "";
 		String detail = !clauseFollows && provenance.isEmpty() && chartOrders.isEmpty() && noSeverity.isEmpty()
 				? detailText
 				: DrugSafetyValidator.endSentence(detailText);

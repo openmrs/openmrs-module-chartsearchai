@@ -1,0 +1,103 @@
+/**
+ * This Source Code Form is subject to the terms of the Mozilla Public License,
+ * v. 2.0. If a copy of the MPL was not distributed with this file, You can
+ * obtain one at http://mozilla.org/MPL/2.0/. OpenMRS is also distributed under
+ * the terms of the Healthcare Disclaimer located at http://openmrs.org/license.
+ *
+ * Copyright (C) OpenMRS Inc. OpenMRS is a registered trademark and the OpenMRS
+ * graphic logo is a trademark of OpenMRS Inc.
+ */
+package org.openmrs.module.chartsearchai.reference;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.LinkedHashSet;
+import java.util.List;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.openmrs.api.context.Context;
+import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
+
+/**
+ * A question whether a drug she already takes is safe is answered by the module: that the drug is one of her active
+ * medications, then its findings counted and stated, then the scope — never a verdict (ADR Decision 193). Measured on
+ * the 3.7.1 standalone: Sarah Taylor's "Is ibuprofen safe for her?" went to the model, which answered no question,
+ * said ibuprofen "should be changed", cited heparin by her Advil record and wrote "adding it would duplicate that order"
+ * of a drug she already takes. Over the slice of {@link ScreenSharedMechanismContextTest}.
+ */
+public class OwnMedicationSafetyContextTest extends BaseModuleContextSensitiveTest {
+
+	private static final String FIXTURE = "chartsearchai-test/ddi-screen-shared-mechanism.json";
+
+	@BeforeEach
+	public void answerFromFindings() {
+		Context.getAdministrationService().setGlobalProperty(
+			ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS, "true");
+	}
+
+	@Test
+	public void aSafetyQuestionAboutHerOwnMedicationIsAnsweredWithItsFindings() throws IOException {
+		String answer = answer("Is ibuprofen safe for her?");
+
+		assertNotNull(answer, "the module answers");
+		String[] lines = answer.split("\n");
+		assertEquals(4, lines.length, "the lead, two lines and the scope: " + answer);
+		assertTrue(lines[0].matches("Ibuprofen is one of this patient's active medications \\(Ibuprofen 400mg \\[\\d+\\]\\)\\. "
+				+ "3 interactions with this patient's other active medications:"), "was: " + answer);
+		assertTrue(lines[1].matches("Ibuprofen interacts with active order Prednisone and Dexamethasone — Moderate\\. \\[\\d+\\].*"),
+			"was: " + answer);
+		assertTrue(lines[2].matches("Ibuprofen interacts with active order Celecoxib — Moderate\\. \\[\\d+\\].*"), "was: " + answer);
+		assertEquals(DrugReferenceInjector.BELOW_FLOOR_SCOPE, lines[3]);
+		assertTrue(!answer.contains("adding it") && !answer.contains("withhold") && !answer.contains("safe"),
+			"no proposal wording and no verdict: " + answer);
+	}
+
+	@Test
+	public void aRecordedAllergyToHerOwnDrugIsStatedWithItsInteractions() throws IOException {
+		String answer = answer("Is ibuprofen safe for her?", DrugReferenceTestSupport.set("ibuprofen"), ALL_FOUR);
+
+		assertNotNull(answer, "the module answers");
+		assertTrue(answer.split("\n")[0].endsWith("3 interactions with this patient's other active medications, and 1 "
+				+ "contraindication, with no severity rated:"), "was: " + answer);
+		// The lead has said it is her medication, so the line does not say it again.
+		assertTrue(answer.matches("(?s).*\nThe patient has a recorded allergy to Ibuprofen\\. \\[\\d+\\]\n.*"),
+			"was: " + answer);
+		assertTrue(answer.endsWith("\n" + DrugReferenceInjector.SCREEN_SCOPE), "it covers contraindications: " + answer);
+	}
+
+	@Test
+	public void herOwnDrugWithNoInteractionIsLeftToTheModel() throws IOException {
+		// No finding relates it to another of her orders, and the module states findings, never a clearance.
+		assertEquals(null, answer("Is ibuprofen safe for her?", null,
+			Arrays.asList(DrugReferenceTestSupport.activeOrder("order-ibuprofen", "Ibuprofen 400mg"))));
+	}
+
+	private static final List<PatientClinicalContext.ActiveDrugOrder> ALL_FOUR = Arrays.asList(
+		DrugReferenceTestSupport.activeOrder("order-ibuprofen", "Ibuprofen 400mg"),
+		DrugReferenceTestSupport.activeOrder("order-celecoxib", "Celecoxib 200mg"),
+		DrugReferenceTestSupport.activeOrder("order-prednisone", "Prednisone 5mg"),
+		DrugReferenceTestSupport.activeOrder("order-dexamethasone", "Dexamethasone 8mg"));
+
+	private static String answer(String question) throws IOException {
+		return answer(question, null, ALL_FOUR);
+	}
+
+	private static String answer(String question, java.util.Set<String> allergies,
+			List<PatientClinicalContext.ActiveDrugOrder> orders) throws IOException {
+		List<String> names = new ArrayList<String>();
+		for (PatientClinicalContext.ActiveDrugOrder order : orders) {
+			names.addAll(order.getNames());
+		}
+		PatientClinicalContext context = DrugReferenceTestSupport.ctx(40, null, new LinkedHashSet<String>(names), null,
+			allergies, null, orders);
+		return DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.ddiFixtureService(FIXTURE))
+				.injectRecords(DrugReferenceTestSupport.oneRecordChart(), context, question).getModuleAnswer();
+	}
+}

@@ -15962,3 +15962,36 @@ proposal whose only withholding finding is such an allergy is still the model's,
 `LlmInferenceServiceAnswerFromFindingsContextTest.theLineUnderTheNoIsTheInteractionThatLicensedIt` pinned the earlier
 order and is now `theLineUnderTheNoIsTheAllergyToTheDrugThenTheInteractionThatLicensedIt`. Pinned by
 `ProposalOwnAllergyLineContextTest`, over a verbatim slice of the shipped knowledge base.
+
+## Decision 193: A safety question about a drug she already takes is answered by the module, as her own medication
+
+**Status: Accepted** (October 2026) — the owner's decision, 2026-10-13. It opens a gate
+[Decision 108](#decision-108-a-drug-safety-question-the-module-resolved-itself-is-answered-from-its-own-findings-and-the-model-is-not-asked-to-restate-them)
+kept closed: `answersFromFindings` composes nothing for a drug her orders carry.
+
+### Context
+
+On the 3.7.1 standalone Sarah Taylor's *"Is ibuprofen safe for her?"* — ibuprofen being her Advil 400mg — went to the
+model, which answered no question, said ibuprofen *"should be changed"*, cited heparin by her Advil record, cited one of
+five corticosteroid orders for all five, and wrote *"adding it would duplicate that order"* of a drug she already takes.
+The gate was closed for issue #402: the drug-in-play arm states a proposal clause for her own drug, and a "No" composed
+from it would make that defect deterministic.
+
+### The decision
+
+`DrugReferenceInjector.aboutHerOwnMedication` admits a question resolving one substance her orders carry that asks
+whether to give it or whether it interacts, where the check related it to another of her orders, and
+`composeAboutHerOwnMedication` answers: *"Ibuprofen is one of this patient's active medications (Advil 400mg [10]). 8
+interactions with this patient's other active medications:"*, the drug's own findings strongest first in a screen's brief
+lines — which carry no strength clause, so no "withhold" — then the scope. The order in the lead is the one the issue
+#548 finding names (`SafetyWarning.alreadyOrdered`), which is not stated as a line: its "adding it would duplicate that
+order" is a proposal's. Contraindications about it are stated and counted, with Decision 191's said-once rule. Without an
+interaction about it the model answers: the module states findings, never a clearance.
+
+`LlmInferenceServiceAnswerFromFindingsContextTest.aDrugSheAlreadyTakesStillAsksTheModel` pinned the closed gate and is
+now `aDrugSheAlreadyTakesIsAnsweredAsHerOwnMedicationAndNeverAsAProposal`, asserting #402's protection directly: no
+"withhold", no "adding it". Pinned by `OwnMedicationSafetyContextTest`.
+
+### Residue
+
+The chip of the #548 finding still reads "adding it would duplicate that order" beside this answer.

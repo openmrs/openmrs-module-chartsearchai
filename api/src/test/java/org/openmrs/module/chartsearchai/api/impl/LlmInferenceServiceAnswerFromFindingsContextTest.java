@@ -2361,10 +2361,12 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 				+ "asked about is not established.", lines[lines.length - 1]);
 	}
 
-	/** Issue #402's shape: a question naming a drug she already takes. The drug-in-play arm states a
-	 *  proposal clause for it, so composing would make that defect deterministic. */
+	/** Issue #402's shape: a question naming a drug she already takes. The drug-in-play arm states a proposal clause
+	 *  for it, which a "No" composed from it would make deterministic — so it is not composed as a proposal. Since ADR
+	 *  Decision 193 the module answers it as her own medication instead: what the drug is to her, then its findings in
+	 *  brief lines, which carry no strength clause — never "withhold" and never "adding it". */
 	@Test
-	public void aDrugSheAlreadyTakesStillAsksTheModel() throws Exception {
+	public void aDrugSheAlreadyTakesIsAnsweredAsHerOwnMedicationAndNeverAsAProposal() throws Exception {
 		executeDataSet(WARFARIN_ORDER);
 		String question = "Can I give her warfarin?";
 		assertFalse(findingsInThePromptFor(question).isEmpty(),
@@ -2374,8 +2376,13 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		RecordingProvider provider = new RecordingProvider();
 		ChartAnswer answer = serviceWith(provider).search(patient, question);
 
-		assertEquals(1, provider.calls, "warfarin is one of her own orders");
-		assertFalse(answer.isAnsweredByTheModule());
+		assertEquals(0, provider.calls, "the module answers: " + answer.getAnswer());
+		assertTrue(answer.isAnsweredByTheModule());
+		assertTrue(answer.getAnswer().startsWith("Warfarin is one of this patient's active medications"),
+				"what the drug is to her, first: " + answer.getAnswer());
+		assertFalse(answer.getAnswer().contains(DrugReferenceInjector.WITHHOLD_LEAD_OPENING.trim())
+				|| answer.getAnswer().contains("withhold") || answer.getAnswer().contains("adding it"),
+				"never a proposal's clause about her own drug (issue #402): " + answer.getAnswer());
 	}
 
 	/** A screen beside an order the data cannot identify is answered from the pairs it related and says that order

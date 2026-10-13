@@ -972,6 +972,16 @@ public class DrugReferenceInjector {
 					orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers,
 					!questionDrugs.isEmpty(), pairExtent.stated(), Lead.of(question, questionDrugs),
 					interactionsOnly ? BELOW_FLOOR_SCOPE : SCREEN_SCOPE);
+		} else if (!findings.isEmpty() && context != null
+				&& ChartSearchAiUtils.getBooleanGlobalProperty(
+						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
+						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS)
+				&& context.chartReadForSafety()
+				&& !aboutHerOwnMedication(question, questionDrugs, screenedSubstances, findings).isEmpty()) {
+			// A safety question about a drug she already takes: its findings, counted and stated (ADR Decision 193).
+			List<Integer> about = aboutHerOwnMedication(question, questionDrugs, screenedSubstances, findings);
+			moduleAnswer = composeAboutHerOwnMedication(findings, findingNumbers, about, orderRecordNumbers,
+					orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers);
 		} else if (onlyHerOwnOrdersSharingASubstance(findings) && context != null
 				&& ChartSearchAiUtils.getBooleanGlobalProperty(
 						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
@@ -4048,6 +4058,116 @@ public class DrugReferenceInjector {
 	/** How a composed line names the substance of a combination order it is about — see {@link
 	 *  #interactingSubstancesOfSharedOrders}. */
 	static final String INTERACTING_SUBSTANCE_OPENING = " The interacting substance is ";
+
+	/**
+	 * The positions in {@code findings} of what a safety question about a drug she already takes is answered with (ADR
+	 * Decision 193), or none where the module does not answer it: the question resolves ONE substance, it is one her
+	 * orders carry ({@code herSubstances}), it asks whether to give it or whether it interacts, and the check raised an
+	 * interaction about it relating it to another of her orders. Those findings are every one whose subject is that
+	 * substance and that is not about another of her medications; each must state a clause {@link #strengthRank} reads.
+	 * Without an interaction about it the model answers — the module states findings, never a clearance.
+	 */
+	private static List<Integer> aboutHerOwnMedication(String question, List<DrugReference> questionDrugs,
+			Set<Object> herSubstances, List<SafetyWarning> findings) {
+		Set<Object> asked = new LinkedHashSet<Object>();
+		for (DrugReference entry : questionDrugs) {
+			asked.add(entry.substanceGroupKey());
+		}
+		List<Integer> about = new ArrayList<Integer>();
+		if (asked.size() != 1 || !herSubstances.containsAll(asked)
+				|| !questionProposes(question, questionDrugs) && !asksWhetherItInteracts(question, questionDrugs)) {
+			return about;
+		}
+		boolean interaction = false;
+		for (int i = 0; i < findings.size(); i++) {
+			SafetyWarning finding = findings.get(i);
+			if (finding.isAboutAnotherOfHerMedications() || finding.subjectRows().isEmpty()) {
+				continue;
+			}
+			boolean ofIt = true;
+			for (DrugReference row : finding.subjectRows()) {
+				ofIt &= asked.contains(row.substanceGroupKey());
+			}
+			if (!ofIt) {
+				continue;
+			}
+			if (strengthRank(strengthClause(finding)) < 0) {
+				return new ArrayList<Integer>();
+			}
+			// A pair: not the finding that her orders already carry it (issue #548), which is typed an interaction too.
+			interaction |= SafetyWarning.TYPE_INTERACTION.equals(finding.getType()) && !finding.statesOrdersSharingASubstance()
+					&& finding.alreadyOrdered() == null;
+			about.add(i);
+		}
+		return interaction ? about : new ArrayList<Integer>();
+	}
+
+	/**
+	 * The module's answer to a safety question about a drug she already takes (ADR Decision 193): <em>"Ibuprofen is one
+	 * of this patient's active medications (Advil 400mg [10]). 8 interactions with this patient's other active
+	 * medications:"</em>, then the drug's findings strongest first in a screen's brief lines, then the scope. The order
+	 * in the lead is the one the finding that the drug is already in her orders names ({@link
+	 * SafetyWarning#alreadyOrdered()}, issue #548); that finding is a proposal's ("adding it would duplicate that
+	 * order") and is not stated as a line. Never a verdict: no "safe", no "change it".
+	 */
+	private static String composeAboutHerOwnMedication(List<SafetyWarning> findings, List<Integer> numbers,
+			List<Integer> about, Map<String, Integer> orderRecordNumbers, Map<String, Integer> herOrderRecords) {
+		String drug = null;
+		String orders = "";
+		List<Integer> stated = new ArrayList<Integer>();
+		int interactions = 0;
+		int contraindications = 0;
+		int sharing = 0;
+		for (Integer i : about) {
+			SafetyWarning finding = findings.get(i);
+			drug = drug == null ? finding.getDrug() : drug;
+			if (finding.alreadyOrdered() != null) {
+				// The orders it names, each cited by the record orderRecordNumbers resolved for its display.
+				List<String> named = new ArrayList<String>();
+				for (String display : finding.namedPartners()) {
+					Integer number = herOrderRecords.get(display == null ? null : display.trim());
+					named.add(display + (number == null ? "" : " [" + number + "]"));
+				}
+				orders = named.isEmpty() ? "" : " (" + DrugSafetyValidator.joinPartners(named) + ")";
+				continue;
+			}
+			if (finding.statesOrdersSharingASubstance()) {
+				sharing++;
+			} else if (SafetyWarning.TYPE_INTERACTION.equals(finding.getType())) {
+				interactions += Math.max(1, finding.namedPartners().size());
+			} else {
+				contraindications++;
+			}
+			stated.add(i);
+		}
+		final Map<Integer, Integer> rank = new HashMap<Integer, Integer>();
+		List<SafetyWarning> statedFindings = new ArrayList<SafetyWarning>();
+		for (Integer i : stated) {
+			rank.put(i, strengthRank(strengthClause(findings.get(i))));
+			statedFindings.add(findings.get(i));
+		}
+		// The lead has said the drug is hers; where every contraindication is unrated too, the count says that once and
+		// the lines say neither (ADR Decision 191's rule).
+		boolean saidOnce = contraindicationsAllCurrentAndUnrated(statedFindings);
+		Collections.sort(stated, Comparator.comparingInt(rank::get));
+		List<String> counts = new ArrayList<String>();
+		counts.add(interactions + (interactions == 1 ? " interaction" : " interactions")
+				+ " with this patient's other active medications");
+		if (contraindications > 0) {
+			counts.add(contraindications + (contraindications == 1 ? " contraindication" : " contraindications")
+					+ (!saidOnce ? "" : contraindications == 1 ? ", with no severity rated" : ", none with a severity rated"));
+		}
+		if (sharing > 0) {
+			counts.add("its substance in more than one of this patient's orders");
+		}
+		List<String> lines = new ArrayList<String>();
+		lines.add(drug + " is one of this patient's active medications" + orders + ". " + String.join(", and ", counts) + ":");
+		for (Integer i : stated) {
+			lines.add(findingLine(findings.get(i), numbers.get(i), orderRecordNumbers, herOrderRecords, true, null, saidOnce));
+		}
+		lines.add(contraindications > 0 ? SCREEN_SCOPE : BELOW_FLOOR_SCOPE);
+		return String.join("\n", lines);
+	}
 
 	/** A recorded allergy whose name names the drug the question proposes — not one of her own orders (ADR Decision
 	 *  192). */

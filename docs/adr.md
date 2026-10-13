@@ -16117,3 +16117,18 @@ line — Sarah's three NSAIDs, and patient e30bc8f0's aspirin and ibuprofen — 
 removed.
 
 Pinned by `NsaidCrossReactivityGroupTest.aScreenOfThreeNsaidsSaysSoOnce` and the cross-reactivity case beside it.
+
+## Decision 198: A screen's drug-group line cites the orders it names, and a grid line's order markers ascend
+
+**Status: Accepted** (October 2026) — the owner's decision, 2026-10-13. It completes
+[Decision 197](#decision-197-a-screen-says-once-which-of-her-medications-share-a-drug-group-and-a-group-may-name-members-for-that-alone)
+and [Decision 191](#decision-191-a-screens-answer-states-a-mechanism-across-a-grid-of-drugs-once-and-says-once-what-is-true-of-every-contraindication-line).
+
+Checked against the rig, every marker of Sarah Taylor's screen resolved to the record it names, but the drug-group line
+named three of her orders and cited none, and the grid line listed its order markers in the order its findings named them
+(`[10] [12] [14] [15] [16] [17] [11] [13]`). The group line now cites the record of every order carrying a member — her
+orders of each substance being `DrugSafetyValidator.ordersOfSubstance`, `currentOrders`' answer for a caller holding no pass,
+so the screen resolves them as the chips do — and the grid line states each order record once, ascending, after its
+finding markers.
+
+Pinned by `ScreenSharedMechanismContextTest` and `NsaidCrossReactivityGroupTest.aScreenOfThreeNsaidsSaysSoOnce`.

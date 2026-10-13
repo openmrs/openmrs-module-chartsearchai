@@ -10344,6 +10344,19 @@ public class DrugSafetyValidator {
 	 *         {@code findForActiveOrders}' answer the caller already holds (issue #151). For
 	 *         {@link #currentMedicationOrdersOn} alone.
 	 */
+	/**
+	 * Her active orders {@code ref}'s substance was resolved from — {@link #currentOrders}' answer, for a caller holding
+	 * no validation pass: the injector's screen, which cites the orders a drug-group line names (ADR Decision 198). Empty
+	 * where there is no context.
+	 */
+	static List<PatientClinicalContext.ActiveDrugOrder> ordersOfSubstance(DrugReferenceService service, DrugReference ref,
+			List<DrugReference> orderEntries, PatientClinicalContext context) {
+		if (context == null || orderEntries == null) {
+			return Collections.emptyList();
+		}
+		return currentOrders(ref, orderEntries, context, BridgedOrders.of(service, context));
+	}
+
 	private static List<PatientClinicalContext.ActiveDrugOrder> currentOrders(DrugReference ref,
 			List<DrugReference> orderEntries, PatientClinicalContext context, BridgedOrders bridged) {
 		Object substance = ref.substanceGroupKey();

@@ -972,7 +972,9 @@ public class DrugReferenceInjector {
 					orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers,
 					!questionDrugs.isEmpty(), pairExtent.stated(), Lead.of(question, questionDrugs),
 					interactionsOnly ? BELOW_FLOOR_SCOPE : SCREEN_SCOPE,
-					questionDrugs.isEmpty() ? duplicateTherapyLines(orderEntries) : Collections.<String> emptyList());
+					questionDrugs.isEmpty() ? duplicateTherapyLines(orderEntries, context,
+							orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers)
+							: Collections.<String> emptyList());
 		} else if (!findings.isEmpty() && context != null
 				&& ChartSearchAiUtils.getBooleanGlobalProperty(
 						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
@@ -4311,18 +4313,21 @@ public class DrugReferenceInjector {
 	 * each substance once, in her orders' order, by the name the data gives it. A group whose members are all members of
 	 * a larger one's is not stated again.
 	 */
-	private List<String> duplicateTherapyLines(List<DrugReference> orderEntries) {
+	private List<String> duplicateTherapyLines(List<DrugReference> orderEntries, PatientClinicalContext context,
+			Map<String, Integer> herOrderRecords) {
 		List<String> lines = new ArrayList<String>();
 		if (orderEntries == null || orderEntries.isEmpty()) {
 			return lines;
 		}
 		List<Map<Object, String>> memberships = new ArrayList<Map<Object, String>>();
 		List<CrossReactivityGroup> groups = new ArrayList<CrossReactivityGroup>();
+		Map<Object, DrugReference> rowOf = new HashMap<Object, DrugReference>();
 		for (CrossReactivityGroup group : drugReferenceService.getCrossReactivityGroups()) {
 			Map<Object, String> members = new LinkedHashMap<Object, String>();
 			for (DrugReference entry : orderEntries) {
 				if (group.containsAnyCodeForDuplicateTherapy(entry.normalizedAtcCodes())) {
 					members.putIfAbsent(entry.substanceGroupKey(), entry.displayLabel());
+					rowOf.putIfAbsent(entry.substanceGroupKey(), entry);
 				}
 			}
 			if (members.size() >= 2) {
@@ -4339,8 +4344,23 @@ public class DrugReferenceInjector {
 				}
 			}
 			if (!inALarger) {
+				// Each of her orders carrying a member, cited by its record, ascending (ADR Decision 198).
+				Set<Integer> records = new TreeSet<Integer>();
+				for (Object substance : memberships.get(g).keySet()) {
+					for (PatientClinicalContext.ActiveDrugOrder order : DrugSafetyValidator.ordersOfSubstance(
+							drugReferenceService, rowOf.get(substance), orderEntries, context)) {
+						Integer number = order.getDisplay() == null ? null : herOrderRecords.get(order.getDisplay().trim());
+						if (number != null) {
+							records.add(number);
+						}
+					}
+				}
+				StringBuilder markers = new StringBuilder();
+				for (Integer number : records) {
+					markers.append(" [").append(number).append("]");
+				}
 				lines.add(DrugSafetyValidator.joinPartners(new ArrayList<String>(memberships.get(g).values()))
-						+ " are in one drug group (" + groups.get(g).getName() + ") — possible duplicate therapy.");
+						+ " are in one drug group (" + groups.get(g).getName() + ") — possible duplicate therapy." + markers);
 			}
 		}
 		return lines;
@@ -4490,8 +4510,14 @@ public class DrugReferenceInjector {
 		for (Integer i : grid) {
 			line += " [" + numbers.get(i) + "]";
 		}
+		// Every order record the grid's findings name, once, ascending (ADR Decision 198).
+		Set<Integer> records = new TreeSet<Integer>();
 		for (Integer i : grid) {
-			line += orderRecordMarkers(findings.get(i), herOrderRecords, ChartSearchAiUtils.citedIndexes(line));
+			records.addAll(ChartSearchAiUtils.citedIndexes(orderRecordMarkers(findings.get(i), herOrderRecords,
+					ChartSearchAiUtils.citedIndexes(line))));
+		}
+		for (Integer number : records) {
+			line += " [" + number + "]";
 		}
 		return line;
 	}

@@ -15820,3 +15820,36 @@ by the client as an open, red *"Safety checks:"* box under the allergy list — 
 `aboutAnotherOfHerMedications` true on an allergy-only question, whether or not anything is stated, and the client
 draws it behind one neutral line (*"8 findings about other medications this patient takes"*, one click away). The two
 cases above assert it.
+
+## Decision 189: A below-floor pair on an order known by its ATC code alone is counted, so the module still answers
+
+**Status: Accepted** (October 2026) — the owner's decision, 2026-10-13. It reverses the refusal
+`LlmInferenceServiceAnswerFromFindingsContextTest` pinned for issue #592's code-only case, now
+`aProposalRelatedToHerOrdersOnlyBelowTheFloorOnACodeOnlyOrderIsAnsweredByTheModule`.
+
+### Context
+
+On the 3.7.1 standalone, Sarah Taylor's proposal of acetaminophen — asked as Panadol, Tylenol, paracetamol and
+acetaminophen — relates it below the floor to nine of her orders, every pair Unknown. One is her heparin order, known by
+its ATC code alone (B01AB01). The pair's orders are gathered by the name walk an interaction chip's matched orders come
+from, which cannot see a code-only order, so that pair carried no order, `BelowFloorPair.onStartedOrdersOnly` was false,
+and the below-floor answer refused the whole proposal. The model answered instead, four ways for one drug: "The records
+do not address the safety of giving Acetaminophen", a list of "potential interactions" with no verdict, "cautioned due
+to interactions", and "No — Acetaminophen should not be given", which nothing in the data licenses.
+
+The refusal dated from when the answer named each order on its own line (Decision 142), and a code-only order has no
+name to print. Since Decision 144 the answer is one sentence that counts her orders and names none.
+
+### The decision
+
+`DrugSafetyValidator`'s below-floor pairs also gather an order with no known name whose ATC codes carry the
+interaction's ATC code — the code arm `PatientClinicalContext.hasActiveDrug` admitted the pair by. Its code-only stand-in
+display is counted by `DrugReferenceInjector.BelowFloorRows` and never printed; it is the only reader.
+
+Live, all four phrasings are answered by the module: *"The interaction data gives no rated reason to withhold
+Acetaminophen: it lists Acetaminophen against 9 of this patient's orders, none with a severity or mechanism on file."*
+
+### Residue
+
+Two code-only orders with the same codes share one stand-in display and count once, as two orders sharing a display
+always have.

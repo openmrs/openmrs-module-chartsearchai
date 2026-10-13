@@ -1,7 +1,7 @@
 {
  "version": "1.0",
  "source": "hand-authored fixture for issue #592 — not shipped data",
- "description": "Issue #592: patient 7's aspirin order, made nameless and reachable by its ATC code alone, against a proposal of subfloran whose only row joins it to aspirin below the severity floor (Unknown). The pair is below the floor but names none of her orders by display, so the below-floor answer refuses it; the aspirin entry carries no row naming subfloran, so nothing but the below-floor population tells the no-pair answer that the check related the drug to her. Neither answer may be composed.",
+ "description": "Issue #592: patient 7's aspirin order, made nameless and reachable by its ATC code alone, against a proposal of subfloran whose only row joins it to aspirin below the severity floor (Unknown). The pair is below the floor and names none of her orders by display; since ADR Decision 189 the below-floor answer counts the code-only order and states it. The aspirin entry carries no row naming subfloran, so nothing but the below-floor population tells the no-pair answer that the check related the drug to her, which keeps the no-pair answer from being composed.",
  "entries": [
   {
    "id": "aspirin",

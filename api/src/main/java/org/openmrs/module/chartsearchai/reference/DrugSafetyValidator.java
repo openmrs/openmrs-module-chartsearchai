@@ -7277,9 +7277,14 @@ public class DrugSafetyValidator {
 				orderEntries, bridgedOrders, subjects, matchedNames);
 			List<String> herOrders = new ArrayList<String>();
 			boolean started = true;
+			// An order known by its ATC code alone is matched by the code, as hasActiveDrug admitted the pair by it: the
+			// name walk above cannot see it (ADR Decision 189). Its stand-in display is counted, never printed.
+			String atc = DrugReference.normalizeAtcToken(i.getAtc());
 			for (PatientClinicalContext.ActiveDrugOrder order : context.getActiveDrugOrders()) {
 				String display = order.getDisplay() == null ? null : order.getDisplay().trim();
-				if (display != null && matchedNames.contains(display) && !herOrders.contains(display)) {
+				boolean matched = display != null && (matchedNames.contains(display)
+						|| (!order.hasKnownName() && atc != null && order.getAtcCodes().contains(atc)));
+				if (matched && !herOrders.contains(display)) {
 					herOrders.add(display);
 					started &= order.hasStarted();
 				}

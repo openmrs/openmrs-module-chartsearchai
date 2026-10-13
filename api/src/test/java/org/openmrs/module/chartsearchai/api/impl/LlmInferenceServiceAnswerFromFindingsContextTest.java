@@ -1085,12 +1085,13 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		return only;
 	}
 
-	/** A pair below the floor that the below-floor answer cannot state — her order, known by its ATC code alone,
-	 *  names no drug a line could print — still relates the drug to her, so the no-pair answer must not say it
-	 *  relates the drug to none of her medications: the model answers (issue #592). Her aspirin's entry carries no
-	 *  row naming subfloran, so the empty-{@code belowFloor} conjunct is all that refuses it. */
+	/** A pair below the floor on an order known by its ATC code alone is one of her orders all the same, and the
+	 *  below-floor answer, which counts her orders and names none of them (ADR Decision 144), states it: before ADR
+	 *  Decision 189 the module refused, and the model answered — on the 3.7.1 standalone, "Can I give her Tylenol?"
+	 *  drew "No — Acetaminophen should not be given" over nine unrated rows, one of them on a code-only heparin order.
+	 *  The order's stand-in display is counted and never printed. */
 	@Test
-	public void aProposalRelatedToHerOrdersOnlyByAPairNoLineCanStateStillAsksTheModel() throws Exception {
+	public void aProposalRelatedToHerOrdersOnlyBelowTheFloorOnACodeOnlyOrderIsAnsweredByTheModule() throws Exception {
 		DrugReferenceTestSupport.mapConceptToAtc(88, "B01AC06");
 		DrugReferenceTestSupport.makeOrderNameless(111, 88);
 		DrugReferenceService reference = DrugReferenceTestSupport.curatedFixtureService(BELOW_FLOOR_CODES_ONLY);
@@ -1109,8 +1110,19 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		RecordingProvider provider = new RecordingProvider();
 		ChartAnswer answer = serviceWith(provider, reference).search(patient, question);
 
-		assertEquals(1, provider.calls, "the model is asked: " + answer.getAnswer());
-		assertFalse(answer.isAnsweredByTheModule());
+		assertEquals(0, provider.calls, "no model is asked: " + answer.getAnswer());
+		assertTrue(answer.isAnsweredByTheModule());
+		int cited = -1;
+		for (RecordReference ref : answer.getReferences()) {
+			if (ChartSearchAiConstants.RESOURCE_TYPE_DRUG_REFERENCE.equals(ref.getResourceType())) {
+				cited = ref.getIndex();
+			}
+		}
+		assertEquals("The interaction data gives no rated reason to withhold Subfloran: it lists Subfloran against one of "
+				+ "this patient's orders, with no severity on file. [" + cited + "]\n"
+				+ "Interactions the data does not rate, and anything beyond drug interactions, are not covered.",
+				answer.getAnswer());
+		assertFalse(answer.getAnswer().contains("ATC"), "the code-only stand-in is counted, never printed");
 	}
 
 	/** Beside an order that has not started, the answer would count it among her active medications, so the model

@@ -1487,9 +1487,10 @@ public class SafetyWarning {
 
 	/**
 	 * This warning, stated as about another of her medications — see {@link #isAboutAnotherOfHerMedications()}.
-	 * Package-private: written only by {@code DrugSafetyValidator.ContraindicationChips}, where it stamps the
-	 * orders the check of her own prescriptions recorded for the chip's substance. Changes nothing this
-	 * warning prints.
+	 * Package-private: written by {@code DrugSafetyValidator.ContraindicationChips}, where it stamps the
+	 * orders the check of her own prescriptions recorded for the chip's substance, and by
+	 * {@link ConflictingOrderStatement} for a cross-reactivity chip beside a question asking only for her allergies
+	 * (ADR Decision 188). Changes nothing this warning prints.
 	 */
 	SafetyWarning asAboutAnotherOfHerMedications() {
 		return new SafetyWarning(type, drug, detail, severity, unratedRelationship, uncorroboratedChartMatch,
@@ -1504,7 +1505,9 @@ public class SafetyWarning {
 	 * Whether this finding is about one of her OWN medications other than the drug the response is about: a
 	 * contraindication the check of her own prescriptions against her own allergy and condition records
 	 * raised ({@code DrugSafetyValidator.addActiveOrderContraindications}, issue #143), for a substance no
-	 * drug the question or the answer put in play is of, on a response that put one in play. Published
+	 * drug the question or the answer put in play is of, on a response that put one in play; and, on a question
+	 * asking only for her allergies, a cross-reactivity finding about one of her orders — about her medications,
+	 * not about the allergies asked for (ADR Decision 188). Published
 	 * VERBATIM as each chip's {@code aboutAnotherOfHerMedications} wire key, so this accessor's name IS the
 	 * key.
 	 *

@@ -15813,3 +15813,10 @@ cross-reactivity sentences alone.
 Pinned by `AllergyQuestionConflictingOrderContextTest.search_aCrossReactiveAllergyAloneIsLeftToItsChip` and
 `search_anOrderWithACrossReactiveFindingBesideItsOwnAllergyStatesOnlyTheOwnAllergy`, both red when
 `isACrossReactivityFinding` answers false.
+
+**Amended the same day, on the owner's decision.** Left as plain chips, the eight cross-reactivity findings were drawn
+by the client as an open, red *"Safety checks:"* box under the allergy list — the statement had kept every chip
+`statedInTheAnswer`, which the client hides, and this decision unmarked them. Each such chip is now also published
+`aboutAnotherOfHerMedications` true on an allergy-only question, whether or not anything is stated, and the client
+draws it behind one neutral line (*"8 findings about other medications this patient takes"*, one click away). The two
+cases above assert it.

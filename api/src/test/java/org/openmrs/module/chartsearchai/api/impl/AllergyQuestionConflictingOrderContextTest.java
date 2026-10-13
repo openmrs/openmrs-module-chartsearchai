@@ -228,8 +228,8 @@ public class AllergyQuestionConflictingOrderContextTest extends BaseModuleContex
 
 	/**
 	 * A chip raised by an allergy to a DIFFERENT drug of the same class is not an answer to "any allergies?": her
-	 * order is not one of her allergies, so the answer is the model's alone and the finding stays a chip (ADR Decision
-	 * 188, which narrowed Decision 124's statement to an allergy recorded to the ordered drug itself).
+	 * order is not one of her allergies, so the answer is the model's alone and the finding stays a chip, drawn apart
+	 * from the answer (ADR Decision 188, which leaves a cross-reactivity finding out of Decision 124's statement).
 	 */
 	@Test
 	public void search_aCrossReactiveAllergyAloneIsLeftToItsChip() throws IOException {
@@ -248,6 +248,8 @@ public class AllergyQuestionConflictingOrderContextTest extends BaseModuleContex
 				"precondition: the chip is the cross-reactivity finding, was: " + chip.getDetail());
 		assertEquals(modelAnswer, answer.getAnswer(), "nothing is appended to the allergy list");
 		assertFalse(chip.isStatedInTheAnswer(), "the finding stays a chip the clinician has not read in the answer");
+		assertTrue(chip.isAboutAnotherOfHerMedications(),
+			"and is drawn apart from the answer, as a finding about her medications rather than what was asked");
 		for (RecordReference reference : answer.getReferences()) {
 			assertFalse(reference.isAttachedByTheModule(), "no order is cited by the module, was: " + reference.getIndex());
 		}
@@ -281,6 +283,8 @@ public class AllergyQuestionConflictingOrderContextTest extends BaseModuleContex
 			answer.getAnswer(), "the order once, cited, for the allergy to its own drug alone");
 		assertTrue(own.isStatedInTheAnswer(), "the own-drug allergy is stated");
 		assertFalse(crossReactive.isStatedInTheAnswer(), "the cross-reactivity is not, so it stays a chip");
+		assertTrue(crossReactive.isAboutAnotherOfHerMedications(), "drawn apart from the answer");
+		assertFalse(own.isAboutAnotherOfHerMedications(), "the finding the answer states is not moved");
 		assertTrue(order.isAttachedByTheModule(), "the module cited it");
 		assertEquals(Collections.singletonList(own.getFindingCitation()), order.getAttachedFor(),
 			"for the one finding the line states");

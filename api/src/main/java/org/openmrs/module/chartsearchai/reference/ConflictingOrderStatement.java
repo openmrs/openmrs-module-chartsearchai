@@ -42,7 +42,9 @@ import org.openmrs.module.chartsearchai.api.impl.QueryScopeRouter;
  * <em>"- Lidocaine [4]: recorded allergy to this drug."</em> (ADR Decision 167); otherwise by each finding's own
  * sentence verbatim, since a rule finding or an allergy recorded under another name claims only what its own words
  * do — which is also why the heading says "records" and not "allergies". It says "directly", so a list leaving the
- * cross-reactivity chips out does not read as every order her records touch. Only the chips it states are
+ * cross-reactivity chips out does not read as every order her records touch, and each such chip is
+ * {@link SafetyWarning#asAboutAnotherOfHerMedications() drawn apart} from the answer, whether or not anything is
+ * stated: a finding about her medications beside a list of her allergies. Only the chips it states are
  * {@link SafetyWarning#asStatedInTheAnswer() marked}, and every chip is still published: the wire keeps every
  * finding, and a client reads {@code statedInTheAnswer} to know the clinician has read it.
  * APPENDS, as {@code EndedOrderStatement} does: no prompt change, and never a word about whether any drug may
@@ -160,20 +162,23 @@ public final class ConflictingOrderStatement {
 				quoted.append(' ').append(DrugSafetyValidator.endSentence(chip.getDetail().trim()));
 			}
 		}
+		// A cross-reactivity chip is about her medications and not about what was asked, so it is drawn apart from the
+		// answer (ADR Decision 188) — whether or not anything else is stated.
+		List<SafetyWarning> published = new ArrayList<SafetyWarning>(warnings.size());
+		for (SafetyWarning chip : warnings) {
+			published.add(statedChips.contains(chip) ? chip.asStatedInTheAnswer()
+					: chip.isACrossReactivityFinding() ? chip.asAboutAnotherOfHerMedications() : chip);
+		}
 		if (statedChips.isEmpty()) {
-			return unchanged;
+			return new Stated(answer, Collections.unmodifiableList(published), Collections.<Integer, List<Integer>> emptyMap());
 		}
 		StringBuilder sb = new StringBuilder(DrugSafetyValidator.endSentence(answer.trim())).append("\n\n").append(HEADING);
 		for (String item : ownAllergy) {
 			sb.append(item);
 		}
 		sb.append(quoted);
-		List<SafetyWarning> stated = new ArrayList<SafetyWarning>(warnings.size());
-		for (SafetyWarning chip : warnings) {
-			stated.add(statedChips.contains(chip) ? chip.asStatedInTheAnswer() : chip);
-		}
 		// Trimmed so a blank answer takes the statement without a leading space.
-		return new Stated(sb.toString().trim(), Collections.unmodifiableList(stated), Collections.unmodifiableMap(cited));
+		return new Stated(sb.toString().trim(), Collections.unmodifiableList(published), Collections.unmodifiableMap(cited));
 	}
 
 	/**

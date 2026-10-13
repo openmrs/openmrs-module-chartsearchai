@@ -751,6 +751,8 @@ public class CitationGroundingVerifier {
 		List<String> isolateSources = new ArrayList<String>();
 		List<String> isolateStatements = new ArrayList<String>();
 		List<ClaimSupport> isolateSupport = new ArrayList<ClaimSupport>();
+		// An enumeration item's header and item, asked about apart (ADR Decision 187); null for any other unit.
+		List<Sentence> isolateClaims = new ArrayList<Sentence>();
 		// How many claim units each reference is cited for and queued to be judged on, capped or not.
 		int[] uses = new int[references.size()];
 		for (int i = 0; i < references.size(); i++) {
@@ -849,6 +851,7 @@ public class CitationGroundingVerifier {
 						isolateSources.add(tier1.recordText);
 						isolateStatements.add(statement);
 						isolateSupport.add(support);
+						isolateClaims.add(claim);
 					} else {
 						batchPositions.add(i);
 						batchSources.add(tier1.recordText);
@@ -880,10 +883,16 @@ public class CitationGroundingVerifier {
 		// enumeration in either mode) get a single-pair call each, so the batched LLM cannot couple
 		// their statements into each other's verdicts. Same contract as the batch.
 		for (int k = 0; k < isolatePositions.size(); k++) {
-			List<Boolean> verdict = safeEntailsBatch(Collections.singletonList(isolateSources.get(k)),
-					Collections.singletonList(isolateStatements.get(k)));
-			withheldNegatives += recordUse(isolatePositions.get(k),
-					(verdict != null && !verdict.isEmpty()) ? verdict.get(0) : null, isolateSupport.get(k),
+			Sentence claim = isolateClaims.get(k);
+			Boolean verdict;
+			if (claim.listHeader != null) {
+				verdict = safeEntailsListItem(isolateSources.get(k), claim.listHeader, claim.listItem);
+			} else {
+				List<Boolean> verdicts = safeEntailsBatch(Collections.singletonList(isolateSources.get(k)),
+						Collections.singletonList(isolateStatements.get(k)));
+				verdict = (verdicts != null && !verdicts.isEmpty()) ? verdicts.get(0) : null;
+			}
+			withheldNegatives += recordUse(isolatePositions.get(k), verdict, isolateSupport.get(k),
 					demoteOnlyIndexes, refuted, entailedUses, withheld);
 		}
 		// A reference is refuted if ANY use was, entailed only if EVERY use was, and otherwise has no
@@ -1393,6 +1402,16 @@ public class CitationGroundingVerifier {
 	 * path. Returns {@code null} (not an empty list) on failure so the caller can tell "batch failed"
 	 * from "batch ran and returned verdicts".
 	 */
+	private Boolean safeEntailsListItem(String source, String header, String item) {
+		try {
+			return llmProvider.entailsListItem(source, header, item);
+		}
+		catch (RuntimeException e) {
+			log.warn("Tier-2 list-item entailment failed; keeping the Tier-1 verdict", e);
+			return null;
+		}
+	}
+
 	private List<Boolean> safeEntailsBatch(List<String> sources, List<String> statements) {
 		try {
 			return llmProvider.entailsBatch(sources, statements);
@@ -1868,22 +1887,25 @@ public class CitationGroundingVerifier {
 			String item = itemSlice(sentence.text, itemStart, marker.end());
 			String named = stripCitationMarkers(item);
 			String fragment;
+			String listItem;
 			if (named.isEmpty()) {
 				if (lastNamed == null) {
 					return null;
 				}
 				fragment = lastNamed + " " + marker.group();
+				listItem = lastNamed;
 			} else if (named.split("\\s+").length > MAX_ENUMERATION_ITEM_WORDS
 					|| CLAUSE_MARKER.matcher(named).find()) {
 				return null;
 			} else {
 				fragment = item;
+				listItem = named;
 				lastNamed = named;
 				namedItems++;
 			}
 			Sentence built = newFragment(budget, preamble + " " + fragment,
 					Collections.singleton(Integer.valueOf(marker.group(1))),
-					sentence.sourceCitedIndexes);
+					sentence.sourceCitedIndexes, preamble, listItem);
 			if (built == null) {
 				budget.refused(sentence);
 				return null;
@@ -2031,10 +2053,16 @@ public class CitationGroundingVerifier {
 	 */
 	private static Sentence newFragment(FragmentBudget budget, String text,
 			Set<Integer> citedIndexes, Set<Integer> sourceCitedIndexes) {
+		return newFragment(budget, text, citedIndexes, sourceCitedIndexes, null, null);
+	}
+
+	/** The fragment factory, carrying an enumeration item's header and item where it is one (ADR Decision 187). */
+	private static Sentence newFragment(FragmentBudget budget, String text, Set<Integer> citedIndexes,
+			Set<Integer> sourceCitedIndexes, String listHeader, String listItem) {
 		if (!budget.charge(text.length())) {
 			return null;
 		}
-		return new Sentence(text, citedIndexes, true, sourceCitedIndexes);
+		return new Sentence(text, citedIndexes, true, sourceCitedIndexes, listHeader, listItem);
 	}
 
 	/**
@@ -2112,6 +2140,16 @@ public class CitationGroundingVerifier {
 		 */
 		final boolean isolate;
 
+		/**
+		 * For one item of a colon-introduced list, the header up to that colon and the item's own text without its
+		 * marker; {@code null} for every other unit. Tier-2 asks the judge about the item UNDER the header
+		 * ({@code LlmProvider.entailsListItem}), not about {@link #text}, which glues the two and so makes one item's
+		 * record answer for whatever the header says of the whole list (ADR Decision 187).
+		 */
+		final String listHeader;
+
+		final String listItem;
+
 		/** Whole-sentence constructor: the unit is its own source, so {@link #sourceCitedIndexes}
 		 *  is the same instance as {@code citedIndexes}, which the caller has made unmodifiable. A
 		 *  whole sentence reaches it through {@link CitationGroundingVerifier#newSentence}, as a
@@ -2139,10 +2177,18 @@ public class CitationGroundingVerifier {
 		 */
 		Sentence(String text, java.util.Set<Integer> citedIndexes, boolean isolate,
 				java.util.Set<Integer> sourceCitedIndexes) {
+			this(text, citedIndexes, isolate, sourceCitedIndexes, null, null);
+		}
+
+		/** An enumeration item: a fragment that also carries its list's header and its own item text. */
+		Sentence(String text, java.util.Set<Integer> citedIndexes, boolean isolate,
+				java.util.Set<Integer> sourceCitedIndexes, String listHeader, String listItem) {
 			this.text = text;
 			this.citedIndexes = citedIndexes;
 			this.isolate = isolate;
 			this.sourceCitedIndexes = sourceCitedIndexes;
+			this.listHeader = listHeader;
+			this.listItem = listItem;
 		}
 
 		boolean cites(int index) {

@@ -2726,7 +2726,7 @@ The record is injected in order that the answer should not deny a medication the
 
 On that database before either arrangement was built: **53 active drug orders across 30 patients, of which 0 were codes-only** — nameless in all three sources `addDrugName` reads *and* ATC-mapped. From a SQL sweep of those columns and the ATC map, which RE-EXPRESSES that predicate rather than calling it: `Concept.getName()` can return null for a concept that still has name rows, so the sweep can only UNDERCOUNT, the direction that turns a real instance into a reported zero. The zero is therefore weak in the direction of the claim it would support. Production's own instrument — the builder's per-order "has no readable name" WARN over a sweep of patients — would settle it and was not run. Both instances here were manufactured, and the arrangement also needs the querystore index to be behind for that order, which is environmental and not countable from the database.
 
-**Not this measurement's result, recorded so it is not read as one.** In the twinned arrangement under entailment, two correctly-named chart `drug_order` citations in a colon-introduced list published `grounded=false` while the third published `true`; in Tier-1-only mode all three published `true`. **The cause is not established, and no answer text was recorded for it** — the one observation in this section with nothing to check a mechanism against. One earlier draft attributed it to the enumeration-scoping family of [#278](https://github.com/openmrs/openmrs-module-chartsearchai/issues/278)/[#279](https://github.com/openmrs/openmrs-module-chartsearchai/issues/279), and that attribution is wrong: #278 checks each citation of a colon-introduced list against the preamble plus its OWN item, and #279 is scoped to the colon-LESS residue, so neither family covers this shape. Whoever picks it up starts by capturing the answer text again; nothing here is evidence that it is accounted for.
+**Not this measurement's result, recorded so it is not read as one.** In the twinned arrangement under entailment, two correctly-named chart `drug_order` citations in a colon-introduced list published `grounded=false` while the third published `true`; in Tier-1-only mode all three published `true`. **The cause is not established, and no answer text was recorded for it** — the one observation in this section with nothing to check a mechanism against. One earlier draft attributed it to the enumeration-scoping family of [#278](https://github.com/openmrs/openmrs-module-chartsearchai/issues/278)/[#279](https://github.com/openmrs/openmrs-module-chartsearchai/issues/279), and that attribution is wrong: #278 checks each citation of a colon-introduced list against the preamble plus its OWN item, and #279 is scoped to the colon-LESS residue, so neither family covers this shape. Whoever picks it up starts by capturing the answer text again; nothing here is evidence that it is accounted for. (**2026-10-13:** [Decision 187](#decision-187-a-list-item-is-judged-under-its-header-not-glued-to-it) measured a mechanism that produces this shape — a list header describing the whole list, which no one item's record can support — but this observation's own answer text is still missing, so it is a candidate, not an attribution.)
 
 #### Remedies, with what each costs
 
@@ -15722,3 +15722,58 @@ narrowing condition has a case that reddens when the condition is removed.
 A wrong marker that is its item's only one is kept, as is a marker cited once: nothing else in the answer says where
 it belongs, and the grounding verdict remains the signal there. The streamed tokens still carry the marker until
 `done` replaces them.
+
+## Decision 187: A list item is judged under its header, not glued to it
+
+**Status: Accepted** (October 2026) — implemented on the owner's decision, 2026-10-13. It changes what the Tier-2 judge
+is asked for one item of a colon-introduced list ([#278](https://github.com/openmrs/openmrs-module-chartsearchai/issues/278)),
+and nothing about how a list is split or which citations are judged.
+
+### Context
+
+On the 3.7.1 standalone, Sarah Taylor's *"Does she have any allergies?"* was answered *"Yes — the patient has multiple
+allergies: Levothyroxine [1], ..., Gentamicin [8], ..."* and five correct allergy citations were published
+`grounded: false` on every run. #278 judges each item as the header glued to the item — *"Yes — the patient has
+multiple allergies: Levothyroxine"* — and one allergy record cannot support "multiple allergies".
+
+Dropping the counting words from the header was rejected: it is an English word list, and the next phrasing ("two",
+"numerous") is the same defect again.
+
+### The decision
+
+An enumeration item's `CitationGroundingVerifier.Sentence` carries its header and its item apart, and Tier-2 asks
+`LlmProvider.entailsListItem(source, header, item)`. Its prompt has the judge first decide whether the header says its
+items are true of the patient, not true of the patient (no, not taking, no longer, denies, negative for, ruled out), or
+about someone else, and says that how many items the header gives the list is not part of the question. Every other
+claim unit keeps `entailsBatch`.
+
+**Measured under production settings only.** Every figure below is through the module's own request against the rig's
+Gemma E4B with the rig's server flags, `--reasoning-budget 0` included, one item per call as the verifier asks. An
+earlier round on a server that let the model reason produced a different table and is not quoted: a first prompt that
+passed every control there accepted *"No — the patient has no allergies: X"* for 7 of 8 items once reasoning was off,
+and was replaced. Seven prompts were measured; the shipped one is the seventh.
+
+| Headers (items each) | Expected | Glued (before) | Shipped |
+|---|---|---|---|
+| "multiple", "several", "9 drug", "a long list of", "two ... are recorded" allergies (8) | yes | 6 of 40 | 40 of 40 |
+| "the following allergies:", "Allergies:" (8) | yes | 16 of 16 | 16 of 16 |
+| "on 3 medications", "takes 4 drugs", "Her active medications:", "Her 2 active conditions are:" | yes | 3 of 11 | 11 of 11 |
+| "three eye problems are recorded:" (3) | yes | 1 of 3 | 3 of 3 |
+| 16 negated, ruled-out or other-person allergy headers (8) | no | 128 of 128 refused | 127 of 128 refused |
+| 5 negated or stopped medication headers (3) | no | 15 of 15 refused | 15 of 15 refused |
+| a record naming a different drug than the item (8); a condition listed as a drug allergy (3) | no | 11 of 11 refused | 11 of 11 refused |
+
+The one item accepted against expectation is under *"She has no drug allergies:"*, a header that contradicts the list it
+introduces. On the rig, the answer above now publishes its eleven model citations `true`, and three other list answers
+on the same patient ("any allergies?", her active conditions, her medications) publish byte-identical answers and
+verdicts, at the same latency as before (11-21 s per question on both builds, two runs each, within 2 s of each other).
+
+Pinned by `CitationGroundingVerifierTest.enumeration_anItemIsAskedAboutUnderItsHeaderSoAHeaderCountingTheListDoesNotRefuseIt`
+and `enumeration_aCoCitedMarkerIsAskedAboutTheItemBeforeIt`, both red when items are routed back to `entailsBatch`. The
+verdicts themselves are the model's, so no test pins them; the table is the evidence.
+
+### Residue
+
+One measured false acceptance, on a self-contradictory header, where the glued form refused it. A header naming a
+category ("eye problems") was supported here, but that rests on the judge's reading of the category, which its prompt
+tells it not to bring outside knowledge to.

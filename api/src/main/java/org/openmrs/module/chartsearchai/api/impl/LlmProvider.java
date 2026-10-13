@@ -771,8 +771,8 @@ public class LlmProvider {
 	 * flips cosine alone cannot judge (high lexical overlap but e.g. "patient has X" vs "mother had
 	 * X"). The chart-grounding path verifies an answer's citations via {@link #entailsBatch} — in ONE
 	 * round-trip for citations whose statements do not overlap, but in a single-pair call each for the
-	 * fragments of one sentence that do (a clause-scoped compound, or an enumeration in either mode:
-	 * see {@code CitationGroundingVerifier} and #278). So this single-pair form is not only the
+	 * fragments of one sentence that do (a clause-scoped compound: see {@code CitationGroundingVerifier} and
+	 * #278; an enumeration item goes to {@link #entailsListItem} instead, ADR Decision 187). So this single-pair form is not only the
 	 * primitive and the one-off path — {@code entailsBatch} is genuinely called with one pair on the
 	 * grounding path too.
 	 *
@@ -856,6 +856,42 @@ public class LlmProvider {
 			result.set(positions.get(k), k < verdicts.size() ? verdicts.get(k) : null);
 		}
 		return result;
+	}
+
+	static final String ENTAILMENT_LIST_ITEM_SYSTEM_PROMPT = "You are a strict clinical fact-checker. "
+			+ "You are given a SOURCE record and ONE ITEM of a list, with the LIST HEADER that introduces the list. "
+			+ "First decide what the header says about its items: that they are TRUE of the patient (the patient has, "
+			+ "takes, is on, was diagnosed with them), or that they are NOT (the patient has no, is not taking, no longer "
+			+ "has, denies, is negative for, or was ruled out for them), or that they are about someone else (a relative, "
+			+ "family history). A header saying the patient has NO items of a kind (\"has no allergies:\", \"no "
+			+ "medications:\") says that every item listed under it is NOT true of the patient. Answer YES only when the "
+			+ "header says the items are true of the patient AND the SOURCE explicitly records this item for the patient. "
+			+ "Answer NO when the header says they are not true of the patient, when it is about someone else, when the "
+			+ "SOURCE records the item as unconfirmed or merely suspected, or when the SOURCE does not state the item. How "
+			+ "many items the header says the list has is NOT part of the question: one SOURCE answers for one item. Do "
+			+ "not use any outside knowledge. Return a \"verdicts\" array with exactly one entry - the single word YES or NO.";
+
+	/**
+	 * Tier-2 grounding for ONE item of a colon-introduced list (ADR Decision 187): whether {@code source} supports
+	 * {@code item} as a member of the list {@code header} introduces. Asked apart from {@link #entailsBatch} because
+	 * that form glues the header to the item, and a header describing the whole list ("multiple allergies:", "9 drug
+	 * allergies:") is a claim no one item's record can support — measured, every item of such a list was refused while
+	 * the same items under "the following allergies:" were all supported. The header still travels with the item, so
+	 * a header about a relative, or a negated one, is refused as before.
+	 *
+	 * @return {@code TRUE}/{@code FALSE}, or {@code null} where an input is blank or the verdict is missing or
+	 *         unparseable — the caller then keeps the Tier-1 verdict, as for {@link #entailsBatch}
+	 */
+	public Boolean entailsListItem(String source, String header, String item) {
+		if (source == null || source.trim().isEmpty() || header == null || header.trim().isEmpty() || item == null
+				|| item.trim().isEmpty()) {
+			return null;
+		}
+		String user = "SOURCE: " + source.trim() + "\nLIST HEADER: " + header.trim() + "\nITEM: " + item.trim() + "\n";
+		LlmEngine.InferenceResult inference = getActiveEngine().infer(ENTAILMENT_LIST_ITEM_SYSTEM_PROMPT, user,
+			getTimeoutSeconds(), EntailmentBatchResponseFormat.build(MAPPER, 1));
+		List<Boolean> verdicts = parseBatchVerdicts(inference == null ? null : inference.getText(), 1);
+		return verdicts.isEmpty() ? null : verdicts.get(0);
 	}
 
 	/**

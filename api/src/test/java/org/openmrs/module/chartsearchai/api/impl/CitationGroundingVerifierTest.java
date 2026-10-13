@@ -130,6 +130,12 @@ public class CitationGroundingVerifierTest {
 			}
 			return out;
 		}
+
+		/** A list item (ADR Decision 187) is one call of one pair, counted and recorded as the header and item joined. */
+		@Override
+		public Boolean entailsListItem(String source, String header, String item) {
+			return entailsBatch(Collections.singletonList(source), Collections.singletonList(header + " " + item)).get(0);
+		}
 	}
 
 	private StubEmbedder embeddings;
@@ -1604,6 +1610,77 @@ public class CitationGroundingVerifierTest {
 			}
 			return out;
 		}
+
+		/** A list item is asked about under its header (ADR Decision 187); recorded as the two joined, judged alike. */
+		@Override
+		public Boolean entailsListItem(String source, String header, String item) {
+			return entailsBatch(Collections.singletonList(source), Collections.singletonList(header + " " + item)).get(0);
+		}
+	}
+
+	/**
+	 * What the live judge does with a list HEADER that describes the whole list (ADR Decision 187): one allergy record
+	 * cannot support "multiple allergies", so the glued statement is refused, while the item asked about under its
+	 * header is supported where the record names it.
+	 */
+	private static final class WholeListHeaderJudge extends LlmProvider {
+
+		final List<String[]> listItemCalls = new ArrayList<String[]>();
+
+		@Override
+		public List<Boolean> entailsBatch(List<String> sources, List<String> statements) {
+			List<Boolean> out = new ArrayList<Boolean>();
+			for (int i = 0; i < sources.size(); i++) {
+				out.add(Boolean.valueOf(!statements.get(i).contains("multiple")
+						&& sources.get(i).toLowerCase().contains(statements.get(i).toLowerCase()
+								.replaceAll(".*: ", ""))));
+			}
+			return out;
+		}
+
+		@Override
+		public Boolean entailsListItem(String source, String header, String item) {
+			listItemCalls.add(new String[] { header, item });
+			return Boolean.valueOf(source.toLowerCase().contains(item.toLowerCase()));
+		}
+	}
+
+	@Test
+	public void enumeration_anItemIsAskedAboutUnderItsHeaderSoAHeaderCountingTheListDoesNotRefuseIt() {
+		// Measured on the 3.7.1 standalone: "Yes — the patient has multiple allergies: Levothyroxine [1], ..." had its
+		// correct citations published false, the judge refusing that one record supports "multiple allergies".
+		WholeListHeaderJudge judge = new WholeListHeaderJudge();
+		verifier.setLlmProvider(judge);
+
+		List<RecordReference> result = verifier.verify(
+			"Yes — the patient has multiple allergies: Lidocaine [1], Ketoconazole [2], and Aspirin [3].", threeRefs(),
+			allergyMappings("Penicillin"), FLOOR, TIER2_ON, false);
+
+		assertEquals(Boolean.TRUE, result.get(0).getGrounded(), "[1] Lidocaine");
+		assertEquals(Boolean.FALSE, result.get(1).getGrounded(), "[2] is a penicillin record cited for Ketoconazole");
+		assertEquals(Boolean.TRUE, result.get(2).getGrounded(), "[3] Aspirin");
+		assertEquals(3, judge.listItemCalls.size(), "one call per item");
+		for (String[] call : judge.listItemCalls) {
+			assertEquals("Yes — the patient has multiple allergies:", call[0], "the header, without the item");
+		}
+		assertEquals("Lidocaine", judge.listItemCalls.get(0)[1]);
+		assertEquals("Ketoconazole", judge.listItemCalls.get(1)[1]);
+		assertEquals("Aspirin", judge.listItemCalls.get(2)[1], "the item, without its separator or marker");
+	}
+
+	@Test
+	public void enumeration_aCoCitedMarkerIsAskedAboutTheItemBeforeIt() {
+		WholeListHeaderJudge judge = new WholeListHeaderJudge();
+		verifier.setLlmProvider(judge);
+
+		verifier.verify("Yes — the patient has multiple allergies: Lidocaine [1] [2], and Aspirin [3].", threeRefs(),
+			allergyMappings("Lidocaine"), FLOOR, TIER2_ON, false);
+
+		List<String> items = new ArrayList<String>();
+		for (String[] call : judge.listItemCalls) {
+			items.add(call[1]);
+		}
+		assertEquals(Arrays.asList("Lidocaine", "Lidocaine", "Aspirin"), items, "[2] co-cites the Lidocaine item");
 	}
 
 	private List<RecordMapping> allergyMappings(String secondAllergen) {

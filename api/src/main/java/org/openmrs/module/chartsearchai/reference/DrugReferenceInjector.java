@@ -2863,12 +2863,16 @@ public class DrugReferenceInjector {
 		return displays;
 	}
 
-	/** Whether {@code finding} is an interaction-typed finding every order of which is one of {@code itsOwnOrders} — the
-	 *  drug in two or more of her own orders (issue #477), which relates it to none of her OTHER orders (ADR Decision
-	 *  206). */
+	/**
+	 * Whether {@code finding} is the drug in two or more of her own orders (issue #477), which relates it to none of her
+	 * OTHER orders (ADR Decision 206): an interaction-typed finding with no rating and no partner SUBSTANCE ({@link
+	 * SafetyWarning#partnerRows()}), every order of which is one of {@code itsOwnOrders}. Not a rated rule whose partner
+	 * order carries the drug too — Rose Rifadupla's rifampicin "interacts with active order Rifampicin isoniazid
+	 * pyrazinamide and ethambutol — Major" is an interaction with another substance of that order, and counts as one.
+	 */
 	private static boolean namesOnlyItsOwnOrders(SafetyWarning finding, Set<String> itsOwnOrders) {
 		if (!SafetyWarning.TYPE_INTERACTION.equals(finding.getType()) || finding.namedPartners().isEmpty()
-				|| itsOwnOrders.isEmpty()) {
+				|| itsOwnOrders.isEmpty() || finding.getSeverity() != null || !finding.partnerRows().isEmpty()) {
 			return false;
 		}
 		for (String partner : finding.namedPartners()) {
@@ -4353,7 +4357,7 @@ public class DrugReferenceInjector {
 		for (Integer i : stated) {
 			SafetyWarning finding = findings.get(i);
 			if (SafetyWarning.TYPE_INTERACTION.equals(finding.getType()) && !finding.statesOrdersSharingASubstance()
-					&& statesNoSeverity(finding)) {
+					&& !namesOnlyItsOwnOrders(finding, itsOwnOrders) && statesNoSeverity(finding)) {
 				unrated += Math.max(1, finding.namedPartners().size());
 			}
 		}

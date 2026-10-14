@@ -16315,6 +16315,13 @@ states what the check established, as Decision 143 does for a drug proposed:
 > to none of this patient's 1 other active medication. [n]
 > Metronidazole is already in active orders Metronidazole (2 orders) — possible duplicate therapy. [m]
 
+**Corrected the same day.** Only an UNRATED finding naming no partner substance (`SafetyWarning.partnerRows`) is that
+finding: the first cut, pushed in 3b6caa6c, also counted Rose Rifadupla's rated *"Rifampicin interacts with active order
+Rifampicin isoniazid pyrazinamide and ethambutol — Major"* — an interaction with another substance of an order carrying
+rifampicin too — as her orders sharing it, and left the #477 finding in the lead's unrated tally, so two Moderate lines
+read *"none with a severity rated"*. Found by re-running the session's 86 sweep questions on the deployed build; pinned
+by `OwnMedicationSafetyContextTest.theFindingThatHerOrdersCarryTheDrugTwiceIsNeitherAnInteractionNorAnUnratedOne`.
+
 Fail-closed on Decision 143's conjuncts — her other orders all started and identified by the data, the drug carrying
 interaction rows that none of their rules names, her allergy records checked — and never a clearance. Where her orders of
 the drug are ALL her orders — James's two metronidazole orders and nothing else, verified on the rig — the sentence is

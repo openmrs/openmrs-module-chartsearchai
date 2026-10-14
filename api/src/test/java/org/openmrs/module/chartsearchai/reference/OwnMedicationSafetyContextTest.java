@@ -221,6 +221,26 @@ public class OwnMedicationSafetyContextTest extends BaseModuleContextSensitiveTe
 	}
 
 	@Test
+	public void theFindingThatHerOrdersCarryTheDrugTwiceIsNeitherAnInteractionNorAnUnratedOne() throws IOException {
+		// The first cut of ADR Decision 206 took the finding that the drug is in two of her orders out of the interaction
+		// count and left it in the unrated count, so two Moderate lines were introduced "none with a severity rated". On
+		// the rig it also swallowed rated interactions whose partner order carries the drug too (Rose Rifadupla's
+		// rifampicin against her other TB combination, "— Major"): only an UNRATED finding naming no partner substance is
+		// her orders sharing the drug.
+		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
+			DrugReferenceTestSupport.activeOrder("order-ibuprofen", "Ibuprofen 400mg"),
+			DrugReferenceTestSupport.activeOrder("order-combination", "Ibuprofen and celecoxib", "Ibuprofen", "Celecoxib"),
+			DrugReferenceTestSupport.activeOrder("order-prednisone", "Prednisone 5mg"));
+
+		String answer = answer("Is ibuprofen safe with her other medications?", null, orders);
+
+		assertNotNull(answer, "the module answers");
+		assertEquals("Ibuprofen is one of this patient's active medications (Ibuprofen 400mg [2] and Ibuprofen and celecoxib "
+				+ "[3]). 2 interactions with this patient's other active medications, and its substance in more than one of "
+				+ "this patient's orders:", answer.split("\n")[0], "was: " + answer);
+	}
+
+	@Test
 	public void herOwnDrugWithNoOtherMedicationToCheckItAgainstSaysSo() throws IOException {
 		// James Thompson holds two orders of metronidazole and nothing else: there is no other medication to relate it
 		// to, as Decision 178 says of one order on a screen (ADR Decision 206).

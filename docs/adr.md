@@ -16272,3 +16272,22 @@ The bottom line is the interaction DATA's, as Decision 144 scoped the proposal's
 her order even where no finding was raised to index her orders' records, by indexing the chart's records for this answer.
 
 Pinned by `OwnMedicationSafetyContextTest.herOwnDrugRelatedToHerOtherOrdersOnlyBelowTheFloorIsAnsweredAsHers`.
+
+## Decision 205: A question asking what to monitor in her medications is screened
+
+**Status: Accepted** (October 2026) — decided unattended on the owner's instruction of 2026-10-14 to choose what serves a
+clinician. It adds a cue to `QueryScopeRouter.MEDICATION_SAFETY_CUES`, the family Decisions 176–182 grew, under the
+2026-10-13 triage rule that phrasing matters for safety on a drug-less request about her medications.
+
+On the :8081 rig Sarah Taylor's *"What should I monitor given her medications?"* ran no interaction screen: no cue in it
+asked after the drugs' safety, so the prompt carried her allergy findings alone, and the model's answer said nothing of
+her three NSAIDs beside four corticosteroids — the gastrointestinal-bleeding interactions a clinician monitors for. What
+to monitor in her medications asks after their safety exactly as what to worry about does
+(`DrugSafetyInteractionScreeningTest.aQuestionAskingWhatToWORRYAboutTheCurrentMedicationsIsScreened`).
+
+**The decision.** The cue is the phrase asking what the clinician should monitor or watch for — *"should I monitor"*,
+*"monitor for"*, *"watch for"* — and never the bare word: *"Is her medication adherence being monitored?"* asks nothing
+of the drugs' safety and screens nothing. Conjoined with the medications intent like every cue in the family.
+
+Pinned by `DrugSafetyInteractionScreeningTest.aQuestionAskingWhatToMONITORInTheCurrentMedicationsIsScreened` and
+`.aQuestionAboutHowAMedicationIsMonitoredIsNotScreened`.

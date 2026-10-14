@@ -619,6 +619,33 @@ public class DrugSafetyInteractionScreeningTest {
 	}
 
 	@Test
+	public void aQuestionAskingWhatToMONITORInTheCurrentMedicationsIsScreened() {
+		// Measured on the :8081 rig on 2026-10-14 (ADR Decision 205): Sarah Taylor's "What should I monitor given her
+		// medications?" ran no screen, so the model answered from her allergy findings alone and said nothing of her three
+		// NSAIDs beside four corticosteroids — the gastrointestinal-bleeding interactions a clinician monitors for. What
+		// to monitor in her medications is a question about their safety, as what to worry about is.
+		for (String question : new String[] { "What should I monitor given her medications?",
+				"What should I watch for with his current medications?" }) {
+			List<SafetyWarning> warnings = screen(ddinterValidator(), question, interactingPairContext());
+
+			assertTrue(DrugReferenceTestSupport.detailContains(warnings, SafetyWarning.TYPE_INTERACTION,
+					"Simvastatin", "clarithromycin", "Major"),
+					question + " must raise the real pair among the patient's own active orders, was: " + warnings);
+		}
+	}
+
+	@Test
+	public void aQuestionAboutHowAMedicationIsMonitoredIsNotScreened() {
+		// The eager-firing guard for the cue above: monitoring ADHERENCE, or whether something is monitored, is not a
+		// question about the drugs' safety, so the cue is the phrase asking what the CLINICIAN should monitor and never
+		// the bare word.
+		List<SafetyWarning> warnings = screen(ddinterValidator(),
+				"Is her medication adherence being monitored?", interactingPairContext());
+
+		assertTrue(warnings.isEmpty(), "adherence monitoring must screen nothing, was: " + warnings);
+	}
+
+	@Test
 	public void aScreeningQuestionThatNAMESADrugKeepsTheExistingSingleChip() {
 		// The boundary with the question-driven arm: once the question names a drug, that arm has an
 		// anchor and already answers the question, so the screening arm stands down. Asserting the

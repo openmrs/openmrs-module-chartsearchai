@@ -192,7 +192,11 @@ public final class QueryScopeRouter {
 			"contraindicat(?:ed|ion|ions)", "clash(?:es|ing)?", "(?:taken|given|used) together",
 			// "Do any of her current prescriptions conflict?" — conjoined with a medication word like every cue here, so
 			// the everyday senses INTERACTION_CUES' javadoc keeps out of the bare family do not screen (ADR Decision 182)
-			"conflict(?:s|ing)?");
+			"conflict(?:s|ing)?",
+			// "What should I monitor given her medications?", "What should I watch for with his meds?" — what the CLINICIAN
+			// should monitor or watch for, never the bare word: "Is her medication adherence monitored?" asks nothing of
+			// the drugs' safety (ADR Decision 205)
+			"(?:should|must|do|would) (?:i|we) (?:monitor|watch)", "monitor(?:ing)? for", "watch (?:out )?for");
 
 	/**
 	 * True when the question asks to be SCREENED for drug interactions — "are there any drug

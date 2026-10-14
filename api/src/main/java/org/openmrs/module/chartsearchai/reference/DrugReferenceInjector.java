@@ -940,8 +940,9 @@ public class DrugReferenceInjector {
 		// Read only where there is something it could decide, and HERE rather than where the answer is
 		// used, so that with the property off none of the composition runs at all (issue #469).
 		String moduleAnswer = null;
-		// Decision 204's answer, assigned where its branch decides it, so it is composed once.
+		// Decision 204's and 206's answers, assigned where their branches decide them, so each is composed once.
 		String belowFloorAboutHerOwn;
+		String noPairAboutHerOwn;
 		// Her active orders the drug data does not identify — once, for every composition below (ADR Decision 161).
 		List<PatientClinicalContext.ActiveDrugOrder> unidentified = context == null
 				? Collections.<PatientClinicalContext.ActiveDrugOrder> emptyList()
@@ -982,14 +983,16 @@ public class DrugReferenceInjector {
 						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
 						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS)
 				&& context.chartReadForSafety()
-				&& !aboutHerOwnMedication(question, questionDrugs, screenedSubstances, findings).isEmpty()) {
+				&& !aboutHerOwnMedication(question, questionDrugs, screenedSubstances, findings,
+						itsOwnOrderDisplays(questionDrugs, orderEntries, context)).isEmpty()) {
 			// A safety question about a drug she already takes: its findings, counted and stated (ADR Decision 193).
-			List<Integer> about = aboutHerOwnMedication(question, questionDrugs, screenedSubstances, findings);
+			Set<String> itsOwnOrders = itsOwnOrderDisplays(questionDrugs, orderEntries, context);
+			List<Integer> about = aboutHerOwnMedication(question, questionDrugs, screenedSubstances, findings, itsOwnOrders);
 			Map<String, Integer> herRecords = orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context)
 					: orderRecordNumbers;
 			String herOrders = herStartedOrdersOf(questionDrugs.get(0), orderEntries, context, herRecords);
 			moduleAnswer = composeAboutHerOwnMedication(findings, findingNumbers, about, orderRecordNumbers, herRecords,
-					herOrders,
+					itsOwnOrders, herOrders,
 					herOrders.isEmpty() ? herScheduledOrdersOf(questionDrugs.get(0), orderEntries, context, herRecords) : "");
 		} else if (context != null
 				&& ChartSearchAiUtils.getBooleanGlobalProperty(
@@ -1005,6 +1008,19 @@ public class DrugReferenceInjector {
 										context))) != null) {
 			// Her own drug, which the check relates to her other orders only below the severity floor (ADR Decision 204).
 			moduleAnswer = belowFloorAboutHerOwn;
+		} else if (context != null
+				&& ChartSearchAiUtils.getBooleanGlobalProperty(
+						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
+						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS)
+				&& context.chartReadForSafety()
+				&& (noPairAboutHerOwn = composeNoPairAboutHerOwnMedication(question, questionDrugs, screenedSubstances,
+						findings, findingNumbers, pairExtent.stated(), mappings, orderEntries, context, reading.states(),
+						unidentified.size(), orderRecordNumbers,
+						!orderRecordNumbers.isEmpty() ? orderRecordNumbers
+								: orderRecordNumbers(findingRecords != null ? findingRecords : new DrugOrderRecords(mappings),
+										context))) != null) {
+			// Her own drug, which the check relates to none of her other orders (ADR Decision 206).
+			moduleAnswer = noPairAboutHerOwn;
 		} else if (!findings.isEmpty() && context != null
 				&& ChartSearchAiUtils.getBooleanGlobalProperty(
 						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
@@ -2805,20 +2821,62 @@ public class DrugReferenceInjector {
 	 */
 	private String herStartedOrdersOf(DrugReference drug, List<DrugReference> orderEntries, PatientClinicalContext context,
 			Map<String, Integer> herOrderRecords) {
-		List<String> named = new ArrayList<String>();
+		// Each display once, with how many of her orders carry it where that is more than one (ADR Decision 206) — the
+		// way the finding that her orders share the drug counts them.
+		Map<String, Integer> countByDisplay = new LinkedHashMap<String, Integer>();
 		for (PatientClinicalContext.ActiveDrugOrder order : DrugSafetyValidator.ordersOfSubstance(drugReferenceService, drug,
 				orderEntries, context)) {
 			if (!order.hasStarted() || !DrugSafetyValidator.displayNamesADrug(order)) {
 				continue;
 			}
 			String display = order.getDisplay().trim();
-			Integer number = herOrderRecords.get(display);
-			String item = display + (number == null ? "" : " [" + number + "]");
-			if (!named.contains(item)) {
-				named.add(item);
-			}
+			Integer seen = countByDisplay.get(display);
+			countByDisplay.put(display, seen == null ? 1 : seen + 1);
+		}
+		List<String> named = new ArrayList<String>();
+		for (Map.Entry<String, Integer> display : countByDisplay.entrySet()) {
+			Integer number = herOrderRecords.get(display.getKey());
+			named.add(display.getKey() + (number == null ? "" : " [" + number + "]")
+					+ (display.getValue() > 1 ? ", " + display.getValue() + " orders" : ""));
 		}
 		return named.isEmpty() ? "" : " (" + DrugSafetyValidator.joinPartners(named) + ")";
+	}
+
+	/** The displays of her orders of the one substance {@code questionDrugs} resolve, started or not; empty where they
+	 *  resolve none or several (ADR Decision 206). */
+	private Set<String> itsOwnOrderDisplays(List<DrugReference> questionDrugs, List<DrugReference> orderEntries,
+			PatientClinicalContext context) {
+		Set<Object> asked = new LinkedHashSet<Object>();
+		for (DrugReference entry : questionDrugs) {
+			asked.add(entry.substanceGroupKey());
+		}
+		Set<String> displays = new LinkedHashSet<String>();
+		if (asked.size() != 1) {
+			return displays;
+		}
+		for (PatientClinicalContext.ActiveDrugOrder order : DrugSafetyValidator.ordersOfSubstance(drugReferenceService,
+				questionDrugs.get(0), orderEntries, context)) {
+			if (order.getDisplay() != null) {
+				displays.add(order.getDisplay().trim());
+			}
+		}
+		return displays;
+	}
+
+	/** Whether {@code finding} is an interaction-typed finding every order of which is one of {@code itsOwnOrders} — the
+	 *  drug in two or more of her own orders (issue #477), which relates it to none of her OTHER orders (ADR Decision
+	 *  206). */
+	private static boolean namesOnlyItsOwnOrders(SafetyWarning finding, Set<String> itsOwnOrders) {
+		if (!SafetyWarning.TYPE_INTERACTION.equals(finding.getType()) || finding.namedPartners().isEmpty()
+				|| itsOwnOrders.isEmpty()) {
+			return false;
+		}
+		for (String partner : finding.namedPartners()) {
+			if (partner == null || !itsOwnOrders.contains(partner.trim())) {
+				return false;
+			}
+		}
+		return true;
 	}
 
 	/**
@@ -4200,7 +4258,7 @@ public class DrugReferenceInjector {
 	 * Without an interaction about it the model answers — the module states findings, never a clearance.
 	 */
 	private static List<Integer> aboutHerOwnMedication(String question, List<DrugReference> questionDrugs,
-			Set<Object> herSubstances, List<SafetyWarning> findings) {
+			Set<Object> herSubstances, List<SafetyWarning> findings, Set<String> itsOwnOrders) {
 		Set<Object> asked = new LinkedHashSet<Object>();
 		for (DrugReference entry : questionDrugs) {
 			asked.add(entry.substanceGroupKey());
@@ -4228,9 +4286,11 @@ public class DrugReferenceInjector {
 			if (strengthRank(strengthClause(finding)) < 0) {
 				return new ArrayList<Integer>();
 			}
-			// A pair: not the finding that her orders already carry it (issue #548), which is typed an interaction too.
+			// A pair: not the finding that her orders already carry it (issue #548), which is typed an interaction too, nor
+			// the one that it is in two or more of her orders (issue #477), which relates it to no OTHER order (ADR
+			// Decision 206).
 			interaction |= SafetyWarning.TYPE_INTERACTION.equals(finding.getType()) && !finding.statesOrdersSharingASubstance()
-					&& finding.alreadyOrdered() == null;
+					&& finding.alreadyOrdered() == null && !namesOnlyItsOwnOrders(finding, itsOwnOrders);
 			about.add(i);
 		}
 		return interaction ? about : new ArrayList<Integer>();
@@ -4249,7 +4309,7 @@ public class DrugReferenceInjector {
 	 */
 	private static String composeAboutHerOwnMedication(List<SafetyWarning> findings, List<Integer> numbers,
 			List<Integer> about, Map<String, Integer> orderRecordNumbers, Map<String, Integer> herOrderRecords,
-			String herOrders, String herScheduledOrders) {
+			Set<String> itsOwnOrders, String herOrders, String herScheduledOrders) {
 		String drug = null;
 		String orders = "";
 		List<Integer> stated = new ArrayList<Integer>();
@@ -4269,7 +4329,7 @@ public class DrugReferenceInjector {
 				orders = named.isEmpty() ? "" : " (" + DrugSafetyValidator.joinPartners(named) + ")";
 				continue;
 			}
-			if (finding.statesOrdersSharingASubstance()) {
+			if (finding.statesOrdersSharingASubstance() || namesOnlyItsOwnOrders(finding, itsOwnOrders)) {
 				sharing++;
 			} else if (SafetyWarning.TYPE_INTERACTION.equals(finding.getType())) {
 				interactions += Math.max(1, finding.namedPartners().size());
@@ -4390,6 +4450,119 @@ public class DrugReferenceInjector {
 						: (n == 1 ? "with no severity" : "none with a severity") + (rows.noMechanism ? " or mechanism" : "")
 								+ " on file")
 				+ ". [" + record.getIndex() + "]\n" + BELOW_FLOOR_SCOPE;
+	}
+
+	/**
+	 * The module's answer to a question about a drug she already takes that the interaction check relates to NONE of her
+	 * other orders (ADR Decision 206), or {@code null} where the model answers: <em>"Metronidazole is one of this patient's
+	 * active medications (Metronidazole, 2 orders). The interaction check relates it to none of this patient's 1 other
+	 * active medication. [n]"</em>, then a line for each finding that it is in more than one of her orders. {@link
+	 * #composeFromNoPair}'s statement about the CHECK (Decision 143), turned to a drug she takes: the model answered James
+	 * Thompson's own metronidazole, and Mark Smith's own chloroquine, "Adding it would duplicate that order". Never a
+	 * clearance.
+	 *
+	 * <p>Fail-closed on {@link #composeFromNoPair}'s conjuncts: one substance, hers, with a started order, asked about in one
+	 * of Decision 193's or 202's shapes; the check stated an extent that found no pair at any rating; her allergy records
+	 * checked; no finding about it but those saying her orders carry it; every other order of hers started and identified
+	 * by the data; the drug carrying interaction rows that no rule of those orders names; and its reference record in the
+	 * chart, which it cites. With NO other order of hers and a finding that her orders carry it more than once, it says
+	 * there is none to check it against instead.
+	 */
+	private String composeNoPairAboutHerOwnMedication(String question, List<DrugReference> questionDrugs,
+			Set<Object> herSubstances, List<SafetyWarning> findings, List<Integer> findingNumbers, PairChipExtent extent,
+			List<RecordMapping> mappings, List<DrugReference> orderEntries, PatientClinicalContext context,
+			boolean contraindicationsChecked, int unidentified, Map<String, Integer> orderRecordNumbers,
+			Map<String, Integer> herOrderRecords) {
+		if (extent == null || extent.getFound() != 0 || extent.getBelowFloor() == null || !extent.getBelowFloor().isEmpty()
+				|| !contraindicationsChecked || unidentified != 0) {
+			return null;
+		}
+		Set<Object> asked = new LinkedHashSet<Object>();
+		for (DrugReference entry : questionDrugs) {
+			asked.add(entry.substanceGroupKey());
+		}
+		if (asked.size() != 1 || !herSubstances.containsAll(asked)
+				|| !questionProposes(question, questionDrugs) && !asksWhetherItInteracts(question, questionDrugs)
+						&& !asksWhetherSheIsOnIt(question, questionDrugs)
+						&& !asksAboutItBesideHerMedications(question, questionDrugs)) {
+			return null;
+		}
+		Set<String> itsOwnOrders = itsOwnOrderDisplays(questionDrugs, orderEntries, context);
+		List<Integer> lines = new ArrayList<Integer>();
+		for (int i = 0; i < findings.size(); i++) {
+			SafetyWarning finding = findings.get(i);
+			if (finding.alreadyOrdered() != null) {
+				continue;
+			}
+			if (!finding.statesOrdersSharingASubstance() && !namesOnlyItsOwnOrders(finding, itsOwnOrders)) {
+				return null;
+			}
+			lines.add(i);
+		}
+		String herOrders = herStartedOrdersOf(questionDrugs.get(0), orderEntries, context, herOrderRecords);
+		List<PatientClinicalContext.ActiveDrugOrder> ofIt = DrugSafetyValidator.ordersOfSubstance(drugReferenceService,
+				questionDrugs.get(0), orderEntries, context);
+		int others = 0;
+		for (PatientClinicalContext.ActiveDrugOrder order : context.getActiveDrugOrders()) {
+			if (ofIt.contains(order)) {
+				continue;
+			}
+			if (!order.hasStarted()) {
+				return null;
+			}
+			others++;
+		}
+		List<DrugReference> otherEntries = new ArrayList<DrugReference>();
+		for (DrugReference entry : orderEntries == null ? Collections.<DrugReference> emptyList() : orderEntries) {
+			if (!asked.contains(entry.substanceGroupKey())) {
+				otherEntries.add(entry);
+			}
+		}
+		boolean carriesInteractions = false;
+		for (DrugReference row : questionDrugs) {
+			carriesInteractions |= !row.getInteractions().isEmpty();
+		}
+		if (herOrders.isEmpty()) {
+			return null;
+		}
+		// Nothing else of hers to relate it to: said as Decision 178 says it of a screen over one order — where there is a
+		// finding to state beside it, that her orders carry it twice; one order and no finding stays the model's, as
+		// Decision 193 pins (OwnMedicationSafetyContextTest.herOwnDrugWithNoInteractionIsLeftToTheModel).
+		if (others == 0 && lines.isEmpty()) {
+			return null;
+		}
+		if (others == 0) {
+			StringBuilder alone = new StringBuilder(questionDrugs.get(0).displayLabel() + OWN_MEDICATION_LEAD + herOrders
+					+ ", and this patient has no other active medication to check it against.");
+			for (Integer i : lines) {
+				alone.append("\n").append(findingLine(findings.get(i), findingNumbers.get(i), orderRecordNumbers,
+					herOrderRecords, true));
+			}
+			return alone.toString();
+		}
+		if (!carriesInteractions || DrugSafetyValidator.anyRuleIdentifiesAny(otherEntries, questionDrugs)) {
+			return null;
+		}
+		List<String> rowIds = rowIds(questionDrugs);
+		RecordMapping record = null;
+		for (RecordMapping mapping : mappings) {
+			if (ChartSearchAiConstants.RESOURCE_TYPE_DRUG_REFERENCE.equals(mapping.getResourceType())
+					&& rowIds.contains(mapping.getResourceUuid())) {
+				record = mapping;
+				break;
+			}
+		}
+		if (record == null) {
+			return null;
+		}
+		StringBuilder answer = new StringBuilder(questionDrugs.get(0).displayLabel() + OWN_MEDICATION_LEAD + herOrders
+				+ ". The interaction check relates it to none of this patient's " + others + " other active medication"
+				+ (others == 1 ? "" : "s") + ". [" + record.getIndex() + "]");
+		for (Integer i : lines) {
+			answer.append("\n").append(findingLine(findings.get(i), findingNumbers.get(i), orderRecordNumbers,
+				herOrderRecords, true));
+		}
+		return answer.toString();
 	}
 
 	/** What follows the two drugs in the lead of {@link #composeTwoOfHerOwn} (ADR Decision 203). */

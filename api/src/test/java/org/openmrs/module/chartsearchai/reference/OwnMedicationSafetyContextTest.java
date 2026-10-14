@@ -195,6 +195,51 @@ public class OwnMedicationSafetyContextTest extends BaseModuleContextSensitiveTe
 	}
 
 	@Test
+	public void herOwnDrugTheCheckRelatesToNoneOfHerOtherOrdersIsAnsweredAsHersAndItsSecondOrderIsNoInteraction()
+			throws IOException {
+		// James Thompson's "Is metronidazole safe with his other medications?" — two orders of his own metronidazole —
+		// opened "1 interaction with this patient's other active medications" for the finding that the drug is in two of
+		// his orders, which relates it to no OTHER medication; and the model answered his own chloroquine "Adding it would
+		// duplicate that order" (ADR Decision 206). Metformin here is listed against neither of her other orders.
+		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
+			DrugReferenceTestSupport.activeOrder("order-metformin-1", "Metformin 500mg"),
+			DrugReferenceTestSupport.activeOrder("order-metformin-2", "Metformin 500mg"),
+			DrugReferenceTestSupport.activeOrder("order-atorvastatin", "Atorvastatin 10mg"));
+		for (String question : Arrays.asList("Is metformin safe with her other medications?", "Is she on metformin?")) {
+			String answer = answerOver("chartsearchai-test/ddi-folded-caution-order.json", question, orders);
+
+			assertNotNull(answer, "the module answers " + question);
+			String[] lines = answer.split("\n");
+			assertTrue(lines[0].matches("Metformin is one of this patient's active medications \\(Metformin 500mg, 2 orders\\)\\. "
+					+ "The interaction check relates it to none of this patient's 1 other active medication\\. \\[\\d+\\]"),
+				question + " was: " + answer);
+			assertTrue(lines[1].matches("Metformin is (?:already )?in active orders Metformin 500mg \\(2 orders\\) — possible "
+					+ "duplicate therapy\\..*\\[\\d+\\]"), question + " was: " + answer);
+			assertEquals(2, lines.length, question + " was: " + answer);
+			assertTrue(!answer.contains("interaction with this patient's other"), "no interaction is counted: " + answer);
+		}
+	}
+
+	@Test
+	public void herOwnDrugWithNoOtherMedicationToCheckItAgainstSaysSo() throws IOException {
+		// James Thompson holds two orders of metronidazole and nothing else: there is no other medication to relate it
+		// to, as Decision 178 says of one order on a screen (ADR Decision 206).
+		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
+			DrugReferenceTestSupport.activeOrder("order-metformin-1", "Metformin 500mg"),
+			DrugReferenceTestSupport.activeOrder("order-metformin-2", "Metformin 500mg"));
+
+		String answer = answerOver("chartsearchai-test/ddi-folded-caution-order.json",
+			"Is metformin safe with her other medications?", orders);
+
+		assertNotNull(answer, "the module answers");
+		String[] lines = answer.split("\n");
+		assertEquals("Metformin is one of this patient's active medications (Metformin 500mg, 2 orders), and this patient has "
+				+ "no other active medication to check it against.", lines[0], "was: " + answer);
+		assertTrue(lines.length == 2 && lines[1].matches("Metformin is (?:already )?in active orders Metformin 500mg \\(2 orders\\) "
+				+ "— possible duplicate therapy\\..*\\[\\d+\\]"), "was: " + answer);
+	}
+
+	@Test
 	public void twoOfHerOwnDrugsAskedAboutTogetherAreAnsweredWithWhatRelatesThem() throws IOException {
 		// Sarah Taylor's "Is it safe to combine ibuprofen and celecoxib?" — both hers — was answered "Ibuprofen can be
 		// combined with Celecoxib, with one caution" by the model, and "Does ibuprofen interact with celecoxib?" "Ibuprofen
@@ -240,6 +285,19 @@ public class OwnMedicationSafetyContextTest extends BaseModuleContextSensitiveTe
 
 	private static String answer(String question) throws IOException {
 		return answer(question, null, ALL_FOUR);
+	}
+
+	/** As {@link #answer(String, java.util.Set, List)}, over another fixture slice. */
+	private static String answerOver(String fixture, String question, List<PatientClinicalContext.ActiveDrugOrder> orders)
+			throws IOException {
+		List<String> names = new ArrayList<String>();
+		for (PatientClinicalContext.ActiveDrugOrder order : orders) {
+			names.addAll(order.getNames());
+		}
+		PatientClinicalContext context = DrugReferenceTestSupport.ctx(40, null, new LinkedHashSet<String>(names), null,
+			null, null, orders);
+		return DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.ddiFixtureService(fixture))
+				.injectRecords(DrugReferenceTestSupport.oneRecordChart(), context, question).getModuleAnswer();
 	}
 
 	private static String answer(String question, java.util.Set<String> allergies,

@@ -16291,3 +16291,36 @@ of the drugs' safety and screens nothing. Conjoined with the medications intent 
 
 Pinned by `DrugSafetyInteractionScreeningTest.aQuestionAskingWhatToMONITORInTheCurrentMedicationsIsScreened` and
 `.aQuestionAboutHowAMedicationIsMonitoredIsNotScreened`.
+
+## Decision 206: Her own drug in two of her orders is no interaction with her other medications, and one related to none of them is answered as hers
+
+**Status: Accepted** (October 2026) — decided unattended on the owner's instruction of 2026-10-14 to choose what serves a
+clinician. It corrects Decision 193's count and carries [Decision 143](#decision-143-a-proposal-related-to-none-of-her-orders-is-answered-with-what-the-interaction-check-established)'s
+no-pair statement to a drug she already takes.
+
+On the :8081 rig James Thompson holds two orders of metronidazole. Under Decision 202, *"Is metronidazole safe with his
+other medications?"* was answered *"Metronidazole is one of this patient's active medications (Metronidazole). 1
+interaction with this patient's other active medications"* — the one finding being that the drug is in two of his
+orders (issue #477), which relates it to no OTHER medication; and the lead named one order of two. Where Decision 193 did
+not answer, the model wrote, of Mark Smith's own chloroquine and James's metronidazole, *"Adding it would duplicate that
+order"*.
+
+**The decision.** A finding whose orders are all her orders of the drug itself — the #477 finding — is not an interaction
+for Decision 193's admission and is counted, in its lead, as *its substance in more than one of this patient's orders*.
+The lead names a display several of her orders share once, with their count (*"Metronidazole, 2 orders"*). And where
+the check relates her drug to none of her other orders at any rating, with nothing else found about it, the module
+states what the check established, as Decision 143 does for a drug proposed:
+
+> Metronidazole is one of this patient's active medications (Metronidazole, 2 orders). The interaction check relates it
+> to none of this patient's 1 other active medication. [n]
+> Metronidazole is already in active orders Metronidazole (2 orders) — possible duplicate therapy. [m]
+
+Fail-closed on Decision 143's conjuncts — her other orders all started and identified by the data, the drug carrying
+interaction rows that none of their rules names, her allergy records checked — and never a clearance. Where her orders of
+the drug are ALL her orders — James's two metronidazole orders and nothing else, verified on the rig — the sentence is
+Decision 178's instead: *"… (Metronidazole, 2 orders), and this patient has no other active medication to check it
+against."*, then the line that her orders carry it twice. One order and no finding stays the model's, as
+`OwnMedicationSafetyContextTest.herOwnDrugWithNoInteractionIsLeftToTheModel` pins for Decision 193.
+
+Pinned by `OwnMedicationSafetyContextTest.herOwnDrugTheCheckRelatesToNoneOfHerOtherOrdersIsAnsweredAsHersAndItsSecondOrderIsNoInteraction`
+and `.herOwnDrugWithNoOtherMedicationToCheckItAgainstSaysSo`.

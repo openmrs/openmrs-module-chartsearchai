@@ -2088,6 +2088,8 @@ public interface ChartSearchService {
 		/** The cited findings this citation was attached FOR — see {@link #getAttachedFor()}. */
 		private final List<Integer> attachedFor;
 
+		private final String referenceText;
+
 		public RecordReference(int index, String resourceType, String resourceUuid, Date date) {
 			this(index, resourceType, resourceUuid, date, null);
 		}
@@ -2123,6 +2125,18 @@ public interface ChartSearchService {
 		 */
 		public RecordReference(int index, String resourceType, String resourceUuid, Date date, Boolean grounded,
 				String source, int withheldInteractions, boolean attachedByTheModule, List<Integer> attachedFor) {
+			this(index, resourceType, resourceUuid, date, grounded, source, withheldInteractions, attachedByTheModule,
+					attachedFor, null);
+		}
+
+		/**
+		 * Full constructor, additionally carrying what the cited record says where it is reference material — see
+		 * {@link #getReferenceText()}. Every shorter constructor answers {@code null}.
+		 */
+		public RecordReference(int index, String resourceType, String resourceUuid, Date date, Boolean grounded,
+				String source, int withheldInteractions, boolean attachedByTheModule, List<Integer> attachedFor,
+				String referenceText) {
+			this.referenceText = referenceText;
 			this.index = index;
 			this.resourceType = resourceType;
 			this.resourceUuid = resourceUuid;
@@ -2269,7 +2283,19 @@ public interface ChartSearchService {
 		 */
 		public RecordReference withGrounded(Boolean verdict) {
 			return new RecordReference(index, resourceType, resourceUuid, date, verdict, source,
-					withheldInteractions, attachedByTheModule, attachedFor);
+					withheldInteractions, attachedByTheModule, attachedFor, referenceText);
+		}
+
+		/**
+		 * What the cited record SAYS, where it is module-supplied reference material — a drug's reference entry, a
+		 * safety finding, a drug-class note — so a client can show what an answer resting on it was checked against
+		 * (ADR Decision 224); {@code null} for a citation of the patient's own chart, whose record is opened in the chart.
+		 * Decided by the citation's {@code ChartSearchAiUtils.referenceGroup}, never its type name, so every
+		 * reference-group type carries it alike. It is the text the record was rendered with, published on the wire and
+		 * never returned to a prompt. Published VERBATIM as the {@code referenceText} wire key.
+		 */
+		public String getReferenceText() {
+			return referenceText;
 		}
 	}
 }

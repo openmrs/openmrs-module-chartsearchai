@@ -16846,3 +16846,29 @@ NSAID group alone) and a path matching a recorded allergen's name to a group —
 Pinned by `UnidentifiedActiveOrdersAnswerTest.aRecordedAllergyTheDataDoesNotIdentifyIsSaidToBeUnchecked`,
 `.aRecordedAllergyTheDataIdentifiesIsNotSaidToBeUnchecked` and
 `UncheckedDrugAllergyContextTest.onlyADrugAllergyTheDataDoesNotIdentifyIsReportedUnchecked` (the real builder).
+
+## Decision 224: A reference-group citation publishes its record's text
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-14, after asking why every live demo answer carries a
+*Drug reference* citation.
+
+### Context
+
+A module-composed answer cites the drug-reference entries and safety findings it was checked against, and the client renders
+each as a purple *Drug reference* item that is not a link: a chart citation opens the patient's record by its uuid, but a
+`reference`-group record lives nowhere a client can open. The wire carried its type, its uuid and its `source`, never what
+it said, so a clinician saw that the answer leaned on reference data and could not read which.
+
+### The decision
+
+- **Every citation carries `referenceText`**: the cited record's text for a `reference`-group citation, `null` for a `chart`
+  one. Set once, in `LlmInferenceService.extractCitedReferences`, gated on `ChartSearchAiUtils.referenceGroup` and never a
+  type name; carried across `RecordReference.withGrounded`; serialized by `ChartSearchAiRestController.serializeReferences`
+  on the JSON response and on every SSE event that carries the array.
+- **A chart record's text is not published.** The client already opens it by its uuid, under the chart's own privileges; a
+  second copy on the wire would put a patient's record into every answer payload and log a client keeps.
+- **It is the text the model was given**, the same rendering the citation resolved against, so what a clinician reads is
+  what the answer was checked against — not a fresh lookup that may have moved since.
+
+Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aReferenceGroupCitationPublishesItsRecordsTextAndAChartCitationNone`
+and `ChartSearchAiReferenceProvenanceTest.everyEventCarriesTheReferenceTextOfAReferenceCitationAndNoneForAChartRecord`.

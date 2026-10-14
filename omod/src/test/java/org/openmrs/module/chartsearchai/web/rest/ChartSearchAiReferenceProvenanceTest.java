@@ -49,6 +49,8 @@ public class ChartSearchAiReferenceProvenanceTest {
 
 	private static final String DDINTER = "DDInter 2.0 (via openmrs-ddi-knowledge-base)";
 
+	private static final String ENTRY_TEXT = "Drug reference — Erythromycin: interacts with simvastatin (Major).";
+
 	private ChartSearchAiRestController controller;
 
 	private ByteArrayOutputStream out;
@@ -150,6 +152,26 @@ public class ChartSearchAiReferenceProvenanceTest {
 	}
 
 	/**
+	 * What a reference-group citation's record says reaches every event carrying references, and a chart citation carries
+	 * the key as {@code null} (ADR Decision 224): a client reads it unconditionally, and renders it to show what an answer
+	 * resting on the citation was checked against.
+	 */
+	@Test
+	public void everyEventCarriesTheReferenceTextOfAReferenceCitationAndNoneForAChartRecord() throws Exception {
+		for (boolean async : new boolean[] { false, true }) {
+			out = new ByteArrayOutputStream();
+			controller.streamAnswer(out, patient(), "can I prescribe erythromycin for this patient?", new User(3), async);
+			for (String event : async ? Arrays.asList("references", "done", "grounded") : Arrays.asList("references", "done")) {
+				List<JsonNode> refs = referencesOf(event);
+				assertTrue(refs.get(0).has("referenceText") && refs.get(0).get("referenceText").isNull(),
+					"a chart citation carries the key, null, on '" + event + "': " + refs.get(0));
+				assertEquals(ENTRY_TEXT, refs.get(1).path("referenceText").asText(null),
+					"the drug reference carries its record's text on '" + event + "': " + refs.get(1));
+			}
+		}
+	}
+
+	/**
 	 * Each reference's {@code index:source:withheldInteractions}, in emitted order — rendering a
 	 * null source as the literal {@code null} so an absent key cannot masquerade as one.
 	 */
@@ -173,7 +195,7 @@ public class ChartSearchAiReferenceProvenanceTest {
 		return new ChartSearchService.ChartAnswer("Erythromycin interacts with simvastatin [75].",
 				Arrays.asList(
 						new ChartSearchService.RecordReference(75, "drug_reference", "erythromycin", null,
-								null, DDINTER, 824),
+								null, DDINTER, 824, false, null, ENTRY_TEXT),
 						new ChartSearchService.RecordReference(12, "allergy", "u12", null, Boolean.TRUE)));
 	}
 

@@ -974,6 +974,35 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		}
 	}
 
+	/**
+	 * Each reference-group citation publishes what its record SAYS, so a clinician can read what an answer like "The
+	 * interaction check relates Mebendazole to none of this patient's medications" was checked against; a chart citation
+	 * publishes none, its record being the patient's own and opened in the chart (ADR Decision 224). On the public demo a
+	 * "Drug reference" citation was a label with nothing behind it: not a link, and no text on the wire.
+	 */
+	@Test
+	public void aReferenceGroupCitationPublishesItsRecordsTextAndAChartCitationNone() throws Exception {
+		executeDataSet(RIFAMPICIN_ORDER);
+		executeDataSet(SECOND_RIFAMPICIN_ORDER);
+		ChartAnswer answer = serviceWith(new RecordingProvider(), shipped()).search(patient, "Can I give her mebendazole?");
+
+		int mebendazole = referenceRecordOf(answer, "mebendazole");
+		boolean sawReference = false;
+		for (RecordReference ref : answer.getReferences()) {
+			if (ChartSearchAiConstants.REFERENCE_GROUP_REFERENCE.equals(ChartSearchAiUtils.referenceGroup(ref.getResourceType()))) {
+				sawReference = true;
+				assertTrue(ref.getReferenceText() != null && !ref.getReferenceText().trim().isEmpty(),
+					"a reference-group citation carries its record's text: " + ref);
+				if (ref.getIndex() == mebendazole) {
+					assertTrue(ref.getReferenceText().contains("Mebendazole"), "the drug's own entry: " + ref.getReferenceText());
+				}
+			} else {
+				assertNull(ref.getReferenceText(), "a chart citation carries none: " + ref);
+			}
+		}
+		assertTrue(sawReference, "precondition: the answer cites reference material");
+	}
+
 	/** The question ADR Decision 108 named as its grammar's first miss to read, answered as its proposal is. */
 	@Test
 	public void theKneePainProposalIsAnsweredWithItsFindingsAndSaysThePurposeWasNotWeighed() {

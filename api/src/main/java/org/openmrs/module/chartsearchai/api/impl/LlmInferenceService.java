@@ -1600,9 +1600,12 @@ public class LlmInferenceService implements ChartSearchService {
 				// Citation metadata travels with the reference, not inside the record text the model
 				// reads (issue #117): a client renders provenance and the withheld-partner count on
 				// the citation chip, so the record has nothing about itself for the model to recite.
+				// And, for module-supplied reference material alone, what the record says (ADR Decision 224).
+				String referenceText = ChartSearchAiConstants.REFERENCE_GROUP_REFERENCE.equals(
+						ChartSearchAiUtils.referenceGroup(mapping.getResourceType())) ? mapping.getText() : null;
 				references.add(new RecordReference(index, mapping.getResourceType(),
 						mapping.getResourceUuid(), mapping.getDate(), null, mapping.getSource(),
-						mapping.getWithheldInteractions(), attached.contains(index), attachedFor.get(index)));
+						mapping.getWithheldInteractions(), attached.contains(index), attachedFor.get(index), referenceText));
 			} else {
 				log.warn("LLM cited record [{}] which does not exist in the provided records", index);
 			}

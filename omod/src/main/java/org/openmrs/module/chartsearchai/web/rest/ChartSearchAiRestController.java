@@ -1492,6 +1492,10 @@ public class ChartSearchAiRestController {
 			// Which cited findings it was attached FOR, so a client can say what the record is to the
 			// answer — RecordReference.getAttachedFor is the one home for what it means.
 			refMap.put("attachedFor", ref.getAttachedFor());
+			// What a reference-group citation's record says, so a client can show what an answer resting on it was
+			// checked against; null for a chart record (ADR Decision 224). RecordReference.getReferenceText is the one
+			// home for when it is set.
+			refMap.put("referenceText", ref.getReferenceText());
 			refs.add(refMap);
 		}
 		return refs;

@@ -4257,9 +4257,10 @@ public class DrugReferenceInjector {
 	 * orders carry ({@code herSubstances}), it asks whether to give it, whether it interacts or — ADR Decision 202 —
 	 * whether she is on it or about it beside her other medications ({@link #asksWhetherSheIsOnIt}, {@link
 	 * #asksAboutItBesideHerMedications}), and the check raised an interaction about it relating it to another of her
-	 * orders. Those findings are every one whose subject is that
+	 * orders — or, since ADR Decision 208, a contraindication about it. Those findings are every one whose subject is that
 	 * substance and that is not about another of her medications; each must state a clause {@link #strengthRank} reads.
-	 * Without an interaction about it the model answers — the module states findings, never a clearance.
+	 * Without an interaction or a contraindication about it the model answers — the module states findings, never a
+	 * clearance.
 	 */
 	private static List<Integer> aboutHerOwnMedication(String question, List<DrugReference> questionDrugs,
 			Set<Object> herSubstances, List<SafetyWarning> findings, Set<String> itsOwnOrders) {
@@ -4275,6 +4276,7 @@ public class DrugReferenceInjector {
 			return about;
 		}
 		boolean interaction = false;
+		boolean contraindication = false;
 		for (int i = 0; i < findings.size(); i++) {
 			SafetyWarning finding = findings.get(i);
 			if (finding.isAboutAnotherOfHerMedications() || finding.subjectRows().isEmpty()) {
@@ -4295,9 +4297,12 @@ public class DrugReferenceInjector {
 			// Decision 206).
 			interaction |= SafetyWarning.TYPE_INTERACTION.equals(finding.getType()) && !finding.statesOrdersSharingASubstance()
 					&& finding.alreadyOrdered() == null && !namesOnlyItsOwnOrders(finding, itsOwnOrders);
+			// Or a contraindication about it — a recorded allergy to the drug she takes, or to its class — which the
+			// module states as it states one beside interactions (ADR Decision 208).
+			contraindication |= SafetyWarning.TYPE_CONTRAINDICATION.equals(finding.getType());
 			about.add(i);
 		}
-		return interaction ? about : new ArrayList<Integer>();
+		return interaction || contraindication ? about : new ArrayList<Integer>();
 	}
 
 	/**
@@ -4363,11 +4368,14 @@ public class DrugReferenceInjector {
 		}
 		boolean unratedSaidOnce = unrated > 0;
 		List<String> counts = new ArrayList<String>();
-		counts.add(interactions + (interactions == 1 ? " interaction" : " interactions")
+		// No interaction count where there is none: "0 interactions" would read as a clearance (ADR Decision 208).
+		if (interactions > 0) {
+			counts.add(interactions + (interactions == 1 ? " interaction" : " interactions")
 				+ " with this patient's other active medications"
 				+ (unrated == 0 ? ""
 						: unrated == interactions ? (interactions == 1 ? ", with no severity rated" : ", none with a severity rated")
 								: ", " + unrated + " of them with no severity rated"));
+		}
 		if (contraindications > 0) {
 			counts.add(contraindications + (contraindications == 1 ? " contraindication" : " contraindications")
 					+ (!saidOnce ? "" : contraindications == 1 ? ", with no severity rated" : ", none with a severity rated"));

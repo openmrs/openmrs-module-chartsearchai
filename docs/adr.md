@@ -16348,3 +16348,28 @@ with the model, and read *"which … medications"* as one because no interaction
 should be taken with food?"* stays the model's.
 
 Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.askingWhichOfHerMedicationsToStopBecauseOfInteractionsIsAScreen`.
+
+## Decision 208: A recorded allergy to a drug she already takes is stated as her own medication's finding, interaction or none
+
+**Status: Accepted** (October 2026) — decided unattended on the owner's instruction of 2026-10-14 to choose what serves a
+clinician. It widens [Decision 193](#decision-193-a-safety-question-about-a-drug-she-already-takes-is-answered-by-the-module-as-her-own-medication)'s
+admission by one finding type.
+
+Susan Young takes tiotropium and is recorded allergic to it. Nothing relates it to her other orders above the floor, so
+Decision 193, which answers only where an interaction about the drug was raised, left *"Is tiotropium safe for her?"* to
+the model, which wrote *"Tiotropium is already in active order [4]. Adding it would duplicate that order … the patient
+has a recorded allergy to Tiotropium"* — the most important fact in the chart behind a proposal's wording about a drug she
+already takes.
+
+**The decision.** A contraindication about the drug — a recorded allergy to it, or to its class — admits the question as
+an interaction does, and the lead counts no interactions where there are none: *"0 interactions with this patient's
+other active medications"* would read as a clearance.
+
+> Tiotropium is one of this patient's active medications (Tiotropium [4]). 1 contraindication, with no severity rated:
+> The patient has a recorded allergy to Tiotropium. [46]
+> Interactions the data does not rate, and anything beyond drug interactions and contraindications, are not covered.
+
+One order and no finding stays the model's, as `OwnMedicationSafetyContextTest.herOwnDrugWithNoInteractionIsLeftToTheModel`
+pins.
+
+Pinned by `OwnMedicationSafetyContextTest.aRecordedAllergyToHerOwnDrugIsStatedEvenWithNoInteraction`.

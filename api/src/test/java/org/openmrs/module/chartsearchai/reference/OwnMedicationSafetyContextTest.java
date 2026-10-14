@@ -86,6 +86,24 @@ public class OwnMedicationSafetyContextTest extends BaseModuleContextSensitiveTe
 	}
 
 	@Test
+	public void aRecordedAllergyToHerOwnDrugIsStatedEvenWithNoInteraction() throws IOException {
+		// Susan Young takes tiotropium and is recorded allergic to it; nothing relates it to her other orders above the
+		// floor, so Decision 193 left it to the model, which wrote "Tiotropium is already in active order [4]. Adding it
+		// would duplicate that order" (ADR Decision 208). The allergy is a finding the module states — never "0
+		// interactions", which would read as a clearance.
+		String answer = answer("Is ibuprofen safe for her?", DrugReferenceTestSupport.set("ibuprofen"),
+			Arrays.asList(DrugReferenceTestSupport.activeOrder("order-ibuprofen", "Ibuprofen 400mg")));
+
+		assertNotNull(answer, "the module answers");
+		String[] lines = answer.split("\n");
+		assertTrue(lines[0].matches("Ibuprofen is one of this patient's active medications \\(Ibuprofen 400mg \\[\\d+\\]\\)\\. "
+				+ "1 contraindication, with no severity rated:"), "was: " + answer);
+		assertTrue(lines[1].matches("The patient has a recorded allergy to Ibuprofen\\. \\[\\d+\\]"), "was: " + answer);
+		assertEquals(DrugReferenceInjector.SCREEN_SCOPE, lines[2], "was: " + answer);
+		assertEquals(3, lines.length, "was: " + answer);
+	}
+
+	@Test
 	public void herOwnDrugWithNoInteractionIsLeftToTheModel() throws IOException {
 		// No finding relates it to another of her orders, and the module states findings, never a clearance.
 		assertEquals(null, answer("Is ibuprofen safe for her?", null,

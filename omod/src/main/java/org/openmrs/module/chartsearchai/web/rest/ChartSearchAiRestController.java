@@ -1747,6 +1747,9 @@ public class ChartSearchAiRestController {
 			// client can set it beside the answer rather than among its findings. false is no claim the chip
 			// is about that drug: SafetyWarning.isAboutAnotherOfHerMedications() says why.
 			map.put("aboutAnotherOfHerMedications", warning.isAboutAnotherOfHerMedications());
+			// ADR Decision 210: whether the chip is a possible cross-reactivity beside an answer the module followed with
+			// her direct conflicts, so a client can draw it apart under a line saying so.
+			map.put("crossReactivityBesideHerStatedConflicts", warning.isCrossReactivityBesideHerStatedConflicts());
 			// ADR Decision 137: whether the chip is about a drug other than the one the question proposes. false is
 			// no claim it is about that drug: SafetyWarning.isAboutADrugOtherThanTheOneProposed() says why.
 			map.put("aboutADrugOtherThanTheOneProposed", warning.isAboutADrugOtherThanTheOneProposed());

@@ -22,7 +22,8 @@ import org.openmrs.module.chartsearchai.api.impl.QueryScopeRouter;
 
 /**
  * The module's own statement, in the answer, of which of the patient's active orders directly conflict with her
- * records — on a question that asks only for her ALLERGIES. ADR Decisions 124, 188.
+ * records — on a question that asks only for her ALLERGIES, and after a model's answer that itself names such an
+ * order. ADR Decisions 124, 188, 210.
  *
  * <p><b>The gap this closes.</b> <em>"any allergies?"</em>, asked of a patient prescribed two drugs she is
  * recorded as allergic to, came back with a complete allergy list and two red contraindication chips
@@ -60,6 +61,17 @@ import org.openmrs.module.chartsearchai.api.impl.QueryScopeRouter;
  * chip stays a chip and the answer is untouched: a statement covering some of a response's findings
  * would read as covering all of them. (Within a qualifying response the statement leaves the cross-reactivity
  * findings to their chips, and says "directly" in its heading for that reason — ADR Decision 188.)
+ *
+ * <p><b>And beside an answer that names such an order</b> (ADR Decision 210). Sarah Taylor's <em>"Is she on more
+ * than one drug from the same class?"</em> was answered with her five corticosteroids, each order cited — two of them
+ * drugs she is recorded allergic to — and said nothing of either allergy. On a question asking neither about her
+ * allergies nor for a drug-safety reading ({@link #mayFollowAnAnswerNamingHerOrders}), the same statement follows
+ * where the model's answer itself cites the record of an order a direct finding is about, under the same all-or-nothing
+ * rule. Decision 124's questions keep their own rule: one asking about her allergies AND her medications is the
+ * drug-safety question, and its chips stay the carrier. Here a cross-reactivity chip is about a medication the answer
+ * names, so it is drawn apart as a cross-reactivity beside the conflicts stated
+ * ({@link SafetyWarning#asCrossReactivityBesideHerStatedConflicts()}), never as another of her medications; and the
+ * anchor is the order's record, never the finding's, since an answer citing the finding has stated it.
  */
 public final class ConflictingOrderStatement {
 
@@ -110,13 +122,18 @@ public final class ConflictingOrderStatement {
 
 	/**
 	 * @param orderRecordNumbers the record each of her orders' displays is, from the chart the injector built
+	 * @param recordsTheAnswerCites the records the MODEL's answer cites — its markers, each admitted by the answer's own
+	 *        resolution — which decide, off an allergy question, whether the answer names a conflicting order (ADR
+	 *        Decision 210)
 	 * @return {@code answer} with her conflicting orders stated and every chip it states marked, or both
 	 *         unchanged where the question or the chips do not qualify — see this class's javadoc.
 	 */
 	public static Stated state(String question, String answer, List<SafetyWarning> warnings,
-			Map<String, Integer> orderRecordNumbers) {
+			Map<String, Integer> orderRecordNumbers, Set<Integer> recordsTheAnswerCites) {
 		Stated unchanged = new Stated(answer, warnings, Collections.<Integer, List<Integer>> emptyMap());
-		if (answer == null || warnings == null || warnings.isEmpty() || !asksOnlyForAllergies(question)) {
+		boolean onlyForAllergies = asksOnlyForAllergies(question);
+		if (answer == null || warnings == null || warnings.isEmpty()
+				|| !onlyForAllergies && !mayFollowAnAnswerNamingHerOrders(question)) {
 			return unchanged;
 		}
 		// One group per set of orders, in chip order, so two findings about one order name it once.
@@ -132,6 +149,10 @@ public final class ConflictingOrderStatement {
 				chipsByOrders.put(chip.currentOrderDisplays(), chips);
 			}
 			chips.add(chip);
+		}
+		// Off an allergy question, only after an answer naming an order a direct finding is about (ADR Decision 210).
+		if (!onlyForAllergies && !namesADirectlyConflictingOrder(chipsByOrders, orderRecordNumbers, recordsTheAnswerCites)) {
+			return unchanged;
 		}
 		// A cross-reactivity finding is an allergy to ANOTHER drug of the class, and stays a chip (ADR Decision 188);
 		// every other finding is stated. Short-line items first, each one order, then the quoted ones, each in chip
@@ -162,12 +183,15 @@ public final class ConflictingOrderStatement {
 				quoted.append(' ').append(DrugSafetyValidator.endSentence(chip.getDetail().trim()));
 			}
 		}
-		// A cross-reactivity chip is about her medications and not about what was asked, so it is drawn apart from the
-		// answer (ADR Decision 188) — whether or not anything else is stated.
+		// On an allergy question a cross-reactivity chip is about her medications and not about what was asked, so it is
+		// drawn apart from the answer (ADR Decision 188) — whether or not anything else is stated. Beside an answer naming
+		// her orders it is about a medication that answer names, so it is drawn apart as what it is: a cross-reactivity
+		// finding beside the conflicts the statement names (ADR Decision 210).
 		List<SafetyWarning> published = new ArrayList<SafetyWarning>(warnings.size());
 		for (SafetyWarning chip : warnings) {
 			published.add(statedChips.contains(chip) ? chip.asStatedInTheAnswer()
-					: chip.isACrossReactivityFinding() ? chip.asAboutAnotherOfHerMedications() : chip);
+					: !chip.isACrossReactivityFinding() ? chip
+					: onlyForAllergies ? chip.asAboutAnotherOfHerMedications() : chip.asCrossReactivityBesideHerStatedConflicts());
 		}
 		if (statedChips.isEmpty()) {
 			return new Stated(answer, Collections.unmodifiableList(published), Collections.<Integer, List<Integer>> emptyMap());
@@ -189,8 +213,7 @@ public final class ConflictingOrderStatement {
 	 */
 	private static String cite(String printed, List<SafetyWarning> chips, Map<String, Integer> orderRecordNumbers,
 			Map<Integer, List<Integer>> cited) {
-		Integer number = orderRecordNumbers == null ? null
-				: orderRecordNumbers.get(chips.get(0).orderDisplayPrintedAs(printed));
+		Integer number = recordNumberOf(printed, chips, orderRecordNumbers);
 		if (number == null) {
 			return printed;
 		}
@@ -205,6 +228,39 @@ public final class ConflictingOrderStatement {
 			}
 		}
 		return printed + " [" + number + "]";
+	}
+
+	/**
+	 * @return the record the order {@code chips} print as {@code printed} IS, where the injector numbered one — the one
+	 *         reading of {@code orderRecordNumbers} for the item's marker and for whether an answer named the order
+	 */
+	private static Integer recordNumberOf(String printed, List<SafetyWarning> chips, Map<String, Integer> orderRecordNumbers) {
+		return orderRecordNumbers == null ? null : orderRecordNumbers.get(chips.get(0).orderDisplayPrintedAs(printed));
+	}
+
+	/**
+	 * Whether {@code recordsTheAnswerCites} holds the record of an order a finding that is not a cross-reactivity one is
+	 * about — the answer itself named an order her records directly conflict with (ADR Decision 210). An order no one
+	 * record is, which the injector numbers none for, cannot be named this way.
+	 */
+	private static boolean namesADirectlyConflictingOrder(Map<List<String>, List<SafetyWarning>> chipsByOrders,
+			Map<String, Integer> orderRecordNumbers, Set<Integer> recordsTheAnswerCites) {
+		if (recordsTheAnswerCites == null || recordsTheAnswerCites.isEmpty()) {
+			return false;
+		}
+		for (Map.Entry<List<String>, List<SafetyWarning>> group : chipsByOrders.entrySet()) {
+			List<SafetyWarning> direct = notCrossReactive(group.getValue());
+			if (direct.isEmpty()) {
+				continue;
+			}
+			for (String printed : group.getKey()) {
+				Integer number = recordNumberOf(printed, direct, orderRecordNumbers);
+				if (number != null && recordsTheAnswerCites.contains(number)) {
+					return true;
+				}
+			}
+		}
+		return false;
 	}
 
 	/** The ones of {@code chips}, all about one set of her orders, that are not a cross-reactivity finding. */
@@ -237,6 +293,17 @@ public final class ConflictingOrderStatement {
 	static boolean asksOnlyForAllergies(String question) {
 		return question != null && QueryScopeRouter.asksAboutAllergies(question)
 				&& !QueryScopeRouter.asksAboutMedications(question)
+				&& !QueryScopeRouter.asksForADrugSafetyReading(question);
+	}
+
+	/**
+	 * Whether {@code question} asks neither about her allergies ({@link QueryScopeRouter#asksAboutAllergies}) nor for a
+	 * drug-safety reading ({@link QueryScopeRouter#asksForADrugSafetyReading}) — where the statement may follow an
+	 * answer that names an order her records directly conflict with (ADR Decision 210). A question asking about her
+	 * allergies is Decision 124's to decide, and a drug-safety reading's chips are its carrier.
+	 */
+	static boolean mayFollowAnAnswerNamingHerOrders(String question) {
+		return question != null && !QueryScopeRouter.asksAboutAllergies(question)
 				&& !QueryScopeRouter.asksForADrugSafetyReading(question);
 	}
 }

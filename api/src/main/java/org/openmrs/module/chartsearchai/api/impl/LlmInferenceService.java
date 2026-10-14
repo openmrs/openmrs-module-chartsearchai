@@ -346,13 +346,14 @@ public class LlmInferenceService implements ChartSearchService {
 			// And the drug-class note's own sentence where the answer does not cite the note (ADR Decision 166).
 			completedAnswer = DrugClassStatement.withDrugClassStated(completedAnswer, unresolvedDrugClass, cited);
 			// And, on a question asking only for her allergies, which of her own orders conflict with them
-			// (ADR Decision 124) — last, so it follows every sentence the module appends, and it marks the
-			// chips it states, which is why the chips it hands back are the ones the answer carries.
+			// (ADR Decision 124), or after a model's answer that names such an order (ADR Decision 210) — last, so it
+			// follows every sentence the module appends, and it marks the chips it states, which is why the chips it
+			// hands back are the ones the answer carries.
 			// ADR Decision 138's record numbers are joined first, so the records the statement cites are attached for
 			// the findings it states (ADR Decision 168).
 			ConflictingOrderStatement.Stated conflicting = ConflictingOrderStatement.state(question, completedAnswer,
 					DrugReferenceInjector.withFindingCitations(safetyWarnings, chart.getMappings()),
-					chart.getOrderRecordNumbers());
+					chart.getOrderRecordNumbers(), recordsTheModelCites(response.getAnswer(), cited));
 			completedAnswer = conflicting.getAnswer();
 			safetyWarnings = aboutTheDrugAsked(conflicting.getWarnings(), chart);
 			// And the order records it cites, as the module's, by the one method that decides which indices become
@@ -937,13 +938,14 @@ public class LlmInferenceService implements ChartSearchService {
 			// And the drug-class note's own sentence where the answer does not cite the note (ADR Decision 166).
 			completedAnswer = DrugClassStatement.withDrugClassStated(completedAnswer, unresolvedDrugClass, cited);
 			// And, on a question asking only for her allergies, which of her own orders conflict with them
-			// (ADR Decision 124) — last, so it follows every sentence the module appends, and it marks the
-			// chips it states, which is why the chips it hands back are the ones the answer carries.
+			// (ADR Decision 124), or after a model's answer that names such an order (ADR Decision 210) — last, so it
+			// follows every sentence the module appends, and it marks the chips it states, which is why the chips it
+			// hands back are the ones the answer carries.
 			// ADR Decision 138's record numbers are joined first, so the records the statement cites are attached for
 			// the findings it states (ADR Decision 168).
 			ConflictingOrderStatement.Stated conflicting = ConflictingOrderStatement.state(question, completedAnswer,
 					DrugReferenceInjector.withFindingCitations(safetyWarnings, chart.getMappings()),
-					chart.getOrderRecordNumbers());
+					chart.getOrderRecordNumbers(), recordsTheModelCites(response.getAnswer(), cited));
 			completedAnswer = conflicting.getAnswer();
 			safetyWarnings = aboutTheDrugAsked(conflicting.getWarnings(), chart);
 			// And the order records it cites, as the module's, by the one method that decides which indices become
@@ -1346,6 +1348,25 @@ public class LlmInferenceService implements ChartSearchService {
 	static List<RecordReference> extractCitedReferences(String answer, List<Integer> citations,
 			List<RecordMapping> mappings) {
 		return extractCitedReferences(answer, citations, mappings, Collections.<Integer, List<Integer>> emptyMap());
+	}
+
+	/**
+	 * The records the MODEL's own answer cites: each marker its prose prints ({@link ChartSearchAiUtils#citedIndexes}),
+	 * kept only where the answer's own resolution, {@code cited}, admits it — an index is not a citation until that
+	 * resolution admits one. Asked of the model's prose, so a sentence the module appended names nothing here (ADR
+	 * Decision 210).
+	 */
+	static Set<Integer> recordsTheModelCites(String modelAnswer, List<RecordReference> cited) {
+		Set<Integer> printed = ChartSearchAiUtils.citedIndexes(modelAnswer);
+		Set<Integer> admitted = new TreeSet<Integer>();
+		if (cited != null) {
+			for (RecordReference reference : cited) {
+				if (reference != null && printed.contains(Integer.valueOf(reference.getIndex()))) {
+					admitted.add(Integer.valueOf(reference.getIndex()));
+				}
+			}
+		}
+		return admitted;
 	}
 
 	/** The records several sentences the module appended cite, one map, each record's findings unioned in order. */

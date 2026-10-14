@@ -743,6 +743,10 @@ public class DrugReferenceInjector {
 								? UnrecognisedDrugName.in(question, drugReferenceService.getAll()) : null;
 		if (nothingResolved && unrepresented.isEmpty() && !screenRelatedNothing && !screenOfNoMedications
 				&& !screenOfOneOrder && listed.stated().isEmpty() && unrecognised == null) {
+			// The record each of her orders is, though nothing here resolved: it is a fact about her chart, and the
+			// statement after a model's answer naming an order her records directly conflict with cites it (ADR
+			// Decision 210). Every order has its own record here, so the chart's own index is the one to number off.
+			chart.markOrderRecordNumbers(orderRecordNumbers(new DrugOrderRecords(chart.getMappings()), context));
 			return chart;
 		}
 
@@ -1132,8 +1136,10 @@ public class DrugReferenceInjector {
 		// And the line of each finding about the drug the question proposes against one of her orders (ADR Decision
 		// 147), which LlmInferenceService states after a model's answer that does not cite it.
 		// The record each of her orders is (ADR Decision 168), which the module's own sentences after a model's answer
-		// cite — so ungated, as the composed answer's numbers are.
-		Map<String, Integer> herOrderRecords = orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context)
+		// cite — so ungated, as the composed answer's numbers are, and numbered where no finding was raised too: an
+		// answer can name an order her records directly conflict with though this pass raised nothing (ADR Decision 210).
+		Map<String, Integer> herOrderRecords = orderRecordNumbers.isEmpty()
+				? orderRecordNumbers(findingRecords != null ? findingRecords : new DrugOrderRecords(mappings), context)
 				: orderRecordNumbers;
 		injected.markProposalOwnOrderFindingLines(proposalOwnOrderFindingLines(question, questionDrugs, findings,
 				findingNumbers, herOrderRecords));

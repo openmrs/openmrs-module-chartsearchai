@@ -16398,3 +16398,77 @@ model call it always had; each has a single reader that asks it only of drugs he
 
 Pinned by `OwnMedicationSafetyContextTest.twoOfHerOwnDrugsAskedAboutAsWhetherSheCanHaveThemTogetherAreAnsweredAsHers`
 and `OwnMedicationSafetyContextTest.aQuestionWhetherHerOwnDrugIsCausingInteractionsIsAnsweredAsHers`.
+
+## Decision 210: A model's answer naming an order her records directly conflict with is followed by that conflict
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-14. It widens
+[Decision 124](#decision-124-an-allergy-question-states-her-conflicting-orders-in-the-answer)'s admission and keeps
+[Decision 188](#decision-188-an-allergy-answer-states-only-the-orders-her-records-directly-conflict-with)'s narrowing.
+
+### Context
+
+On the 3.7.1 standalone Sarah Taylor's *"Is she on more than one drug from the same class?"* was answered by the model
+with her three NSAIDs and five corticosteroids, citing each order — among them *Dexamethasone Injection vial 8mg* [12]
+and *Hydrocortisone Injection vial 100mg* [14], drugs she is recorded allergic to. The answer said nothing of either
+allergy (`findingCitations` carried 10, cited 0); the ten chips beside it did. `QueryScopeRouter` reads the question as
+one about her medications, and neither about her allergies nor for a drug-safety reading, so Decision 124's statement,
+which only an allergy question admits, did not follow.
+
+### The decision
+
+- **The same statement follows a model's answer that itself cites the record of an order a direct finding is about**,
+  on a question asking neither about her allergies nor for a drug-safety reading
+  (`ConflictingOrderStatement.mayFollowAnAnswerNamingHerOrders`), under Decision 124's all-or-nothing rule. Once
+  admitted it states every direct finding on the response, so its heading stays true of the response's own chips.
+- **The anchor is the answer, not the question.** A finding stated beside every question about her medications would be
+  the invariance [Decision 79](#decision-79-the-standing-chart-finding-is-served-by-a-surface-a-client-asks-for-not-by-every-answer)
+  rejected; the answer naming the very order is the finding's claim on the text. *"Does she take any NSAIDs?"* names no
+  conflicting order and is answered as before.
+- **It is the ORDER's record, and the model's own**: the markers its prose prints, each admitted by its own resolution
+  (`LlmInferenceService.recordsTheModelCites`) — never a sentence the module appended, and never the finding's record,
+  since an answer citing the finding has stated it.
+- **Decision 124's questions keep their rule.** One asking about her allergies AND her medications — *"Is she allergic to
+  any of her medications?"* — is the drug-safety question, and its chips stay the carrier even where the answer names
+  her order; a drug-safety reading's chips are its carrier too.
+- **A cross-reactivity chip is drawn apart, as what it is.** Not stated (Decision 188). Left among the findings about the
+  drugs in question, Sarah's eight kept the client's safety box open and red under an answer that already states the
+  two conflicts, and the owner ruled that noise. `aboutAnotherOfHerMedications` would move them, but the client labels
+  those *"findings about other medications this patient takes"*, which is false of drugs the answer names. So each is
+  published `crossReactivityBesideHerStatedConflicts` (`SafetyWarning.isCrossReactivityBesideHerStatedConflicts`,
+  written by `ConflictingOrderStatement` alone), and `openmrs-esm-chartsearchai` draws such chips behind one neutral
+  line, *"8 possible cross-reactivity findings"*, one click away. An allergy question's cross-reactivity chips keep
+  Decision 188's key and line.
+- **Her orders are numbered where nothing resolved before the answer.** *"Which steroids is she on?"* resolved nothing —
+  no drug, no class, no finding — so `DrugReferenceInjector` handed her chart back unrebuilt, and a rebuilt chart with no
+  finding numbered none of her orders either: an answer citing [12] could not be told to be her dexamethasone order. The
+  record each of her orders is, is a fact about her chart, so both paths now number them, by the one rule
+  (`orderRecordNumbers`).
+
+### Measured
+
+On the :8081 standalone (local E4B), 2026-10-14. Sarah's question is answered as before and then:
+
+> Current orders that directly conflict with the patient's records:
+> - Dexamethasone Injection vial 8mg [12]: recorded allergy to this drug.
+> - Hydrocortisone Injection vial 100mg [14]: recorded allergy to this drug.
+
+Those two chips are `statedInTheAnswer`, and her eight cross-reactivity chips carry
+`crossReactivityBesideHerStatedConflicts`: in the browser, with the client change, the box under the answer is the one
+neutral line *"Safety checks: 8 possible cross-reactivity findings — Show details"*. *"Which steroids is she on?"*
+gains the same two lines, Susan Young's *"What medications is she on?"* her tiotropium and lidocaine lines, and Betty's
+*"What medications is she currently taking?"* her lidocaine line. Sarah's *"Does she have any allergies?"* (its answer
+and chips), Barbara's *"Is she allergic to any of her medications?"* and Sarah's *"Does she take any NSAIDs?"* are
+unchanged, and so are the 126 drug-interaction questions of that day's sweep, each byte-identical to the previous build.
+
+Pinned by `AllergyQuestionConflictingOrderContextTest`: `.search_anAnswerNamingAnOrderHerRecordsDirectlyConflictWithStatesTheConflict`,
+`.search_anAnswerNamingTheConflictingOrderStatesItWhereNothingResolvedBeforeTheAnswer` (the rebuilt chart),
+`.search_anAnswerNamingTheConflictingOrderStatesItWhereTheChartAlreadyHoldsEveryOrderOfHers` (the chart handed back),
+`.search_anAnswerToAMedicationQuestionNotNamingTheConflictingOrderLeavesItAChip`,
+`.search_anAnswerNamingAnOrderDrawsItsCrossReactivityFindingApartBesideTheStatement`,
+`.search_anAllergyAnswersCrossReactivityFindingKeepsDecision188sLine`,
+`.search_anAnswerNamingAnOrderOnlyACrossReactivityFindingIsAboutStatesNothing`,
+`.anAllergyQuestionThatAlsoAsksAboutHerMedicationsKeepsTheFindingAChipWhereTheAnswerNamesHerOrder` and
+`.aDrugSafetyReadingKeepsTheFindingAChipWhereTheAnswerNamesHerOrder`; the wire key by
+`ChartSearchAiSafetyWarningSeverityWireTest.everyPublicZeroArgumentAccessorOfAWarningNamesAKeyOnTheWire`. The allergy leg,
+the drug-safety-reading leg, the anchor, the cross-reactivity key, the wire key and each numbering path redden their own
+case under mutation.

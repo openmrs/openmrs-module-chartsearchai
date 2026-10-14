@@ -2355,8 +2355,9 @@ public final class DrugReferenceTestSupport {
 	}
 
 	/** A querystore drug-order chart record: its resource type is querystore's {@code drug_order}
-	 *  and its resourceUuid is the Order uuid (its {@code DrugOrderRecordSerializer} contract). */
-	static RecordMapping drugOrderRecord(int index, String orderUuid, String drugText) {
+	 *  and its resourceUuid is the Order uuid (its {@code DrugOrderRecordSerializer} contract). Public for
+	 *  {@link #allergyRecord}'s cross-package reason. */
+	public static RecordMapping drugOrderRecord(int index, String orderUuid, String drugText) {
 		return new RecordMapping(index, "drug_order", orderUuid, null, "Drug order: " + drugText);
 	}
 

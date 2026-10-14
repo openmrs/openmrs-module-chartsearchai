@@ -92,6 +92,86 @@ public class OwnMedicationSafetyContextTest extends BaseModuleContextSensitiveTe
 			Arrays.asList(DrugReferenceTestSupport.activeOrder("order-ibuprofen", "Ibuprofen 400mg"))));
 	}
 
+	@Test
+	public void aQuestionWhetherSheIsOnHerOwnDrugIsAnsweredThatItIsWithItsFindings() throws IOException {
+		// Measured on the 3.7.1 standalone (ADR Decision 202): Sarah Taylor's "Is she on prednisone?" was answered "No,
+		// the patient is not currently on Prednisone" by the model, beside seven findings each calling prednisone a
+		// medication she already takes. Her orders answer the question; the module states it with the order cited.
+		for (String question : Arrays.asList("Is she on ibuprofen?", "Is she taking ibuprofen?", "Does she take ibuprofen?",
+			"Is the patient currently on ibuprofen?", "Is ibuprofen one of her medications?")) {
+			String answer = answer(question);
+
+			assertNotNull(answer, "the module answers " + question);
+			String[] lines = answer.split("\n");
+			assertTrue(lines[0].matches("Ibuprofen is one of this patient's active medications \\(Ibuprofen 400mg \\[\\d+\\]\\)\\. "
+					+ "3 interactions with this patient's other active medications:"), question + " was: " + answer);
+			assertEquals(DrugReferenceInjector.BELOW_FLOOR_SCOPE, lines[lines.length - 1], question + " was: " + answer);
+		}
+	}
+
+	@Test
+	public void aQuestionWhetherSheIsOnADrugNoneOfHerOrdersCarriesIsNotAnsweredAsHers() throws IOException {
+		// The statement rests on her orders: a drug none of them carries is not called hers, nor answered "no" by the module.
+		assertEquals(null, answer("Is she on celecoxib?", null,
+			Arrays.asList(DrugReferenceTestSupport.activeOrder("order-ibuprofen", "Ibuprofen 400mg"),
+				DrugReferenceTestSupport.activeOrder("order-prednisone", "Prednisone 5mg"))));
+	}
+
+	@Test
+	public void aQuestionWhetherSheIsOnADrugSheIsOnlyScheduledToStartSaysWhenItStarts() throws IOException {
+		// Dora's "Is she on rifampicin?" opened "Rifampicin (rifampin) is one of this patient's active medications." of an
+		// order scheduled to start 2026-10-28, its own line saying so (ADR Decision 202): a drug none of her orders has
+		// started is not called one of her active medications.
+		// At UTC midnight, the zone every date this module publishes is spelled in (DateFormatUtil).
+		java.util.Date start = java.util.Date.from(java.time.LocalDate.of(2026, 10, 28).atStartOfDay(java.time.ZoneOffset.UTC)
+				.toInstant());
+		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
+			PatientClinicalContext.ActiveDrugOrder.named("order-ibuprofen", "Ibuprofen 400mg",
+				new LinkedHashSet<String>(Arrays.asList("Ibuprofen 400mg")), java.util.Collections.<String> emptySet(),
+				java.util.Collections.<String> emptySet(), null, start),
+			DrugReferenceTestSupport.activeOrder("order-celecoxib", "Celecoxib 200mg"),
+			DrugReferenceTestSupport.activeOrder("order-prednisone", "Prednisone 5mg"),
+			DrugReferenceTestSupport.activeOrder("order-dexamethasone", "Dexamethasone 8mg"));
+
+		String answer = answer("Is she on ibuprofen?", null, orders);
+
+		assertNotNull(answer, "the module answers");
+		assertTrue(answer.split("\n")[0].matches("Ibuprofen is not yet one of this patient's active medications: "
+				+ "Ibuprofen 400mg \\[\\d+\\] is scheduled to start 2026-10-28\\. .*"), "was: " + answer);
+		assertTrue(!answer.contains("Ibuprofen is one of this patient's active medications"), "was: " + answer);
+	}
+
+	@Test
+	public void aQuestionWhetherHerOwnDrugIsSafeWithHerOtherMedicationsIsAnsweredAsHers() throws IOException {
+		// Susan Young's "Is lidocaine safe with her other medications?" — her own lidocaine, which she is also recorded
+		// allergic to — went to the model, which answered "No — Lidocaine should not be given" and left the allergy out.
+		String answer = answer("Is ibuprofen safe with her other medications?", DrugReferenceTestSupport.set("ibuprofen"),
+			ALL_FOUR);
+
+		assertNotNull(answer, "the module answers");
+		assertTrue(answer.startsWith("Ibuprofen is one of this patient's active medications (Ibuprofen 400mg ["), "was: " + answer);
+		assertTrue(answer.matches("(?s).*\nThe patient has a recorded allergy to Ibuprofen\\. \\[\\d+\\]\n.*"),
+			"the allergy is stated: " + answer);
+	}
+
+	@Test
+	public void anInteractionQuestionAboutHerOwnDrugNamesTheOrderItIs() throws IOException {
+		// Susan Young's "Does metoclopramide interact with her meds?" opened "Metoclopramide is one of this patient's active
+		// medications." and named no order: the lead's order came only from a proposal's finding (ADR Decision 202).
+		// The shape of Rhoda's "Which of her medications interact with lopinavir/ritonavir?", which the model answered with
+		// none of the severities. Hers is a combination, which this path does not take (ADR Decision 202), so the case asks
+		// it of a single-substance drug.
+		for (String question : Arrays.asList("Does ibuprofen interact with her medications?",
+			"Does ibuprofen interact with her other medications?", "Which of her medications interact with ibuprofen?",
+			"Which of her other medications interact with ibuprofen?")) {
+			String answer = answer(question);
+
+			assertNotNull(answer, "the module answers " + question);
+			assertTrue(answer.startsWith("Ibuprofen is one of this patient's active medications (Ibuprofen 400mg ["),
+				question + " was: " + answer);
+		}
+	}
+
 	private static final List<PatientClinicalContext.ActiveDrugOrder> ALL_FOUR = Arrays.asList(
 		DrugReferenceTestSupport.activeOrder("order-ibuprofen", "Ibuprofen 400mg"),
 		DrugReferenceTestSupport.activeOrder("order-celecoxib", "Celecoxib 200mg"),

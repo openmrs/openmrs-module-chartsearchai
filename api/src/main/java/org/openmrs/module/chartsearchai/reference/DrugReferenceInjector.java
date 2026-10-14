@@ -983,8 +983,12 @@ public class DrugReferenceInjector {
 				&& !aboutHerOwnMedication(question, questionDrugs, screenedSubstances, findings).isEmpty()) {
 			// A safety question about a drug she already takes: its findings, counted and stated (ADR Decision 193).
 			List<Integer> about = aboutHerOwnMedication(question, questionDrugs, screenedSubstances, findings);
-			moduleAnswer = composeAboutHerOwnMedication(findings, findingNumbers, about, orderRecordNumbers,
-					orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers);
+			Map<String, Integer> herRecords = orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context)
+					: orderRecordNumbers;
+			String herOrders = herStartedOrdersOf(questionDrugs.get(0), orderEntries, context, herRecords);
+			moduleAnswer = composeAboutHerOwnMedication(findings, findingNumbers, about, orderRecordNumbers, herRecords,
+					herOrders,
+					herOrders.isEmpty() ? herScheduledOrdersOf(questionDrugs.get(0), orderEntries, context, herRecords) : "");
 		} else if (!findings.isEmpty() && context != null
 				&& ChartSearchAiUtils.getBooleanGlobalProperty(
 						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
@@ -2748,6 +2752,69 @@ public class DrugReferenceInjector {
 				&& QueryScopeRouter.asksWhetherADrugInteractsWithHerMedications(wordsBesideItsNames(question, questionDrugs));
 	}
 
+	/** Whether {@code question} asks whether she is on its one drug now (ADR Decision 202). */
+	static boolean asksWhetherSheIsOnIt(String question, List<DrugReference> questionDrugs) {
+		return !questionDrugs.isEmpty()
+				&& QueryScopeRouter.asksWhetherSheIsOnADrug(wordsBesideItsNames(question, questionDrugs));
+	}
+
+	/** Whether {@code question} asks about its one drug beside her other medications — whether it is safe with them, which
+	 *  of them it interacts with (ADR Decision 202). */
+	static boolean asksAboutItBesideHerMedications(String question, List<DrugReference> questionDrugs) {
+		return !questionDrugs.isEmpty()
+				&& QueryScopeRouter.asksAboutADrugBesideHerMedications(wordsBesideItsNames(question, questionDrugs));
+	}
+
+	/**
+	 * Her STARTED orders of {@code drug}'s substance, each cited by the record {@code herOrderRecords} gives its display —
+	 * <em>" (Prednisone Co 5mg [15])"</em> — for the lead of {@link #composeAboutHerOwnMedication} where no finding named
+	 * them (ADR Decision 202). Resolved by {@link DrugSafetyValidator#ordersOfSubstance}, the chips' own resolution; an
+	 * order whose display names no drug, or that has not started, is not named as an active medication. Empty where none
+	 * is.
+	 */
+	private String herStartedOrdersOf(DrugReference drug, List<DrugReference> orderEntries, PatientClinicalContext context,
+			Map<String, Integer> herOrderRecords) {
+		List<String> named = new ArrayList<String>();
+		for (PatientClinicalContext.ActiveDrugOrder order : DrugSafetyValidator.ordersOfSubstance(drugReferenceService, drug,
+				orderEntries, context)) {
+			if (!order.hasStarted() || !DrugSafetyValidator.displayNamesADrug(order)) {
+				continue;
+			}
+			String display = order.getDisplay().trim();
+			Integer number = herOrderRecords.get(display);
+			String item = display + (number == null ? "" : " [" + number + "]");
+			if (!named.contains(item)) {
+				named.add(item);
+			}
+		}
+		return named.isEmpty() ? "" : " (" + DrugSafetyValidator.joinPartners(named) + ")";
+	}
+
+	/**
+	 * Her orders of {@code drug}'s substance that have NOT started, each cited by its record and said to be scheduled
+	 * with its date in the one spelling the chart line and the findings share ({@link
+	 * PatientChartSerializer#scheduledToStart}) — <em>"Rifampicin 150mg [3] is scheduled to start 2026-10-28"</em> — for a
+	 * lead that must not call the drug one of her active medications (ADR Decision 202). Empty where none is.
+	 */
+	private String herScheduledOrdersOf(DrugReference drug, List<DrugReference> orderEntries,
+			PatientClinicalContext context, Map<String, Integer> herOrderRecords) {
+		List<String> named = new ArrayList<String>();
+		for (PatientClinicalContext.ActiveDrugOrder order : DrugSafetyValidator.ordersOfSubstance(drugReferenceService, drug,
+				orderEntries, context)) {
+			if (order.hasStarted() || !DrugSafetyValidator.displayNamesADrug(order)) {
+				continue;
+			}
+			String display = order.getDisplay().trim();
+			Integer number = herOrderRecords.get(display);
+			String item = display + (number == null ? "" : " [" + number + "]") + " is "
+					+ PatientChartSerializer.scheduledToStart(order.getScheduledStart());
+			if (!named.contains(item)) {
+				named.add(item);
+			}
+		}
+		return String.join("; ", named);
+	}
+
 	/**
 	 * How the module's own answer opens on a proposal whose findings are all interaction cautions about the drug
 	 * proposed (ADR Decision 140): <em>"2 interaction cautions for Omeprazole:"</em> — the count, what kind of
@@ -4094,8 +4161,10 @@ public class DrugReferenceInjector {
 	/**
 	 * The positions in {@code findings} of what a safety question about a drug she already takes is answered with (ADR
 	 * Decision 193), or none where the module does not answer it: the question resolves ONE substance, it is one her
-	 * orders carry ({@code herSubstances}), it asks whether to give it or whether it interacts, and the check raised an
-	 * interaction about it relating it to another of her orders. Those findings are every one whose subject is that
+	 * orders carry ({@code herSubstances}), it asks whether to give it, whether it interacts or — ADR Decision 202 —
+	 * whether she is on it or about it beside her other medications ({@link #asksWhetherSheIsOnIt}, {@link
+	 * #asksAboutItBesideHerMedications}), and the check raised an interaction about it relating it to another of her
+	 * orders. Those findings are every one whose subject is that
 	 * substance and that is not about another of her medications; each must state a clause {@link #strengthRank} reads.
 	 * Without an interaction about it the model answers — the module states findings, never a clearance.
 	 */
@@ -4107,7 +4176,9 @@ public class DrugReferenceInjector {
 		}
 		List<Integer> about = new ArrayList<Integer>();
 		if (asked.size() != 1 || !herSubstances.containsAll(asked)
-				|| !questionProposes(question, questionDrugs) && !asksWhetherItInteracts(question, questionDrugs)) {
+				|| !questionProposes(question, questionDrugs) && !asksWhetherItInteracts(question, questionDrugs)
+						&& !asksWhetherSheIsOnIt(question, questionDrugs)
+						&& !asksAboutItBesideHerMedications(question, questionDrugs)) {
 			return about;
 		}
 		boolean interaction = false;
@@ -4140,10 +4211,14 @@ public class DrugReferenceInjector {
 	 * medications:"</em>, then the drug's findings strongest first in a screen's brief lines, then the scope. The order
 	 * in the lead is the one the finding that the drug is already in her orders names ({@link
 	 * SafetyWarning#alreadyOrdered()}, issue #548); that finding is a proposal's ("adding it would duplicate that
-	 * order") and is not stated as a line. Never a verdict: no "safe", no "change it".
+	 * order") and is not stated as a line. Where no finding names them — a question whether it interacts, or whether she
+	 * is on it — the lead names {@code herOrders} instead ({@link #herStartedOrdersOf}, ADR Decision 202); where none of
+	 * her orders of it has started it says so, with when each starts ({@code herScheduledOrders}). Never a verdict: no
+	 * "safe", no "change it".
 	 */
 	private static String composeAboutHerOwnMedication(List<SafetyWarning> findings, List<Integer> numbers,
-			List<Integer> about, Map<String, Integer> orderRecordNumbers, Map<String, Integer> herOrderRecords) {
+			List<Integer> about, Map<String, Integer> orderRecordNumbers, Map<String, Integer> herOrderRecords,
+			String herOrders, String herScheduledOrders) {
 		String drug = null;
 		String orders = "";
 		List<Integer> stated = new ArrayList<Integer>();
@@ -4206,7 +4281,13 @@ public class DrugReferenceInjector {
 			counts.add("its substance in more than one of this patient's orders");
 		}
 		List<String> lines = new ArrayList<String>();
-		lines.add(drug + OWN_MEDICATION_LEAD + orders + ". " + String.join(", and ", counts) + ":");
+		// Only a proposal raises the finding that names her orders of it; any other question names them from her orders
+		// (ADR Decision 202), so the lead says which prescription the drug is — and where none of them has started, that
+		// it is not yet one of her active medications, and when it starts.
+		String lead = herOrders.isEmpty() && !herScheduledOrders.isEmpty()
+				? drug + NOT_YET_STARTED_LEAD + herScheduledOrders
+				: drug + OWN_MEDICATION_LEAD + (orders.isEmpty() ? herOrders : orders);
+		lines.add(lead + ". " + String.join(", and ", counts) + ":");
 		for (Integer i : stated) {
 			SafetyWarning finding = findings.get(i);
 			lines.add(findingLine(finding, numbers.get(i), orderRecordNumbers, herOrderRecords, true, null, saidOnce,
@@ -4369,6 +4450,9 @@ public class DrugReferenceInjector {
 	/** What follows the drug's name in the lead of {@link #composeAboutHerOwnMedication} — read by
 	 *  {@link ModuleAnswerStatement} too, which marks the finding it states (ADR Decision 194). */
 	static final String OWN_MEDICATION_LEAD = " is one of this patient's active medications";
+
+	/** What follows the drug's name in that lead where none of her orders of it has started (ADR Decision 202). */
+	static final String NOT_YET_STARTED_LEAD = " is not yet one of this patient's active medications: ";
 
 	/** A recorded allergy whose name names the drug the question proposes — not one of her own orders (ADR Decision
 	 *  192). */

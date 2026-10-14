@@ -16169,3 +16169,49 @@ refusal.
 Pinned by `CitationGroundingVerifierTest.aRunOfMarkersClosingAListOfItemsIsACompoundClaimAndIsNotPublishedUnsupported`,
 `.aRunOfMarkersClosingAColonLessListIsWithheldWhicheverWayTheJudgeWouldAnswer` and
 `.anIntroductoryWordBeforeOneCoCitedClaimDoesNotMakeItAList`; #302's co-citation cases stay green.
+
+## Decision 202: A question whether she is on her own drug, or whether it is safe with her other medications, is answered as her own medication, and the answer names the order
+
+**Status: Accepted** (October 2026) — decided unattended on the owner's instruction of 2026-10-14 to choose what serves a
+clinician. It widens [Decision 193](#decision-193-a-safety-question-about-a-drug-she-already-takes-is-answered-by-the-module-as-her-own-medication).
+
+Three answers from a DDI sweep on the :8081 rig, each about a drug the patient's own active orders carry:
+
+- Sarah Taylor's *"Is she on prednisone?"* was answered *"No, the patient is not currently on Prednisone"* by the model,
+  beside seven findings each calling prednisone a medication she already takes. *"Is she on Advil?"* opened *"Yes, the
+  patient is related to Ibuprofen"* and cited no order.
+- Susan Young's *"Is lidocaine safe with her other medications?"* — her own lidocaine, which she is also recorded allergic
+  to — was answered *"No — Lidocaine should not be given"*, the allergy left out; Helen Roberts' methotrexate likewise
+  went to the model.
+- *"Does metoclopramide interact with her meds?"*, which Decision 193 does answer, opened *"Metoclopramide is one of this
+  patient's active medications."* and named no order: the lead took its order only from the finding a PROPOSAL raises
+  (issue #548).
+
+**The decision.** Decision 193's path also takes a question whether she is on the drug now —
+`QueryScopeRouter.asksWhetherSheIsOnADrug`, a closed present-tense grammar beside Decision 151's past-tense one
+(*"Is she on X?"*, *"Is she taking X?"*, *"Does she take X?"*, *"Is X one of her medications?"*) — and a question about it
+beside her other medications, `QueryScopeRouter.asksAboutADrugBesideHerMedications` (*"Is X safe with her other
+medications?"*, *"Which of her medications interact with X?"*). That one is a grammar of its own and NOT a proposal
+shape: the proposal shapes also find the slot an unrecognised drug word sits in (Decision
+183), and as one, *"Is grapefruit juice safe with her medications?"* was answered by the module where
+`LlmInferenceServiceAnswerFromFindingsContextTest.aScreenNamingSomethingTheDatasetDoesNotResolveStillAsksTheModel` pins
+it to the model; nor an interaction shape, whose answer opens "Yes —", which does not answer "which". *"Does X interact
+with her other medications?"* joins Decision 181's shape. Where no finding names her orders of the drug, the lead names them itself —
+her STARTED orders of its substance, `DrugSafetyValidator.ordersOfSubstance`, each cited by its record. And where none of
+her orders of it has started, the lead does not call it one of her active medications at all: verified on the rig, Dora
+DdiScheduled's *"Is she on rifampicin?"* opened *"Rifampicin (rifampin) is one of this patient's active medications."* of
+an order scheduled to start 2026-10-28, so it now reads *"… is not yet one of this patient's active medications: Rifampicin
+150mg [1] is scheduled to start 2026-10-28."* — the date in `PatientChartSerializer.scheduledToStart`'s one spelling.
+Everything else is Decision 193's: the module answers only where the check related the drug to another of her orders, states findings
+and never a clearance, and a drug none of her orders carries is not answered as hers.
+
+**What it leaves to the model**, unchanged: a question naming a COMBINATION drug, because Decision 193 answers for ONE
+substance and *"lopinavir/ritonavir"* resolves to two. Rhoda's *"Which of her medications interact with
+lopinavir/ritonavir?"* — her own lopinavir/ritonavir — was answered by the model with none of the severities, three of
+them flagged by `unstatedFindingSeverities`, before this decision and after it.
+
+Pinned by `OwnMedicationSafetyContextTest.aQuestionWhetherSheIsOnHerOwnDrugIsAnsweredThatItIsWithItsFindings`,
+`.aQuestionWhetherSheIsOnADrugNoneOfHerOrdersCarriesIsNotAnsweredAsHers`,
+`.aQuestionWhetherHerOwnDrugIsSafeWithHerOtherMedicationsIsAnsweredAsHers`,
+`.aQuestionWhetherSheIsOnADrugSheIsOnlyScheduledToStartSaysWhenItStarts` and
+`.anInteractionQuestionAboutHerOwnDrugNamesTheOrderItIs`.

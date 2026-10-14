@@ -377,7 +377,7 @@ public final class QueryScopeRouter {
 	 */
 	private static final List<Pattern> INTERACTS_WITH_HER_MEDICATIONS_SHAPES = shapes(
 			// "Does ibuprofen interact with her medications?", "Will ibuprofen interact with any of her current meds?"
-			"(?:does|will|would|could|can) " + D + " interact with (?:any of )?" + POSSESSIVE + " " + MEDICATIONS,
+			"(?:does|will|would|could|can) " + D + " interact with (?:any of )?" + POSSESSIVE + " (?:other )?" + MEDICATIONS,
 			// "Any interactions if I give her ibuprofen?", "Are there any interactions if I start her on ibuprofen?" — the
 			// model answered it "No — X should not be given: it interacts with …" (ADR Decision 181)
 			"(?:are there )?any (?:drug )?interactions if (?:i|we) (?:give|start|prescribe|add) (?:" + PATIENT + " )?(?:on )?"
@@ -504,6 +504,53 @@ public final class QueryScopeRouter {
 			// "Has fluconazole ever been prescribed for her?", "Was warfarin ever given to the patient?"
 			"(?:has|was) " + D + " (?:ever )?(?:been )?(?:given|prescribed|ordered|administered|used)(?: (?:to|for) "
 					+ PATIENT + ")?" + BEFORE);
+
+	/**
+	 * The question shapes asking whether the patient is ON one drug now, over {@link #words} with the drug's name marked
+	 * {@link #DRUG_NAME} — ADR Decision 202. The present tense {@link #HISTORY_SHAPES} leaves out: "Is she on
+	 * prednisone?" asks whether the drug is one of her active medications, which her orders answer. A grammar, and
+	 * fail-CLOSED, for the reason {@link #PROPOSAL_SHAPES} is: a phrasing it misses keeps the model call it always had.
+	 */
+	private static final List<Pattern> PRESENCE_SHAPES = shapes(
+			// "Is she on prednisone?", "Is the patient currently taking ibuprofen?", "Is he still on warfarin?"
+			"(?:is|are) " + SUBJECT + " (?:currently |still |now )?(?:on|taking|using|receiving|prescribed) " + D
+					+ "(?: now| currently| at the moment| at present)?",
+			// "Does she take prednisone?", "Does the patient still use ibuprofen?"
+			"(?:does|do) " + SUBJECT + " (?:currently |still )?(?:take|use|receive) " + D + "(?: now| currently)?",
+			// "Is prednisone one of her medications?", "Is ibuprofen in her current meds?", "Is ibuprofen on her medication list?"
+			"is " + D + " (?:one of " + POSSESSIVE + " " + MEDICATIONS + "|in " + POSSESSIVE + " " + MEDICATIONS + "|on "
+					+ POSSESSIVE + " (?:medication|med|drug) list)");
+
+	/**
+	 * Whether a question asks whether the patient is on ONE drug now, and nothing else — one of {@link #PRESENCE_SHAPES}
+	 * (ADR Decision 202). Fail-CLOSED as {@link #asksWhetherToGiveADrug} is.
+	 */
+	public static boolean asksWhetherSheIsOnADrug(List<String> wordsWithTheDrugMarked) {
+		return fitsAShape(wordsWithTheDrugMarked, PRESENCE_SHAPES);
+	}
+
+	/**
+	 * The question shapes asking about ONE drug beside her other medications — whether it is safe with them, which of
+	 * them it interacts with — over {@link #words} with the drug's name marked {@link #DRUG_NAME} (ADR Decision 202).
+	 * Kept out of {@link #PROPOSAL_SHAPES} and {@link #INTERACTS_WITH_HER_MEDICATIONS_SHAPES} deliberately: the first
+	 * also finds the drug SLOT an unrecognised word sits in (ADR Decision 183), and "Is grapefruit juice safe with her
+	 * medications?" is the model's to answer; the second's answer opens "Yes —", which does not answer "which". Its one
+	 * reader asks it of a drug her own orders carry.
+	 */
+	private static final List<Pattern> BESIDE_HER_MEDICATIONS_SHAPES = shapes(
+			// "Is lidocaine safe with her other medications?", "Is ibuprofen okay with her current meds?"
+			"is " + D + " (?:safe|ok|okay|appropriate) (?:with|alongside) (?:any of )?" + POSSESSIVE + " (?:other )?"
+					+ MEDICATIONS,
+			// "Which of her medications interact with lopinavir/ritonavir?", "What other meds of hers interact with X?"
+			"(?:which|what) (?:of )?" + POSSESSIVE + " (?:other )?" + MEDICATIONS + " (?:interact|interacts) with " + D);
+
+	/**
+	 * Whether a question asks about ONE drug beside her other medications, and nothing else — one of {@link
+	 * #BESIDE_HER_MEDICATIONS_SHAPES} (ADR Decision 202). Fail-CLOSED as {@link #asksWhetherToGiveADrug} is.
+	 */
+	public static boolean asksAboutADrugBesideHerMedications(List<String> wordsWithTheDrugMarked) {
+		return fitsAShape(wordsWithTheDrugMarked, BESIDE_HER_MEDICATIONS_SHAPES);
+	}
 
 	private static List<Pattern> shapes(String... shapes) {
 		List<Pattern> patterns = new ArrayList<Pattern>(shapes.length);

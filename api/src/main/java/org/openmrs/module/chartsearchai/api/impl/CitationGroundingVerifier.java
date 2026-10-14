@@ -1791,6 +1791,20 @@ public class CitationGroundingVerifier {
 			Pattern.compile("^[\\s,;]*(?:(?:and|or)\\b[\\s,;]*)?", Pattern.CASE_INSENSITIVE);
 
 	/**
+	 * What joins two ITEMS of a list inside a claim — the separators {@link #LEADING_ITEM_SEPARATOR}
+	 * strips from the front of one, found anywhere instead. {@link #coCitedClaimNamesSeveralItems} reads
+	 * it, and only between two non-empty pieces of text.
+	 */
+	private static final Pattern LIST_JOIN = Pattern.compile("[,;]|\\b(?:and|or)\\b", Pattern.CASE_INSENSITIVE);
+
+	/**
+	 * One word opening a claim and closed by a comma — {@code "Yes,"}, {@code "No,"},
+	 * {@code "Additionally,"}. Its comma joins no items, and an answer opens with one more often than
+	 * not, so {@link #coCitedClaimNamesSeveralItems} drops it before looking for a list.
+	 */
+	private static final Pattern INTRODUCTORY_WORD = Pattern.compile("^\\s*\\p{L}+\\s*,");
+
+	/**
 	 * Splits a sentence that ENUMERATES its cited records into one claim per record — the shared
 	 * preamble plus that record's OWN item — or returns {@code null} when the sentence is not an
 	 * enumeration and must be left to the caller's normal scoping.
@@ -1962,6 +1976,45 @@ public class CitationGroundingVerifier {
 				return true;
 			}
 			previousEnd = marker.end();
+		}
+		return false;
+	}
+
+	/**
+	 * True when the claim a run of co-cited markers closes NAMES SEVERAL ITEMS — a list join
+	 * ({@link #LIST_JOIN}) between two non-empty pieces of the claim text before the first marker,
+	 * read after the last colon there (what a colon introduces is the list; what precedes it is its
+	 * header) and after an {@link #INTRODUCTORY_WORD}.
+	 *
+	 * <p>Why that makes the unit compound (ADR Decision 201): {@code "Advil 400mg, Celebrex 200mg, and
+	 * Diclofenac Co 50mg are all NSAIDs [10], [11], [13]"} gathers its markers at the end, so
+	 * {@link #claimTextSeparatesCitations} reads co-citation — but each record is the ORDER for one of the
+	 * three drugs, so each is asked to entail a list naming the other two and a correct judge refuses all
+	 * three, whether the citations are right or wrong. Measured live on that answer: all eight citations
+	 * of a correct two-sentence answer published {@code grounded=false}. From the text alone the module
+	 * cannot tell "each record supports the whole list" from "the records support its items in turn",
+	 * and only the second is the shape the answers produce, so the question is malformed and the verdict
+	 * is withheld, as #302 withholds it.
+	 *
+	 * <p>What it gives up, stated so it is not mistaken for nothing: a list that every co-cited record
+	 * DOES support whole is no longer graded either — a withheld verdict rather than a wrong one, the
+	 * direction #302 is safe in. A comma that joins no items still reads as a join ({@code "The patient,
+	 * aged 64, has hypertension [1], [2]"}); only the single introductory word is exempt, because only it
+	 * is common enough to cost the co-citation shape its grading wholesale.
+	 */
+	private static boolean coCitedClaimNamesSeveralItems(String text) {
+		Matcher marker = ChartSearchAiUtils.INLINE_CITATION.matcher(text);
+		if (!marker.find()) {
+			return false;
+		}
+		String claim = text.substring(0, marker.start());
+		claim = claim.substring(claim.lastIndexOf(':') + 1);
+		claim = INTRODUCTORY_WORD.matcher(claim).replaceFirst("");
+		Matcher join = LIST_JOIN.matcher(claim);
+		while (join.find()) {
+			if (!claim.substring(0, join.start()).trim().isEmpty() && !claim.substring(join.end()).trim().isEmpty()) {
+				return true;
+			}
 		}
 		return false;
 	}
@@ -2221,9 +2274,15 @@ public class CitationGroundingVerifier {
 		 * one, the direction this rule is deliberately safe in, so it is recorded rather than closed:
 		 * widening the separator to every Unicode space would move the boundary {@link #itemSlice}
 		 * shares with {@link #splitEnumeration}, and that needs its own evidence.
+		 *
+		 * <p><strong>Co-citation of a LIST is not co-citation</strong> (ADR Decision 201). The markers of
+		 * {@code "Advil, Celebrex and Diclofenac are all NSAIDs [1], [2], [3]"} have nothing but separators
+		 * between them, yet the claim names three items and each record answers for one: the conjunction
+		 * above with its markers gathered at the end. {@link #coCitedClaimNamesSeveralItems} says when.
 		 */
 		boolean compoundClaim() {
-			return citedIndexes.size() > 1 && claimTextSeparatesCitations(text);
+			return citedIndexes.size() > 1
+					&& (claimTextSeparatesCitations(text) || coCitedClaimNamesSeveralItems(text));
 		}
 	}
 }

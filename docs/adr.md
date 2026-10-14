@@ -16132,3 +16132,40 @@ so the screen resolves them as the chips do — and the grid line states each or
 finding markers.
 
 Pinned by `ScreenSharedMechanismContextTest` and `NsaidCrossReactivityGroupTest.aScreenOfThreeNsaidsSaysSoOnce`.
+
+## Decision 201: A run of markers closing a list is a compound claim, and publishes no verdict
+
+**Status: Accepted** (October 2026) — decided unattended on the owner's instruction of 2026-10-14 to choose what serves a
+clinician. It refines [#302](https://github.com/openmrs/openmrs-module-chartsearchai/issues/302)'s compound-claim rule
+(Decision 25) where that rule set co-citation aside.
+
+On the :8081 rig, Sarah Taylor's *"Is she on more than one drug from the same class?"* was answered correctly — "Advil
+400mg, Celebrex 200mg, and Diclofenac Co 50mg are all NSAIDs [10], [11], [13]", and a second sentence naming her five
+steroid orders — and all eight citations published `grounded=false`. A loopback capture of the judge's request showed why:
+each order record was asked to entail the whole sentence, naming the other drugs of the list. A correct judge refuses that
+whether the citation is right or wrong, which is #302's conjunction with its markers gathered at the end instead of spread
+through the text. #302 read every run with nothing but separators between its markers as co-citation of ONE claim
+(`Infections [5], [12], [15]`); a run closing a claim that names several items is the other reading, the one these
+answers produce, and the text cannot tell the two apart.
+
+**The decision.** A claim unit cited by more than one record is compound also when the claim its marker run closes names
+several items — a comma, semicolon, `and` or `or` between two non-empty pieces of the text before the first marker, read
+after the last colon there and after a single introductory word (`Yes,`). Such a unit publishes no verdict, exactly as #302's
+does: it is not put to the judge and no cosine is published for it. `CitationGroundingVerifier.coCitedClaimNamesSeveralItems`
+is the test; `Sentence.compoundClaim` composes it with #302's.
+
+What it gives up: a list that every co-cited record DOES support whole is no longer graded, and a comma joining no items
+(`The patient, aged 64, has hypertension [1], [2]`) reads as a list. Both are a verdict withheld rather than a wrong one,
+the direction #302 is safe in. #302's own co-citation shapes — one item, as the module's `normalizeSlashCitations` emits —
+keep their grading.
+
+Two other findings from the same capture are recorded rather than changed. The replay of the judge's exact request against
+the rig's own model showed it refusing "The patient is on Advil 400mg." because that rig's fixture orders record `Dose: 1
+Milligram` for a 400 mg product: the same statement over `Dose: 1 Tablet` or `Dose: 400 Milligram` is entailed. That is the
+fixture's data, not the module. And a drug's CLASS is never stated by an order record, so "Advil 400mg is an NSAID [10]"
+cannot ground under a judge told to use no outside knowledge; a single-citation class claim still publishes the judge's
+refusal.
+
+Pinned by `CitationGroundingVerifierTest.aRunOfMarkersClosingAListOfItemsIsACompoundClaimAndIsNotPublishedUnsupported`,
+`.aRunOfMarkersClosingAColonLessListIsWithheldWhicheverWayTheJudgeWouldAnswer` and
+`.anIntroductoryWordBeforeOneCoCitedClaimDoesNotMakeItAList`; #302's co-citation cases stay green.

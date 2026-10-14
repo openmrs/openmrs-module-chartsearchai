@@ -2671,6 +2671,86 @@ public class CitationGroundingVerifierTest {
 				"both citations are asked about the same whole sentence");
 	}
 
+	/** A medication answer measured live (ADR Decision 201): three orders named in a list, cited by ONE run of markers. */
+	private static final String CO_CITED_LIST =
+			"Yes — the patient is on multiple drugs from the same class: Advil 400mg, Celebrex 200mg, and Diclofenac Co 50mg"
+					+ " are all NSAIDs [1], [2], [3].";
+
+	private List<RecordMapping> coCitedListOrders() {
+		return Arrays.asList(
+				mapping(1, "(2026-08-05) Drug order: Advil 400mg. Dose: 1 Milligram Oral Once daily. Order status: in force"),
+				mapping(2, "(2026-08-05) Drug order: Celebrex 200mg. Dose: 1 Milligram Oral Once daily. Order status: in force"),
+				mapping(3, "(2026-08-05) Drug order: Diclofenac Co 50mg. Dose: 1 Milligram Oral Once daily. Order status: in force"));
+	}
+
+	@Test
+	public void aRunOfMarkersClosingAListOfItemsIsACompoundClaimAndIsNotPublishedUnsupported() {
+		// The run [1], [2], [3] has nothing but separators between its markers, which is what co-citation
+		// looks like — but the claim it closes names THREE drugs, one per record. Each order record is then
+		// asked to entail a statement naming the other two, a correct judge says no to all three, and the
+		// wire published grounded=false on three correct, active citations (ADR Decision 201). It is #302's
+		// conjunction with the markers gathered at the end instead of spread through the text.
+		ConjunctionAwareJudge judge = new ConjunctionAwareJudge("advil", "celebrex", "diclofenac", "nsaid");
+		verifier.setLlmProvider(judge);
+		embeddings.register(CO_CITED_LIST, AXIS_A);
+		for (RecordMapping order : coCitedListOrders()) {
+			embeddings.register(order.getText(), AXIS_A);
+		}
+
+		List<RecordReference> result = verifier.verify(CO_CITED_LIST, threeRefs(), coCitedListOrders(), FLOOR,
+				TIER2_ON, false);
+
+		assertNull(result.get(0).getGrounded(), "[1] Advil: no one record answers for the list, so no verdict");
+		assertNull(result.get(1).getGrounded(), "[2] Celebrex: likewise");
+		assertNull(result.get(2).getGrounded(), "[3] Diclofenac: likewise");
+		assertEquals(0, judge.statementsPerCall.size(),
+				"a record cannot answer for a list naming the others, so the judge is not asked at all");
+	}
+
+	@Test
+	public void aRunOfMarkersClosingAColonLessListIsWithheldWhicheverWayTheJudgeWouldAnswer() {
+		// The answer's second sentence had no colon: the items join at commas and an "and". A lenient
+		// judge would have said yes to each, so this pins that the rule is about the QUESTION, which is
+		// malformed whichever way it would have been answered — #302's own reasoning.
+		String answer = "Additionally, Dexamethasone Injection vial 8mg, Hydrocortisone Injection vial 100mg, and"
+				+ " Prednisone Co 5mg are all Corticosteroids [1], [2], [3].";
+		StubLlmProvider lenient = new StubLlmProvider(Boolean.TRUE);
+		verifier.setLlmProvider(lenient);
+		embeddings.register(answer, AXIS_A);
+		List<RecordMapping> orders = Arrays.asList(
+				mapping(1, "(2026-08-05) Drug order: Dexamethasone Injection vial 8mg. Order status: in force"),
+				mapping(2, "(2026-08-05) Drug order: Hydrocortisone Injection vial 100mg. Order status: in force"),
+				mapping(3, "(2026-08-05) Drug order: Prednisone Co 5mg. Order status: in force"));
+		for (RecordMapping order : orders) {
+			embeddings.register(order.getText(), AXIS_A);
+		}
+
+		List<RecordReference> result = verifier.verify(answer, threeRefs(), orders, FLOOR, TIER2_ON, false);
+
+		assertEquals(0, lenient.calls, "the judge is not asked about a list it would answer for one item of");
+		assertNull(result.get(0).getGrounded());
+		assertNull(result.get(1).getGrounded());
+		assertNull(result.get(2).getGrounded());
+	}
+
+	@Test
+	public void anIntroductoryWordBeforeOneCoCitedClaimDoesNotMakeItAList() {
+		// "Yes," is the commonest opening of an answer, and its comma joins no items: the claim is still
+		// ONE claim each record is cited for, so it keeps its full grading (the co-citation cases above).
+		String answer = "Yes, the patient has recurrent infections [1], [2].";
+		embeddings.register(answer, AXIS_A);
+		embeddings.register("record one", AXIS_A);
+		embeddings.register("record two", AXIS_A);
+		llm.verdict = Boolean.TRUE;
+
+		List<RecordReference> result = verifier.verify(answer, twoRefs(),
+				Arrays.asList(mapping(1, "record one"), mapping(2, "record two")), FLOOR, TIER2_ON, false);
+
+		assertEquals(2, llm.calls, "one co-cited claim: each record is asked about it");
+		assertEquals(Boolean.TRUE, result.get(0).getGrounded());
+		assertEquals(Boolean.TRUE, result.get(1).getGrounded());
+	}
+
 	@Test
 	public void splitIntoCitedSentences_aNegationInsideAnItemStaysWithThatItemOnly() {
 		// The mirror case: a qualifier sitting in ONE item must not leak to its siblings and must not be

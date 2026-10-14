@@ -16740,3 +16740,27 @@ order the switch stops. Nothing in the module read a switch; the question reache
 
 Pinned by `SwitchingHerDrugContextTest.aSwitchIsAnsweredForTheNewDrugAgainstHerOtherMedications` and
 `.aSwitchToADrugSheAlreadyTakesOrFromOneSheDoesNotIsLeftToTheModel`, over the shipped knowledge base.
+
+## Decision 220: Whether two drugs, neither hers, interact is answered "Yes" where the data relates them
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-14. The companion of
+[Decision 218](#decision-218-whether-her-drug-and-another-interact-is-answered-yes-where-a-finding-relates-them) for a
+pair neither of which her orders carry.
+
+### Context
+
+On the demo replica, *"Is there any interaction between nevirapine and rifampicin?"* for a patient on neither drug was
+answered by the model *"No — Nevirapine interacts with Rifampicin, which is a Major interaction"*, beside the question-pair
+arm's own finding stating that pair.
+
+### The decision
+
+- **A question whether two drugs interact, neither of them hers, is answered by the module where a finding relates the
+  PAIR** (`DrugReferenceInjector.composeWhetherTwoDrugsNotHersInteract`): the question-pair arm's finding, recognised by its
+  subject rows covering both substances (`SafetyWarning.subjectRows`, which that arm stamps with both) and never by its
+  wording. *"Yes — Nevirapine and Rifampicin (rifampin) interact; neither is one of this patient's active medications."*,
+  the pair's line, each drug's findings against her medications under *"Against this patient's active medications:"*, and
+  the scope. With no such finding the model answers, as before.
+
+Pinned by `TogetherWithHerOwnMedicationContextTest.aQuestionWhetherTwoDrugsNeitherOfThemHersInteractIsAnsweredYesWhereTheDataRelatesThem`
+and `.aQuestionWhetherTwoDrugsNeitherOfThemHersInteractIsLeftToTheModelWhereTheDataDoesNotRelateThem`.

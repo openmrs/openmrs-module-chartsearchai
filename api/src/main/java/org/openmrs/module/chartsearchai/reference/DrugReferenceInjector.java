@@ -948,6 +948,7 @@ public class DrugReferenceInjector {
 		String belowFloorAboutHerOwn;
 		String noPairAboutHerOwn;
 		String switchAnswer;
+		String pairAnswer;
 		// Her active orders the drug data does not identify — once, for every composition below (ADR Decision 161).
 		List<PatientClinicalContext.ActiveDrugOrder> unidentified = context == null
 				? Collections.<PatientClinicalContext.ActiveDrugOrder> emptyList()
@@ -1065,6 +1066,17 @@ public class DrugReferenceInjector {
 			// One of her drugs switched to another: the new drug against her medications other than the one it replaces
 			// (ADR Decision 219).
 			moduleAnswer = switchAnswer;
+		} else if (context != null
+				&& ChartSearchAiUtils.getBooleanGlobalProperty(
+						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
+						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS)
+				&& context.chartReadForSafety()
+				&& (pairAnswer = composeWhetherTwoDrugsNotHersInteract(question, questionDrugs, screenedSubstances, findings,
+						findingNumbers, orderRecordNumbers,
+						orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers))
+						!= null) {
+			// Whether two drugs, neither hers, interact: "Yes" where the data relates them (ADR Decision 220).
+			moduleAnswer = pairAnswer;
 		} else if (onlyHerOwnOrdersSharingASubstance(findings) && context != null
 				&& ChartSearchAiUtils.getBooleanGlobalProperty(
 						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
@@ -4963,6 +4975,61 @@ public class DrugReferenceInjector {
 		answer.append('\n').append(BELOW_FLOOR_SCOPE);
 		return withHerOwnOrdersSharingASubstance(answer.toString(), sharing, sharingNumbers, orderRecordNumbers,
 			herOrderRecords);
+	}
+
+	/**
+	 * The module's answer to a question whether two drugs interact, neither of them hers (ADR Decision 220), or {@code null}
+	 * where the model answers: <em>"Yes — Nevirapine and Rifampicin (rifampin) interact; neither is one of this patient's
+	 * active medications."</em>, then the question-pair finding relating them, then each drug's findings against her
+	 * medications under their own heading, then the scope. Only where a finding relates the PAIR — the question-pair arm's,
+	 * whose subject rows are of both substances — since "Yes" is a claim about it; the model answered such a question "No —
+	 * Nevirapine interacts with Rifampicin, which is a Major interaction".
+	 */
+	private static String composeWhetherTwoDrugsNotHersInteract(String question, List<DrugReference> questionDrugs,
+			Set<Object> herSubstances, List<SafetyWarning> findings, List<Integer> numbers,
+			Map<String, Integer> orderRecordNumbers, Map<String, Integer> herOrderRecords) {
+		if (questionDrugs.isEmpty()
+				|| !QueryScopeRouter.asksWhetherTwoDrugsInteract(wordsBesideItsNames(question, questionDrugs))) {
+			return null;
+		}
+		Map<Object, DrugReference> rowOf = new LinkedHashMap<Object, DrugReference>();
+		for (DrugReference entry : questionDrugs) {
+			rowOf.putIfAbsent(entry.substanceGroupKey(), entry);
+		}
+		if (rowOf.size() != 2 || !Collections.disjoint(rowOf.keySet(), herSubstances)) {
+			return null;
+		}
+		List<String> pairLines = new ArrayList<String>();
+		List<String> herLines = new ArrayList<String>();
+		for (int i = 0; i < findings.size(); i++) {
+			SafetyWarning finding = findings.get(i);
+			if (!SafetyWarning.TYPE_INTERACTION.equals(finding.getType()) || finding.statesOrdersSharingASubstance()) {
+				continue;
+			}
+			Set<Object> about = new HashSet<Object>();
+			for (DrugReference row : finding.subjectRows()) {
+				about.add(row.substanceGroupKey());
+			}
+			if (about.containsAll(rowOf.keySet())) {
+				pairLines.add(findingLine(finding, numbers.get(i), orderRecordNumbers, herOrderRecords, true));
+			} else if (about.size() == 1 && rowOf.keySet().containsAll(about)) {
+				herLines.add(findingLine(finding, numbers.get(i), orderRecordNumbers, herOrderRecords, true));
+			}
+		}
+		if (pairLines.isEmpty()) {
+			return null;
+		}
+		List<DrugReference> rows = new ArrayList<DrugReference>(rowOf.values());
+		List<String> lines = new ArrayList<String>();
+		lines.add("Yes — " + rows.get(0).displayLabel() + " and " + rows.get(1).displayLabel()
+				+ " interact; neither is one of this patient's active medications.");
+		lines.addAll(pairLines);
+		if (!herLines.isEmpty()) {
+			lines.add("Against this patient's active medications:");
+			lines.addAll(herLines);
+		}
+		lines.add(BELOW_FLOOR_SCOPE);
+		return String.join("\n", lines);
 	}
 
 	/** Whether every partner {@code finding} names resolved to {@code substance} alone, by the rows its chip site took. */

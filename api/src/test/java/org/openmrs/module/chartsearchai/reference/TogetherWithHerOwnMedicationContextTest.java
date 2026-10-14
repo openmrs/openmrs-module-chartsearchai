@@ -103,6 +103,28 @@ public class TogetherWithHerOwnMedicationContextTest extends BaseModuleContextSe
 			"Lamivudine").getModuleAnswer());
 	}
 
+	/**
+	 * Neither drug hers (ADR Decision 220): the demo's "Is there any interaction between nevirapine and rifampicin?" for a
+	 * patient on neither was answered by the model "No — Nevirapine interacts with Rifampicin, which is a Major interaction",
+	 * beside the question-pair finding stating that very pair.
+	 */
+	@Test
+	public void aQuestionWhetherTwoDrugsNeitherOfThemHersInteractIsAnsweredYesWhereTheDataRelatesThem() {
+		String answer = askOverTheShippedData("Is there any interaction between nevirapine and rifampicin?", "Lamivudine 150mg",
+			"Lamivudine").getModuleAnswer();
+
+		assertTrue(answer != null && answer.startsWith("Yes — Nevirapine and Rifampicin (rifampin) interact; neither is one of "
+				+ "this patient's active medications.\nNevirapine interacts with Rifampicin (rifampin), also named in the question "
+				+ "— Major."), "was: " + answer);
+		assertTrue(!answer.contains("No —"), "was: " + answer);
+	}
+
+	@Test
+	public void aQuestionWhetherTwoDrugsNeitherOfThemHersInteractIsLeftToTheModelWhereTheDataDoesNotRelateThem() {
+		assertNull(askOverTheShippedData("Is there any interaction between amoxicillin and metformin?", "Lamivudine 150mg",
+			"Lamivudine").getModuleAnswer());
+	}
+
 	private static PatientChart askOverTheShippedData(String question, String display, String name) {
 		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
 			DrugReferenceTestSupport.activeOrder("order-hers", display, name));

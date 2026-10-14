@@ -173,6 +173,28 @@ public class OwnMedicationSafetyContextTest extends BaseModuleContextSensitiveTe
 	}
 
 	@Test
+	public void herOwnDrugRelatedToHerOtherOrdersOnlyBelowTheFloorIsAnsweredAsHers() throws IOException {
+		// Mogan Kamwara's "Is nevirapine safe for him?" — his own nevirapine, which the data lists against his lamivudine
+		// and stavudine with no rating — went to the model, which answered "Adding it would duplicate that order …
+		// Nevirapine is a caution about a medication this patient is already taking"; under another wording "Nevirapine
+		// can be given" (ADR Decision 204). With the floor at Major, her ibuprofen's Moderate pair is below it.
+		Context.getAdministrationService().setGlobalProperty(
+			ChartSearchAiConstants.GP_DRUG_SAFETY_MIN_INTERACTION_SEVERITY, "major");
+		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
+			DrugReferenceTestSupport.activeOrder("order-ibuprofen", "Ibuprofen 400mg"),
+			DrugReferenceTestSupport.activeOrder("order-prednisone", "Prednisone 5mg"));
+		for (String question : Arrays.asList("Is ibuprofen safe for her?", "Is she on ibuprofen?",
+			"Is ibuprofen safe with her other medications?")) {
+			String answer = answer(question, null, orders);
+
+			assertEquals("Ibuprofen is one of this patient's active medications (Ibuprofen 400mg [2]). The interaction data "
+					+ "gives no rated reason to change it: it lists Ibuprofen against one of this patient's other orders, rated "
+					+ "Moderate, below the level this module reports as a finding. [4]\n" + DrugReferenceInjector.BELOW_FLOOR_SCOPE,
+				answer, question);
+		}
+	}
+
+	@Test
 	public void twoOfHerOwnDrugsAskedAboutTogetherAreAnsweredWithWhatRelatesThem() throws IOException {
 		// Sarah Taylor's "Is it safe to combine ibuprofen and celecoxib?" — both hers — was answered "Ibuprofen can be
 		// combined with Celecoxib, with one caution" by the model, and "Does ibuprofen interact with celecoxib?" "Ibuprofen

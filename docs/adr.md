@@ -16246,3 +16246,29 @@ has no started order, the model answers as before.
 
 Pinned by `OwnMedicationSafetyContextTest.twoOfHerOwnDrugsAskedAboutTogetherAreAnsweredWithWhatRelatesThem` and
 `.twoDrugsAskedAboutTogetherOnlyOneOfWhichIsHersAreNotAnsweredAsBothHers`.
+
+## Decision 204: Her own drug, related to her other orders only below the severity floor, is answered as hers — the interaction data giving no rated reason to change it
+
+**Status: Accepted** (October 2026) — decided unattended on the owner's instruction of 2026-10-14 to choose what serves a
+clinician. It carries [Decision 142](#decision-142-a-proposal-related-to-her-orders-only-below-the-severity-floor-is-answered-with-those-rows)'s
+below-floor sentence from a drug proposed to one she already takes, beside Decisions 193 and 202.
+
+Decision 193 answers a question about her own drug only where an interaction above the floor relates it to another of
+her orders. Below it, the model answered, and on the :8081 rig it answered Mogan Kamwara's own nevirapine — which the data
+lists against his lamivudine and stavudine, rated Unknown — *"Nevirapine 200mg is in an active order [4]. Adding it would
+duplicate that order [8]. Nevirapine is a caution about a medication this patient is already taking"* to *"Is nevirapine
+safe for him?"*, and *"Nevirapine can be given, with one caution"* to *"Is nevirapine safe with his other medications?"*.
+
+**The decision.** Where the drug is one substance, hers, with a started order, asked about in one of Decision 193's or
+202's shapes, and the check relates it to her other orders only below the floor — no pair found above it, every pair
+below it statable as Decision 142 requires — with her allergy records checked and no finding about it but the one
+saying her orders already carry it, the module answers:
+
+> Nevirapine is one of this patient's active medications (Nevirapine 200mg [4]). The interaction data gives no rated
+> reason to change it: it lists Nevirapine against two of this patient's other orders, none with a severity on file. [7]
+> Interactions the data does not rate, and anything beyond drug interactions, are not covered.
+
+The bottom line is the interaction DATA's, as Decision 144 scoped the proposal's, and never a clearance. The lead cites
+her order even where no finding was raised to index her orders' records, by indexing the chart's records for this answer.
+
+Pinned by `OwnMedicationSafetyContextTest.herOwnDrugRelatedToHerOtherOrdersOnlyBelowTheFloorIsAnsweredAsHers`.

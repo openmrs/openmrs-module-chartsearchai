@@ -940,6 +940,8 @@ public class DrugReferenceInjector {
 		// Read only where there is something it could decide, and HERE rather than where the answer is
 		// used, so that with the property off none of the composition runs at all (issue #469).
 		String moduleAnswer = null;
+		// Decision 204's answer, assigned where its branch decides it, so it is composed once.
+		String belowFloorAboutHerOwn;
 		// Her active orders the drug data does not identify — once, for every composition below (ADR Decision 161).
 		List<PatientClinicalContext.ActiveDrugOrder> unidentified = context == null
 				? Collections.<PatientClinicalContext.ActiveDrugOrder> emptyList()
@@ -989,6 +991,20 @@ public class DrugReferenceInjector {
 			moduleAnswer = composeAboutHerOwnMedication(findings, findingNumbers, about, orderRecordNumbers, herRecords,
 					herOrders,
 					herOrders.isEmpty() ? herScheduledOrdersOf(questionDrugs.get(0), orderEntries, context, herRecords) : "");
+		} else if (context != null
+				&& ChartSearchAiUtils.getBooleanGlobalProperty(
+						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
+						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS)
+				&& context.chartReadForSafety()
+				// Her orders' records even where no finding was raised to index them: this answer can have none (ADR
+				// Decision 204), and its lead cites the order.
+				&& (belowFloorAboutHerOwn = composeBelowFloorAboutHerOwnMedication(question, questionDrugs,
+						screenedSubstances, findings, pairExtent.stated(), mappings, orderEntries, context, reading.states(),
+						!orderRecordNumbers.isEmpty() ? orderRecordNumbers
+								: orderRecordNumbers(findingRecords != null ? findingRecords : new DrugOrderRecords(mappings),
+										context))) != null) {
+			// Her own drug, which the check relates to her other orders only below the severity floor (ADR Decision 204).
+			moduleAnswer = belowFloorAboutHerOwn;
 		} else if (!findings.isEmpty() && context != null
 				&& ChartSearchAiUtils.getBooleanGlobalProperty(
 						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
@@ -4310,6 +4326,70 @@ public class DrugReferenceInjector {
 		}
 		lines.add(contraindications > 0 ? SCREEN_SCOPE : BELOW_FLOOR_SCOPE);
 		return String.join("\n", lines);
+	}
+
+	/**
+	 * The module's answer to a question about a drug she already takes that the interaction check relates to her other
+	 * orders only BELOW the severity floor (ADR Decision 204), or {@code null} where the model answers: <em>"Nevirapine
+	 * is one of this patient's active medications (Nevirapine 200mg [4]). The interaction data gives no rated reason to
+	 * change it: it lists Nevirapine against two of this patient's other orders, none with a severity on file. [7]"</em>,
+	 * then {@link #BELOW_FLOOR_SCOPE}. {@link #composeFromBelowFloor}'s sentence for a drug proposed, turned to one she
+	 * takes — the model answered Mogan Kamwara's own nevirapine "Adding it would duplicate that order" and, under another
+	 * wording, "Nevirapine can be given". Never a clearance: the bottom line is the interaction DATA's, and only where
+	 * nothing else about the drug was found.
+	 *
+	 * <p>Fail-closed: one substance, hers, with a started order, asked about in one of Decision 193's or 202's shapes;
+	 * no pair above the floor and at least one below it, every one statable ({@code BelowFloorRows}); her allergy
+	 * records checked ({@code contraindicationsChecked}); no finding about the drug but the one saying her orders
+	 * already carry it, which this lead states; and the drug's own reference record in the chart, which it cites.
+	 */
+	private String composeBelowFloorAboutHerOwnMedication(String question, List<DrugReference> questionDrugs,
+			Set<Object> herSubstances, List<SafetyWarning> findings, PairChipExtent extent, List<RecordMapping> mappings,
+			List<DrugReference> orderEntries, PatientClinicalContext context, boolean contraindicationsChecked,
+			Map<String, Integer> herOrderRecords) {
+		if (extent == null || extent.getFound() != 0 || extent.getBelowFloor() == null || extent.getBelowFloor().isEmpty()
+				|| !contraindicationsChecked) {
+			return null;
+		}
+		Set<Object> asked = new LinkedHashSet<Object>();
+		for (DrugReference entry : questionDrugs) {
+			asked.add(entry.substanceGroupKey());
+		}
+		if (asked.size() != 1 || !herSubstances.containsAll(asked)
+				|| !questionProposes(question, questionDrugs) && !asksWhetherItInteracts(question, questionDrugs)
+						&& !asksWhetherSheIsOnIt(question, questionDrugs)
+						&& !asksAboutItBesideHerMedications(question, questionDrugs)) {
+			return null;
+		}
+		for (SafetyWarning finding : findings) {
+			if (finding.alreadyOrdered() == null) {
+				return null;
+			}
+		}
+		String herOrders = herStartedOrdersOf(questionDrugs.get(0), orderEntries, context, herOrderRecords);
+		if (herOrders.isEmpty()) {
+			return null;
+		}
+		List<String> rowIds = rowIds(questionDrugs);
+		RecordMapping record = null;
+		for (RecordMapping mapping : mappings) {
+			if (ChartSearchAiConstants.RESOURCE_TYPE_DRUG_REFERENCE.equals(mapping.getResourceType())
+					&& rowIds.contains(mapping.getResourceUuid())) {
+				record = mapping;
+				break;
+			}
+		}
+		BelowFloorRows rows = record == null ? null : BelowFloorRows.of(extent);
+		if (rows == null) {
+			return null;
+		}
+		int n = rows.orders.size();
+		return rows.drug + OWN_MEDICATION_LEAD + herOrders + ". The interaction data gives no rated reason to change it: it lists "
+				+ rows.drug + " against " + (n == 1 ? "one" : String.valueOf(n)) + " of this patient's other orders, "
+				+ (!rows.allUnknown ? "rated " + rows.ratings() + ", below the level this module reports as a finding"
+						: (n == 1 ? "with no severity" : "none with a severity") + (rows.noMechanism ? " or mechanism" : "")
+								+ " on file")
+				+ ". [" + record.getIndex() + "]\n" + BELOW_FLOOR_SCOPE;
 	}
 
 	/** What follows the two drugs in the lead of {@link #composeTwoOfHerOwn} (ADR Decision 203). */

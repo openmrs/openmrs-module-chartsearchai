@@ -306,6 +306,37 @@ public class OwnMedicationSafetyContextTest extends BaseModuleContextSensitiveTe
 	}
 
 	@Test
+	public void twoOfHerOwnDrugsAskedAboutAsWhetherSheCanHaveThemTogetherAreAnsweredAsHers() throws IOException {
+		// Sarah Taylor's "Can she have prednisone and ibuprofen together?" — both hers — was answered "Prednisone can be
+		// given with Ibuprofen, with one caution" by the model: Decision 203's shape took "take" and not "have" (ADR
+		// Decision 209).
+		for (String question : Arrays.asList("Can she have ibuprofen and celecoxib together?",
+			"Can she be on ibuprofen and celecoxib together?", "Can the patient use ibuprofen with celecoxib?")) {
+			String answer = answer(question);
+
+			assertNotNull(answer, "the module answers " + question);
+			assertTrue(answer.split("\n")[0].matches("Ibuprofen \\(Ibuprofen 400mg \\[\\d+\\]\\) and Celecoxib \\(Celecoxib 200mg "
+					+ "\\[\\d+\\]\\) are both among this patient's active medications\\. What the interaction check relates "
+					+ "between them:"), question + " was: " + answer);
+		}
+	}
+
+	@Test
+	public void aQuestionWhetherHerOwnDrugIsCausingInteractionsIsAnsweredAsHers() throws IOException {
+		// Rose Rifadupla's "Is rifampicin causing any interactions with her other drugs?" — her own rifampicin — was
+		// answered "No — Rifampicin should not be given" by the model, a proposal's call on a drug she takes (ADR
+		// Decision 209).
+		for (String question : Arrays.asList("Is ibuprofen causing any interactions with her other drugs?",
+			"Is ibuprofen interacting with any of her medications?", "Does ibuprofen cause interactions with her other meds?")) {
+			String answer = answer(question);
+
+			assertNotNull(answer, "the module answers " + question);
+			assertTrue(answer.startsWith("Ibuprofen is one of this patient's active medications (Ibuprofen 400mg ["),
+				question + " was: " + answer);
+		}
+	}
+
+	@Test
 	public void twoDrugsAskedAboutTogetherOnlyOneOfWhichIsHersAreNotAnsweredAsBothHers() throws IOException {
 		// Decision 196's question, not this one: celecoxib is not among her orders here.
 		String answer = answer("Can ibuprofen and celecoxib be given together?", null,

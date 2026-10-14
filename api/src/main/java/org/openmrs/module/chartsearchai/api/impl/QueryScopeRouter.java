@@ -546,7 +546,12 @@ public final class QueryScopeRouter {
 			"is " + D + " (?:safe|ok|okay|appropriate) (?:with|alongside) (?:any of )?" + POSSESSIVE + " (?:other )?"
 					+ MEDICATIONS,
 			// "Which of her medications interact with lopinavir/ritonavir?", "What other meds of hers interact with X?"
-			"(?:which|what) (?:of )?" + POSSESSIVE + " (?:other )?" + MEDICATIONS + " (?:interact|interacts) with " + D);
+			"(?:which|what) (?:of )?" + POSSESSIVE + " (?:other )?" + MEDICATIONS + " (?:interact|interacts) with " + D,
+			// "Is rifampicin causing any interactions with her other drugs?", "Is X interacting with any of her medications?",
+			// "Does X cause interactions with her other meds?" (ADR Decision 209)
+			"is " + D + " (?:causing (?:any )?(?:drug )?interactions? with|interacting with) (?:any of )?" + POSSESSIVE
+					+ " (?:other )?" + MEDICATIONS,
+			"does " + D + " cause (?:any )?(?:drug )?interactions? with (?:any of )?" + POSSESSIVE + " (?:other )?" + MEDICATIONS);
 
 	/**
 	 * Whether a question asks about ONE drug beside her other medications, and nothing else — one of {@link
@@ -571,8 +576,10 @@ public final class QueryScopeRouter {
 			"is " + D + " (?:safe|ok|okay|compatible) (?:with|alongside) " + D,
 			// "Any interactions between ibuprofen and celecoxib?", "Is there an interaction between X and Y?"
 			"(?:are there |is there )?(?:any |an )?(?:drug )?interactions? between " + D + " and " + D,
-			// "Can she take ibuprofen and celecoxib together?"
-			"(?:can|could|may|should) " + SUBJECT + " (?:safely )?take " + D + " (?:and|with) " + D + "(?: together)?");
+			// "Can she take ibuprofen and celecoxib together?", "Can she have prednisone and ibuprofen together?" (ADR
+			// Decision 209), "Can the patient be on X and Y together?"
+			"(?:can|could|may|should) " + SUBJECT + " (?:safely )?(?:take|have|use|receive|be on|be given) " + D
+					+ " (?:and|with) " + D + "(?: together)?");
 
 	/**
 	 * Whether a question asks about TWO drugs together, and nothing else — one of {@link #TWO_DRUGS_SHAPES} or {@link

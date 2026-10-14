@@ -16373,3 +16373,28 @@ One order and no finding stays the model's, as `OwnMedicationSafetyContextTest.h
 pins.
 
 Pinned by `OwnMedicationSafetyContextTest.aRecordedAllergyToHerOwnDrugIsStatedEvenWithNoInteraction`.
+
+## Decision 209: Two more phrasings reach the own-medication answers — "can she have X and Y together", "is X causing interactions with her medications"
+
+**Status: Accepted** (October 2026) — decided unattended on the owner's instruction of 2026-10-14 to choose what serves a
+clinician. It widens two fail-closed grammars and moves no answer they already admitted.
+
+Two questions from the 2026-10-14 sweep on the 3.7.1 standalone reached the model through phrasings the grammars of
+[Decision 202](#decision-202-a-question-whether-she-is-on-her-own-drug-or-whether-it-is-safe-with-her-other-medications-is-answered-as-her-own-medication-and-the-answer-names-the-order)
+and [Decision 203](#decision-203-two-drugs-she-already-takes-asked-about-together-are-answered-with-what-relates-them--never-that-they-may-be-combined)
+did not take, and the model wrote the very answers those decisions exist to prevent:
+
+- Sarah Taylor's *"Can she have prednisone and ibuprofen together?"* — both hers — was answered *"Prednisone can be given
+  with Ibuprofen, with one caution"*. `TWO_DRUGS_SHAPES`' *"can she … X and Y together"* shape took *take* and no
+  other verb.
+- Rose Rifadupla's *"Is rifampicin causing any interactions with her other drugs?"* — her own rifampicin — was answered
+  *"No — Rifampicin should not be given"*, a proposal's call on a drug she takes, opening with a "No" to a question whose
+  answer is that it interacts.
+
+**The decision.** That shape's verb is *take, have, use, receive, be on* or *be given*;
+`BESIDE_HER_MEDICATIONS_SHAPES` takes *"is X causing (any) interactions with"*, *"is X interacting with"* and *"does X
+cause (any) interactions with"* her (other) medications. Both stay grammars, so a phrasing they still miss keeps the
+model call it always had; each has a single reader that asks it only of drugs her own orders carry.
+
+Pinned by `OwnMedicationSafetyContextTest.twoOfHerOwnDrugsAskedAboutAsWhetherSheCanHaveThemTogetherAreAnsweredAsHers`
+and `OwnMedicationSafetyContextTest.aQuestionWhetherHerOwnDrugIsCausingInteractionsIsAnsweredAsHers`.

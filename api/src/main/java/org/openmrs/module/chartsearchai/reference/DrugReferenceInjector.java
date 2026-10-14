@@ -949,6 +949,7 @@ public class DrugReferenceInjector {
 		String noPairAboutHerOwn;
 		String switchAnswer;
 		String pairAnswer;
+		String twoProposalsAnswer;
 		// Her active orders the drug data does not identify — once, for every composition below (ADR Decision 161).
 		List<PatientClinicalContext.ActiveDrugOrder> unidentified = context == null
 				? Collections.<PatientClinicalContext.ActiveDrugOrder> emptyList()
@@ -1077,6 +1078,17 @@ public class DrugReferenceInjector {
 						!= null) {
 			// Whether two drugs, neither hers, interact: "Yes" where the data relates them (ADR Decision 220).
 			moduleAnswer = pairAnswer;
+		} else if (context != null
+				&& ChartSearchAiUtils.getBooleanGlobalProperty(
+						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
+						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS)
+				&& context.chartReadForSafety()
+				&& (twoProposalsAnswer = composeTwoProposalsTogether(question, questionDrugs, screenedSubstances, findings,
+						findingNumbers, orderRecordNumbers,
+						orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers,
+						pairExtent.stated())) != null) {
+			// Two drugs proposed together, neither hers: each answered as its own proposal (ADR Decision 222).
+			moduleAnswer = twoProposalsAnswer;
 		} else if (onlyHerOwnOrdersSharingASubstance(findings) && context != null
 				&& ChartSearchAiUtils.getBooleanGlobalProperty(
 						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
@@ -1135,6 +1147,14 @@ public class DrugReferenceInjector {
 		// which, and that it was not checked. History questions are answered below under their own gate, unchanged.
 		if (moduleAnswer != null && !unidentified.isEmpty()) {
 			moduleAnswer = moduleAnswer + "\n" + unidentifiedOrdersLine(unidentified, questionDrugs.isEmpty());
+		}
+		// And a recorded drug allergy the data does not identify was compared with nothing: said so, never left to read as
+		// checked (ADR Decision 223).
+		if (moduleAnswer != null && context != null) {
+			List<String> unchecked = DrugSafetyValidator.unresolvedDrugAllergens(drugReferenceService, context);
+			if (!unchecked.isEmpty()) {
+				moduleAnswer = moduleAnswer + "\n" + uncheckedAllergiesLine(unchecked, questionDrugs);
+			}
 		}
 		if (moduleAnswer == null && !historyQuestionDrugRows.isEmpty() && orderHistory != null
 				&& ChartSearchAiUtils.getBooleanGlobalProperty(
@@ -4310,6 +4330,25 @@ public class DrugReferenceInjector {
 	 * by semicolons, because a display can carry a comma of its own ("Polio vaccination, oral", on the demo). It
 	 * states what the module did NOT check; the lines above it are what it did.
 	 */
+	/**
+	 * The closing line of a composed answer beside recorded drug allergies the drug data does not identify (ADR Decision
+	 * 223): <em>"Not checked: a recorded allergy the drug data does not identify — penicillins. Whether it covers Amoxicillin
+	 * is not established."</em> Each allergy as the chart records it, joined by semicolons; "the drugs asked about" for
+	 * several drugs, and "one of this patient's medications" for a screen.
+	 */
+	static String uncheckedAllergiesLine(List<String> allergens, List<DrugReference> questionDrugs) {
+		Set<Object> substances = new LinkedHashSet<Object>();
+		for (DrugReference entry : questionDrugs) {
+			substances.add(entry.substanceGroupKey());
+		}
+		String covered = questionDrugs.isEmpty() ? "one of this patient's medications"
+				: substances.size() == 1 ? questionDrugs.get(0).displayLabel() : "the drugs asked about";
+		int k = allergens.size();
+		return "Not checked: " + (k == 1 ? "a recorded allergy" : k + " recorded allergies")
+				+ " the drug data does not identify — " + String.join("; ", allergens) + ". Whether "
+				+ (k == 1 ? "it covers " : "one of them covers ") + covered + " is not established.";
+	}
+
 	static String unidentifiedOrdersLine(List<PatientClinicalContext.ActiveDrugOrder> orders, boolean screen) {
 		Map<String, Integer> byName = new LinkedHashMap<String, Integer>();
 		for (PatientClinicalContext.ActiveDrugOrder order : orders) {
@@ -4904,23 +4943,11 @@ public class DrugReferenceInjector {
 			return null;
 		}
 		// Which drug the question names first is the one switched from.
-		String folded = DrugReference.foldedLower(question);
-		Map<Object, Integer> firstAt = new HashMap<Object, Integer>();
-		Map<Object, DrugReference> rowOf = new LinkedHashMap<Object, DrugReference>();
-		for (DrugReference entry : questionDrugs) {
-			for (DrugReference.NamedOccurrence occurrence : entry.namedOccurrences(folded, 0)) {
-				Integer seen = firstAt.get(entry.substanceGroupKey());
-				if (seen == null || occurrence.getStart() < seen) {
-					firstAt.put(entry.substanceGroupKey(), occurrence.getStart());
-				}
-			}
-			rowOf.putIfAbsent(entry.substanceGroupKey(), entry);
-		}
-		if (firstAt.size() != 2 || rowOf.size() != 2) {
+		Map<Object, DrugReference> rowOf = inQuestionOrder(question, questionDrugs);
+		if (rowOf.size() != 2) {
 			return null;
 		}
-		List<Object> byPosition = new ArrayList<Object>(firstAt.keySet());
-		Collections.sort(byPosition, (a, b) -> firstAt.get(a).compareTo(firstAt.get(b)));
+		List<Object> byPosition = new ArrayList<Object>(rowOf.keySet());
 		Object from = byPosition.get(0);
 		Object to = byPosition.get(1);
 		if (!herSubstances.contains(from) || herSubstances.contains(to)) {
@@ -4992,10 +5019,7 @@ public class DrugReferenceInjector {
 				|| !QueryScopeRouter.asksWhetherTwoDrugsInteract(wordsBesideItsNames(question, questionDrugs))) {
 			return null;
 		}
-		Map<Object, DrugReference> rowOf = new LinkedHashMap<Object, DrugReference>();
-		for (DrugReference entry : questionDrugs) {
-			rowOf.putIfAbsent(entry.substanceGroupKey(), entry);
-		}
+		Map<Object, DrugReference> rowOf = inQuestionOrder(question, questionDrugs);
 		if (rowOf.size() != 2 || !Collections.disjoint(rowOf.keySet(), herSubstances)) {
 			return null;
 		}
@@ -5030,6 +5054,120 @@ public class DrugReferenceInjector {
 		}
 		lines.add(BELOW_FLOOR_SCOPE);
 		return String.join("\n", lines);
+	}
+
+	/**
+	 * The module's answer to two drugs proposed together, neither of them hers (ADR Decision 222), or {@code null} where the
+	 * model answers: <em>"Fluconazole and Clarithromycin, asked about together; neither is one of this patient's active
+	 * medications."</em>, what relates the two (the question-pair arm's finding, by its subject rows), then each drug
+	 * under <em>"For X:"</em> with the answer a proposal of it alone gets from its own findings — its "No", its cautions — or
+	 * that the check raised none about it. The model answered "The drug can be given, with a caution: …", a clearance naming
+	 * neither drug.
+	 *
+	 * <p>Fail-closed on a proposal's own rule: a drug whose findings a proposal of it would leave to the model — a
+	 * contraindication, an unrated relationship — leaves this to the model too.
+	 */
+	private static String composeTwoProposalsTogether(String question, List<DrugReference> questionDrugs,
+			Set<Object> herSubstances, List<SafetyWarning> findings, List<Integer> numbers,
+			Map<String, Integer> orderRecordNumbers, Map<String, Integer> herOrderRecords, PairChipExtent pairs) {
+		if (questionDrugs.isEmpty()
+				|| !QueryScopeRouter.asksWhetherToGiveDrugsTogether(wordsBesideItsNames(question, questionDrugs))) {
+			return null;
+		}
+		Map<Object, DrugReference> rowOf = inQuestionOrder(question, questionDrugs);
+		if (rowOf.size() != 2 || !Collections.disjoint(rowOf.keySet(), herSubstances)) {
+			return null;
+		}
+		List<String> pairLines = new ArrayList<String>();
+		Map<Object, List<SafetyWarning>> ofEach = new LinkedHashMap<Object, List<SafetyWarning>>();
+		Map<Object, List<Integer>> numbersOfEach = new LinkedHashMap<Object, List<Integer>>();
+		for (Object substance : rowOf.keySet()) {
+			ofEach.put(substance, new ArrayList<SafetyWarning>());
+			numbersOfEach.put(substance, new ArrayList<Integer>());
+		}
+		List<SafetyWarning> sharing = new ArrayList<SafetyWarning>();
+		List<Integer> sharingNumbers = new ArrayList<Integer>();
+		for (int i = 0; i < findings.size(); i++) {
+			SafetyWarning finding = findings.get(i);
+			if (finding.statesOrdersSharingASubstance()) {
+				sharing.add(finding);
+				sharingNumbers.add(numbers.get(i));
+				continue;
+			}
+			Set<Object> about = new HashSet<Object>();
+			for (DrugReference row : finding.subjectRows()) {
+				about.add(row.substanceGroupKey());
+			}
+			if (about.containsAll(rowOf.keySet()) && SafetyWarning.TYPE_INTERACTION.equals(finding.getType())) {
+				pairLines.add(findingLine(finding, numbers.get(i), orderRecordNumbers, herOrderRecords, true));
+			} else if (about.size() == 1 && rowOf.containsKey(about.iterator().next())) {
+				ofEach.get(about.iterator().next()).add(finding);
+				numbersOfEach.get(about.iterator().next()).add(numbers.get(i));
+			} else {
+				// A finding about neither drug alone nor their pair: not one this answer knows how to state.
+				return null;
+			}
+		}
+		List<DrugReference> rows = new ArrayList<DrugReference>(rowOf.values());
+		List<String> lines = new ArrayList<String>();
+		lines.add(rows.get(0).displayLabel() + " and " + rows.get(1).displayLabel()
+				+ ", asked about together; neither is one of this patient's active medications.");
+		if (!pairLines.isEmpty()) {
+			lines.add("Between them:");
+			lines.addAll(pairLines);
+		}
+		for (Map.Entry<Object, DrugReference> drug : rowOf.entrySet()) {
+			List<SafetyWarning> its = ofEach.get(drug.getKey());
+			lines.add("For " + drug.getValue().displayLabel() + ":");
+			if (its.isEmpty()) {
+				lines.add("The interaction check raised no finding about " + drug.getValue().displayLabel()
+						+ " against this patient's active medications.");
+				continue;
+			}
+			boolean withholds = false;
+			for (SafetyWarning finding : its) {
+				withholds |= licensesTheModulesNo(finding);
+			}
+			if (!withholds && !cautionsOnlyAbout(Collections.singleton(drug.getKey()), its)) {
+				return null;
+			}
+			String composed = composeFromFindings(its, numbersOfEach.get(drug.getKey()), orderRecordNumbers, herOrderRecords,
+					true, pairs, Lead.GIVE, SCREEN_SCOPE);
+			if (composed == null) {
+				return null;
+			}
+			lines.add(composed);
+		}
+		lines.add(BELOW_FLOOR_SCOPE);
+		return withHerOwnOrdersSharingASubstance(String.join("\n", lines), sharing, sharingNumbers, orderRecordNumbers,
+			herOrderRecords);
+	}
+
+	/**
+	 * One row per substance {@code questionDrugs} resolve, in the order {@code question} first NAMES each — the order a
+	 * clinician wrote them, which the resolution does not keep (ADR Decisions 219, 222). A substance the question names
+	 * nowhere is left out.
+	 */
+	private static Map<Object, DrugReference> inQuestionOrder(String question, List<DrugReference> questionDrugs) {
+		String folded = DrugReference.foldedLower(question);
+		final Map<Object, Integer> firstAt = new HashMap<Object, Integer>();
+		Map<Object, DrugReference> rowOf = new HashMap<Object, DrugReference>();
+		for (DrugReference entry : questionDrugs) {
+			for (DrugReference.NamedOccurrence occurrence : entry.namedOccurrences(folded, 0)) {
+				Integer seen = firstAt.get(entry.substanceGroupKey());
+				if (seen == null || occurrence.getStart() < seen) {
+					firstAt.put(entry.substanceGroupKey(), occurrence.getStart());
+				}
+			}
+			rowOf.putIfAbsent(entry.substanceGroupKey(), entry);
+		}
+		List<Object> byPosition = new ArrayList<Object>(firstAt.keySet());
+		Collections.sort(byPosition, (a, b) -> firstAt.get(a).compareTo(firstAt.get(b)));
+		Map<Object, DrugReference> ordered = new LinkedHashMap<Object, DrugReference>();
+		for (Object substance : byPosition) {
+			ordered.put(substance, rowOf.get(substance));
+		}
+		return ordered;
 	}
 
 	/** Whether every partner {@code finding} names resolved to {@code substance} alone, by the rows its chip site took. */

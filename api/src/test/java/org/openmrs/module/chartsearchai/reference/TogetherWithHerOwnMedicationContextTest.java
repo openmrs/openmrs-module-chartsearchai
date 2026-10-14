@@ -125,6 +125,25 @@ public class TogetherWithHerOwnMedicationContextTest extends BaseModuleContextSe
 			"Lamivudine").getModuleAnswer());
 	}
 
+	/**
+	 * Two drugs proposed together, neither hers (ADR Decision 222): the demo's "Can I give him fluconazole and
+	 * clarithromycin?" was answered by the model "The drug can be given, with a caution: …", naming no drug the clearance
+	 * was about. The module answers each drug as its own proposal is answered, and says what relates the two.
+	 */
+	@Test
+	public void twoDrugsProposedTogetherNeitherOfThemHersAreEachAnsweredAsTheirOwnProposal() {
+		String answer = askOverTheShippedData("Can I give him fluconazole and clarithromycin?", "Nevirapine 200mg", "Nevirapine")
+				.getModuleAnswer();
+
+		assertTrue(answer != null && answer.startsWith("Fluconazole and Clarithromycin, asked about together; neither is one of "
+				+ "this patient's active medications."), "was: " + answer);
+		assertTrue(answer.contains("\nFor Fluconazole:\n1 interaction caution for Fluconazole:\nFluconazole interacts with "
+				+ "active order Nevirapine — Moderate."), "fluconazole's own answer: " + answer);
+		assertTrue(answer.contains("\nFor Clarithromycin:\n1 interaction caution for Clarithromycin:\nClarithromycin interacts "
+				+ "with active order Nevirapine — Moderate."), "clarithromycin's own answer: " + answer);
+		assertTrue(!answer.contains("can be given"), "never a clearance: " + answer);
+	}
+
 	private static PatientChart askOverTheShippedData(String question, String display, String name) {
 		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
 			DrugReferenceTestSupport.activeOrder("order-hers", display, name));

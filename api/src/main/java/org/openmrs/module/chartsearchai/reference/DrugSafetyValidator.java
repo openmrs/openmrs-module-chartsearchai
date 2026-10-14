@@ -11208,6 +11208,27 @@ public class DrugSafetyValidator {
 	 *         A free-text allergen can, and the ledger then collapses the identity chip but not
 	 *         necessarily the class one.
 	 */
+	/**
+	 * The patient's recorded DRUG allergies the reference data resolves to no substance — the ones
+	 * {@link #recordedAllergens} skips, since there is nothing to compare — in the order the context lists them (ADR
+	 * Decision 223). An allergy recorded as a drug CLASS the data does not carry ("Penicillins") is the shape this names:
+	 * every comparison the allergy arm makes stood silent on it, and an answer saying her records were checked must say
+	 * this one was not. Food and environmental allergies are left out ({@link PatientClinicalContext#getNonDrugAllergyTokens}).
+	 */
+	static List<String> unresolvedDrugAllergens(DrugReferenceService drugReferenceService, PatientClinicalContext context) {
+		if (context == null) {
+			return Collections.emptyList();
+		}
+		List<String> out = new ArrayList<String>();
+		for (String allergyToken : context.getAllergyTokens()) {
+			if (!context.getNonDrugAllergyTokens().contains(allergyToken)
+					&& drugReferenceService.findImpliedSubstances(allergyToken).isEmpty()) {
+				out.add(allergyToken);
+			}
+		}
+		return out;
+	}
+
 	private static List<RecordedAllergen> recordedAllergens(DrugReferenceService drugReferenceService,
 			PatientClinicalContext context) {
 		if (context == null) {

@@ -230,7 +230,10 @@ public final class QueryScopeRouter {
 	public static boolean isInteractionScreening(String question) {
 		return question != null && (DDI_CUES.matcher(question).find() || asksForADrugSafetyReading(question)
 				&& matchedIntents(question).contains(Intent.MEDICATIONS)
-				|| INTERACTION_NOUN_CUES.matcher(question).find() && !SOCIAL_CUES.matcher(question).find());
+				|| INTERACTION_NOUN_CUES.matcher(question).find() && !SOCIAL_CUES.matcher(question).find()
+				// Two groups of her own medications, named by words the MEDICATIONS cues need not know — "her TB treatment",
+				// "her ARVs" — and asked whether they interact: the grammar says what the cues cannot (ADR Decision 221).
+				|| fitsAShape(words(question), MEDICATION_GROUPS_SHAPES));
 	}
 
 	/**
@@ -441,7 +444,24 @@ public final class QueryScopeRouter {
 	 * replaced admitted "Does this drug interact with her medications?", every word of which was on
 	 * it, and answered it with her own pairs.
 	 */
+	/**
+	 * A group of her OWN medications as a clinician words it, closing on a noun of medication — "her TB treatment", "her
+	 * ARVs", "her blood pressure pills" (ADR Decision 221). Never resolved to drugs: a question asking whether two such
+	 * groups interact is a screen of her medications, which states every pair, those between the two among them.
+	 */
+	private static final String HER_MEDICATION_GROUP = POSSESSIVE + " (?:\\p{L}+ ){0,2}(?:treatments?|therapy|therapies|"
+			+ "regimens?|medications?|meds|medicines?|drugs?|pills|tablets|arvs?|antiretrovirals?|antibiotics?|antimalarials?|"
+			+ "antihypertensives?|antiepileptics?|anticonvulsants?|antidepressants?)";
+
+	/** "Does her TB treatment interact with her ARVs?", "Do her TB drugs interact with her antiretrovirals?" (ADR Decision 221). */
+	private static final String TWO_OF_HER_MEDICATION_GROUPS_INTERACT = "(?:does|do|will|would) " + HER_MEDICATION_GROUP
+			+ " interact with " + HER_MEDICATION_GROUP;
+
+	/** That shape alone — the one screen shape naming no medication word the trigger's own cues know (ADR Decision 221). */
+	private static final List<Pattern> MEDICATION_GROUPS_SHAPES = shapes(TWO_OF_HER_MEDICATION_GROUPS_INTERACT);
+
 	private static final List<Pattern> SCREEN_SHAPES = shapes(
+			TWO_OF_HER_MEDICATION_GROUPS_INTERACT,
 			// "Are there any drug interactions with her current medications?"
 			"(?:are|is) there (?:any )?(?:drug )?interactions? (?:with|between|among) " + POSSESSIVE + " " + MEDICATIONS,
 			// "Are any of her current medications interacting with each other?", "Do any of her meds

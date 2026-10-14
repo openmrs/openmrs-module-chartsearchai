@@ -476,6 +476,24 @@ public class PatientClinicalContext {
 		return allergyTokens;
 	}
 
+	/**
+	 * The {@link #getAllergyTokens} of allergies recorded as NOT to a drug — food, environment, other — in the same
+	 * normalized form, so a recorded allergy the drug data does not identify is reported only where it is a drug's (ADR
+	 * Decision 223). Written once, by {@link PatientClinicalContextBuilder}; empty for a context built otherwise, which
+	 * then reads every unidentified allergy as possibly a drug's — the conservative reading.
+	 */
+	private final Set<String> nonDrugAllergyTokens = new LinkedHashSet<String>();
+
+	/** Called by {@link PatientClinicalContextBuilder} alone, with the raw tokens it added for non-drug allergies. */
+	void recordNonDrugAllergyTokens(Set<String> rawTokens) {
+		nonDrugAllergyTokens.addAll(lower(rawTokens));
+	}
+
+	/** @return the allergy tokens of allergies recorded as not to a drug (ADR Decision 223), never null. */
+	public Set<String> getNonDrugAllergyTokens() {
+		return Collections.unmodifiableSet(nonDrugAllergyTokens);
+	}
+
 	/** @return lowercased text of the patient's active conditions. */
 	public Set<String> getConditionTokens() {
 		return conditionTokens;

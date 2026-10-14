@@ -956,6 +956,24 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		}
 	}
 
+	/** Two drugs proposed together, neither hers: each given its own answer, which is what kept them with the model (ADR
+	 *  Decision 222). */
+	@Test
+	public void twoDrugsProposedTogetherAreEachAnsweredAsTheirOwnProposal() {
+		answerFromFindings(true);
+		for (String question : Arrays.asList("Can I give her ibuprofen and omeprazole?",
+			"Can ibuprofen be given with omeprazole?")) {
+			RecordingProvider provider = new RecordingProvider();
+			ChartAnswer answer = serviceWith(provider).search(patient, question);
+
+			assertEquals(0, provider.calls, "no model is asked for " + question + ": " + answer.getAnswer());
+			assertTrue(answer.getAnswer().startsWith("Ibuprofen and Omeprazole, asked about together; neither is one of this "
+					+ "patient's active medications."), question + " was: " + answer.getAnswer());
+			assertTrue(answer.getAnswer().contains("\nFor Ibuprofen:\n" + DrugReferenceInjector.WITHHOLD_LEAD_OPENING),
+				"ibuprofen beside her aspirin is still withheld, under its own heading: " + answer.getAnswer());
+		}
+	}
+
 	/** The question ADR Decision 108 named as its grammar's first miss to read, answered as its proposal is. */
 	@Test
 	public void theKneePainProposalIsAnsweredWithItsFindingsAndSaysThePurposeWasNotWeighed() {
@@ -2240,8 +2258,8 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 			"What dose of ibuprofen can I give her?",
 			// current use, not a proposal
 			"Does she take ibuprofen?",
-			// two drugs: each would need its own answer
-			"Can I give her ibuprofen and omeprazole?",
+			// two drugs: each would need its own answer — which, neither of them hers, the module now gives each
+			// (twoDrugsProposedTogetherAreEachAnsweredAsTheirOwnProposal, ADR Decision 222)
 			// no proposal at all, in words a proposal is made of
 			"Is she on ibuprofen?",
 			"Give her ibuprofen?",
@@ -2265,7 +2283,6 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 			"Can I give her ibuprofen for her kidney pain?",
 			// a second drug, in the drug-first shapes (ADR Decision 134)
 			"Is ibuprofen safe to add to omeprazole?",
-			"Can ibuprofen be given with omeprazole?",
 			// inverse polarity in the passive: a "No" lead would answer it backwards
 			"Should ibuprofen be stopped?",
 			"Can ibuprofen be avoided?",

@@ -16689,8 +16689,8 @@ marked names, the hyphen between them dropped.
   (`DrugReferenceInjector.namesOneProduct`), on every other conjunct the gate already asks — none of them hers, a proposal
   shape, a finding licensing the answer. Its lines name each substance's finding.
 
-Pinned by `CombinationProductProposalContextTest.aProposalNamingOneCombinationProductIsAnsweredWithItsFindings` and
-`.twoDrugsNamedApartStillAskTheModel`.
+Pinned by `CombinationProductProposalContextTest.aProposalNamingOneCombinationProductIsAnsweredWithItsFindings`; two drugs
+named apart are Decision 222's (`.twoDrugsNamedApartAreAnsweredAsTwoDrugsAndNotAsOneProduct`).
 
 ## Decision 218: Whether her drug and another interact is answered "Yes" where a finding relates them
 
@@ -16764,3 +16764,85 @@ arm's own finding stating that pair.
 
 Pinned by `TogetherWithHerOwnMedicationContextTest.aQuestionWhetherTwoDrugsNeitherOfThemHersInteractIsAnsweredYesWhereTheDataRelatesThem`
 and `.aQuestionWhetherTwoDrugsNeitherOfThemHersInteractIsLeftToTheModelWhereTheDataDoesNotRelateThem`.
+
+## Decision 221: Whether two groups of her own medications interact is a screen of her medications
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-14.
+
+### Context
+
+On the demo replica, *"Does her TB treatment interact with her ARVs?"* was answered by the model *"The records do not
+address whether her TB treatment interacts with her ARVs."* for a patient whose nevirapine the data rates Major against her
+rifampicin regimen. The words name no drug and no class the module resolves, and resolving a class to an ATC subtree is
+refused (`DrugClassTerms`, ADR Decision 67); the screening trigger read no medication word in them.
+
+### The decision
+
+- **The question is read as a screen of her medications, never resolved to drugs**: a screen states every pair of hers,
+  those between the two groups among them. One shape, `QueryScopeRouter.TWO_OF_HER_MEDICATION_GROUPS_INTERACT`: two
+  POSSESSIVE groups, each closing on a medication noun (treatment, therapy, regimen, drugs, pills, ARVs, antibiotics …) —
+  "her diet" fits neither — joined by "interact with". It is a `SCREEN_SHAPES` member and the one shape
+  `isInteractionScreening` also admits, since its words need not be the MEDICATIONS cues.
+
+Pinned by `MedicationGroupsScreenContextTest`.
+
+## Decision 222: Two drugs proposed together, neither hers, are each answered as their own proposal
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-14.
+
+### Context
+
+On the demo replica, *"Can I give him fluconazole and clarithromycin?"* for patients on neither was answered by the model
+*"The drug can be given, with a caution: …"* — a clearance naming no drug, which the module never gives.
+
+### The decision
+
+- **A together shape (`QueryScopeRouter.asksWhetherToGiveDrugsTogether`) naming two substances, neither hers, is answered
+  by the module** (`DrugReferenceInjector.composeTwoProposalsTogether`): *"Fluconazole and Clarithromycin, asked about
+  together; neither is one of this patient's active medications."*, what relates the two (the question-pair finding, by its
+  subject rows), then under *"For X:"* each drug's own proposal answer — its "No" or its cautions — or that the check raised no
+  finding about it, then the scope.
+- **Fail-closed on a proposal's own rule**: a drug whose findings a proposal of it would leave to the model leaves this to
+  the model too, and so does a finding about neither drug alone nor their pair.
+- **The drugs are named in the order the question names them** (`inQuestionOrder`), shared with Decisions 219 and 220.
+- **It changes three pinned answers**, on purpose: Decision 108's list kept *"Can I give her ibuprofen and omeprazole?"*
+  and Decision 134's *"Can ibuprofen be given with omeprazole?"* with
+  the model because "each would need its own answer", which this gives each; and Decision 217's *"artemether and
+  lumefantrine"*, named apart, is answered as two drugs rather than left to the model. Both cases now pin this answer
+  (`LlmInferenceServiceAnswerFromFindingsContextTest.twoDrugsProposedTogetherAreEachAnsweredAsTheirOwnProposal`,
+  `CombinationProductProposalContextTest.twoDrugsNamedApartAreAnsweredAsTwoDrugsAndNotAsOneProduct`).
+
+Pinned by `TogetherWithHerOwnMedicationContextTest.twoDrugsProposedTogetherNeitherOfThemHersAreEachAnsweredAsTheirOwnProposal`.
+
+## Decision 223: A recorded drug allergy the data does not identify is said to be unchecked
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-14. The allergy counterpart of
+[Decision 161](#decision-161-orders-the-drug-data-does-not-identify-are-named-rather-than-giving-the-question-up).
+
+### Context
+
+On the demo replica, two patients recorded allergic to *"Penicillins"* — a CIEL drug-CLASS concept carrying no ATC code
+and no member list — were asked *"Can I give her amoxicillin?"* and *"Can I give her penicillin V?"*, and the module answered
+*"The interaction check relates Amoxicillin to none of this patient's 3 active medications."* with no word of the allergy.
+`findImpliedSubstances("Penicillins")` resolves nothing, so `DrugSafetyValidator.recordedAllergens` skipped the record and
+every comparison the allergy arm makes stood silent, while the answer read as one whose allergy records had been checked.
+
+### The decision
+
+- **A composed answer closes by naming each recorded DRUG allergy the data does not identify as unchecked**:
+  *"Not checked: a recorded allergy the drug data does not identify — penicillins. Whether it covers Amoxicillin is not
+  established."* (`DrugSafetyValidator.unresolvedDrugAllergens`, `DrugReferenceInjector.uncheckedAllergiesLine`). Never a
+  guess at what the class covers: a class allergen is resolved by nothing the module holds, and inventing its members is
+  the class resolution Decision 67 refused.
+- **Food and environmental allergies are left out**, read off the allergy's own recorded type by the context builder
+  (`PatientClinicalContext.getNonDrugAllergyTokens`); an allergy with no type counts as a drug's.
+
+### What it leaves
+
+The allergy is reported unchecked, not checked: amoxicillin is still not FLAGGED for a penicillin-class allergy. Doing that
+needs the class's members from somewhere the module trusts — a curated cross-reactivity group (the shipped file carries the
+NSAID group alone) and a path matching a recorded allergen's name to a group — which is clinical content, not a rule.
+
+Pinned by `UnidentifiedActiveOrdersAnswerTest.aRecordedAllergyTheDataDoesNotIdentifyIsSaidToBeUnchecked`,
+`.aRecordedAllergyTheDataIdentifiesIsNotSaidToBeUnchecked` and
+`UncheckedDrugAllergyContextTest.onlyADrugAllergyTheDataDoesNotIdentifyIsReportedUnchecked` (the real builder).

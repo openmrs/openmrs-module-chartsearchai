@@ -161,6 +161,7 @@ final class PatientClinicalContextBuilder {
 		// would miss on every allergen the chart spelled with a capital letter.
 		Map<String, Set<String>> allergyRecords = new LinkedHashMap<String, Set<String>>();
 		Map<String, Set<String>> conditionRecords = new LinkedHashMap<String, Set<String>>();
+		Set<String> nonDrugAllergyTokens = new LinkedHashSet<String>();
 
 		// Active allergies -> allergen tokens (for contraindication checks).
 		try {
@@ -168,10 +169,22 @@ final class PatientClinicalContextBuilder {
 				if (allergy.getAllergen() != null) {
 					// One row can contribute BOTH tokens — the coded allergen's name and the clinician's
 					// free text — and each is attributed to the row, so a rule matching either names it.
-					attribute(allergyRecords, allergy.getUuid(),
-							addConceptName(allergyTokens, allergy.getAllergen().getCodedAllergen()));
-					attribute(allergyRecords, allergy.getUuid(),
-							addRaw(allergyTokens, allergy.getAllergen().getNonCodedAllergen()));
+					String coded = addConceptName(allergyTokens, allergy.getAllergen().getCodedAllergen());
+					String free = addRaw(allergyTokens, allergy.getAllergen().getNonCodedAllergen());
+					attribute(allergyRecords, allergy.getUuid(), coded);
+					attribute(allergyRecords, allergy.getUuid(), free);
+					// Which are NOT a drug's: a food or environmental allergy the drug data does not identify is
+					// no unchecked drug allergy (ADR Decision 223). An allergy with no type recorded counts as a
+					// drug's, the conservative reading.
+					if (allergy.getAllergen().getAllergenType() != null
+							&& allergy.getAllergen().getAllergenType() != org.openmrs.AllergenType.DRUG) {
+						if (coded != null) {
+							nonDrugAllergyTokens.add(coded);
+						}
+						if (free != null) {
+							nonDrugAllergyTokens.add(free);
+						}
+					}
 				}
 			}
 		}
@@ -199,9 +212,11 @@ final class PatientClinicalContextBuilder {
 			contraindicationRecordsRead = false;
 		}
 
-		return new PatientClinicalContext(age, weightKg, drugNames, atcCodes, allergyTokens, conditionTokens,
-				activeOrders, null, contraindicationRecordsRead, activeDrugOrderReadCompleted,
+		PatientClinicalContext built = new PatientClinicalContext(age, weightKg, drugNames, atcCodes, allergyTokens,
+				conditionTokens, activeOrders, null, contraindicationRecordsRead, activeDrugOrderReadCompleted,
 				activeDrugOrderUnaccountedFor, allergyRecords, conditionRecords);
+		built.recordNonDrugAllergyTokens(nonDrugAllergyTokens);
+		return built;
 	}
 
 	/**

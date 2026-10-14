@@ -83,6 +83,40 @@ public class UnidentifiedActiveOrdersAnswerTest extends BaseModuleContextSensiti
 		assertEquals(2, lines.length, "was: " + answer);
 	}
 
+	/**
+	 * A recorded drug allergy the data does not identify is said to be unchecked (ADR Decision 223). On the public demo's
+	 * data a patient recorded allergic to "Penicillins" — a drug-class concept naming no substance the data carries — was
+	 * asked "Can I give her amoxicillin?" and answered "The interaction check relates Amoxicillin to none of this patient's
+	 * 3 active medications.", nothing saying her penicillin allergy had not been compared at all.
+	 */
+	@Test
+	public void aRecordedAllergyTheDataDoesNotIdentifyIsSaidToBeUnchecked() {
+		String answer = askBesideAnAllergy("Penicillins", "Can I give her amoxicillin?").getModuleAnswer();
+
+		assertNotNull(answer, "the module answers");
+		String[] lines = answer.split("\n");
+		assertEquals("Not checked: a recorded allergy the drug data does not identify — penicillins. Whether it covers "
+				+ "Amoxicillin is not established.", lines[lines.length - 1], "was: " + answer);
+	}
+
+	@Test
+	public void aRecordedAllergyTheDataIdentifiesIsNotSaidToBeUnchecked() {
+		String answer = askBesideAnAllergy("Aspirin", "Can I give her amoxicillin?").getModuleAnswer();
+
+		assertNotNull(answer, "the module answers");
+		assertTrue(!answer.contains("recorded allergy the drug data does not identify"), "was: " + answer);
+	}
+
+	private PatientChart askBesideAnAllergy(String allergen, String question) {
+		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
+				new PatientClinicalContext.ActiveDrugOrder("order-nvp", "Nevirapine", DrugReferenceTestSupport.set("Nevirapine")));
+		return DrugReferenceTestSupport.injectorWithSafety(shipped()).injectRecords(
+				DrugReferenceTestSupport.oneRecordChart(),
+				DrugReferenceTestSupport.ctx(35, null, DrugReferenceTestSupport.set("Nevirapine"), DrugReferenceTestSupport.set(),
+						DrugReferenceTestSupport.set(allergen), null, orders),
+				question);
+	}
+
 	private PatientChart askOverVaccinationsOnly(String question) {
 		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
 				new PatientClinicalContext.ActiveDrugOrder("order-polio", "Polio vaccination, oral",

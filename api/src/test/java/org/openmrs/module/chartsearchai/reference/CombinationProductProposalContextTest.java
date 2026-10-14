@@ -10,7 +10,6 @@
 package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Arrays;
@@ -52,8 +51,11 @@ public class CombinationProductProposalContextTest extends BaseModuleContextSens
 	}
 
 	@Test
-	public void twoDrugsNamedApartStillAskTheModel() {
-		assertNull(ask("Can I give her artemether and lumefantrine?").getModuleAnswer());
+	public void twoDrugsNamedApartAreAnsweredAsTwoDrugsAndNotAsOneProduct() {
+		// Named apart they are two proposals, each answered on its own (ADR Decision 222), never one product's answer.
+		String answer = ask("Can I give her artemether and lumefantrine?").getModuleAnswer();
+		assertTrue(answer != null && answer.startsWith("Artemether and Lumefantrine, asked about together;"), "was: " + answer);
+		assertTrue(answer.contains("\nFor Artemether:\n" + DrugReferenceInjector.WITHHOLD_LEAD_OPENING), "was: " + answer);
 	}
 
 	private static PatientChart ask(String question) {

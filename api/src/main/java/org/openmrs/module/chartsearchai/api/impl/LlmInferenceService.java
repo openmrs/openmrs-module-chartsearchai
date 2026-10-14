@@ -353,7 +353,7 @@ public class LlmInferenceService implements ChartSearchService {
 			// the findings it states (ADR Decision 168).
 			ConflictingOrderStatement.Stated conflicting = ConflictingOrderStatement.state(question, completedAnswer,
 					DrugReferenceInjector.withFindingCitations(safetyWarnings, chart.getMappings()),
-					chart.getOrderRecordNumbers(), recordsTheModelCites(response.getAnswer(), cited));
+					chart.getOrderRecordNumbers(), recordsTheModelCites(response.getAnswer(), cited), chart.getMappings());
 			completedAnswer = conflicting.getAnswer();
 			safetyWarnings = aboutTheDrugAsked(conflicting.getWarnings(), chart);
 			// And the order records it cites, as the module's, by the one method that decides which indices become
@@ -945,7 +945,7 @@ public class LlmInferenceService implements ChartSearchService {
 			// the findings it states (ADR Decision 168).
 			ConflictingOrderStatement.Stated conflicting = ConflictingOrderStatement.state(question, completedAnswer,
 					DrugReferenceInjector.withFindingCitations(safetyWarnings, chart.getMappings()),
-					chart.getOrderRecordNumbers(), recordsTheModelCites(response.getAnswer(), cited));
+					chart.getOrderRecordNumbers(), recordsTheModelCites(response.getAnswer(), cited), chart.getMappings());
 			completedAnswer = conflicting.getAnswer();
 			safetyWarnings = aboutTheDrugAsked(conflicting.getWarnings(), chart);
 			// And the order records it cites, as the module's, by the one method that decides which indices become

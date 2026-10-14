@@ -170,6 +170,31 @@ public class AllergyQuestionConflictingOrderContextTest extends BaseModuleContex
 	}
 
 	/**
+	 * The line names her order and cites it, and cites the ALLERGY too where the chart carries its record: the allergy
+	 * is the other half of the conflict, and without its marker a clinician could open the prescription from the answer
+	 * but not the record that makes it a conflict (Betty Williams, 2026-10-14). The record cited is the one the finding
+	 * fired on, the module's own provenance (ADR Decision 80), attached for the finding the line states.
+	 */
+	@Test
+	public void search_theLineCitesTheRecordedAllergyAsWellAsHerOrder() throws IOException {
+		ChartAnswer answer = serviceAnswering(MODEL_ANSWER, SLICE, DrugReferenceTestSupport.obsRecord(1, "BP 120/80"),
+				DrugReferenceTestSupport.allergyRecord(2, aspirinAllergyUuid, "Allergy: Aspirin")).search(patient,
+						ALLERGY_QUESTION);
+
+		SafetyWarning chip = theAspirinChip(answer);
+		RecordReference order = theOrderRecord(answer, Context.getOrderService().getOrder(111).getUuid());
+		assertEquals(MODEL_ANSWER + HEADING + "\n- " + ORDER_DISPLAY + " [" + order.getIndex() + "]"
+				+ ": recorded allergy to this drug [2].", answer.getAnswer(),
+				"the item cites the allergy record beside the order it conflicts with");
+		RecordReference allergy = theOrderRecord(answer, aspirinAllergyUuid);
+		assertEquals(2, allergy.getIndex());
+		assertTrue(allergy.isAttachedByTheModule(), "the module cited the allergy, not the model");
+		assertEquals(Collections.singletonList(chip.getFindingCitation()), allergy.getAttachedFor(),
+				"attached for the finding the line states");
+		assertTheModuleAttachedHerOrder(answer);
+	}
+
+	/**
 	 * A record the MODEL already cited stays the model's citation, as a record the model cited stays its own
 	 * under issue #305's attachment: the module's marker beside it claims nothing the model did not.
 	 */

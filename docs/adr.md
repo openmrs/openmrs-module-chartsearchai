@@ -16872,3 +16872,31 @@ it said, so a clinician saw that the answer leaned on reference data and could n
 
 Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aReferenceGroupCitationPublishesItsRecordsTextAndAChartCitationNone`
 and `ChartSearchAiReferenceProvenanceTest.everyEventCarriesTheReferenceTextOfAReferenceCitationAndNoneForAChartRecord`.
+
+## Decision 225: An order conflicting with its own recorded allergy cites the allergy too
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-14. Amends
+[Decision 167](#decision-167-an-order-conflicting-only-with-its-own-recorded-allergy-is-named-in-one-short-line)'s line.
+
+### Context
+
+On the 3.7.1 standalone, Betty Williams (`a7090f70…`, prescribed Bupivacaine and Lidocaine, allergic to Lidocaine) was
+asked *"What medications is she currently taking?"*, and the module's statement closed with
+*"- Lidocaine [4]: recorded allergy to this drug."* The marker opens her prescription. The allergy, the other half of
+the conflict, was named but could not be opened from the answer, and the owner asked what the line meant.
+
+### The decision
+
+- **The line cites the allergy record each stated finding fired on**: *"- Lidocaine [4]: recorded allergy to this drug
+  [7]."* (`ConflictingOrderStatement.state`). The records are read off each finding's own `safety_finding` record,
+  `RecordMapping.getDerivedFrom()`, the provenance Decision 80 already resolves. They are never re-derived.
+- **They reach the references as the module's**, attached for the finding the line states, as the order's record is
+  under [Decision 168](#decision-168-the-allergy-answers-conflicting-orders-cite-the-records-they-are).
+- **Where the chart carries no record of the allergy, the line is Decision 167's unchanged.** A query-scoped slice, or
+  an allergy the injector could resolve no record for, cites none.
+
+### What it leaves
+
+The quoted form, for an allergy recorded under another name or a rule finding, still cites only the order.
+
+Pinned by `AllergyQuestionConflictingOrderContextTest.search_theLineCitesTheRecordedAllergyAsWellAsHerOrder`.

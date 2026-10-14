@@ -18,7 +18,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.api.impl.QueryScopeRouter;
+import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 
 /**
  * The module's own statement, in the answer, of which of the patient's active orders directly conflict with her
@@ -40,7 +42,9 @@ import org.openmrs.module.chartsearchai.api.impl.QueryScopeRouter;
  * (ADR Decision 188, which narrowed Decision 124's statement to this), and an order only such chips are about is not
  * named. Where every finding stated about an order is an allergy recorded to its very drug
  * ({@link SafetyWarning#isARecordedAllergyToItsOwnDrug()}) the order is followed by {@link #OWN_ALLERGY} alone,
- * <em>"- Lidocaine [4]: recorded allergy to this drug."</em> (ADR Decision 167); otherwise by each finding's own
+ * <em>"- Lidocaine [4]: recorded allergy to this drug [7]."</em> (ADR Decisions 167, 225) — citing the allergy record
+ * each finding fired on where the chart carries one ({@code RecordMapping.getDerivedFrom()}, ADR Decision 80), since
+ * the allergy is the other half of the conflict; otherwise by each finding's own
  * sentence verbatim, since a rule finding or an allergy recorded under another name claims only what its own words
  * do — which is also why the heading says "records" and not "allergies". It says "directly", so a list leaving the
  * cross-reactivity chips out does not read as every order her records touch, and each such chip is
@@ -81,8 +85,11 @@ public final class ConflictingOrderStatement {
 	/** What opens each item, on its own line. */
 	static final String ITEM = "\n- ";
 
-	/** What follows an order whose every finding is an allergy recorded to its own drug, in place of them. */
-	static final String OWN_ALLERGY = ": recorded allergy to this drug.";
+	/**
+	 * What follows an order whose every finding is an allergy recorded to its own drug, in place of them — then the
+	 * markers of the allergy records those findings fired on, where the chart carries any, and a full stop.
+	 */
+	static final String OWN_ALLERGY = ": recorded allergy to this drug";
 
 	private ConflictingOrderStatement() {
 	}
@@ -125,11 +132,13 @@ public final class ConflictingOrderStatement {
 	 * @param recordsTheAnswerCites the records the MODEL's answer cites — its markers, each admitted by the answer's own
 	 *        resolution — which decide, off an allergy question, whether the answer names a conflicting order (ADR
 	 *        Decision 210)
+	 * @param mappings the chart's records, whose {@code safety_finding} records name the chart records each finding
+	 *        fired on — the allergy records an own-allergy item cites (ADR Decision 225)
 	 * @return {@code answer} with her conflicting orders stated and every chip it states marked, or both
 	 *         unchanged where the question or the chips do not qualify — see this class's javadoc.
 	 */
 	public static Stated state(String question, String answer, List<SafetyWarning> warnings,
-			Map<String, Integer> orderRecordNumbers, Set<Integer> recordsTheAnswerCites) {
+			Map<String, Integer> orderRecordNumbers, Set<Integer> recordsTheAnswerCites, List<RecordMapping> mappings) {
 		Stated unchanged = new Stated(answer, warnings, Collections.<Integer, List<Integer>> emptyMap());
 		boolean onlyForAllergies = asksOnlyForAllergies(question);
 		if (answer == null || warnings == null || warnings.isEmpty()
@@ -172,8 +181,14 @@ public final class ConflictingOrderStatement {
 				orders.add(cite(printed, own, orderRecordNumbers, cited));
 			}
 			if (everyOneNamesItsDrug(own)) {
+				// The allergy is the other half of the conflict, so its record is cited too (ADR Decision 225).
+				StringBuilder allergies = new StringBuilder();
+				for (Integer allergy : recordsFiredOn(own, mappings)) {
+					allergies.append(" [").append(allergy).append(']');
+					attach(allergy, own, cited);
+				}
 				for (String order : orders) {
-					ownAllergy.add(ITEM + order + OWN_ALLERGY);
+					ownAllergy.add(ITEM + order + OWN_ALLERGY + allergies + '.');
 				}
 				continue;
 			}
@@ -217,6 +232,12 @@ public final class ConflictingOrderStatement {
 		if (number == null) {
 			return printed;
 		}
+		attach(number, chips, cited);
+		return printed + " [" + number + "]";
+	}
+
+	/** Records {@code number} in {@code cited} with the findings {@code chips} state, for the references to attach. */
+	private static void attach(Integer number, List<SafetyWarning> chips, Map<Integer, List<Integer>> cited) {
 		List<Integer> findings = cited.get(number);
 		if (findings == null) {
 			findings = new ArrayList<Integer>();
@@ -227,7 +248,30 @@ public final class ConflictingOrderStatement {
 				findings.add(chip.getFindingCitation());
 			}
 		}
-		return printed + " [" + number + "]";
+	}
+
+	/**
+	 * The chart records {@code chips}' findings fired on, in finding order and once each — read off each finding's own
+	 * record ({@code RecordMapping.getDerivedFrom()}, ADR Decision 80), never re-derived. Empty where no chip names its
+	 * finding's record or the injector resolved no chart record for it, and then the item cites no allergy.
+	 */
+	private static Set<Integer> recordsFiredOn(List<SafetyWarning> chips, List<RecordMapping> mappings) {
+		Set<Integer> records = new LinkedHashSet<Integer>();
+		if (mappings == null) {
+			return records;
+		}
+		List<RecordMapping> findings = ChartSearchAiUtils.safetyFindingMappings(mappings);
+		for (SafetyWarning chip : chips) {
+			if (chip.getFindingCitation() == null) {
+				continue;
+			}
+			for (RecordMapping finding : findings) {
+				if (finding.getIndex() == chip.getFindingCitation().intValue()) {
+					records.addAll(finding.getDerivedFrom());
+				}
+			}
+		}
+		return records;
 	}
 
 	/**

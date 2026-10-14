@@ -582,6 +582,60 @@ public final class QueryScopeRouter {
 	}
 
 	/**
+	 * Whether a question asks for the verdict on giving ONE drug, in whatever words, and asks nothing else: the rule
+	 * {@code chartsearchai.drugSafety.verdictForAnyWording} adds beside {@link #asksWhetherToGiveADrug}'s shapes
+	 * (ADR Decision 200). Asked of the question's {@link #words} with the drug's own name marked {@link #DRUG_NAME},
+	 * and of the question as written, which {@link #asksForSomethingElseToo} reads. Every condition is a refusal
+	 * except the last, so the rule stays fail-CLOSED.
+	 * <ul>
+	 * <li>One drug, named once.</li>
+	 * <li>Not a wh-question, whose answer is neither yes nor no, nor a past-tense one, which asks about her history
+	 *     ({@link #HISTORY_SHAPES}' domain).</li>
+	 * <li>Nothing {@link #asksForSomethingElseToo} refuses a screen for: a second question, a list asked for,
+	 *     something outside her chart, a dose, food or patient factor, another record domain.</li>
+	 * <li>No amount (a number), no alternative ("or", other than "yes or no"), and no purpose: "for" names the patient
+	 *     and nothing after her.</li>
+	 * <li>And a word asking about giving it ({@link #GIVING}) or about its safety ({@link #VERDICT_CUES}).</li>
+	 * </ul>
+	 */
+	public static boolean asksForOneDrugsVerdict(String question, List<String> wordsWithTheDrugMarked) {
+		if (question == null || wordsWithTheDrugMarked == null || Collections.frequency(wordsWithTheDrugMarked,
+				DRUG_NAME) != 1 || NOT_A_YES_OR_NO_QUESTION.contains(wordsWithTheDrugMarked.get(0))
+				|| asksForSomethingElseToo(question)) {
+			return false;
+		}
+		String joined = String.join(" ", wordsWithTheDrugMarked).replace("yes or no", "");
+		return !AMOUNT.matcher(joined).find() && !ALTERNATIVE.matcher(joined).find() && !PURPOSE.matcher(joined).find()
+				&& (GIVING.matcher(joined).find() || VERDICT_CUES.matcher(joined).find());
+	}
+
+	/** The first words of a question {@link #asksForOneDrugsVerdict} refuses: a wh-word, or a past tense. */
+	private static final Set<String> NOT_A_YES_OR_NO_QUESTION = Collections.unmodifiableSet(new HashSet<String>(
+			Arrays.asList("what", "when", "where", "who", "whom", "whose", "why", "how", "which", "has", "have", "had", "did",
+					"was", "were")));
+
+	private static final Pattern AMOUNT = Pattern.compile("\\d");
+
+	private static final Pattern ALTERNATIVE = Pattern.compile("\\bor\\b");
+
+	private static final Pattern PURPOSE = Pattern.compile("\\bfor (?!" + PATIENT + "(?: now| today)?\\s*$)");
+
+	/**
+	 * Giving the drug, as a question asks about it: a verb of giving after a modal or "to" — the speaker's ("can I give",
+	 * "OK to prescribe") or the patient's taking it ("can she take") — or its gerund ("prescribing", "adding"). Never the
+	 * bare verb, which "Give her ibuprofen?" is, nor the speaker taking it ("Can I take ibuprofen?").
+	 */
+	private static final Pattern GIVING = Pattern.compile("\\b(?:(?:can|could|may|should|shall|would|will|to)"
+			+ "(?: i| we)?(?: safely)? (?:give|start|prescribe|administer|add|put)"
+			+ "|(?:can|could|may|should|would|will) " + SUBJECT + "(?: safely)? (?:take|use|have|be given|be started on)"
+			+ "|giving|starting|prescribing|adding|administering)\\b");
+
+	/** A word asking after the drug's safety for her. "avoid" exactly, since "Can ibuprofen be avoided?" reads a verdict
+	 *  backwards. */
+	private static final Pattern VERDICT_CUES = cues("safe", "safely", "unsafe", "ok", "okay", "appropriate", "alright",
+			"problems?", "issues?", "concerns?", "risks?", "risky", "avoid", "contraindicated", "harmful", "dangerous");
+
+	/**
 	 * Whether a question asks whether the patient has EVER taken one drug, and nothing else — one of
 	 * {@link #HISTORY_SHAPES}, asked of its {@link #words} with the drug's own name marked {@link #DRUG_NAME}. ADR
 	 * Decision 151: such a response publishes no interaction chip about giving that drug. Fail-CLOSED as

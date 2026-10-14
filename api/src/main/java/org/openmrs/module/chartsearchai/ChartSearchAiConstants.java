@@ -592,6 +592,18 @@ public class ChartSearchAiConstants {
 	public static final boolean DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS = true;
 
 	/**
+	 * Whether a question asking whether to give ONE drug is admitted by
+	 * {@link #GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS} whatever its words, rather than only in the shapes
+	 * {@code QueryScopeRouter.asksWhetherToGiveADrug} lists: {@code QueryScopeRouter.asksForOneDrugsVerdict}, read by
+	 * {@code DrugReferenceInjector.questionProposes}, the one spelling the injector and the validator share. A question
+	 * the rule alone admits opens with neither "Yes" nor "No". A prototype, measured against the shapes before any
+	 * decision: ADR Decision 200. Ships OFF.
+	 */
+	public static final String GP_DRUG_SAFETY_VERDICT_FOR_ANY_WORDING = "chartsearchai.drugSafety.verdictForAnyWording";
+
+	public static final boolean DEFAULT_DRUG_SAFETY_VERDICT_FOR_ANY_WORDING = false;
+
+	/**
 	 * Whether the answer's prose is asked to SUMMARISE the safety findings rather than enumerate
 	 * them, on the grounds that the client already renders every finding in full — issue #403.
 	 *

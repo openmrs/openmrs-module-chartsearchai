@@ -2175,6 +2175,67 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	@Test
 	public void aQuestionTheModuleDidNotResolveAsASuitabilityQuestionStillAsksTheModel() {
 		answerFromFindings(true);
+		assertEveryQuestionTheModuleDidNotResolveAsksTheModel();
+	}
+
+	/**
+	 * The same questions with {@code chartsearchai.drugSafety.verdictForAnyWording} on (ADR Decision 200): the rule
+	 * admits a proposal whatever its words, and every reason above for leaving a question to the model still holds.
+	 */
+	@Test
+	public void withTheVerdictRuleOn_everyQuestionTheModuleDidNotResolveStillAsksTheModel() {
+		answerFromFindings(true);
+		verdictForAnyWording(true);
+		assertEveryQuestionTheModuleDidNotResolveAsksTheModel();
+	}
+
+	/**
+	 * Proposals in words no shape carries, taken from the 2026-10-14 sweep on the 3.7.1 standalone, where each
+	 * reached the model. With {@code chartsearchai.drugSafety.verdictForAnyWording} on, the module states its check's
+	 * verdict for the drug, opening with neither "Yes" nor "No", since such words do not say which of them answers
+	 * (ADR Decision 200).
+	 */
+	private static final String[] UNSHAPED_PROPOSALS = { "I'm thinking of prescribing ibuprofen — any problems?",
+			"Any concerns if we add ibuprofen to her medications?", "Should I avoid ibuprofen for her?",
+			"Could ibuprofen cause problems for her?" };
+
+	private void verdictForAnyWording(boolean on) {
+		Context.getAdministrationService().setGlobalProperty(
+				ChartSearchAiConstants.GP_DRUG_SAFETY_VERDICT_FOR_ANY_WORDING, String.valueOf(on));
+	}
+
+	@Test
+	public void withTheVerdictRuleOn_aProposalInWordsNoShapeCarriesIsAnsweredWithoutAYesOrNo() {
+		verdictForAnyWording(true);
+		List<Finding> findings = findingsInThePromptFor(PROPOSAL);
+		for (String question : UNSHAPED_PROPOSALS) {
+			RecordingProvider provider = new RecordingProvider();
+			ChartAnswer answer = serviceWith(provider).search(patient, question);
+			assertEquals(0, provider.calls, question + " — " + answer.getAnswer());
+			assertTrue(answer.isAnsweredByTheModule(), question);
+			assertEquals(DrugReferenceInjector.NEUTRAL_WITHHOLD_LEAD_OPENING + "Ibuprofen.\n" + IBUPROFEN_LINE
+					+ findings.get(0).index + "] [" + recordOf(answer, ASPIRIN_ORDER_UUID) + "]", answer.getAnswer(),
+					question);
+		}
+	}
+
+	/** The control: with the rule off, as it ships, each of those wordings is the model's, as before. */
+	@Test
+	public void withTheVerdictRuleOff_aProposalInWordsNoShapeCarriesStillAsksTheModel() {
+		for (String question : UNSHAPED_PROPOSALS) {
+			assertTheModelIsAsked(question);
+		}
+	}
+
+	/** A proposal a shape carries keeps its "No" with the rule on: the rule widens what is admitted, never the lead of
+	 *  a question whose words say "No" answers it. */
+	@Test
+	public void withTheVerdictRuleOn_aShapedProposalStillOpensWithItsNo() {
+		verdictForAnyWording(true);
+		assertTheModuleAnswers(PROPOSAL, DrugReferenceTestSupport.ddinterServiceWithGroups());
+	}
+
+	private void assertEveryQuestionTheModuleDidNotResolveAsksTheModel() {
 		String[] questions = {
 			// a dose: the injected reference record addresses it, the findings do not
 			"Can I give her ibuprofen 400mg?",

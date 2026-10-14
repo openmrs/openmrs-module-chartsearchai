@@ -2737,7 +2737,8 @@ public class DrugReferenceInjector {
 				return GIVE;
 			}
 			List<String> words = wordsBesideItsNames(question, questionDrugs);
-			return QueryScopeRouter.asksWhetherNotToGiveADrug(words) ? NOT_GIVE
+			// A question the verdict rule alone admits says neither way which answers it (ADR Decision 200).
+			return QueryScopeRouter.asksWhetherNotToGiveADrug(words) || asksOnlyForTheVerdict(question, words) ? NOT_GIVE
 					: QueryScopeRouter.asksWhetherADrugInteractsWithHerMedications(words) ? INTERACTS : GIVE;
 		}
 	}
@@ -3629,8 +3630,23 @@ public class DrugReferenceInjector {
 	 * (issue #548, ADR Decision 129).
 	 */
 	static boolean questionProposes(String question, List<DrugReference> questionDrugs) {
-		return !questionDrugs.isEmpty()
-				&& QueryScopeRouter.asksWhetherToGiveADrug(wordsBesideItsNames(question, questionDrugs));
+		if (questionDrugs.isEmpty()) {
+			return false;
+		}
+		List<String> words = wordsBesideItsNames(question, questionDrugs);
+		return QueryScopeRouter.asksWhetherToGiveADrug(words) || asksOnlyForTheVerdict(question, words);
+	}
+
+	/**
+	 * Whether {@code question} is admitted by the verdict rule ALONE: {@code chartsearchai.drugSafety.verdictForAnyWording}
+	 * on, no shape of {@code QueryScopeRouter.asksWhetherToGiveADrug} carrying it, and
+	 * {@code QueryScopeRouter.asksForOneDrugsVerdict} admitting it (ADR Decision 200). Such words do not say whether "Yes"
+	 * or "No" answers them, so {@link Lead#of} opens its answer with neither.
+	 */
+	private static boolean asksOnlyForTheVerdict(String question, List<String> words) {
+		return ChartSearchAiUtils.getBooleanGlobalProperty(ChartSearchAiConstants.GP_DRUG_SAFETY_VERDICT_FOR_ANY_WORDING,
+				ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_VERDICT_FOR_ANY_WORDING)
+				&& !QueryScopeRouter.asksWhetherToGiveADrug(words) && QueryScopeRouter.asksForOneDrugsVerdict(question, words);
 	}
 
 	/**

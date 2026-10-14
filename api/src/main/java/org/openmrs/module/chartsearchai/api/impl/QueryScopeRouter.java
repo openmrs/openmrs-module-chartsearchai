@@ -552,6 +552,32 @@ public final class QueryScopeRouter {
 		return fitsAShape(wordsWithTheDrugMarked, BESIDE_HER_MEDICATIONS_SHAPES);
 	}
 
+	/**
+	 * The question shapes asking about TWO drugs together beyond {@link #TOGETHER_SHAPES} — whether they interact,
+	 * whether it is safe to combine them — over {@link #words} with each drug's name marked {@link #DRUG_NAME} (ADR
+	 * Decision 203). Kept apart from {@link #TOGETHER_SHAPES} for that grammar's reason: its readers answer for drugs
+	 * proposed, and this one's single reader asks it of two drugs her own orders BOTH carry.
+	 */
+	private static final List<Pattern> TWO_DRUGS_SHAPES = shapes(
+			// "Is it safe to combine ibuprofen and celecoxib?", "Is it ok to give ibuprofen with celecoxib together?"
+			"is it (?:safe|ok|okay|appropriate) to (?:combine|give|take|use) " + D + " (?:and|with) " + D + "(?: together)?",
+			// "Does ibuprofen interact with celecoxib?"
+			"(?:does|do|will|would|can) " + D + " interact with " + D,
+			// "Is ibuprofen safe with celecoxib?", "Is simvastatin ok with clopidogrel?"
+			"is " + D + " (?:safe|ok|okay|compatible) (?:with|alongside) " + D,
+			// "Any interactions between ibuprofen and celecoxib?", "Is there an interaction between X and Y?"
+			"(?:are there |is there )?(?:any |an )?(?:drug )?interactions? between " + D + " and " + D,
+			// "Can she take ibuprofen and celecoxib together?"
+			"(?:can|could|may|should) " + SUBJECT + " (?:safely )?take " + D + " (?:and|with) " + D + "(?: together)?");
+
+	/**
+	 * Whether a question asks about TWO drugs together, and nothing else — one of {@link #TWO_DRUGS_SHAPES} or {@link
+	 * #TOGETHER_SHAPES} (ADR Decision 203). Fail-CLOSED as {@link #asksWhetherToGiveADrug} is.
+	 */
+	public static boolean asksAboutTwoDrugsTogether(List<String> wordsWithTheDrugsMarked) {
+		return fitsAShape(wordsWithTheDrugsMarked, TWO_DRUGS_SHAPES) || asksWhetherToGiveDrugsTogether(wordsWithTheDrugsMarked);
+	}
+
 	private static List<Pattern> shapes(String... shapes) {
 		List<Pattern> patterns = new ArrayList<Pattern>(shapes.length);
 		for (String shape : shapes) {

@@ -994,6 +994,21 @@ public class DrugReferenceInjector {
 						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
 						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS)
 				&& context.chartReadForSafety()
+				&& !twoOfHerOwnAskedTogether(question, questionDrugs, screenedSubstances, findings).isEmpty()
+				&& composeTwoOfHerOwn(question, questionDrugs, findings, findingNumbers,
+						twoOfHerOwnAskedTogether(question, questionDrugs, screenedSubstances, findings), orderRecordNumbers,
+						orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers,
+						orderEntries, context) != null) {
+			// Two drugs she already takes, asked about together: that both are hers, and what relates them (ADR Decision 203).
+			moduleAnswer = composeTwoOfHerOwn(question, questionDrugs, findings, findingNumbers,
+					twoOfHerOwnAskedTogether(question, questionDrugs, screenedSubstances, findings), orderRecordNumbers,
+					orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers,
+					orderEntries, context);
+		} else if (!findings.isEmpty() && context != null
+				&& ChartSearchAiUtils.getBooleanGlobalProperty(
+						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
+						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS)
+				&& context.chartReadForSafety()
 				&& theOneOfTwoDrugsNotHers(question, questionDrugs, screenedSubstances, findings) != null) {
 			// Two drugs asked about together, one hers: the other is the proposal (ADR Decision 196).
 			moduleAnswer = composeTogetherWithHerOwn(question, questionDrugs, screenedSubstances, findings, findingNumbers,
@@ -4297,6 +4312,105 @@ public class DrugReferenceInjector {
 		return String.join("\n", lines);
 	}
 
+	/** What follows the two drugs in the lead of {@link #composeTwoOfHerOwn} (ADR Decision 203). */
+	static final String TWO_OF_HER_OWN_LEAD = " are both among this patient's active medications. What the interaction check"
+			+ " relates between them:";
+
+	/**
+	 * The positions in {@code findings} of what a question about two drugs her orders BOTH carry, asked about together
+	 * ({@code QueryScopeRouter.asksAboutTwoDrugsTogether}), is answered with (ADR Decision 203), or none where the model
+	 * answers: every INTERACTION about one of the two whose partner is the other, stated from ONE side — the drug the
+	 * question names first, where a finding is stated from it, else the other — so the pair is not stated twice. None where the question names other than two substances,
+	 * either is not hers, or nothing relates them; the module states what relates them, never that they may be combined.
+	 */
+	private static List<Integer> twoOfHerOwnAskedTogether(String question, List<DrugReference> questionDrugs,
+			Set<Object> herSubstances, List<SafetyWarning> findings) {
+		List<Integer> relating = new ArrayList<Integer>();
+		List<Object> asked = new ArrayList<Object>(inTheQuestionsOrder(question, questionDrugs).keySet());
+		if (asked.size() != 2 || !herSubstances.containsAll(asked)
+				|| !QueryScopeRouter.asksAboutTwoDrugsTogether(wordsBesideItsNames(question, questionDrugs))) {
+			return relating;
+		}
+		// From the side of the drug the question names first, where any finding is stated from there.
+		for (int s = 0; s < 2 && relating.isEmpty(); s++) {
+			for (int i = 0; i < findings.size(); i++) {
+				SafetyWarning finding = findings.get(i);
+				if (SafetyWarning.TYPE_INTERACTION.equals(finding.getType()) && !finding.statesOrdersSharingASubstance()
+						&& isAbout(finding, asked.get(s)) && hasPartnerOf(finding, asked.get(1 - s))) {
+					relating.add(i);
+				}
+			}
+		}
+		return relating;
+	}
+
+	/** One row of each substance {@code questionDrugs} resolve, keyed on the substance, in the order the question first
+	 *  names them ({@link DrugReference#namedOccurrences}); a row named nowhere goes last. */
+	private static Map<Object, DrugReference> inTheQuestionsOrder(String question, List<DrugReference> questionDrugs) {
+		String folded = DrugReference.foldedLower(question);
+		final Map<Object, Integer> first = new HashMap<Object, Integer>();
+		Map<Object, DrugReference> rows = new LinkedHashMap<Object, DrugReference>();
+		for (DrugReference entry : questionDrugs) {
+			int at = Integer.MAX_VALUE;
+			for (DrugReference.NamedOccurrence occurrence : entry.namedOccurrences(folded, 0)) {
+				at = Math.min(at, occurrence.getStart());
+			}
+			Object substance = entry.substanceGroupKey();
+			rows.putIfAbsent(substance, entry);
+			first.put(substance, Math.min(at, first.containsKey(substance) ? first.get(substance) : Integer.MAX_VALUE));
+		}
+		List<Object> ordered = new ArrayList<Object>(rows.keySet());
+		Collections.sort(ordered, Comparator.comparingInt(first::get));
+		Map<Object, DrugReference> inOrder = new LinkedHashMap<Object, DrugReference>();
+		for (Object substance : ordered) {
+			inOrder.put(substance, rows.get(substance));
+		}
+		return inOrder;
+	}
+
+	/** Whether one of {@code finding}'s partners was resolved to a row of {@code substance} — {@link
+	 *  SafetyWarning#partnerRows()}, as the chip was decided. */
+	private static boolean hasPartnerOf(SafetyWarning finding, Object substance) {
+		for (List<DrugReference> rows : finding.partnerRows().values()) {
+			for (DrugReference row : rows) {
+				if (substance.equals(row.substanceGroupKey())) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * The module's answer to two drugs her orders both carry, asked about together (ADR Decision 203): <em>"Ibuprofen
+	 * (Advil 400mg [10]) and Celecoxib (Celebrex 200mg [11]) are both among this patient's active medications. What the
+	 * interaction check relates between them:"</em>, the findings {@link #twoOfHerOwnAskedTogether} chose as brief lines,
+	 * a drug group both are in ({@link #duplicateTherapyLines}), then the scope. Never a verdict: the model answered such
+	 * a question "Ibuprofen can be combined with Celecoxib". {@code null} where either has no started order of hers,
+	 * which "active medications" would misdescribe.
+	 */
+	private String composeTwoOfHerOwn(String question, List<DrugReference> questionDrugs, List<SafetyWarning> findings,
+			List<Integer> numbers, List<Integer> relating, Map<String, Integer> orderRecordNumbers,
+			Map<String, Integer> herOrderRecords, List<DrugReference> orderEntries, PatientClinicalContext context) {
+		Map<Object, DrugReference> rows = inTheQuestionsOrder(question, questionDrugs);
+		List<String> named = new ArrayList<String>();
+		for (DrugReference row : rows.values()) {
+			String orders = herStartedOrdersOf(row, orderEntries, context, herOrderRecords);
+			if (orders.isEmpty()) {
+				return null;
+			}
+			named.add(row.displayLabel() + orders);
+		}
+		List<String> lines = new ArrayList<String>();
+		lines.add(named.get(0) + " and " + named.get(1) + TWO_OF_HER_OWN_LEAD);
+		for (Integer i : relating) {
+			lines.add(findingLine(findings.get(i), numbers.get(i), orderRecordNumbers, herOrderRecords, true));
+		}
+		lines.addAll(duplicateTherapyLines(orderEntries, context, herOrderRecords, rows.keySet()));
+		lines.add(BELOW_FLOOR_SCOPE);
+		return String.join("\n", lines);
+	}
+
 	/**
 	 * Of a question asking whether two drugs may be given together ({@code QueryScopeRouter.asksWhetherToGiveDrugsTogether},
 	 * ADR Decision 169) naming two substances, exactly one of which her orders carry, the substance that is NOT hers —
@@ -4396,6 +4510,13 @@ public class DrugReferenceInjector {
 	 */
 	private List<String> duplicateTherapyLines(List<DrugReference> orderEntries, PatientClinicalContext context,
 			Map<String, Integer> herOrderRecords) {
+		return duplicateTherapyLines(orderEntries, context, herOrderRecords, Collections.emptySet());
+	}
+
+	/** As above, for the groups whose members include every one of {@code mustInclude} — the two drugs a question asks
+	 *  about together (ADR Decision 203). */
+	private List<String> duplicateTherapyLines(List<DrugReference> orderEntries, PatientClinicalContext context,
+			Map<String, Integer> herOrderRecords, Set<?> mustInclude) {
 		List<String> lines = new ArrayList<String>();
 		if (orderEntries == null || orderEntries.isEmpty()) {
 			return lines;
@@ -4411,7 +4532,7 @@ public class DrugReferenceInjector {
 					rowOf.putIfAbsent(entry.substanceGroupKey(), entry);
 				}
 			}
-			if (members.size() >= 2) {
+			if (members.size() >= 2 && members.keySet().containsAll(mustInclude)) {
 				memberships.add(members);
 				groups.add(group);
 			}

@@ -16215,3 +16215,34 @@ Pinned by `OwnMedicationSafetyContextTest.aQuestionWhetherSheIsOnHerOwnDrugIsAns
 `.aQuestionWhetherHerOwnDrugIsSafeWithHerOtherMedicationsIsAnsweredAsHers`,
 `.aQuestionWhetherSheIsOnADrugSheIsOnlyScheduledToStartSaysWhenItStarts` and
 `.anInteractionQuestionAboutHerOwnDrugNamesTheOrderItIs`.
+
+## Decision 203: Two drugs she already takes, asked about together, are answered with what relates them — never that they may be combined
+
+**Status: Accepted** (October 2026) — decided unattended on the owner's instruction of 2026-10-14 to choose what serves a
+clinician. It completes [Decision 196](#decision-196-two-drugs-asked-about-together-one-of-them-hers-are-answered-for-the-other-and-her-drugs-other-findings-are-drawn-apart),
+which answers two drugs asked about together where ONE is hers.
+
+Where BOTH are hers the model answered, and on the :8081 rig it cleared them. Sarah Taylor takes Advil and Celebrex:
+*"Is it safe to combine ibuprofen and celecoxib?"* was answered *"Ibuprofen can be combined with Celecoxib, with one
+caution"*, *"Can ibuprofen and celecoxib be given together?"* *"… can be given together, with one caution"*, and even
+*"Does ibuprofen interact with celecoxib?"* *"Ibuprofen can be given with Celecoxib"* — two NSAIDs she already takes,
+which the module itself would never clear ([Decision 108](#decision-108-a-drug-safety-question-the-module-resolved-itself-is-answered-from-its-own-findings-and-the-model-is-not-asked-to-restate-them)).
+
+**The decision.** A question naming two substances her started orders both carry, asked about together —
+`QueryScopeRouter.asksAboutTwoDrugsTogether`, Decision 169's shapes and a closed grammar beside them (*"Is it safe to
+combine X and Y?"*, *"Does X interact with Y?"*, *"Is X safe with Y?"*, *"Any interactions between X and Y?"*, *"Can she
+take X and Y together?"*) — is answered by the module where an interaction relates the two:
+
+> Ibuprofen (Advil 400mg [10]) and Celecoxib (Celebrex 200mg [11]) are both among this patient's active medications. What
+> the interaction check relates between them:
+> Ibuprofen interacts with active order Celecoxib — Moderate. [358] [10] [11]
+> Ibuprofen, Celecoxib and Diclofenac are in one drug group (NSAID) — possible duplicate therapy. [10] [11] [13]
+> Interactions the data does not rate, and anything beyond drug interactions, are not covered.
+
+The relating findings are the interactions about one of the two whose partner rows are the other's
+(`SafetyWarning.partnerRows`), stated from the side of the drug the question names first, so the pair is stated once; a
+drug group both are in is Decision 197's line. Never a verdict. Where nothing relates the two above the floor, or either
+has no started order, the model answers as before.
+
+Pinned by `OwnMedicationSafetyContextTest.twoOfHerOwnDrugsAskedAboutTogetherAreAnsweredWithWhatRelatesThem` and
+`.twoDrugsAskedAboutTogetherOnlyOneOfWhichIsHersAreNotAnsweredAsBothHers`.

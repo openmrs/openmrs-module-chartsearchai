@@ -172,6 +172,44 @@ public class OwnMedicationSafetyContextTest extends BaseModuleContextSensitiveTe
 		}
 	}
 
+	@Test
+	public void twoOfHerOwnDrugsAskedAboutTogetherAreAnsweredWithWhatRelatesThem() throws IOException {
+		// Sarah Taylor's "Is it safe to combine ibuprofen and celecoxib?" — both hers — was answered "Ibuprofen can be
+		// combined with Celecoxib, with one caution" by the model, and "Does ibuprofen interact with celecoxib?" "Ibuprofen
+		// can be given with Celecoxib": a clearance of two NSAIDs she already takes, which the module never gives (ADR
+		// Decision 203). The module says both are hers and states what relates them.
+		for (String question : Arrays.asList("Can ibuprofen and celecoxib be given together?",
+			"Is it safe to combine ibuprofen and celecoxib?", "Does ibuprofen interact with celecoxib?",
+			"Is ibuprofen safe with celecoxib?")) {
+			String answer = answer(question);
+
+			assertNotNull(answer, "the module answers " + question);
+			String[] lines = answer.split("\n");
+			assertTrue(lines[0].matches("Ibuprofen \\(Ibuprofen 400mg \\[\\d+\\]\\) and Celecoxib \\(Celecoxib 200mg \\[\\d+\\]\\) "
+					+ "are both among this patient's active medications\\. What the interaction check relates between them:"),
+				question + " was: " + answer);
+			assertTrue(lines[1].matches("Ibuprofen interacts with active order Celecoxib — Moderate\\. \\[\\d+\\].*"),
+				question + " was: " + answer);
+			// The point a clinician needs: two NSAIDs (ADR Decision 197's group, which carries celecoxib for this alone).
+			assertTrue(lines[2].matches("Ibuprofen and Celecoxib are in one drug group \\(NSAID\\) — possible duplicate therapy\\."
+					+ " \\[\\d+\\] \\[\\d+\\]"), question + " was: " + answer);
+			assertEquals(4, lines.length, question + " was: " + answer);
+			assertEquals(DrugReferenceInjector.BELOW_FLOOR_SCOPE, lines[lines.length - 1], question + " was: " + answer);
+			assertTrue(!answer.contains("can be") && !answer.contains("Celecoxib interacts with active order Ibuprofen"),
+				"no clearance, and the pair once: " + answer);
+		}
+	}
+
+	@Test
+	public void twoDrugsAskedAboutTogetherOnlyOneOfWhichIsHersAreNotAnsweredAsBothHers() throws IOException {
+		// Decision 196's question, not this one: celecoxib is not among her orders here.
+		String answer = answer("Can ibuprofen and celecoxib be given together?", null,
+			Arrays.asList(DrugReferenceTestSupport.activeOrder("order-ibuprofen", "Ibuprofen 400mg"),
+				DrugReferenceTestSupport.activeOrder("order-prednisone", "Prednisone 5mg")));
+
+		assertTrue(answer == null || !answer.contains("are both among this patient's active medications"), "was: " + answer);
+	}
+
 	private static final List<PatientClinicalContext.ActiveDrugOrder> ALL_FOUR = Arrays.asList(
 		DrugReferenceTestSupport.activeOrder("order-ibuprofen", "Ibuprofen 400mg"),
 		DrugReferenceTestSupport.activeOrder("order-celecoxib", "Celecoxib 200mg"),

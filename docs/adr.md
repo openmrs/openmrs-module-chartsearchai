@@ -16132,3 +16132,183 @@ so the screen resolves them as the chips do — and the grid line states each or
 finding markers.
 
 Pinned by `ScreenSharedMechanismContextTest` and `NsaidCrossReactivityGroupTest.aScreenOfThreeNsaidsSaysSoOnce`.
+
+## Decision 199: A single-drug question is admitted by what it asks for, not by its listed wordings; a typed composed answer was measured and is not adopted
+
+**Status: Proposed** (October 2026). It was drafted from an audit of `main` @ fad6ae2f on 2026-10-13, then revised on
+2026-10-14 after two experiments run against criteria fixed before any code was written; both are recorded under
+**Measured**. It keeps
+[Decision 108](#decision-108-a-drug-safety-question-the-module-resolved-itself-is-answered-from-its-own-findings-and-the-model-is-not-asked-to-restate-them)'s
+bound (the module states what a finding positively says, never a clearance) and
+[Decision 130](#decision-130-whether-a-question-reaches-the-drug-interaction-checks-is-decided-by-code-not-by-a-model)'s
+(no model classifies the question).
+
+### Context
+
+Of the 90 decisions from 108 to 198, by my reading of their titles, most fall into three groups. Each group is a seam
+between parts of the code, not the safety engine:
+
+- **Which questions the module answers**: 119, 129, 134, 149, 150, 152, 154, 155, 158, 162, 166, 169, 176, 177, 180,
+  181, 182, 183, 193, 196.
+- **How a composed answer reads**: 113, 140, 142, 143, 144, 146, 153, 159, 160, 161, 163, 167, 168, 170, 171, 173, 175,
+  178, 179, 190, 191, 192, 194, 197, 198.
+- **Repairing or reporting the prose a model wrote**: 120, 128, 135, 136, 147, 185, 186, 187.
+
+The rest change findings, data or infrastructure. The audit found the following shapes in the code. Every figure is
+of `main` @ fad6ae2f, and none is a figure the code tracks.
+
+- **A question's kind is never computed as a value.** `QueryScopeRouter.Intent` names record domains, and
+  `DrugReferenceInjector.Lead` (three values) only picks how an answer opens. Each kind of drug-safety question is a
+  separate boolean predicate on `QueryScopeRouter` (`asksOnlyToScreenHerMedications`, `asksWhetherToGiveADrug`,
+  `asksOnlyAboutInteractions`, `asksWhetherToGiveDrugsTogether`, and others). Wrappers over those predicates live in
+  `DrugReferenceInjector` (`questionProposes`, `aboutHerOwnMedication`), in `DrugSafetyValidator`
+  (`proposedByTheQuestion`), in `UnrecognisedDrugName` and in `ConflictingOrderStatement`. Five classes outside the
+  router call the router's predicates on the raw question string, and several kinds are asked in both the injector and
+  the validator. `QueryScopeRouter`'s javadoc forbids classifying intent "a second time elsewhere". That holds for the
+  regular expressions, which all live in the router. It does not hold for the answers they give, which are recomputed.
+- **The question's drugs are resolved more than once.** `DrugReferenceInjector.injectRecords` and
+  `DrugSafetyValidator.validate` each call `findImpliedByQuery(question)`, and a drug's word positions in the question
+  are recomputed at each site that matches a shape. Only "has she ever taken it" is computed once and carried
+  (`historyQuestionDrugRows`). That is the pattern this decision generalises.
+- **Who answers is decided by an if/else cascade.** In `injectRecords`, each `compose*` method is tried in turn
+  (`composeFromFindings`, `composeAboutHerOwnMedication`, `composeTogetherWithHerOwn`, `composeFromBelowFloor`,
+  `composeFromNoPair`, `composeFromNoActiveOrders`, `composeAfterAList`, `composeFromAScreenThatRelatedNothing`,
+  `UnrecognisedDrugName.statement`, `composeNoOrderEver`). Each branch re-asks the question predicates it needs, and the
+  first to return a string wins. Whether a new branch shadows an older one is a property of where it sits in the
+  cascade.
+- **A composed answer is built as strings.** Each composer adds `String` lines to a list and joins them with `"\n"`.
+  Answer-wide rules arrive as extra boolean parameters on a line builder. `findingLine` has four overloads, the later ones
+  adding `saidOnce` (Decision 191) and `severitySaidOnce` (Decision 194). Group and count lines are spliced in by list
+  position (`lines.add(0, …)`, `lines.addAll(1, groupLines)`), and `composeAfterAList` splices a line after the first
+  `'\n'`. Markers are appended as text, and `findingLine` reads back the markers of the line it has just built
+  (`ChartSearchAiUtils.citedIndexes(line)`) to avoid writing one twice.
+- **Structure is recovered from text.** `interactionGrids` groups findings by `RestatedReversePairs.note`, which pulls
+  the mechanism note out of the chip's `detail` with `indexOf(" — " + severity + ".")`. `collapseSharedMechanisms`
+  meanwhile keys the same notion on the rule's own note (`MechanismStatement.collapseKey`). So one notion, "same
+  mechanism", has two readings: one of the rule, one of rendered text. `ModuleAnswerStatement.markStated` decides that a
+  chip is "stated in the answer" by `composed.contains(chip.getDetail())`.
+  - **A lead, not verified at runtime.** `composeFromFindings` always builds its lines from `briefDetail`, the first
+  sentence plus kept sentences. So a chip whose detail carries a mechanism sentence fails that containment test and
+  stays unmarked, and grid lines carry no detail at all. That contradicts `ModuleAnswerStatement`'s javadoc, which
+  says composed lines open with the detail verbatim. Whether a client then draws such a chip twice has not been
+  measured.
+
+None of this is wrong one decision at a time; each decision above was measured and pinned. The audit took these
+shapes to be the per-fix cost the owner noticed. The two experiments below tested that reading, and it held for
+admission and not for composition.
+
+### Measured
+
+**1. Admitting a single-drug proposal by a rule, not a list of wordings.**
+- **Where it lives:** the prototype
+  [Decision 200](#decision-200-a-question-asking-whether-to-give-one-drug-is-admitted-whatever-its-words-prototype)
+  records, behind `chartsearchai.drugSafety.verdictForAnyWording`, which ships off.
+- **The rule:** `QueryScopeRouter.asksForOneDrugsVerdict`, read through `DrugReferenceInjector.questionProposes`. It
+  admits a question naming ONE drug, once, that asks about giving the drug or its safety. It refuses everything
+  `asksForSomethingElseToo` refuses for a screen, and also a wh- or past-tense question, an amount, an alternative and a
+  purpose. A question only this rule admits opens with neither "Yes" nor "No".
+- **The run:** the 3.7.1 standalone, 196 questions, one build, only the setting between the arms.
+  - **Off:** byte-identical to main on all 196 (answer, `answeredByTheModule`, `interactionPairs`, chips).
+  - **On, wordings that should be admitted:** the module answered 54 of 60, against 30 with the setting off. The 6 misses
+    are all one wording, *"Warfarin for her, yes or no?"*, which carries no word about giving the drug or its safety.
+  - **On, questions that name a drug without asking whether to give it:** the module answered 0 of 30.
+  - **On, the questions `LlmInferenceServiceAnswerFromFindingsContextTest` pins to the model:** every one still goes
+    to the model.
+  - **Openings:** each of the 40 new module answers opens with what its findings establish, checked by reading each.
+  - **Defects** (a wrong order citation, a pasted record, a cited rating left unstated): 9 → 6 of 114 single-drug answers.
+    All 6 remaining are model-written answers to questions the rule does not admit.
+  - **Suite:** green.
+- **Not measured:** wordings written by clinicians. I wrote the rule and most of the questions, so the independent
+  check is the pinned list above, which predates the rule.
+
+**2. A typed composed answer (`ComposedAnswer`, one renderer).**
+- **The setup:** built at the base 82873223 (Decision 190), with Decisions 191–198 re-implemented on it, each original
+  commit's tests, resources and docs taken unchanged. The work is on branch `exp/composed-answer-replay` (local commits).
+- **Behaviour:**
+  - the refactor alone changed no test result in any of 307 test classes;
+  - every port passed its original tests;
+  - the end state is byte-identical to main on the same 196 questions, 98 of them composed by the module.
+- **Cost** (production Java code lines changed, blank and comment lines excluded): the seven composition-touching fixes
+  take 544 lines on the structure against 532 originally — 102%, where the fixed criterion was at most 60%. The
+  refactor itself is a further 224 lines.
+
+  | Decision | Original | Replay |
+  |---|---|---|
+  | 191 | 154 | 164 |
+  | 192 | 25 | 10 |
+  | 193 | 97 | 116 |
+  | 194 | 33 | 25 |
+  | 196 | 118 | 125 |
+  | 197 | 66 | 61 |
+  | 198 | 39 | 43 |
+
+- **Why it did not pay:** 80–98% of each fix's lines are the same decision logic in both versions: which findings form
+  a grid, what a count counts, when a question is admitted, which orders a line cites. The structure removed only the
+  accretion of true/false parameters and overloads on the line builders (four in the originals, none in the replay).
+- **Bias, against the structure's favour:** the replay was written knowing what each fix asked for.
+
+### The decision (proposed)
+
+- **Admission by what the question asks for.** The rule measured in experiment 1 replaces the listed proposal shapes as
+  the way a single-drug question reaches the module. Before it ships on, it is run against a corpus of wordings
+  clinicians wrote, under the same pass criteria. The same rule-plus-exclusions approach is then taken, one at a time
+  and each with its own A/B, to the kinds still decided by listed shapes: two drugs together, history, and a proposal
+  after a list.
+- **Classified once.** Whatever admits a question is computed once per request and read by the injector and both
+  validator passes, as `historyQuestionDrugRows` already is. This keeps
+  [Decision 130](#decision-130-whether-a-question-reaches-the-drug-interaction-checks-is-decided-by-code-not-by-a-model)'s
+  reason 2 by construction, not by recomputing a pure function. It is a refactor with no behaviour change, and it is
+  unmeasured for cost.
+- **Not adopted: the typed composed answer.** Experiment 2 refutes the claim that it lowers the cost of a fix. Do not
+  re-propose it on cost grounds without new evidence. Removing the true/false-parameter accretion is a readability
+  argument, which this decision does not make.
+- **Not adopted, untested: a dispatch by question kind** in place of `injectRecords`' if/else chain. Its claimed benefit
+  is the one experiment 2 refuted for composition, so it needs its own measurement before it is proposed.
+
+### What the experiments say about the per-question fixes
+
+- **What drives the cost:** most of what each fix changes is a decision about what the answer should say, and the logic
+  that carries it out. That costs the same in any structure.
+- **What does change it:** the one change measured to remove whole classes of fixes is admission by rule. New wordings
+  of an admitted kind of question need no code.
+- **Where wording is still the gate:** the drug-less screen's own vocabulary
+  ([Decision 130](#decision-130-whether-a-question-reaches-the-drug-interaction-checks-is-decided-by-code-not-by-a-model)'s
+  cost). On 2026-10-14 *"Anything dangerous in her med list?"* and *"Is her regimen OK?"* ran no screen on any of three
+  patients, one of them with two Major pairs.
+
+### Residues, stated
+
+- **A failure changes direction.** Under listed shapes a missed wording kept the model call, which
+  [Decision 108](#decision-108-a-drug-safety-question-the-module-resolved-itself-is-answered-from-its-own-findings-and-the-model-is-not-asked-to-restate-them)
+  chose because a miss costs little. Under the rule, the failure to guard against is a false admission. None was found
+  in 53 questions written to provoke one, and when one is found, the fix is another exclusion.
+- **Phrasings with no word about giving or safety stay with the model.**
+- **A lead from the audit, unverified:** `ModuleAnswerStatement.markStated` and `briefDetail` likely leave a chip with a
+  mechanism sentence unmarked beside a module answer. It is unaffected by this decision.
+- **Pointers:** both experiments' pre-registrations, raw responses and scripts are in the session scratchpad of
+  2026-10-14, not the repository.
+
+## Decision 200: A question asking whether to give one drug is admitted whatever its words (prototype)
+
+**Status: Proposed** (October 2026). A prototype behind `chartsearchai.drugSafety.verdictForAnyWording`, which ships
+OFF. It is being measured against the shapes before any decision; the measurement's plan was fixed before the code was
+written.
+
+### Context
+
+The module's answer to a single-drug question is admitted one listed shape at a time
+([Decision 108](#decision-108-a-drug-safety-question-the-module-resolved-itself-is-answered-from-its-own-findings-and-the-model-is-not-asked-to-restate-them)),
+and Decisions 134, 180 and 181 each widened that list. On 2026-10-14 the 3.7.1 standalone gave identical chips and
+`interactionPairs` for six wordings of each of nine patient/drug questions. Only the answer's author changed with the
+words: three of the six wordings reached the model.
+
+### The prototype
+
+- **The rule:** `QueryScopeRouter.asksForOneDrugsVerdict`, read through `DrugReferenceInjector.questionProposes`, the
+  one spelling the injector and the validator share. It admits a question about giving ONE drug whatever its words,
+  under every refusal `asksForSomethingElseToo` makes for a screen
+  ([Decision 182](#decision-182-every-request-to-screen-her-medications-and-nothing-else-is-the-modules-whatever-its-words)),
+  and it also refuses a wh- or past-tense question, an amount, an alternative and a purpose.
+- **The lead:** a question only the rule admits opens with neither "Yes" nor "No", as Decision 181's negated shapes do.
+- **The pinned questions:** every question `LlmInferenceServiceAnswerFromFindingsContextTest` pins to the model is
+  pinned there with the rule on as well.

@@ -735,8 +735,11 @@ public final class QueryScopeRouter {
 	private static final Pattern SECOND_QUESTION = Pattern.compile("\\b(?:and|also|plus)\\s+(?:what|which|when|where|who|how|is"
 			+ "|are|does|do|did|has|have|can|could|should|list|show|tell)\\b");
 
+	// "Which of her medications should be stopped because of interactions?" asks what to CHANGE, which a screen informs,
+	// and is no request for her list (ADR Decision 207): a change asked of the medications the noun names ends it.
 	private static final Pattern ENUMERATION = Pattern.compile("\\b(?:what|which|list|show|name|tell me)\\b(?:(?!\\binteract)"
-			+ "[^?.])*\\b" + MEDICATION_NOUN + "\\b(?!\\s+(?:interact|interacting|interactions?|have any interactions|clash))");
+			+ "[^?.])*\\b" + MEDICATION_NOUN + "\\b(?!\\s+(?:interact|interacting|interactions?|have any interactions|clash"
+			+ "|(?:should|must|need to|ought to) (?:be )?(?:stopped|changed|discontinued|adjusted|deprescribed|avoided)))");
 
 	private static final Pattern OUTSIDE_AGENT = Pattern.compile("\\b(?:interact\\w*|safe|ok|okay|fine|compatible|combined|"
 			+ "mixed|taken|given) with (?:(?:any of )?(?:her|his|their|the patient's|this patient's) (?:current |active )?"

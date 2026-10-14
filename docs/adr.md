@@ -16331,3 +16331,20 @@ against."*, then the line that her orders carry it twice. One order and no findi
 
 Pinned by `OwnMedicationSafetyContextTest.herOwnDrugTheCheckRelatesToNoneOfHerOtherOrdersIsAnsweredAsHersAndItsSecondOrderIsNoInteraction`
 and `.herOwnDrugWithNoOtherMedicationToCheckItAgainstSaysSo`.
+
+## Decision 207: Asking which of her medications to stop because of interactions is a screen, not a request for her list
+
+**Status: Accepted** (October 2026) — decided unattended on the owner's instruction of 2026-10-14 to choose what serves a
+clinician. It narrows Decision 182's enumeration exclusion (`QueryScopeRouter.asksForSomethingElseToo`).
+
+On the :8081 rig Sarah Taylor's *"Which of her medications should be stopped because of interactions?"* went to the
+model, which answered *"The records do not indicate any medication that should be stopped"* — beside 21 interactions the
+module had found, three NSAIDs and four corticosteroids among them. Decision 182 keeps a request for her medication LIST
+with the model, and read *"which … medications"* as one because no interaction word followed the noun at once.
+
+**The decision.** A change asked of the medications the noun names — *"should be stopped"*, *"changed"*, *"discontinued"*,
+*"adjusted"*, *"deprescribed"*, *"avoided"* — ends the enumeration reading: what to change is what a screen informs, as
+*"Should I stop any of her medications?"* already is. The module answers it with its screen. *"Which of her medications
+should be taken with food?"* stays the model's.
+
+Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.askingWhichOfHerMedicationsToStopBecauseOfInteractionsIsAScreen`.

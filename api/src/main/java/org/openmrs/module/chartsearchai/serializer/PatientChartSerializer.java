@@ -1336,6 +1336,21 @@ public class PatientChartSerializer {
 		}
 
 		/**
+		 * {@link #getText()} without its leading date parenthetical: what the record SAYS, so two records of one
+		 * thing recorded on different dates read alike (ADR Decision 211). The prefix removed is the one
+		 * {@code PatientChartSerializer.dateLabelPrefix} writes for this record's own {@link #getDate()}, never a
+		 * pattern matched against the text, so a text that does not begin with it is returned whole. {@code null}
+		 * where the text is.
+		 */
+		public String getUndatedText() {
+			if (text == null || date == null) {
+				return text;
+			}
+			String prefix = dateLabelPrefix(DateFormatUtil.formatDate(date));
+			return text.startsWith(prefix) ? text.substring(prefix.length()) : text;
+		}
+
+		/**
 		 * Where this record's content came from, for a client to render as provenance beside the
 		 * citation — the dataset attribution of an injected drug-reference record (e.g.
 		 * {@code "DDInter 2.0 (via openmrs-ddi-knowledge-base)"}). {@code null} for a chart

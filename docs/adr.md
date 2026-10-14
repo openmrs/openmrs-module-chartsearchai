@@ -16472,3 +16472,59 @@ Pinned by `AllergyQuestionConflictingOrderContextTest`: `.search_anAnswerNamingA
 `ChartSearchAiSafetyWarningSeverityWireTest.everyPublicZeroArgumentAccessorOfAWarningNamesAKeyOnTheWire`. The allergy leg,
 the drug-safety-reading leg, the anchor, the cross-reactivity key, the wire key and each numbering path redden their own
 case under mutation.
+
+## Decision 211: A citation group the array leaves out is split where its numbers are one record recorded on several dates
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-14. It adds a second corroboration to the rule
+`LlmAnswerExtractor.normalizeSlashCitations` states, and keeps that rule's refusal of an index-only split.
+
+### Context
+
+On the public demo (local E2B), Kamwara's *"What medications is she currently taking?"* was answered
+*"1. Stavudine (Order status: in force) [2, 37, 67]"*, beside Nevirapine and Lamivudine each cited as three single
+markers. [2], [37] and [67] are her three Stavudine orders, identical apart from their dates. The model's citations array
+left them out, so the group was a "value": Stavudine was published citing nothing, and, uncited, it was read as a drug
+the answer PROPOSED and screened against her own orders — two duplicate-therapy chips about her own Stavudine that no
+other drug in the answer raised. Putting the same answer text through the 8088 demo replica with the three numbers in the
+array published all nine citations and no chip; with the six the demo resolved, it reproduced the demo's response
+exactly.
+
+### The decision
+
+- **A slash or comma group the array leaves uncorroborated is split into single markers where every number in it is a
+  record of the chart and those records are ONE record**: the same resource type and the same
+  `RecordMapping.getUndatedText()` — what the record says, without the date prefix the serializer writes for its own
+  date. `LlmAnswerExtractor.splitGroupsOfOneRecord`, reached through `LlmInferenceService.readAgainstTheChart` on both
+  paths and after the finding-enumeration repair, ahead of Decision 186's misplaced-marker removal so that removal
+  weighs every marker.
+- **The array is still the first corroboration**, and this one runs only on what it left: a group the array confirmed was
+  split before the chart was at hand.
+- **A bracketed value is still never split.** `[120, 80]` passes only where records 120 and 80 exist AND read alike —
+  the index-only rule's failure plus a coincidence of content. A group of two different records stays as the model wrote
+  it, because nothing but the array could say the model cited both.
+- **It reads the record's text and nothing clinical**: no drug, class or unit knowledge enters it.
+
+### Considered and refused
+
+- **Splitting where every number is a record index.** The refusal `normalizeSlashCitations` records stands: on a chart of
+  150 records it splits `[120/80]`.
+- **A prompt change asking for single markers.** The model already writes them almost everywhere, and prompt clauses on
+  the small local models have repeatedly fixed one cell and broken others.
+
+### Measured
+
+2026-10-14, demo seed (5284 patients) on the 8088 replica, E2B on the Mac's GPU rather than the demo's CPU: 30
+seeded-random patients with active drug orders plus Kamwara, each asked *"What medications is the patient currently
+taking?"* and *"What are the patient's diagnoses?"*. An uncorroborated group survived in **1 of 31** medication answers
+(`Trimethoprim and sulfamethoxazole … [6, 237, 36, 150]`, all four the same order on four dates, [36] missing from the
+array) and **0 of 31** diagnosis answers, and **no** answer carried a bracketed clinical value. Hardware moves single
+answers — Kamwara's own answer came out correctly cited on the replica — so the figure is E2B's rate on that machine and
+not the demo's. On the demo itself the sweep was stopped after 17 queries (13 Cloudflare 524 timeouts), so no demo rate
+was measured.
+
+Pinned by `IdenticalRecordCitationGroupTest`, over `TestDatasetHelper.FULL_PATIENT_DATASET` serialized with its dates
+(`TestDatasetHelper.toDatedSerializedRecords`) and the model's raw output through the real extractor:
+`.aGroupOfOneRecordOnSeveralDatesIsSplitThoughTheArrayLeavesItOut`, `.aSlashGroupOfOneRecordIsSplitToo` and
+`.theStreamingPathPublishesTheSplitAnswerOnBothItsAnswers` redden when the comparison reads the dated text;
+`.aBracketedValueWhoseNumbersAreRecordIndexesIsNeverSplit` and `.aGroupOfDifferentRecordsIsLeftAsTheModelWroteIt` redden
+when any group of record indexes is accepted.

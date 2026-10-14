@@ -881,6 +881,36 @@ final class TestDatasetHelper {
 	}
 
 	/**
+	 * {@link #toSerializedRecords(String[])} with each record's DATE kept: the date the dataset string carries,
+	 * {@code null} where it carries none. The undated form stays the default because most callers compare a
+	 * record's text and a date prefix would move it; a test whose subject is how records recorded on different
+	 * dates read beside one another needs this one.
+	 */
+	static List<SerializedRecord> toDatedSerializedRecords(String[] dataset) {
+		List<SerializedRecord> undated = toSerializedRecords(dataset);
+		List<SerializedRecord> records = new ArrayList<>(undated.size());
+		for (int i = 0; i < dataset.length; i++) {
+			SerializedRecord record = undated.get(i);
+			records.add(new SerializedRecord(record.getResourceType(), record.getResourceUuid(), record.getText(),
+					datasetDate(dataset[i]), record.getCategoryHints()));
+		}
+		return records;
+	}
+
+	/** The {@code (yyyy-MM-dd)} date a dataset string carries after its prefix, or {@code null}. */
+	private static java.util.Date datasetDate(String datasetText) {
+		String text = datasetText;
+		for (String prefix : DATASET_PREFIXES) {
+			if (text.startsWith(prefix)) {
+				text = text.substring(prefix.length());
+				break;
+			}
+		}
+		java.util.regex.Matcher m = DATE_PREFIX_PATTERN.matcher(text);
+		return m.find() ? on(text.substring(1, 11)) : null;
+	}
+
+	/**
 	 * Deterministic UUID literal derived from a dataset index. Keeps fixture
 	 * identifiers sortable and recognizable in failure messages — the trailing
 	 * digits match the dataset index. Used in place of the old integer

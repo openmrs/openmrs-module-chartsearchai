@@ -13,11 +13,15 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.openmrs.module.chartsearchai.api.impl.LlmProvider.LlmResponse;
+import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -45,7 +49,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * <p>Also normalizes shorthand citation syntax: {@code [1/2/3]} and compact comma groups
  * {@code [1, 2]} → {@code [1], [2], [3]} — but only when every number in the group is a
  * record the model actually cited, so a bracketed clinical value like {@code [120/80]}
- * or {@code [120, 80]} is left intact.</p>
+ * or {@code [120, 80]} is left intact. A group the array leaves uncorroborated is split later, once the chart is at
+ * hand, only where its numbers are one record recorded on several dates ({@link #splitGroupsOfOneRecord}).</p>
  */
 final class LlmAnswerExtractor {
 
@@ -391,18 +396,74 @@ final class LlmAnswerExtractor {
 	 * answer with no anchored citations must not ship the model's unanchored review list.
 	 */
 	static String normalizeSlashCitations(String text, Collection<Integer> validCitations) {
-		String normalized = rewriteShorthand(text, SLASH_CITATION, "/", validCitations, validCitations != null);
+		Predicate<String[]> cited = validCitations == null ? null : parts -> allCited(parts, validCitations);
+		String normalized = rewriteShorthand(text, SLASH_CITATION, "/", cited);
 		if (validCitations != null) {
-			normalized = rewriteShorthand(normalized, COMMA_CITATION, ",", validCitations, true);
+			normalized = rewriteShorthand(normalized, COMMA_CITATION, ",", cited);
 		}
 		return normalized;
 	}
 
-	/** One shorthand pass: every {@code pattern} group is split on {@code separator} and, when
-	 *  {@code corroborate} is set, rewritten only if {@link #allCited} against
-	 *  {@code validCitations}; otherwise left byte-identical. */
+	/**
+	 * The second corroboration of a compact group, for the one the array did not give (ADR Decision 211): a slash or
+	 * comma group the model's citations array left uncorroborated is rewritten into single markers where every number
+	 * in it is a record of {@code mappings} and those records are ONE record — the same type and the same
+	 * {@link RecordMapping#getUndatedText()}, i.e. one thing recorded on several dates.
+	 *
+	 * <p>Why: a small local model writes {@code "Stavudine [2, 37, 67]"} over three identical Stavudine orders and
+	 * leaves the three out of its array (measured on the public demo; the ADR decision records how often), and the
+	 * group then cites nothing, so the drug it names is published uncited and screened as a drug the answer PROPOSED.
+	 * A bracketed VALUE is still never split: {@code [120, 80]} passes only where records 120
+	 * and 80 exist and read alike, which is the refused index-only rule's failure plus a coincidence of content. A
+	 * group of two DIFFERENT records stays as written — nothing but the array could say the model cited both.
+	 *
+	 * <p>Runs on the answer {@link #normalizeSlashCitations(String, Collection)} returned, so a group the array
+	 * corroborated was already split there and this sees only what it left. A record whose text cannot be read
+	 * corroborates nothing: the answer must never be lost to the rewrite.
+	 */
+	static String splitGroupsOfOneRecord(String text, List<RecordMapping> mappings) {
+		if (text == null || mappings == null || mappings.isEmpty()) {
+			return text;
+		}
+		Map<Integer, RecordMapping> byIndex = new HashMap<Integer, RecordMapping>();
+		for (RecordMapping mapping : mappings) {
+			byIndex.put(Integer.valueOf(mapping.getIndex()), mapping);
+		}
+		Predicate<String[]> oneRecord = parts -> allOneRecord(parts, byIndex);
+		return rewriteShorthand(rewriteShorthand(text, SLASH_CITATION, "/", oneRecord), COMMA_CITATION, ",", oneRecord);
+	}
+
+	/** True only if every {@code part} is the index of a record in {@code byIndex} and all of them read as one. */
+	private static boolean allOneRecord(String[] parts, Map<Integer, RecordMapping> byIndex) {
+		String type = null;
+		String undated = null;
+		try {
+			for (String part : parts) {
+				RecordMapping mapping = byIndex.get(Integer.valueOf(part));
+				if (mapping == null || mapping.getUndatedText() == null) {
+					return false;
+				}
+				if (undated == null) {
+					type = mapping.getResourceType();
+					undated = mapping.getUndatedText();
+				}
+				else if (!undated.equals(mapping.getUndatedText())
+						|| !(type == null ? mapping.getResourceType() == null : type.equals(mapping.getResourceType()))) {
+					return false;
+				}
+			}
+			return true;
+		}
+		catch (RuntimeException e) {
+			// An index too large for an int, or a record whose text cannot be read: neither corroborates.
+			return false;
+		}
+	}
+
+	/** One shorthand pass: every {@code pattern} group is split on {@code separator} and rewritten only if
+	 *  {@code corroborated} accepts its parts — always, where it is {@code null}; otherwise left byte-identical. */
 	private static String rewriteShorthand(String text, Pattern pattern, String separator,
-			Collection<Integer> validCitations, boolean corroborate) {
+			Predicate<String[]> corroborated) {
 		Matcher matcher = pattern.matcher(text);
 		if (!matcher.find()) {
 			return text;
@@ -414,7 +475,7 @@ final class LlmAnswerExtractor {
 			for (int i = 0; i < parts.length; i++) {
 				parts[i] = parts[i].trim();
 			}
-			if (corroborate && !allCited(parts, validCitations)) {
+			if (corroborated != null && !corroborated.test(parts)) {
 				// Not citation shorthand — a bracketed value. Leave it untouched.
 				matcher.appendReplacement(sb, Matcher.quoteReplacement(matcher.group(0)));
 				continue;

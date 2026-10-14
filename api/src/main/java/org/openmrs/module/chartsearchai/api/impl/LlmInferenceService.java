@@ -195,7 +195,7 @@ public class LlmInferenceService implements ChartSearchService {
 			LlmResponse response = llmProvider.search(chartTextOrPlaceholder(chart),
 					chart.getFocusIndices(), question, kvCacheScope, uninjectedRecords, enumerateFindings,
 					referenceRecords, chart.getDrugsAlreadyOrdered());
-			response = withMisplacedMarkersRemoved(response, chart);
+			response = readAgainstTheChart(response, chart);
 			llmMs = System.currentTimeMillis() - llmStart;
 			inputTokens = response.getInputTokens();
 			cachedTokens = response.getCachedTokens();
@@ -217,7 +217,7 @@ public class LlmInferenceService implements ChartSearchService {
 								findingEnumerationRepairQuestion(owedRepair), kvCacheScope, uninjectedRecords, false,
 								referenceRecords, noDrugsAlreadyOrdered()),
 						owedRepair, chart.getMappings());
-				response = withMisplacedMarkersRemoved(response, chart);
+				response = readAgainstTheChart(response, chart);
 				llmMs += System.currentTimeMillis() - repairStart;
 				cited = extractCitedReferences(response.getAnswer(), response.getCitations(),
 						chart.getMappings());
@@ -738,7 +738,7 @@ public class LlmInferenceService implements ChartSearchService {
 					chartTextOrPlaceholder(chart), chart.getFocusIndices(), question, tokenConsumer,
 					reasoningConsumer, kvCacheScope, uninjectedRecords, enumerateFindings, referenceRecords,
 					chart.getDrugsAlreadyOrdered());
-			response = withMisplacedMarkersRemoved(response, chart);
+			response = readAgainstTheChart(response, chart);
 			llmMs = System.currentTimeMillis() - llmStart;
 			inputTokens = response.getInputTokens();
 			cachedTokens = response.getCachedTokens();
@@ -766,7 +766,7 @@ public class LlmInferenceService implements ChartSearchService {
 								reasoningConsumer, kvCacheScope, uninjectedRecords, false, referenceRecords,
 								noDrugsAlreadyOrdered()),
 						owedRepair, chart.getMappings());
-				response = withMisplacedMarkersRemoved(response, chart);
+				response = readAgainstTheChart(response, chart);
 				llmMs += System.currentTimeMillis() - repairStart;
 				cited = extractCitedReferences(response.getAnswer(), response.getCitations(),
 						chart.getMappings());
@@ -1311,9 +1311,21 @@ public class LlmInferenceService implements ChartSearchService {
 	}
 
 	/**
+	 * The model's answer read against the chart it was asked about, before anything reads it, so every check, the
+	 * references and both answers a streaming request produces describe the one text the caller receives: a compact
+	 * citation group whose numbers are one record recorded on several dates split into single markers (ADR Decision
+	 * 211), then each misplaced marker removed (ADR Decision 186). Split FIRST, so the removal weighs every marker the
+	 * answer carries rather than a group it cannot read.
+	 */
+	private static LlmResponse readAgainstTheChart(LlmResponse response, PatientChart chart) {
+		return withMisplacedMarkersRemoved(
+			response.withAnswer(LlmAnswerExtractor.splitGroupsOfOneRecord(response.getAnswer(), chart.getMappings())),
+			chart);
+	}
+
+	/**
 	 * The model's answer with each citation marker it put on an item another item's own marker shows belongs elsewhere
-	 * removed (ADR Decision 186) — before anything reads the answer, so every check, the references and both answers
-	 * a streaming request produces describe the one text the caller receives.
+	 * removed (ADR Decision 186). Reached through {@link #readAgainstTheChart} alone.
 	 */
 	private static LlmResponse withMisplacedMarkersRemoved(LlmResponse response, PatientChart chart) {
 		return response.withAnswer(MisplacedCitationMarkers.removed(response.getAnswer(), chart.getMappings()));

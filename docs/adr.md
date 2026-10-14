@@ -16691,3 +16691,52 @@ marked names, the hyphen between them dropped.
 
 Pinned by `CombinationProductProposalContextTest.aProposalNamingOneCombinationProductIsAnsweredWithItsFindings` and
 `.twoDrugsNamedApartStillAskTheModel`.
+
+## Decision 218: Whether her drug and another interact is answered "Yes" where a finding relates them
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-14. It widens
+[Decision 196](#decision-196-two-drugs-asked-about-together-one-of-them-hers-are-answered-for-the-other-and-her-drugs-other-findings-are-drawn-apart)
+to a question about the PAIR.
+
+### Context
+
+On the demo replica, *"Is there any interaction between nevirapine and rifampicin?"* for patients on nevirapine was
+answered by the model *"No — Rifampicin interacts with active order Nevirapine: Major"* — a proposal's withholding lead on a
+yes-or-no question whose answer is yes. Decision 196 admitted only a question whether the two may be given TOGETHER, so the
+interaction question reached the model.
+
+### The decision
+
+- **A question whether two drugs interact (`QueryScopeRouter.asksWhetherTwoDrugsInteract`), one of them hers, is answered
+  by Decision 196's answer with the "Yes" lead** — *"Nevirapine is one of this patient's active medications.\nYes — Rifampicin
+  (rifampin) interacts with this patient's active medications. …"* — and only where a finding about the other drug names a
+  partner of her drug's substance (`namesAPartnerOf`, by the rows the chip site took). Where none does, "Yes" would be
+  false of the pair asked about, so the model answers as before. The two shapes are shared with Decision 203's grammar, so the
+  two cannot read the question apart.
+
+Pinned by `TogetherWithHerOwnMedicationContextTest.aQuestionWhetherHerDrugAndAnotherInteractIsAnsweredYesWhereAFindingRelatesThem`
+and `.aQuestionWhetherHerDrugAndAnotherInteractIsLeftToTheModelWhereNoFindingRelatesThem`, over the shipped knowledge base.
+
+## Decision 219: A question whether to switch one of her drugs to another is answered for the new drug against her other medications
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-14.
+
+### Context
+
+On the demo replica, *"Can I switch his nevirapine to efavirenz?"* was answered by the model *"No — Efavirenz should not be
+used because it interacts with the active order Nevirapine"*, for every patient asked: the withholding reason was the very
+order the switch stops. Nothing in the module read a switch; the question reached the model as two drugs.
+
+### The decision
+
+- **A switch shape** (`QueryScopeRouter.asksWhetherToSwitchADrug`: "switch/change … to/for", "replace … with/by", the drug
+  switched FROM named first) **naming her drug first and a drug not hers second is answered by the module**
+  (`DrugReferenceInjector.composeSwitch`): *"Nevirapine is one of this patient's active medications, and this switch
+  replaces it."*, then what a proposal of the new drug gets from its findings against her OTHER medications — its "No", its
+  cautions, or that it raised none — then, under *"About the order the switch replaces:"*, the findings relating it to that
+  order alone, stated and never a reason to withhold it, and the scope.
+- **Fail-closed** on the proposal's own rule: findings against her other medications that a proposal would leave to the
+  model leave this to the model too, and so does a switch to a drug she already takes or from one she does not.
+
+Pinned by `SwitchingHerDrugContextTest.aSwitchIsAnsweredForTheNewDrugAgainstHerOtherMedications` and
+`.aSwitchToADrugSheAlreadyTakesOrFromOneSheDoesNotIsLeftToTheModel`, over the shipped knowledge base.

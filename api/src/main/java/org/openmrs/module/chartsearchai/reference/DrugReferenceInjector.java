@@ -947,6 +947,7 @@ public class DrugReferenceInjector {
 		// Decision 204's and 206's answers, assigned where their branches decide them, so each is composed once.
 		String belowFloorAboutHerOwn;
 		String noPairAboutHerOwn;
+		String switchAnswer;
 		// Her active orders the drug data does not identify — once, for every composition below (ADR Decision 161).
 		List<PatientClinicalContext.ActiveDrugOrder> unidentified = context == null
 				? Collections.<PatientClinicalContext.ActiveDrugOrder> emptyList()
@@ -1052,6 +1053,18 @@ public class DrugReferenceInjector {
 					orderRecordNumbers,
 					orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers,
 					pairExtent.stated());
+		} else if (context != null
+				&& ChartSearchAiUtils.getBooleanGlobalProperty(
+						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
+						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS)
+				&& context.chartReadForSafety()
+				&& (switchAnswer = composeSwitch(question, questionDrugs, screenedSubstances, findings, findingNumbers,
+						orderRecordNumbers,
+						orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers,
+						pairExtent.stated())) != null) {
+			// One of her drugs switched to another: the new drug against her medications other than the one it replaces
+			// (ADR Decision 219).
+			moduleAnswer = switchAnswer;
 		} else if (onlyHerOwnOrdersSharingASubstance(findings) && context != null
 				&& ChartSearchAiUtils.getBooleanGlobalProperty(
 						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
@@ -4819,15 +4832,18 @@ public class DrugReferenceInjector {
 		for (DrugReference entry : questionDrugs) {
 			asked.add(entry.substanceGroupKey());
 		}
-		if (asked.size() != 2
-				|| !QueryScopeRouter.asksWhetherToGiveDrugsTogether(wordsBesideItsNames(question, questionDrugs))) {
+		List<String> words = wordsBesideItsNames(question, questionDrugs);
+		boolean interact = QueryScopeRouter.asksWhetherTwoDrugsInteract(words);
+		if (asked.size() != 2 || !QueryScopeRouter.asksWhetherToGiveDrugsTogether(words) && !interact) {
 			return null;
 		}
 		Object proposed = null;
+		Object herDrug = null;
 		int hers = 0;
 		for (Object substance : asked) {
 			if (herSubstances.contains(substance)) {
 				hers++;
+				herDrug = substance;
 			} else {
 				proposed = substance;
 			}
@@ -4836,10 +4852,17 @@ public class DrugReferenceInjector {
 			return null;
 		}
 		List<SafetyWarning> ofIt = new ArrayList<SafetyWarning>();
+		boolean relatesThePair = false;
 		for (SafetyWarning finding : findings) {
 			if (isAbout(finding, proposed)) {
 				ofIt.add(finding);
+				relatesThePair |= namesAPartnerOf(finding, herDrug);
 			}
+		}
+		// A question whether the two interact is answered "Yes" only where a finding relates them; otherwise the model
+		// answers it, as before (ADR Decision 218).
+		if (interact && !relatesThePair) {
+			return null;
 		}
 		for (SafetyWarning finding : ofIt) {
 			if (licensesTheModulesNo(finding)) {
@@ -4847,6 +4870,130 @@ public class DrugReferenceInjector {
 			}
 		}
 		return cautionsOnlyAbout(Collections.singleton(proposed), notHerOwnOrdersSharingASubstance(ofIt)) ? proposed : null;
+	}
+
+	/**
+	 * The module's answer to a question whether to switch one of her drugs to another (ADR Decision 219), or {@code null}
+	 * where the model answers: <em>"Nevirapine is one of this patient's active medications, and this switch replaces
+	 * it."</em>, then the answer a proposal of the new drug alone gets from its findings against her OTHER medications — its
+	 * "No", its cautions, or that it raised none — and then, under <em>"About the order the switch replaces:"</em>, what
+	 * relates it to the drug it replaces, which is no reason to withhold it: that order is what the switch stops. The model
+	 * answered "No — Efavirenz should not be used because it interacts with the active order Nevirapine".
+	 *
+	 * <p>Fail-closed: a switch shape ({@code QueryScopeRouter.asksWhetherToSwitchADrug}) naming two substances, the first
+	 * hers and the second not; and the new drug's findings against her other medications answerable as a proposal's are
+	 * ({@link #licensesTheModulesNo}, or cautions about it alone), or none.
+	 */
+	private static String composeSwitch(String question, List<DrugReference> questionDrugs, Set<Object> herSubstances,
+			List<SafetyWarning> findings, List<Integer> numbers, Map<String, Integer> orderRecordNumbers,
+			Map<String, Integer> herOrderRecords, PairChipExtent pairs) {
+		if (questionDrugs.isEmpty()
+				|| !QueryScopeRouter.asksWhetherToSwitchADrug(wordsBesideItsNames(question, questionDrugs))) {
+			return null;
+		}
+		// Which drug the question names first is the one switched from.
+		String folded = DrugReference.foldedLower(question);
+		Map<Object, Integer> firstAt = new HashMap<Object, Integer>();
+		Map<Object, DrugReference> rowOf = new LinkedHashMap<Object, DrugReference>();
+		for (DrugReference entry : questionDrugs) {
+			for (DrugReference.NamedOccurrence occurrence : entry.namedOccurrences(folded, 0)) {
+				Integer seen = firstAt.get(entry.substanceGroupKey());
+				if (seen == null || occurrence.getStart() < seen) {
+					firstAt.put(entry.substanceGroupKey(), occurrence.getStart());
+				}
+			}
+			rowOf.putIfAbsent(entry.substanceGroupKey(), entry);
+		}
+		if (firstAt.size() != 2 || rowOf.size() != 2) {
+			return null;
+		}
+		List<Object> byPosition = new ArrayList<Object>(firstAt.keySet());
+		Collections.sort(byPosition, (a, b) -> firstAt.get(a).compareTo(firstAt.get(b)));
+		Object from = byPosition.get(0);
+		Object to = byPosition.get(1);
+		if (!herSubstances.contains(from) || herSubstances.contains(to)) {
+			return null;
+		}
+		List<SafetyWarning> kept = new ArrayList<SafetyWarning>();
+		List<Integer> keptNumbers = new ArrayList<Integer>();
+		List<String> replacedLines = new ArrayList<String>();
+		List<SafetyWarning> sharing = new ArrayList<SafetyWarning>();
+		List<Integer> sharingNumbers = new ArrayList<Integer>();
+		for (int i = 0; i < findings.size(); i++) {
+			SafetyWarning finding = findings.get(i);
+			if (finding.statesOrdersSharingASubstance()) {
+				sharing.add(finding);
+				sharingNumbers.add(numbers.get(i));
+			} else if (isAbout(finding, to)) {
+				if (namesOnlyPartnersOf(finding, from)) {
+					replacedLines.add(findingLine(finding, numbers.get(i), orderRecordNumbers, herOrderRecords, true));
+				} else {
+					kept.add(finding);
+					keptNumbers.add(numbers.get(i));
+				}
+			}
+		}
+		String newDrug = rowOf.get(to).displayLabel();
+		String forTheNewDrug;
+		if (kept.isEmpty()) {
+			forTheNewDrug = "Apart from " + rowOf.get(from).displayLabel() + ", the interaction check raised no finding about "
+					+ newDrug + " against this patient's active medications.";
+		} else {
+			boolean withholds = false;
+			for (SafetyWarning finding : kept) {
+				withholds |= licensesTheModulesNo(finding);
+			}
+			if (!withholds && !cautionsOnlyAbout(Collections.singleton(to), kept)) {
+				return null;
+			}
+			forTheNewDrug = composeFromFindings(kept, keptNumbers, orderRecordNumbers, herOrderRecords, true, pairs, Lead.GIVE,
+					SCREEN_SCOPE);
+			if (forTheNewDrug == null) {
+				return null;
+			}
+		}
+		StringBuilder answer = new StringBuilder(rowOf.get(from).displayLabel()).append(OWN_MEDICATION_LEAD)
+				.append(", and this switch replaces it.\n").append(forTheNewDrug);
+		if (!replacedLines.isEmpty()) {
+			answer.append("\nAbout the order the switch replaces:");
+			for (String line : replacedLines) {
+				answer.append('\n').append(line);
+			}
+		}
+		answer.append('\n').append(BELOW_FLOOR_SCOPE);
+		return withHerOwnOrdersSharingASubstance(answer.toString(), sharing, sharingNumbers, orderRecordNumbers,
+			herOrderRecords);
+	}
+
+	/** Whether every partner {@code finding} names resolved to {@code substance} alone, by the rows its chip site took. */
+	private static boolean namesOnlyPartnersOf(SafetyWarning finding, Object substance) {
+		if (finding.namedPartners().isEmpty()) {
+			return false;
+		}
+		for (String partner : finding.namedPartners()) {
+			List<DrugReference> rows = finding.rowsOfPartner(partner);
+			if (rows.isEmpty()) {
+				return false;
+			}
+			for (DrugReference row : rows) {
+				if (!substance.equals(row.substanceGroupKey())) {
+					return false;
+				}
+			}
+		}
+		return true;
+	}
+
+	/** Whether one of the partners {@code finding} names resolved to {@code substance}, by the rows its chip site took. */
+	private static boolean namesAPartnerOf(SafetyWarning finding, Object substance) {
+		for (String partner : finding.namedPartners()) {
+			for (DrugReference row : finding.rowsOfPartner(partner)) {
+				if (substance.equals(row.substanceGroupKey())) {
+					return true;
+				}
+			}
+		}
+		return false;
 	}
 
 	/** Whether every subject row of {@code finding} is of {@code substance} — the finding is about that drug. */
@@ -4890,8 +5037,12 @@ public class DrugReferenceInjector {
 				ofItNumbers.add(numbers.get(i));
 			}
 		}
+		// Whether the two interact is a question about the pair, answered "Yes" (ADR Decision 218); the gate admitted it only
+		// where a finding relates them.
+		Lead lead = QueryScopeRouter.asksWhetherTwoDrugsInteract(wordsBesideItsNames(question, questionDrugs)) ? Lead.INTERACTS
+				: Lead.of(question, proposedRows);
 		String composed = composeFromFindings(ofIt, ofItNumbers, orderRecordNumbers, herOrderRecords, true, pairs,
-				Lead.of(question, proposedRows), SCREEN_SCOPE);
+				lead, SCREEN_SCOPE);
 		return composed == null ? null : hers + OWN_MEDICATION_LEAD + ".\n" + composed;
 	}
 

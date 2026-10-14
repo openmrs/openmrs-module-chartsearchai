@@ -567,15 +567,20 @@ public final class QueryScopeRouter {
 	 * Decision 203). Kept apart from {@link #TOGETHER_SHAPES} for that grammar's reason: its readers answer for drugs
 	 * proposed, and this one's single reader asks it of two drugs her own orders BOTH carry.
 	 */
+	/** "Does ibuprofen interact with celecoxib?" — a question whether two drugs INTERACT (ADR Decisions 203, 218). */
+	private static final String DOES_ONE_INTERACT_WITH_THE_OTHER = "(?:does|do|will|would|can) " + D + " interact with " + D;
+
+	/** "Any interactions between ibuprofen and celecoxib?", "Is there an interaction between X and Y?" (ADR Decisions 203, 218). */
+	private static final String ANY_INTERACTION_BETWEEN = "(?:are there |is there )?(?:any |an )?(?:drug )?interactions? between "
+			+ D + " and " + D;
+
 	private static final List<Pattern> TWO_DRUGS_SHAPES = shapes(
 			// "Is it safe to combine ibuprofen and celecoxib?", "Is it ok to give ibuprofen with celecoxib together?"
 			"is it (?:safe|ok|okay|appropriate) to (?:combine|give|take|use) " + D + " (?:and|with) " + D + "(?: together)?",
-			// "Does ibuprofen interact with celecoxib?"
-			"(?:does|do|will|would|can) " + D + " interact with " + D,
+			DOES_ONE_INTERACT_WITH_THE_OTHER,
 			// "Is ibuprofen safe with celecoxib?", "Is simvastatin ok with clopidogrel?"
 			"is " + D + " (?:safe|ok|okay|compatible) (?:with|alongside) " + D,
-			// "Any interactions between ibuprofen and celecoxib?", "Is there an interaction between X and Y?"
-			"(?:are there |is there )?(?:any |an )?(?:drug )?interactions? between " + D + " and " + D,
+			ANY_INTERACTION_BETWEEN,
 			// "Can she take ibuprofen and celecoxib together?", "Can she have prednisone and ibuprofen together?" (ADR
 			// Decision 209), "Can the patient be on X and Y together?"
 			"(?:can|could|may|should) " + SUBJECT + " (?:safely )?(?:take|have|use|receive|be on|be given) " + D
@@ -587,6 +592,37 @@ public final class QueryScopeRouter {
 	 */
 	public static boolean asksAboutTwoDrugsTogether(List<String> wordsWithTheDrugsMarked) {
 		return fitsAShape(wordsWithTheDrugsMarked, TWO_DRUGS_SHAPES) || asksWhetherToGiveDrugsTogether(wordsWithTheDrugsMarked);
+	}
+
+	private static final List<Pattern> TWO_DRUGS_INTERACT_SHAPES = shapes(DOES_ONE_INTERACT_WITH_THE_OTHER, ANY_INTERACTION_BETWEEN);
+
+	/**
+	 * The question shapes asking whether to SWITCH one drug to another, the drug switched FROM named first (ADR Decision
+	 * 219): "Can I switch her nevirapine to efavirenz?", "Can I switch her from nevirapine to efavirenz?", "Can I replace
+	 * her nevirapine with efavirenz?", "Is it safe to switch nevirapine to efavirenz?".
+	 */
+	private static final List<Pattern> SWITCH_SHAPES = shapes(
+			"(?:can|could|may|should) (?:i|we) (?:switch|change) (?:" + PATIENT + " (?:from )?|" + POSSESSIVE + " |from )?" + D
+					+ " (?:to|for) " + D + "(?: now| today)?",
+			"(?:can|could|may|should) (?:i|we) replace (?:" + POSSESSIVE + " )?" + D + " (?:with|by) " + D + "(?: now| today)?",
+			"is it (?:safe|ok|okay|appropriate) to (?:switch|change) (?:" + PATIENT + " (?:from )?|" + POSSESSIVE + " |from )?" + D
+					+ " (?:to|for) " + D,
+			"is it (?:safe|ok|okay|appropriate) to replace (?:" + POSSESSIVE + " )?" + D + " (?:with|by) " + D);
+
+	/**
+	 * Whether a question asks whether to switch one drug to another, and nothing else — one of {@link #SWITCH_SHAPES}, the
+	 * drug switched from named first (ADR Decision 219). Fail-CLOSED as {@link #asksWhetherToGiveADrug} is.
+	 */
+	public static boolean asksWhetherToSwitchADrug(List<String> wordsWithTheDrugsMarked) {
+		return fitsAShape(wordsWithTheDrugsMarked, SWITCH_SHAPES);
+	}
+
+	/**
+	 * Whether a question asks whether TWO drugs interact, and nothing else (ADR Decision 218) — a yes-or-no question about
+	 * the pair, which a proposal's "No" lead answers backwards. Fail-CLOSED as {@link #asksWhetherToGiveADrug} is.
+	 */
+	public static boolean asksWhetherTwoDrugsInteract(List<String> wordsWithTheDrugsMarked) {
+		return fitsAShape(wordsWithTheDrugsMarked, TWO_DRUGS_INTERACT_SHAPES);
 	}
 
 	private static List<Pattern> shapes(String... shapes) {

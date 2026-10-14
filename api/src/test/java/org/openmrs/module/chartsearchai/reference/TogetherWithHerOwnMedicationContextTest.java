@@ -11,6 +11,7 @@ package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -23,6 +24,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 
 /**
@@ -72,6 +74,41 @@ public class TogetherWithHerOwnMedicationContextTest extends BaseModuleContextSe
 				+ "2 interaction cautions for Celecoxib:\n"
 				+ "Celecoxib interacts with active order Prednisone and Dexamethasone — Moderate. [7] [3] [4]\n"
 				+ "Celecoxib interacts with active order Ibuprofen — Moderate. [8] [2]", answer);
+	}
+
+	/**
+	 * A question whether the two INTERACT, one of them hers, is answered "Yes" where a finding relates the other drug to hers
+	 * (ADR Decision 218). On the public demo's data, "Is there any interaction between nevirapine and rifampicin?" for
+	 * patients on nevirapine was answered by the model "No — Rifampicin interacts with active order Nevirapine: Major":
+	 * the polarity of a proposal's lead on a question asking whether they interact.
+	 */
+	@Test
+	public void aQuestionWhetherHerDrugAndAnotherInteractIsAnsweredYesWhereAFindingRelatesThem() {
+		for (String question : Arrays.asList("Is there any interaction between nevirapine and rifampicin?",
+			"Does rifampicin interact with nevirapine?", "Any interactions between nevirapine and rifampicin?")) {
+			String answer = askOverTheShippedData(question, "Nevirapine 200mg", "Nevirapine").getModuleAnswer();
+
+			assertTrue(answer != null && answer.startsWith("Nevirapine is one of this patient's active medications.\n"
+					+ "Yes — Rifampicin (rifampin) interacts with this patient's active medications."), question + " was: " + answer);
+			assertTrue(answer.contains("Rifampicin (rifampin) interacts with active order Nevirapine — Major."),
+				question + " states the pair: " + answer);
+			assertTrue(!answer.contains("No —"), "never the proposal's polarity: " + answer);
+		}
+	}
+
+	@Test
+	public void aQuestionWhetherHerDrugAndAnotherInteractIsLeftToTheModelWhereNoFindingRelatesThem() {
+		// Rifampicin relates to nothing of hers above the floor here, so neither "Yes" nor the proposal's "No" is the module's.
+		assertNull(askOverTheShippedData("Is there any interaction between lamivudine and rifampicin?", "Lamivudine 150mg",
+			"Lamivudine").getModuleAnswer());
+	}
+
+	private static PatientChart askOverTheShippedData(String question, String display, String name) {
+		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
+			DrugReferenceTestSupport.activeOrder("order-hers", display, name));
+		return DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.shippedServiceWithGroups()).injectRecords(
+			DrugReferenceTestSupport.oneRecordChart(), DrugReferenceTestSupport.ctx(40, null,
+				new LinkedHashSet<String>(Arrays.asList(display, name)), null, null, null, orders), question);
 	}
 
 	private static DrugReferenceService service() throws IOException {

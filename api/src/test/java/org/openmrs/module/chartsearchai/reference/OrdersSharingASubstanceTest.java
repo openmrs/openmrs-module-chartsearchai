@@ -163,7 +163,8 @@ public class OrdersSharingASubstanceTest {
 		// they do not (issue #402, ADR Decision 123) — so the drugs the question LISTS as current that are
 		// hers state it too (#513 item 1). Trimethoprim and sulfamethoxazole stay proposals: her
 		// Cotrimoxazole 960mg order does not resolve to either, a residue the decision records — the
-		// resolution is issue #353's, and issue #476 is why the second prints as "(sulfamethazine)".
+		// resolution is issue #353's, and issue #476 is why the second prints as "(sulfamethazine)" over these
+		// raw-parse entries; the module's own load prints it without (ADR Decision 216).
 		DrugReferenceService service = DrugReferenceTestSupport.serviceWithGroups(
 				DrugReferenceTestSupport.shippedEntries());
 		PatientClinicalContext context = DrugReferenceTestSupport.contextNaming(service, 40, 60.0,

@@ -213,6 +213,57 @@ public class OwnMedicationSafetyContextTest extends BaseModuleContextSensitiveTe
 	}
 
 	@Test
+	public void herOwnDrugRelatedOnlyBelowTheFloorIsAnsweredAsHersBesideAnotherOfHerDrugsInTwoOrders() throws IOException {
+		// On the public demo's data every drug is re-ordered at each visit and the old order never stopped, so a patient's
+		// other drugs are each in several of her orders. Mogan Kamwara's "Which of his medications interact with
+		// nevirapine?" then went to the model, which answered "Nevirapine interacts with lamivudine and stavudine" — the
+		// data rates neither pair — because the finding that his lamivudine is in three of his orders stopped Decision
+		// 204's answer, as it had stopped a proposal's before Decision 159 (ADR Decision 212). Here her prednisone is in two
+		// of her orders.
+		Context.getAdministrationService().setGlobalProperty(
+			ChartSearchAiConstants.GP_DRUG_SAFETY_MIN_INTERACTION_SEVERITY, "major");
+		// The demo's shape is the asked drug re-ordered too: the drug-in-play arm's own finding that IT is in several of
+		// her orders reached this gate as well, and stopped it just the same.
+		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
+			DrugReferenceTestSupport.activeOrder("order-ibuprofen-1", "Ibuprofen 400mg"),
+			DrugReferenceTestSupport.activeOrder("order-ibuprofen-2", "Ibuprofen 400mg"),
+			DrugReferenceTestSupport.activeOrder("order-prednisone-1", "Prednisone 5mg"),
+			DrugReferenceTestSupport.activeOrder("order-prednisone-2", "Prednisone 5mg"));
+		for (String question : Arrays.asList("Which of her medications interact with ibuprofen?", "Is ibuprofen safe for her?",
+			"Is she on ibuprofen?")) {
+			String answer = answer(question, null, orders);
+
+			assertNotNull(answer, "the module answers " + question);
+			String[] lines = answer.split("\n");
+			assertTrue(lines[0].matches("Ibuprofen is one of this patient's active medications \\(Ibuprofen 400mg, 2 orders\\)\\. "
+					+ "The interaction data gives no rated reason to change it: it lists Ibuprofen against .* of this patient's "
+					+ "other orders, rated Moderate, below the level this module reports as a finding\\. \\[\\d+\\]"),
+				question + " was: " + answer);
+			// Its own two orders are stated once: by the lead ("2 orders"), and as a line where the question did not propose it.
+			assertTrue(answer.matches("(?s).*\nPrednisone is in active orders Prednisone 5mg \\(2 orders\\) — possible "
+					+ "duplicate therapy\\.[^\n]*\\[\\d+\\]\n.*"), question + " was: " + answer);
+			assertEquals(DrugReferenceInjector.BELOW_FLOOR_SCOPE, lines[lines.length - 1], question + " was: " + answer);
+		}
+	}
+
+	@Test
+	public void aBelowFloorPartnerInsideTheDrugsOwnCombinationOrderIsNotCalledAnotherOrder() throws IOException {
+		// The demo's "Which of his medications interact with zidovudine?" — his zidovudine inside a Lamivudine / zidovudine
+		// order — read "it lists Zidovudine against 2 of this patient's other orders", one of them that very order (ADR
+		// Decision 212).
+		Context.getAdministrationService().setGlobalProperty(
+			ChartSearchAiConstants.GP_DRUG_SAFETY_MIN_INTERACTION_SEVERITY, "major");
+		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(DrugReferenceTestSupport.activeOrder(
+			"order-combination", "Ibuprofen and celecoxib", "Ibuprofen", "Celecoxib"));
+
+		String answer = answer("Which of her medications interact with ibuprofen?", null, orders);
+
+		assertNotNull(answer, "the module answers");
+		assertTrue(answer.split("\n")[0].contains("it lists Ibuprofen against one of this patient's orders, rated Moderate"),
+			"was: " + answer);
+	}
+
+	@Test
 	public void herOwnDrugTheCheckRelatesToNoneOfHerOtherOrdersIsAnsweredAsHersAndItsSecondOrderIsNoInteraction()
 			throws IOException {
 		// James Thompson's "Is metronidazole safe with his other medications?" — two orders of his own metronidazole —

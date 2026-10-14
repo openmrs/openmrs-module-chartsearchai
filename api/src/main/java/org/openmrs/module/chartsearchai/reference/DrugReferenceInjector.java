@@ -1006,7 +1006,8 @@ public class DrugReferenceInjector {
 				// Her orders' records even where no finding was raised to index them: this answer can have none (ADR
 				// Decision 204), and its lead cites the order.
 				&& (belowFloorAboutHerOwn = composeBelowFloorAboutHerOwnMedication(question, questionDrugs,
-						screenedSubstances, findings, pairExtent.stated(), mappings, orderEntries, context, reading.states(),
+						screenedSubstances, findings, findingNumbers, pairExtent.stated(), mappings, orderEntries, context,
+						reading.states(), orderRecordNumbers,
 						!orderRecordNumbers.isEmpty() ? orderRecordNumbers
 								: orderRecordNumbers(findingRecords != null ? findingRecords : new DrugOrderRecords(mappings),
 										context))) != null) {
@@ -1070,6 +1071,10 @@ public class DrugReferenceInjector {
 				moduleAnswer = composeFromNoActiveOrders(proposes, questionDrugs, mappings, matched, context,
 						reading.states());
 			}
+			if (moduleAnswer == null) {
+				moduleAnswer = composeFromNoIdentifiedOrders(proposes, questionDrugs, screenedSubstances, mappings, matched,
+						context, reading.states(), unidentified.size());
+			}
 			// A finding that her own orders share a substance says nothing about the drug proposed, so it does not
 			// stop the answer; it is stated after it (ADR Decision 159).
 			moduleAnswer = withHerOwnOrdersSharingASubstance(moduleAnswer, findings, findingNumbers, orderRecordNumbers,
@@ -1096,7 +1101,7 @@ public class DrugReferenceInjector {
 			moduleAnswer = composeFromAScreenThatRelatedNothing(screenNoteIndex, screenedSubstances.size(), findings,
 					findingNumbers, orderRecordNumbers,
 					orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers,
-					context);
+					context, unidentified.size());
 		}
 		if (moduleAnswer == null && unrecognised != null) {
 			moduleAnswer = unrecognised.statement();
@@ -1120,6 +1125,13 @@ public class DrugReferenceInjector {
 		// Stamped on the chart the injector built and on no other, because only this pass knows what
 		// it resolved (issue #469). A chart this method returns early is one it resolved nothing on,
 		// and states none. Whether the answer is USED is LlmInferenceService's to decide.
+		// A proposal that said what the drug is for: the check weighed none of it, and the answer says so rather than read
+		// as a word on that use (ADR Decision 213).
+		String purpose = moduleAnswer == null || questionDrugs.isEmpty() ? null
+				: QueryScopeRouter.statedPurpose(wordsBesideItsNames(question, questionDrugs));
+		if (purpose != null) {
+			moduleAnswer = moduleAnswer + "\n" + PURPOSE_NOT_WEIGHED_OPENING + purpose + ").";
+		}
 		if (moduleAnswer != null) {
 			injected.markModuleAnswer(moduleAnswer);
 		}
@@ -3224,6 +3236,55 @@ public class DrugReferenceInjector {
 	}
 
 	/**
+	 * Her orders were read and she has active orders, every one of them started, and the drug data identifies none:
+	 * nothing of hers resolved to a substance, and each order is one {@code DrugSafetyValidator.unresolvedActiveOrders}
+	 * named (ADR Decision 215). Started, because the answer calls them her active medication orders.
+	 */
+	private static boolean noneOfHerOrdersIdentified(PatientClinicalContext context, int identifiedSubstances,
+			int unidentified) {
+		return context != null && context.activeDrugOrdersRead() && identifiedSubstances == 0
+				&& !context.getActiveDrugOrders().isEmpty() && unidentified == context.getActiveDrugOrders().size()
+				&& !DrugSafetyValidator.anyHasNotStarted(context.getActiveDrugOrders());
+	}
+
+	/** <em>"The drug data identifies none of this patient's 5 active medication orders, "</em> (ADR Decision 215). */
+	private static String noneIdentifiedOpening(PatientClinicalContext context) {
+		int n = context.getActiveDrugOrders().size();
+		return n == 1 ? "The drug data does not identify this patient's one active medication order, "
+				: "The drug data identifies none of this patient's " + n + " active medication orders, ";
+	}
+
+	/**
+	 * The module's answer to a proposal for a patient whose active orders the drug data identifies NONE of (ADR Decision
+	 * 215), or {@code null} where the model answers: <em>"The drug data identifies none of this patient's 5 active
+	 * medication orders, so the interaction check had none to relate Rifampicin (rifampin) to. [n]"</em>, citing the drug's
+	 * reference record; the closing line Decision 161 adds then names each order as not checked. Between {@link
+	 * #composeFromNoActiveOrders}, which needs no order at all, and {@link #composeFromNoPair}, which needs one the data
+	 * identifies, a patient on vaccinations alone reached the model, which answered "The records do not address the safety
+	 * of giving rifampicin" or recited the dataset's partners for the drug. A statement about the CHECK on the same
+	 * conjuncts as theirs — her orders read, the contraindication arms on, one drug proposed whose record is in the chart —
+	 * and never "can be given", never "safe".
+	 */
+	private static String composeFromNoIdentifiedOrders(boolean proposes, List<DrugReference> questionDrugs,
+			Set<Object> herSubstances, List<RecordMapping> mappings, Map<DrugReference, SubstanceRendering> matched,
+			PatientClinicalContext context, boolean contraindicationsChecked, int unidentified) {
+		if (!contraindicationsChecked || !herSubstances.isEmpty()
+				|| !noneOfHerOrdersIdentified(context, herSubstances.size(), unidentified)) {
+			return null;
+		}
+		RecordMapping record = proposedDrugsRecord(proposes, questionDrugs, herSubstances, mappings);
+		if (record == null) {
+			return null;
+		}
+		DrugReference subject = subjectOfRecord(record, matched, context);
+		if (subject == null) {
+			return null;
+		}
+		return noneIdentifiedOpening(context) + "so the interaction check had none to relate " + subject.displayLabel()
+				+ " to. [" + record.getIndex() + "]";
+	}
+
+	/**
 	 * The module's answer to a proposal for a patient with NO active medication orders (ADR Decision 158), or
 	 * {@code null} where the model answers: <em>"This patient has no active medication orders, so the interaction check
 	 * had none to relate Warfarin to. [n]"</em>, citing the drug's reference record. {@link #composeFromNoPair} declines
@@ -3700,7 +3761,9 @@ public class DrugReferenceInjector {
 		for (DrugReference entry : questionDrugs) {
 			asked.add(entry.substanceGroupKey());
 		}
-		if (asked.size() != 1 || !Collections.disjoint(asked, herSubstances)
+		// One substance, or one combination product written as one name (ADR Decision 217); two drugs named apart keep
+		// the model call, each needing its own answer.
+		if (asked.size() != 1 && !namesOneProduct(question, questionDrugs) || !Collections.disjoint(asked, herSubstances)
 				|| !questionProposes(question, questionDrugs) && !asksWhetherItInteracts(question, questionDrugs)) {
 			return false;
 		}
@@ -3830,16 +3893,46 @@ public class DrugReferenceInjector {
 	 *  {@code QueryScopeRouter.DRUG_NAME}. */
 	private static List<String> markedWordsFrom(String folded, boolean[] named, int from) {
 		// One mark per run of named characters, so overlapping names ("aspirin" inside "acetylsalicylic
-		// acid (aspirin)") are one name, and two separate mentions are two.
+		// acid (aspirin)") are one name, and two separate mentions are two. Two names joined by nothing but a hyphen or a
+		// slash are one product written as one name — "artemether-lumefantrine", "lopinavir / ritonavir" — and one mark
+		// (ADR Decision 217); joined by a word ("artemether and lumefantrine") they stay two.
+		boolean[] joined = named.clone();
+		for (int k = from + 1; k < folded.length(); k++) {
+			if (named[k] || !named[k - 1]) {
+				continue;
+			}
+			int end = k;
+			while (end < folded.length() && !named[end] && JOINING_A_PRODUCTS_NAMES.indexOf(folded.charAt(end)) >= 0) {
+				end++;
+			}
+			String gap = folded.substring(k, end).trim();
+			if (end < folded.length() && named[end] && gap.length() == 1 && gap.charAt(0) != ' ') {
+				for (int g = k; g < end; g++) {
+					joined[g] = true;
+				}
+			}
+		}
 		StringBuilder marked = new StringBuilder();
 		for (int k = from; k < folded.length(); k++) {
-			if (!named[k]) {
+			if (!joined[k]) {
 				marked.append(folded.charAt(k));
-			} else if (k == from || !named[k - 1]) {
+			} else if (k == from || !joined[k - 1]) {
 				marked.append(' ').append(QueryScopeRouter.DRUG_NAME).append(' ');
 			}
 		}
 		return QueryScopeRouter.words(marked.toString());
+	}
+
+	/** What may stand between two names of one product's written name: a hyphen, a dash or a slash, spaced or not. */
+	private static final String JOINING_A_PRODUCTS_NAMES = " -/\u2013";
+
+	/**
+	 * Whether {@code question} names its drugs as ONE written name — a single drug, or one combination product whose
+	 * substances are joined by a hyphen or a slash (ADR Decision 217) — as {@link #wordsBesideItsNames} marks it.
+	 */
+	static boolean namesOneProduct(String question, List<DrugReference> questionDrugs) {
+		return !questionDrugs.isEmpty()
+				&& Collections.frequency(wordsBesideItsNames(question, questionDrugs), QueryScopeRouter.DRUG_NAME) == 1;
 	}
 
 	/** Where a word of a question may start: a letter or a digit, as {@code QueryScopeRouter.words} reads one. */
@@ -4154,13 +4247,17 @@ public class DrugReferenceInjector {
 	 */
 	private static String composeFromAScreenThatRelatedNothing(Integer screenNoteIndex, int screened,
 			List<SafetyWarning> findings, List<Integer> findingNumbers, Map<String, Integer> orderRecordNumbers,
-			Map<String, Integer> herOrderRecords, PatientClinicalContext context) {
+			Map<String, Integer> herOrderRecords, PatientClinicalContext context, int unidentified) {
 		if (screenNoteIndex != null && onlyHerOwnOrdersSharingASubstance(findings)) {
 			return withHerOwnOrdersSharingASubstance(interactionScreenNoteWords(screened) + " [" + screenNoteIndex + "]",
 					findings, findingNumbers, orderRecordNumbers, herOrderRecords);
 		}
 		if (findings.isEmpty() && hasNoActiveDrug(context)) {
 			return "This patient has no active medication orders, so there are none to check against each other.";
+		}
+		// Orders, and none the data identifies: none could be compared, and the closing line names them (ADR Decision 215).
+		if (findings.isEmpty() && noneOfHerOrdersIdentified(context, screened, unidentified)) {
+			return noneIdentifiedOpening(context) + "so there are none to check against each other.";
 		}
 		// ONE order has no pair to screen (ADR Decision 178).
 		if (findings.isEmpty() && hasOneActiveOrder(context, screened)) {
@@ -4397,9 +4494,14 @@ public class DrugReferenceInjector {
 				? drug + NOT_YET_STARTED_LEAD + herScheduledOrders
 				: drug + OWN_MEDICATION_LEAD + (orders.isEmpty() ? herOrders : orders);
 		lines.add(lead + ". " + String.join(", and ", counts) + ":");
+		// Two findings about one combination order say which of its substances each is about, as a proposal's lines do:
+		// bare, "rifampicin interacts with active order Isoniazid / pyrazinamide / rifampin" twice read as the drug
+		// interacting with itself (ADR Decision 214).
+		Map<SafetyWarning, String> substances = interactingSubstancesOfSharedOrders(statedFindings);
 		for (Integer i : stated) {
 			SafetyWarning finding = findings.get(i);
-			lines.add(findingLine(finding, numbers.get(i), orderRecordNumbers, herOrderRecords, true, null, saidOnce,
+			lines.add(findingLine(finding, numbers.get(i), orderRecordNumbers, herOrderRecords, true,
+					substances.get(finding), saidOnce,
 					unratedSaidOnce && SafetyWarning.TYPE_INTERACTION.equals(finding.getType())));
 		}
 		lines.add(contraindications > 0 ? SCREEN_SCOPE : BELOW_FLOOR_SCOPE);
@@ -4419,12 +4521,14 @@ public class DrugReferenceInjector {
 	 * <p>Fail-closed: one substance, hers, with a started order, asked about in one of Decision 193's or 202's shapes;
 	 * no pair above the floor and at least one below it, every one statable ({@code BelowFloorRows}); her allergy
 	 * records checked ({@code contraindicationsChecked}); no finding about the drug but the one saying her orders
-	 * already carry it, which this lead states; and the drug's own reference record in the chart, which it cites.
+	 * already carry it, which this lead states; and the drug's own reference record in the chart, which it cites. A
+	 * finding that another of her drugs is in several of her orders is stated under the statement, before the scope
+	 * (ADR Decision 212).
 	 */
 	private String composeBelowFloorAboutHerOwnMedication(String question, List<DrugReference> questionDrugs,
-			Set<Object> herSubstances, List<SafetyWarning> findings, PairChipExtent extent, List<RecordMapping> mappings,
-			List<DrugReference> orderEntries, PatientClinicalContext context, boolean contraindicationsChecked,
-			Map<String, Integer> herOrderRecords) {
+			Set<Object> herSubstances, List<SafetyWarning> findings, List<Integer> findingNumbers, PairChipExtent extent,
+			List<RecordMapping> mappings, List<DrugReference> orderEntries, PatientClinicalContext context,
+			boolean contraindicationsChecked, Map<String, Integer> orderRecordNumbers, Map<String, Integer> herOrderRecords) {
 		if (extent == null || extent.getFound() != 0 || extent.getBelowFloor() == null || extent.getBelowFloor().isEmpty()
 				|| !contraindicationsChecked) {
 			return null;
@@ -4439,10 +4543,23 @@ public class DrugReferenceInjector {
 						&& !asksAboutItBesideHerMedications(question, questionDrugs)) {
 			return null;
 		}
-		for (SafetyWarning finding : findings) {
-			if (finding.alreadyOrdered() == null) {
+		// The finding that her orders already carry the drug is what the lead states. One that it, or ANOTHER of her drugs,
+		// is in several of her orders relates it to none of her other orders, so it does not stop the answer and is stated
+		// under it, as Decision 206 states the first and Decision 159 the second (ADR Decision 212); any other finding keeps
+		// the model call.
+		Set<String> itsOwnOrders = itsOwnOrderDisplays(questionDrugs, orderEntries, context);
+		List<SafetyWarning> sharing = new ArrayList<SafetyWarning>();
+		List<Integer> sharingNumbers = new ArrayList<Integer>();
+		for (int i = 0; i < findings.size(); i++) {
+			SafetyWarning finding = findings.get(i);
+			if (finding.alreadyOrdered() != null) {
+				continue;
+			}
+			if (!finding.statesOrdersSharingASubstance() && !namesOnlyItsOwnOrders(finding, itsOwnOrders)) {
 				return null;
 			}
+			sharing.add(finding);
+			sharingNumbers.add(findingNumbers.get(i));
 		}
 		String herOrders = herStartedOrdersOf(questionDrugs.get(0), orderEntries, context, herOrderRecords);
 		if (herOrders.isEmpty()) {
@@ -4462,12 +4579,19 @@ public class DrugReferenceInjector {
 			return null;
 		}
 		int n = rows.orders.size();
-		return rows.drug + OWN_MEDICATION_LEAD + herOrders + ". The interaction data gives no rated reason to change it: it lists "
-				+ rows.drug + " against " + (n == 1 ? "one" : String.valueOf(n)) + " of this patient's other orders, "
+		// "other" only where no order it is listed against carries the drug itself: a constituent of its own combination
+		// order is not another order (ADR Decision 212).
+		String ofHers = Collections.disjoint(rows.orders, itsOwnOrders) ? " of this patient's other orders, "
+				: " of this patient's orders, ";
+		String statement = rows.drug + OWN_MEDICATION_LEAD + herOrders
+				+ ". The interaction data gives no rated reason to change it: it lists "
+				+ rows.drug + " against " + (n == 1 ? "one" : String.valueOf(n)) + ofHers
 				+ (!rows.allUnknown ? "rated " + rows.ratings() + ", below the level this module reports as a finding"
 						: (n == 1 ? "with no severity" : "none with a severity") + (rows.noMechanism ? " or mechanism" : "")
 								+ " on file")
-				+ ". [" + record.getIndex() + "]\n" + BELOW_FLOOR_SCOPE;
+				+ ". [" + record.getIndex() + "]";
+		return withHerOwnOrdersSharingASubstance(statement, sharing, sharingNumbers, orderRecordNumbers, herOrderRecords)
+				+ "\n" + BELOW_FLOOR_SCOPE;
 	}
 
 	/**
@@ -4842,6 +4966,9 @@ public class DrugReferenceInjector {
 	/** What follows the drug's name in the lead of {@link #composeAboutHerOwnMedication} — read by
 	 *  {@link ModuleAnswerStatement} too, which marks the finding it states (ADR Decision 194). */
 	static final String OWN_MEDICATION_LEAD = " is one of this patient's active medications";
+
+	/** How an answer to a proposal that said what the drug is for closes, the purpose and ")." after it (ADR Decision 213). */
+	static final String PURPOSE_NOT_WEIGHED_OPENING = "This check did not weigh what the drug is for (";
 
 	/** What follows the drug's name in that lead where none of her orders of it has started (ADR Decision 202). */
 	static final String NOT_YET_STARTED_LEAD = " is not yet one of this patient's active medications: ";

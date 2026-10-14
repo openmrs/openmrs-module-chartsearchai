@@ -1352,6 +1352,9 @@ public final class DrugReferenceValidity {
 			contradicted++;
 			details.add(row.getName() + " is filed as '" + substance + "', but the bridge files "
 					+ sample(elsewhere) + " on other rows and not on it");
+			// Reported, and the data left as loaded for matching; but a clinician is not shown the contradicted name as
+			// the drug's synonym (ADR Decision 216).
+			row.withholdTheContradictedGenericNameFromItsLabel();
 		}
 		if (contradicted > 0) {
 			report(SUBSTANCE_NAME_CONTRADICTED_BY_THE_BRIDGE, Remedy.REPORTED, contradicted,

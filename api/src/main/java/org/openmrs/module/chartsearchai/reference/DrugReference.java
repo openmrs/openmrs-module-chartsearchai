@@ -164,6 +164,18 @@ public class DrugReference {
 	}
 
 	/**
+	 * Whether {@link #displayLabel()} must not print {@link #getGenericName()}: the load's validity check reported it as
+	 * a substance name the dataset's own bridge contradicts — another substance's (ADR Decision 216). The LABEL only:
+	 * matching reads every name as loaded, which is the check's own remedy.
+	 */
+	private boolean genericNameContradicted;
+
+	/** Called by the load's validity check for a row it reports under {@code substance-name-contradicted-by-the-bridge}. */
+	void withholdTheContradictedGenericNameFromItsLabel() {
+		genericNameContradicted = true;
+	}
+
+	/**
 	 * The clinician-facing label for safety chips: the display name, with the diverging generic
 	 * appended as a synonym — {@code "Acetylsalicylic acid (aspirin)"} — so a warning is
 	 * recognizable against both the dataset's vocabulary and the question/chart's. The synonym
@@ -196,7 +208,7 @@ public class DrugReference {
 	 *         asking.
 	 */
 	private boolean appendsGenericName() {
-		if (genericName == null || genericName.isEmpty() || name == null) {
+		if (genericName == null || genericName.isEmpty() || name == null || genericNameContradicted) {
 			return false;
 		}
 		String n = name.toLowerCase(Locale.ROOT);

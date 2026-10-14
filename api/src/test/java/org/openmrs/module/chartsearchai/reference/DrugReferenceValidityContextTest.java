@@ -812,6 +812,26 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 	}
 
 	/**
+	 * What the module PRINTS for that row (ADR Decision 216). Matching is left as loaded — the substance name above —
+	 * but the label a clinician reads stops appending the name this check has just reported as another substance's: on
+	 * the public demo's data every co-trimoxazole patient's findings read "Sulfamethoxazole (sulfamethazine)", a
+	 * different sulfonamide. A synonym the check does not report keeps its place in the label.
+	 */
+	@Test
+	public void theLabelOfARowWhoseSubstanceNameTheBridgeContradictsDoesNotPrintThatName() throws IOException {
+		DrugReferenceService service = loading(SUBSTANCE_NAME_CONTRADICTED_FIXTURE, "h476-slice.json",
+				ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_DDINTER);
+
+		List<DrugReference> all = service.getAll();
+		DrugReference sulfamethoxazole = DrugReferenceTestSupport.row(all, "Sulfamethoxazole");
+		assertEquals("Sulfamethoxazole", sulfamethoxazole.displayLabel());
+		assertEquals("sulfamethazine", sulfamethoxazole.getSubstanceName(), "matching reads the data as loaded");
+		assertEquals("Acetylsalicylic acid (aspirin)",
+				DrugReferenceTestSupport.row(all, "Acetylsalicylic acid").displayLabel(),
+				"a synonym the check does not report is still printed");
+	}
+
+	/**
 	 * The edge of that rule the shipped file cannot reach, in a hand-authored dataset: a row whose own
 	 * display stem carries its substance name as a WORD is an ester, salt or presentation filed under its
 	 * parent, which both sibling rules read as legitimate, so the bridge leaving its name out of a concept

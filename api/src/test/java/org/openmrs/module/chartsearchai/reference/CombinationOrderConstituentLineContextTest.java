@@ -60,6 +60,31 @@ public class CombinationOrderConstituentLineContextTest extends BaseModuleContex
 	}
 
 	@Test
+	public void herOwnDrugsTwoFindingsAboutOneCombinationOrderNameTheSubstanceEachIsAbout() {
+		// The answer about a drug she already takes printed the bare line twice: on the public demo's data, a patient on
+		// rifampicin beside an "Isoniazid / pyrazinamide / rifampin" order was told "Rifampicin (rifampin) interacts with
+		// active order Isoniazid / pyrazinamide / rifampin — Major." and the same order again "— Minor.", reading as
+		// rifampicin interacting with itself (ADR Decision 214).
+		PatientChart chart = ask("Which of her medications interact with dolutegravir?",
+			DrugReferenceTestSupport.activeOrder("order-dtg", "Dolutegravir 50mg"), isoniazidRifapentine());
+
+		String answer = chart.getModuleAnswer();
+		assertNotNull(answer, "her own drug, so the module answers: " + chart.getText());
+		assertTrue(answer.startsWith("Dolutegravir is one of this patient's active medications"), "was: " + answer);
+		List<String> about = new ArrayList<String>();
+		for (String line : answer.split("\n")) {
+			if (line.contains("active order Isoniazid / Rifapentine")) {
+				about.add(line);
+			}
+		}
+		assertEquals(2, about.size(), "two lines about the one order, was: " + answer);
+		assertTrue(about.get(0).contains("The interacting substance is Rifapentine.")
+				!= about.get(1).contains("The interacting substance is Rifapentine."), "one is about rifapentine: " + answer);
+		assertTrue(about.get(0).contains("The interacting substance is Isoniazid.")
+				!= about.get(1).contains("The interacting substance is Isoniazid."), "the other about isoniazid: " + answer);
+	}
+
+	@Test
 	public void aSingleFindingAboutACombinationOrderIsNotGivenTheClause() {
 		PatientChart chart = ask("Can I give her warfarin?",
 			isoniazidRifapentine(),

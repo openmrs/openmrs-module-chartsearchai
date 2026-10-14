@@ -929,6 +929,65 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 				"the finding about her own orders is stated as a line, citing its record: " + lines[1]);
 	}
 
+	/**
+	 * A proposal that says what the drug is FOR is still a proposal (ADR Decision 213). On the public demo's data, "Can I
+	 * prescribe ibuprofen for pain?" went to the model for every patient and was answered "The records do not address
+	 * whether it is safe to prescribe ibuprofen for pain", where "Can I prescribe ibuprofen?" was the module's.
+	 */
+	@Test
+	public void aProposalNamingWhatTheDrugIsForIsAnsweredAsTheProposal() throws Exception {
+		executeDataSet(RIFAMPICIN_ORDER);
+		executeDataSet(SECOND_RIFAMPICIN_ORDER);
+		onlyFindingIsHerOwnOrdersSharingASubstance("Can I give her mebendazole?");
+		String[][] questions = { { "Can I give her mebendazole for worms?", "worms" },
+			{ "Can I prescribe mebendazole for her worms?", "her worms" },
+			{ "Is it safe to give her mebendazole for a worm infection?", "a worm infection" } };
+		for (String[] question : questions) {
+			RecordingProvider provider = new RecordingProvider();
+			ChartAnswer answer = serviceWith(provider, shipped()).search(patient, question[0]);
+
+			assertEquals(0, provider.calls, "no model is asked for " + question[0] + ": " + answer.getAnswer());
+			String[] lines = answer.getAnswer().split("\n");
+			assertEquals("The interaction check relates Mebendazole to none of this patient's 3 active medications. ["
+					+ referenceRecordOf(answer, "mebendazole") + "]", lines[0], question[0]);
+			// The check weighed nothing of what the drug is for, and the answer must not read as a word on that use.
+			assertEquals("This check did not weigh what the drug is for (" + question[1] + ").", lines[lines.length - 1],
+				question[0]);
+		}
+	}
+
+	/** The question ADR Decision 108 named as its grammar's first miss to read, answered as its proposal is. */
+	@Test
+	public void theKneePainProposalIsAnsweredWithItsFindingsAndSaysThePurposeWasNotWeighed() {
+		answerFromFindings(true);
+		for (String question : Arrays.asList("Can I give her ibuprofen for her knee pain?",
+			"Is ibuprofen safe to give for her knee pain?", "Can ibuprofen be given for her knee pain?")) {
+			RecordingProvider provider = new RecordingProvider();
+			ChartAnswer answer = serviceWith(provider).search(patient, question);
+
+			assertEquals(0, provider.calls, "no model is asked for " + question + ": " + answer.getAnswer());
+			assertTrue(answer.getAnswer().startsWith(DrugReferenceInjector.WITHHOLD_LEAD_OPENING), question + " was: "
+					+ answer.getAnswer());
+			assertTrue(answer.getAnswer().endsWith("\nThis check did not weigh what the drug is for (her knee pain)."),
+				question + " was: " + answer.getAnswer());
+		}
+	}
+
+	/** What a purpose may not carry: a second question, a factor the findings do not weigh, or a question of its own. */
+	@Test
+	public void aPurposeCarryingSomethingTheFindingsDoNotAnswerStillAsksTheModel() throws Exception {
+		executeDataSet(RIFAMPICIN_ORDER);
+		executeDataSet(SECOND_RIFAMPICIN_ORDER);
+		for (String question : Arrays.asList("Can I give her mebendazole for her kidneys?",
+			"Can I give her mebendazole for how long?", "Can I give her mebendazole for worms and what dose?",
+			"Can I give her mebendazole for worms during pregnancy?")) {
+			RecordingProvider provider = new RecordingProvider();
+			serviceWith(provider, shipped()).search(patient, question);
+
+			assertEquals(1, provider.calls, "the model is asked " + question);
+		}
+	}
+
 	/** The same beside a proposal the check relates to her orders only below the severity floor (ADR Decisions 142,
 	 *  159): the below-floor answer, then the finding about her own orders. */
 	@Test
@@ -2199,12 +2258,12 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 			"When can I start her on ibuprofen?",
 			"How long can she take ibuprofen?",
 			"What can I give her instead of ibuprofen?",
-			// a condition or a purpose the findings may not address
+			// a condition the findings may not address. A purpose the answer can say it did not weigh is admitted
+			// (theKneePainProposalIsAnsweredWithItsFindingsAndSaysThePurposeWasNotWeighed, ADR Decision 213); one naming
+			// a factor the findings do not weigh is not.
 			"Is ibuprofen safe for her kidneys?",
-			"Can I give her ibuprofen for her knee pain?",
-			// the same two, and a second drug, in the drug-first shapes (ADR Decision 134)
-			"Is ibuprofen safe to give for her knee pain?",
-			"Can ibuprofen be given for her knee pain?",
+			"Can I give her ibuprofen for her kidney pain?",
+			// a second drug, in the drug-first shapes (ADR Decision 134)
 			"Is ibuprofen safe to add to omeprazole?",
 			"Can ibuprofen be given with omeprazole?",
 			// inverse polarity in the passive: a "No" lead would answer it backwards

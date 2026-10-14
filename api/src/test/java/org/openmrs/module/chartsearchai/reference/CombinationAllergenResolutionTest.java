@@ -108,8 +108,8 @@ public class CombinationAllergenResolutionTest {
 		assertEquals(SafetyWarning.TYPE_CONTRAINDICATION, warnings.get(0).getType());
 		// The parenthesized synonym is displayLabel()'s, not this fix's: the shipped KB gives this row
 		// the rxnorm_name "sulfamethazine", a DIFFERENT sulfonamide, so the two names diverge and the
-		// label carries both. Reported as a KB data defect; asserted verbatim here so the label is the
-		// one production prints rather than the one this test would prefer.
+		// label carries both — over these raw-parse entries. The module's own load runs the check that
+		// reports that name and prints "Sulfamethoxazole" alone (ADR Decision 216).
 		assertEquals("The patient has a recorded allergy to Sulfamethoxazole (sulfamethazine).",
 				warnings.get(0).getDetail(),
 				"and it names the constituent the patient is allergic to, not the one whose alias list "

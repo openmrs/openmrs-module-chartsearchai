@@ -47,6 +47,60 @@ public class UnidentifiedActiveOrdersAnswerTest extends BaseModuleContextSensiti
 				.setGlobalProperty(ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS, "true");
 	}
 
+	/**
+	 * Every order of hers is one the data does not identify (ADR Decision 215). On the public demo a patient whose active
+	 * orders are her childhood vaccinations was answered by the model for every drug question: "The records do not address
+	 * the safety of giving rifampicin", and "Clarithromycin has major interactions with ivosidenib, ketoconazole …" — the
+	 * dataset's partners, none of them hers. Decision 158 answers a patient with no orders, Decision 161 one with some
+	 * identified; with orders and none identified, neither did.
+	 */
+	@Test
+	public void aProposalForAPatientNoneOfWhoseOrdersTheDataIdentifiesSaysTheCheckHadNoneToRelateItTo() {
+		PatientChart chart = askOverVaccinationsOnly("Can I give her rifampicin?");
+
+		String answer = chart.getModuleAnswer();
+		assertNotNull(answer, "the module answers: " + chart.getText());
+		String[] lines = answer.split("\n");
+		assertTrue(lines[0].matches("The drug data identifies none of this patient's 4 active medication orders, so the "
+				+ "interaction check had none to relate Rifampicin \\(rifampin\\) to\\. \\[\\d+\\]"), "was: " + answer);
+		assertEquals("Not checked: 4 active orders the drug data does not identify — Polio vaccination, oral; Measles "
+				+ "vaccination; Hepatitis B vaccination (2 orders). Whether one of them is the drug asked about is not "
+				+ "established.", lines[1], "was: " + answer);
+		assertEquals(2, lines.length, "was: " + answer);
+	}
+
+	@Test
+	public void aScreenOfAPatientNoneOfWhoseOrdersTheDataIdentifiesSaysThereAreNoneToCheck() {
+		PatientChart chart = askOverVaccinationsOnly("Does she have any drug interactions between her current medications?");
+
+		String answer = chart.getModuleAnswer();
+		assertNotNull(answer, "the module answers: " + chart.getText());
+		String[] lines = answer.split("\n");
+		assertEquals("The drug data identifies none of this patient's 4 active medication orders, so there are none to "
+				+ "check against each other.", lines[0], "was: " + answer);
+		assertTrue(lines[1].startsWith("Not checked: 4 active orders the drug data does not identify — Polio vaccination, "
+				+ "oral; Measles vaccination; Hepatitis B vaccination (2 orders). "), "was: " + answer);
+		assertEquals(2, lines.length, "was: " + answer);
+	}
+
+	private PatientChart askOverVaccinationsOnly(String question) {
+		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
+				new PatientClinicalContext.ActiveDrugOrder("order-polio", "Polio vaccination, oral",
+						DrugReferenceTestSupport.set("Polio vaccination, oral")),
+				new PatientClinicalContext.ActiveDrugOrder("order-measles", "Measles vaccination",
+						DrugReferenceTestSupport.set("Measles vaccination")),
+				new PatientClinicalContext.ActiveDrugOrder("order-hepb-1", "Hepatitis B vaccination",
+						DrugReferenceTestSupport.set("Hepatitis B vaccination")),
+				new PatientClinicalContext.ActiveDrugOrder("order-hepb-2", "Hepatitis B vaccination",
+						DrugReferenceTestSupport.set("Hepatitis B vaccination")));
+		return DrugReferenceTestSupport.injectorWithSafety(shipped()).injectRecords(
+				DrugReferenceTestSupport.oneRecordChart(),
+				DrugReferenceTestSupport.ctx(60, null,
+						DrugReferenceTestSupport.set("Polio vaccination, oral", "Measles vaccination", "Hepatitis B vaccination"),
+						DrugReferenceTestSupport.set(), null, null, orders),
+				question);
+	}
+
 	@Test
 	public void aProposalBesideSeveralUnidentifiedOrdersNamesEachOnceAndCountsEveryOrder() {
 		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(

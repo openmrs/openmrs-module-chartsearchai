@@ -662,7 +662,59 @@ public final class QueryScopeRouter {
 	 * 129.
 	 */
 	public static boolean asksWhetherToGiveADrug(List<String> wordsWithTheDrugMarked) {
-		return fitsAShape(wordsWithTheDrugMarked, PROPOSAL_SHAPES) || asksWhetherNotToGiveADrug(wordsWithTheDrugMarked);
+		if (fitsAShape(wordsWithTheDrugMarked, PROPOSAL_SHAPES) || asksWhetherNotToGiveADrug(wordsWithTheDrugMarked)) {
+			return true;
+		}
+		List<String> proposal = withoutAPurpose(wordsWithTheDrugMarked);
+		return proposal != null
+				&& (fitsAShape(proposal, PROPOSAL_SHAPES) || asksWhetherNotToGiveADrug(proposal));
+	}
+
+	/**
+	 * The purpose a proposal closes with — <em>"pain"</em>, <em>"her knee pain"</em> — where {@link #asksWhetherToGiveADrug}
+	 * admits it only once that purpose is set aside, or {@code null}. The findings do not weigh what a drug is for, so an
+	 * answer to such a proposal says so (ADR Decision 213).
+	 */
+	public static String statedPurpose(List<String> wordsWithTheDrugMarked) {
+		if (fitsAShape(wordsWithTheDrugMarked, PROPOSAL_SHAPES) || asksWhetherNotToGiveADrug(wordsWithTheDrugMarked)) {
+			return null;
+		}
+		List<String> proposal = withoutAPurpose(wordsWithTheDrugMarked);
+		if (proposal == null || !fitsAShape(proposal, PROPOSAL_SHAPES) && !asksWhetherNotToGiveADrug(proposal)) {
+			return null;
+		}
+		return String.join(" ", wordsWithTheDrugMarked.subList(proposal.size() + 1, wordsWithTheDrugMarked.size()));
+	}
+
+	/** Words a closing purpose may not carry: a second question joined to it, or a question of its own. */
+	private static final Set<String> NOT_A_PURPOSE = new HashSet<String>(Arrays.asList("and", "or", "but", "also", "plus",
+		"with", "while", "during", "if", "how", "what", "which", "when", "why", "who", "whether", "long", "much", "many"));
+
+	/**
+	 * {@code words} with a closing PURPOSE taken off — <em>"Can I prescribe ibuprofen for pain?"</em>, <em>"Can I give her
+	 * mebendazole for her worms?"</em> — or {@code null} where they close with none the proposal grammar may set aside (ADR
+	 * Decision 213). What a drug is for changes nothing the findings answer, and the module never answers it: its answer
+	 * states what the check found and what it does not cover. So a purpose of at most four words after the last "for" is
+	 * set aside, unless it is the patient alone (the shapes' own "for her"), or carries the drug, a word joining a second
+	 * question or asking one of its own ({@link #NOT_A_PURPOSE}), or a factor the findings do not weigh
+	 * ({@link #OTHER_FACTOR}) — each of which keeps the model call, as the grammar's fail-closed design has it.
+	 */
+	static List<String> withoutAPurpose(List<String> words) {
+		int at = words.lastIndexOf("for");
+		int length = words.size() - at - 1;
+		if (at < 1 || length < 1 || length > 4) {
+			return null;
+		}
+		List<String> purpose = words.subList(at + 1, words.size());
+		if (String.join(" ", purpose).matches(PATIENT)) {
+			return null;
+		}
+		for (String word : purpose) {
+			if (DRUG_NAME.equals(word) || NOT_A_PURPOSE.contains(word) || OTHER_FACTOR.matcher(word).find()) {
+				return null;
+			}
+		}
+		return new ArrayList<String>(words.subList(0, at));
 	}
 
 	/**

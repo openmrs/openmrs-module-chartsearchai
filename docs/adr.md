@@ -16528,3 +16528,166 @@ Pinned by `IdenticalRecordCitationGroupTest`, over `TestDatasetHelper.FULL_PATIE
 `.theStreamingPathPublishesTheSplitAnswerOnBothItsAnswers` redden when the comparison reads the dated text;
 `.aBracketedValueWhoseNumbersAreRecordIndexesIsNeverSplit` and `.aGroupOfDifferentRecordsIsLeftAsTheModelWroteIt` redden
 when any group of record indexes is accepted.
+
+## Decision 212: Her own drug related to her others only below the floor is answered beside another of her drugs in several orders
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-14 to fix what a sweep of the public demo's data
+found. It extends [Decision 204](#decision-204-her-own-drug-related-to-her-other-orders-only-below-the-severity-floor-is-answered-as-hers--the-interaction-data-giving-no-rated-reason-to-change-it)
+the way [Decision 159](#decision-159-her-own-orders-sharing-a-substance-do-not-stop-the-answer-to-a-proposal) extended
+the proposal's answers.
+
+### Context
+
+On the demo's seed every drug is re-ordered at each visit and the earlier order is never stopped, so most patients'
+drugs are each in two to five of their active orders, and #477's finding — a substance in more than one of her orders —
+is raised for every one of them. Mogan Kamwara's *"Which of his medications interact with nevirapine?"* (the 8088
+replica of the demo, E2B) went to the model, which answered *"Nevirapine interacts with lamivudine and stavudine"*: the
+data rates neither pair. `composeBelowFloorAboutHerOwnMedication` refused every finding but the one about the asked
+drug's own orders, so the finding that his LAMIVUDINE is in three orders stopped Decision 204's answer.
+
+### The decision
+
+- **A finding that the drug, or another of her drugs, is in several of her orders does not stop Decision 204's
+  answer.** The asked drug's own is the drug-in-play arm's finding, recognised as Decision 206 recognises it
+  (`namesOnlyItsOwnOrders`); another drug's is #477's (`statesOrdersSharingASubstance`). Each is stated under the
+  statement and before the scope, through `withHerOwnOrdersSharingASubstance`, as Decision 159 states it under a
+  proposal's. Any other finding still keeps the model call.
+
+Pinned by `OwnMedicationSafetyContextTest.herOwnDrugRelatedOnlyBelowTheFloorIsAnsweredAsHersBesideAnotherOfHerDrugsInTwoOrders`,
+which failed — the model was asked — before the change. Its first version re-ordered only the OTHER drug, and passed while
+the demo's nevirapine, re-ordered itself, still reached the model: the case now re-orders both.
+
+- **An order the drug is listed against that carries the drug itself is not called "other"** — a constituent of its own
+  combination order: the demo's zidovudine, in a `Lamivudine / zidovudine` order, read *"against 2 of this patient's other
+  orders"*, one of them that order. Pinned by
+  `OwnMedicationSafetyContextTest.aBelowFloorPartnerInsideTheDrugsOwnCombinationOrderIsNotCalledAnotherOrder`.
+
+## Decision 213: A proposal that says what the drug is for is answered as the proposal, and the answer says the purpose was not weighed
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-14. It narrows
+[Decision 108](#decision-108-a-drug-safety-question-the-module-resolved-itself-is-answered-from-its-own-findings-and-the-model-is-not-asked-to-restate-them)'s
+exclusion of a purpose clause, which that decision called unmeasured and named, *"Can I give her ibuprofen for her knee
+pain?"*, as the first miss to read.
+
+### Context
+
+On the demo replica, *"Can I prescribe ibuprofen for pain?"* went to the model for all eight patients asked, and four
+were told *"The records do not address whether it is safe to prescribe ibuprofen for pain"*, where *"Can I prescribe
+ibuprofen?"* was the module's: the check had run and had a statement to make. The proposal grammar
+(`QueryScopeRouter.PROPOSAL_SHAPES`) admits no purpose.
+
+### The decision
+
+- **A closing purpose is set aside before the grammar is asked** (`QueryScopeRouter.withoutAPurpose`): at most four words
+  after the last "for", not the patient alone (the shapes' own "for her"), and carrying no drug name, no word joining a
+  second question or asking one (`NOT_A_PURPOSE`: "and", "how", "long", "during" …), and no factor the findings do not
+  weigh (`OTHER_FACTOR`: kidneys, liver, pregnancy, dose …). Each of those still keeps the model call.
+- **The answer closes by saying the purpose was not weighed**: *"This check did not weigh what the drug is for (her knee
+  pain)."* (`QueryScopeRouter.statedPurpose`, `DrugReferenceInjector.PURPOSE_NOT_WEIGHED_OPENING`). The module's answer
+  states what its check found and is never a clearance; a purpose can name a condition the check does not read, and the
+  line keeps the answer from reading as a word on that use.
+
+Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aProposalNamingWhatTheDrugIsForIsAnsweredAsTheProposal`,
+`.theKneePainProposalIsAnsweredWithItsFindingsAndSaysThePurposeWasNotWeighed` and
+`.aPurposeCarryingSomethingTheFindingsDoNotAnswerStillAsksTheModel`. The three knee-pain questions moved from
+`.aQuestionTheModuleDidNotResolveAsASuitabilityQuestionStillAsksTheModel`, which keeps *"for her kidney pain"*.
+
+## Decision 214: The answer about her own drug says which substance of a combination order each finding is about
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-14.
+
+### Context
+
+On the demo replica, a patient on a rifampicin-containing regimen asked *"Which of her medications interact with
+rifampicin?"* was told *"Rifampicin (rifampin) interacts with active order Isoniazid / pyrazinamide / rifampin — Major."*
+and the same order again *"— Minor."*: two findings, one against the order's pyrazinamide and one against its isoniazid,
+which read as rifampicin interacting with itself. A proposal's lines already name the substance in that case
+(`interactingSubstancesOfSharedOrders`); `composeAboutHerOwnMedication` passed none.
+
+### The decision
+
+- **`composeAboutHerOwnMedication` names the interacting substance where two of its findings share a drug and an
+  order**, through the same `interactingSubstancesOfSharedOrders` the proposal's composition uses, so one rule decides
+  both.
+
+Pinned by `CombinationOrderConstituentLineContextTest.herOwnDrugsTwoFindingsAboutOneCombinationOrderNameTheSubstanceEachIsAbout`.
+
+## Decision 215: A patient none of whose orders the drug data identifies is told so, not left to the model
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-14. It fills the gap between
+[Decision 158](#decision-158-a-proposal-for-a-patient-with-no-active-medication-orders-is-answered-with-what-the-check-had-to-compare)
+(no orders) and [Decision 161](#decision-161-orders-the-drug-data-does-not-identify-are-named-rather-than-giving-the-question-up)
+(some orders identified).
+
+### Context
+
+On the demo replica, a patient whose active orders are her childhood vaccinations was answered by the model for every
+drug question: *"The records do not address the safety of giving rifampicin"*, *"Clarithromycin has major interactions
+with ivosidenib, ketoconazole, lapatinib …"* — the dataset's partners, none hers — and *"The records do not address drug
+interactions between current medications."* `composeFromNoPair` needs an identified order and
+`composeFromNoActiveOrders` needs none at all.
+
+### The decision
+
+- **A proposal**: *"The drug data identifies none of this patient's 4 active medication orders, so the interaction check
+  had none to relate Rifampicin (rifampin) to. [n]"* (`DrugReferenceInjector.composeFromNoIdentifiedOrders`), on Decision
+  158's conjuncts — her orders read and started, the contraindication arms on, one drug proposed whose record is in the
+  chart.
+- **A screen**: *"… so there are none to check against each other."*
+- Decision 161's closing line then names each order as not checked, as it does wherever an order is unidentified.
+
+Pinned by `UnidentifiedActiveOrdersAnswerTest.aProposalForAPatientNoneOfWhoseOrdersTheDataIdentifiesSaysTheCheckHadNoneToRelateItTo`
+and `.aScreenOfAPatientNoneOfWhoseOrdersTheDataIdentifiesSaysThereAreNoneToCheck`.
+
+## Decision 216: A drug's label does not print a synonym the load's check reports as another substance's
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-14. It changes what is PRINTED for the rows
+#476's check reports, and leaves that check's remedy for matching as it was.
+
+### Context
+
+The shipped knowledge base files `Sulfamethoxazole` under `rxnorm_name: sulfamethazine`, a different sulfonamide, and
+`DrugReference.displayLabel` appends a diverging generic name as a synonym, so every co-trimoxazole patient on the demo
+was told about *"Sulfamethoxazole (sulfamethazine)"*. `DrugReferenceValidity`'s
+`substance-name-contradicted-by-the-bridge` rule already reports the row, and leaves the data as loaded because the
+module cannot choose which of the row's names to believe for MATCHING. Printing is a separate question: a name the
+module's own check has found contradicted is not one to show a clinician as the drug's synonym.
+
+### The decision
+
+- **A row the rule reports keeps its substance name and every alias for matching, and its label prints the display name
+  alone** (`DrugReference.withholdTheContradictedGenericNameFromItsLabel`, called by the rule). A synonym the rule does not
+  report — *"Acetylsalicylic acid (aspirin)"* — is printed as before.
+- **What it leaves**: `DrugReferenceTestSupport.shippedEntries()` reads the raw parse, which does not run the load-time
+  check, so the cases built on it (`CombinationAllergenResolutionTest`, `OrdersSharingASubstanceTest`) still print the
+  synonym; their comments now say so. Moving that helper onto the load path shifts measured figures over the shipped
+  dataset (`BridgedConceptLegBoundsTest` reads 135 refused concepts rather than 121), which is its own question.
+
+Pinned by `DrugReferenceValidityContextTest.theLabelOfARowWhoseSubstanceNameTheBridgeContradictsDoesNotPrintThatName`, over
+the real load of the #476 slice.
+
+## Decision 217: A proposal naming one combination product is answered as the proposal it is
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-14. It widens which proposals
+[Decision 108](#decision-108-a-drug-safety-question-the-module-resolved-itself-is-answered-from-its-own-findings-and-the-model-is-not-asked-to-restate-them)'s
+answer takes, and keeps two drugs named apart with the model.
+
+### Context
+
+On the demo replica, *"Can I give him artemether-lumefantrine for malaria?"* for a patient on lopinavir/ritonavir — beside a
+Major finding, artemether against that order — was answered by the model *"The records do not address the safety of giving
+artemether-lumefantrine for malaria."* `answersFromFindings` admitted only a question resolving ONE substance, the guard
+against *"Can I give her ibuprofen and omeprazole?"*, which needs an answer per drug; and the proposal grammar saw two
+marked names, the hyphen between them dropped.
+
+### The decision
+
+- **Two names joined by nothing but a hyphen, a dash or a slash are one written name, and one mark**
+  (`DrugReferenceInjector.markedWordsFrom`): *"artemether-lumefantrine"*, *"lopinavir / ritonavir"*. Joined by a word they
+  stay two.
+- **A proposal naming its drugs as ONE written name is admitted however many substances it resolves**
+  (`DrugReferenceInjector.namesOneProduct`), on every other conjunct the gate already asks — none of them hers, a proposal
+  shape, a finding licensing the answer. Its lines name each substance's finding.
+
+Pinned by `CombinationProductProposalContextTest.aProposalNamingOneCombinationProductIsAnsweredWithItsFindings` and
+`.twoDrugsNamedApartStillAskTheModel`.

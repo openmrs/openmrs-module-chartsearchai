@@ -449,7 +449,8 @@ public final class QueryScopeRouter {
 	 * #INTERACTS_WITH_HER_MEDICATIONS_SHAPES} (ADR Decision 181). Fail-CLOSED as {@link #asksWhetherToGiveADrug} is.
 	 */
 	public static boolean asksWhetherADrugInteractsWithHerMedications(List<String> wordsWithTheDrugMarked) {
-		return fitsAShape(wordsWithTheDrugMarked, INTERACTS_WITH_HER_MEDICATIONS_SHAPES);
+		return fitsAShape(wordsWithTheDrugMarked, INTERACTS_WITH_HER_MEDICATIONS_SHAPES)
+				|| fitsAShape(wordsWithTheDrugMarked, BESIDE_A_GROUP_OF_HER_MEDICATIONS_SHAPES);
 	}
 
 	/** A drug slot of the two-drug shapes below, which may name the drug as hers — "her methotrexate" (ADR Decision 233):
@@ -526,6 +527,19 @@ public final class QueryScopeRouter {
 	private static final String HER_MEDICATION_GROUP_SAFE_TOGETHER = "(?:is it (?:safe|ok|okay|fine|appropriate) to (?:continue"
 			+ "|give|take|keep|use|combine) (?:all )?(?:of )?" + HER_MEDICATION_GROUP + "|are (?:all )?(?:of )?" + HER_MEDICATION_GROUP
 			+ " (?:safe|ok|okay|fine)(?: to (?:take|give|continue))?) together";
+
+	/**
+	 * One drug asked about beside a GROUP of her medications — "Does fluconazole interact with her TB drugs?", "Is there any
+	 * problem combining her TB drugs with fluconazole?" — asked as whether it interacts with her medications (ADR Decision
+	 * 271), whose answer states every finding about it against her orders, the group's among them. The group names no drug,
+	 * so no shape held such a question and the model's "No —" lead read it backwards.
+	 */
+	private static final List<Pattern> BESIDE_A_GROUP_OF_HER_MEDICATIONS_SHAPES = shapes(
+			"(?:does|will|would|could|can) " + D + " interact with (?:any of )?" + HER_MEDICATION_GROUP,
+			"(?:(?:is|are) there )?any (?:problems?|issues?|concerns?|interactions?) (?:with |in )?(?:combining|mixing) "
+					+ HER_MEDICATION_GROUP + " (?:with|and) " + D,
+			"(?:(?:is|are) there )?any (?:problems?|issues?|concerns?|interactions?) (?:with |in )?(?:combining|mixing|giving|"
+					+ "starting|adding|taking) " + D + " (?:with|to|and|alongside) " + HER_MEDICATION_GROUP);
 
 	/** The screen shapes naming no medication word the trigger's own cues know (ADR Decisions 221, 254). */
 	private static final List<Pattern> MEDICATION_GROUPS_SHAPES = shapes(TWO_OF_HER_MEDICATION_GROUPS_INTERACT,

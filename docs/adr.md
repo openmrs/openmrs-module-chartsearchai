@@ -18078,3 +18078,25 @@ shapes (`QueryScopeRouter.asksAboutThePairsInteraction`): the module states what
 each finding whole with its mechanism, and neither "Yes" nor "No".
 
 Pinned by `TogetherWithHerOwnMedicationContextTest.whetherToSeparateTwoDrugsDosesIsAnsweredWithTheFindingWhole`.
+
+## Decision 271: One drug asked about beside a group of her medications is asked as whether it interacts with them
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-15 to fix the errors the sweep left.
+
+### Context
+
+On the 3.7.1 standalone a patient on a rifampicin-based TB regimen asked *"Is there any problem combining her TB drugs
+with fluconazole?"*. One run of the model answered *"Yes, there are problems …"*; the next, after a knowledge-base refresh
+moved its prompt, *"No — Fluconazole should not be combined with rifampin"* — a "No" that reads backwards to "is there any
+problem?". "Her TB drugs" names a group of her medications, never a drug
+([Decision 221](#decision-221-whether-two-groups-of-her-own-medications-interact-is-a-screen-of-her-medications)), so no shape held the question and the model's habitual lead decided it.
+
+### The decision
+
+A question about one drug beside a group of her medications — *"Does fluconazole interact with her TB drugs?"*, *"Is there
+any problem combining her TB drugs with fluconazole?"*, *"Are there any issues with giving fluconazole with her TB
+treatment?"* — is one of `QueryScopeRouter.asksWhetherADrugInteractsWithHerMedications`'s shapes
+([Decision 181](#decision-181-a-question-whether-not-to-give-a-drug-or-whether-it-interacts-is-answered-without-an-inverted-no)), answered *"Yes — Fluconazole interacts with this patient's active medications."* with its
+findings against her orders, the group's among them.
+
+Pinned by `DrugBesideHerMedicationGroupTest`.

@@ -6770,7 +6770,7 @@ public class DrugReferenceInjector {
 			Object key = partner != null ? (Object) partner
 					: (label != null ? (Object) label.toLowerCase(Locale.ROOT) : i);
 			DrugReference.Interaction incumbent = best.get(key);
-			if (incumbent == null || outranksForRendering(i, incumbent, context, floor)) {
+			if (incumbent == null || outranksForRendering(i, incumbent, context, floor, partner)) {
 				best.put(key, i);
 			}
 		}
@@ -6779,8 +6779,9 @@ public class DrugReferenceInjector {
 
 	/** @return true when {@code candidate} is the row this record should show for a partner
 	 *          {@code incumbent} already covers: the row that sits in the earlier of
-	 *          {@link #renderTier}'s segments, then {@link DrugSafetyValidator#outranksOnRule}. See
-	 *          {@link #onePerPartner}.
+	 *          {@link #renderTier}'s segments, then, at one severity, the rule about {@code partner}'s own row
+	 *          ({@link DrugSafetyValidator#aboutItsOwnPartnerRow}, ADR Decision 238), then
+	 *          {@link DrugSafetyValidator#outranksOnRule}. See {@link #onePerPartner}.
 	 *
 	 *          <p>The whole tier and not promotability alone since issue #357, because promotability
 	 *          stopped being the whole of where a row puts its partner. Two sub-floor rows of one
@@ -6791,11 +6792,19 @@ public class DrugReferenceInjector {
 	 *          exhaust the budget, out of the record: this issue's own defect surviving inside the
 	 *          ordering added to close it. */
 	private static boolean outranksForRendering(DrugReference.Interaction candidate,
-			DrugReference.Interaction incumbent, PatientClinicalContext context, int floor) {
+			DrugReference.Interaction incumbent, PatientClinicalContext context, int floor, DrugReference partner) {
 		int candidateTier = renderTier(candidate, context, floor);
 		int incumbentTier = renderTier(incumbent, context, floor);
 		if (candidateTier != incumbentTier) {
 			return candidateTier < incumbentTier;
+		}
+		// The chip's step, in the same place: at one severity, the rule about her order's own row (ADR Decision 238).
+		if (DrugSafetyValidator.severityPriority(candidate.getSeverity()) == DrugSafetyValidator.severityPriority(
+				incumbent.getSeverity())) {
+			int about = DrugSafetyValidator.aboutItsOwnPartnerRow(candidate, incumbent, partner);
+			if (about != 0) {
+				return about > 0;
+			}
 		}
 		return DrugSafetyValidator.outranksOnRule(candidate, incumbent);
 	}

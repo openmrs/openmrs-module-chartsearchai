@@ -17250,3 +17250,39 @@ vibrio cholerae cvd 103-hgr strain live antigen, warfarin, bcg, live, tice strai
   Johnson's own questions are that case, so they are unchanged.
 
 Pinned by `OwnMedicationSafetyContextTest.anyInteractionsOrProblemsWithHerOwnDrugIsAnsweredAsHers`.
+
+## Decision 238: Two rules reaching one of her orders at one severity, the rule about that order's own row is kept
+
+**Status: Accepted** (October 2026) — the owner's standing request of 2026-10-15 to fix what misleads a clinician. A
+companion to [Decision 234](#decision-234-a-partner-a-rule-names-by-another-substances-name-is-printed-by-its-own).
+
+### Context
+
+The shipped knowledge base files `Omeprazole` (DDInter1340) under `rxnorm_name: esomeprazole` and esomeprazole's ATC
+code, so a drug with a rule about each of the two rows carries two rules whose partner token is "esomeprazole", and both
+reach an omeprazole order. Diazepam has one Moderate rule about each; at one severity the longer note won, and on the
+3.7.1 standalone Brian Lopez, on diazepam and omeprazole, read *"Diazepam interacts with active order esomeprazole —
+Moderate"* in the chip and *"Interactions: esomeprazole (…)"* in the record: a drug he does not take.
+
+### The decision
+
+- **Where two rules of one drug reach one of her orders at one severity, the rule whose recorded partner row is that
+  order's own row is kept** (`DrugSafetyValidator.aboutItsOwnPartnerRow`, reading `DrugReference.Interaction.getPartnerName()`
+  against the order's entry), ahead of the route and note-length steps. Severity still decides first: the rule kept is
+  never a less severe one.
+- **One step for the chip's collapse and the record's** (`DrugReferenceInjector`'s `onePerPartner`), so the two keep the
+  same rule and the record's note names the partner as the chip does ([Decision 63](#decision-63-one-response-names-one-active-order-one-way-so-the-reconciliation-stops-being-the-folds)).
+- **A source that records no partner row decides nothing here**, so a hand-authored dataset collapses as before.
+- **Where the competing rules name the partner alike, it moves only which mechanism a clinician reads**, toward the one
+  the source recorded for the drug she takes. Measured 2026-10-15 by re-asking the standalone's 251-question corpus: beside Brian
+  Lopez's own screen, five answers moved, each for this reason and none in severity. Two read another presentation's
+  mechanism before: Betty Williams' lidocaine chip, about her bupivacaine order, described *"bupivacaine liposome
+  suspension"* (the `Bupivacaine (liposomal)` row), and Sarah Taylor's ibuprofen chip, about her oral diclofenac,
+  described absorption after topical use (the `Diclofenac (topical)` row). Three now carry the note DDInter records for
+  the order's own row where a sibling row's longer one won: Helen Roberts' methotrexate and omeprazole chips about her
+  salicylic acid order, which carried the `Salicylic acid (sodium)` row's notes — the omeprazole one with a sentence
+  saying the interaction's clinical significance is unknown, which salicylic acid's own note does not say — and Susan
+  Young's neomycin chip, whose two notes differ in whitespace alone. The four model-written answers among the five
+  were reworded around the new note.
+
+Pinned by `ConflatedPartnerRowContextTest`, over the real load of a verbatim slice of the shipped knowledge base.

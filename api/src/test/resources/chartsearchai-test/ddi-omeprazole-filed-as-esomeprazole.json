@@ -1,0 +1,662 @@
+{
+ "metadata": {
+  "note": "Verbatim DDInter slice for ADR Decision 238: diazepam, omeprazole (filed under esomeprazole's rxnorm_name and ATC code), esomeprazole, and every row whose CIEL bridge names omeprazole, so the load's substance-name-contradicted-by-the-bridge rule reports the omeprazole row. Rows are field-for-field their rows in the shipped ddi-knowledge-base.json, in KB order, and the interaction rows are every KB pair among them, with the mechanisms they cite."
+ },
+ "mechanisms": {
+  "3116": {
+   "text": "INTERVAL: Oral preparations that contain magnesium, aluminum, or calcium may significantly decrease the gastrointestinal absorption of quinolone antibiotics. Absorption may also be reduced by sucralfate, which contains aluminum, as well as other polyvalent cations such as iron and zinc. The mechanism is chelation of quinolones by polyvalent cations, forming a complex that is poorly absorbed from the gastrointestinal tract.",
+   "categories": [
+    "absorption"
+   ]
+  },
+  "579": {
+   "text": "Urinary alkalinizers such as citrates may decrease the solubility of fluoroquinolones in the urine and increase the risk of crystalluria.",
+   "categories": [
+    "excretion"
+   ]
+  },
+  "1780": {
+   "text": "Certain quinolones, including levofloxacin, norfloxacin, and ofloxacin, may cause dose-related prolongation of the QT interval in some patients. Theoretically, coadministration with other agents that can prolong the QT interval may result in additive effects and increased risk of ventricular arrhythmias including torsade de pointes and sudden death.",
+   "categories": [
+    "synergistic_effect"
+   ]
+  },
+  "3449": {
+   "text": "Bowel cleansing as well as overuse of certain laxatives may cause electrolyte loss and increase the risk of torsade de pointes ventricular arrhythmia in patients treated with drugs that prolong the QT interval. Electrolyte disturbances including hypokalemia and hypomagnesemia have been reported with laxative abuse and are known risk factors for torsade de pointes associated with QT interval prolongation.",
+   "categories": [
+    "synergistic_effect"
+   ]
+  },
+  "1622": {
+   "text": "number of studies have reported that antacids can delay the gastrointestinal absorption and reduce the peak plasma concentration (Cmax) of some benzodiazepines, including clorazepate, chlordiazepoxide and diazepam, although the overall extent of absorption is generally not affected. The exact mechanism of interaction is unknown, but may involve delayed gastric emptying or cation binding of the benzodiazepine.",
+   "categories": [
+    "absorption"
+   ]
+  },
+  "-1": {
+   "text": null,
+   "categories": []
+  },
+  "2910": {
+   "text": "Clarithromycin may increase and prolong the omeprazole plasma concentration. The mechanism may be related to clarithromycin inhibition of hepatic cytochrome P450 enzymes responsible for omeprazole metabolism. Coadministration of omeprazole may result in an increase in clarithromycin and 14-(R)-hydroxyclarithromycin plasma concentrations. These increases may be due to the effect of omeprazole on gastric pH.",
+   "categories": [
+    "metabolism"
+   ]
+  },
+  "608": {
+   "text": "Omeprazole may increase the pharmacologic effects and serum levels of certain benzodiazepines via hepatic enzyme inhibition.",
+   "categories": [
+    "metabolism"
+   ]
+  },
+  "5024": {
+   "text": "Macrolide antibiotics may increase and prolong the CNS effects of certain benzodiazepines. The mechanism is inhibition of CYP450 3A4 hepatic oxidation of the benzodiazepines.",
+   "categories": [
+    "metabolism"
+   ]
+  },
+  "1699": {
+   "text": "Clarithromycin may increase the plasma concentration of esomeprazole. The mechanism may be related to clarithromycin inhibition of hepatic cytochrome P450 enzymes responsible for esomeprazole metabolism. The systemic exposure (AUC) to esomeprazole doubled after coadministration with clarithromycin 500 mg twice daily. The clinical significance is unknown and dose adjustments are not required.",
+   "categories": [
+    "metabolism"
+   ]
+  },
+  "3556": {
+   "text": "Although some in vitro data indicate synergism between macrolide antibiotics and penicillins, other in vitro data indicate antagonism. When these drugs are given together, neither has predictable therapeutic efficacy. Data are available for erythromycin, although theoretically this interaction could occur with any macrolide. Except for monitoring of the effectiveness of antibiotic therapy, no special precautions appear to be necessary.",
+   "categories": [
+    "others"
+   ]
+  },
+  "5036": {
+   "text": "Coadministration with esomeprazole may increase the plasma concentrations and the risk of adverse effects of drugs that are substrates of CYP450 2C19. The proposed mechanism is decreased clearance due to esomeprazole-mediated inhibition of CYP450 2C19.",
+   "categories": [
+    "metabolism"
+   ]
+  }
+ },
+ "drugs": [
+  {
+   "id": "DDInter1055",
+   "name": "Levofloxacin",
+   "rxcui": "82122",
+   "rxnorm_name": "levofloxacin",
+   "drugbank_id": "DB01137",
+   "atc": [
+    "J01MA12",
+    "S01AE05"
+   ],
+   "brand_names": [
+    "Levaquin"
+   ],
+   "international_names": [],
+   "abbreviations": [],
+   "ciel": [
+    {
+     "code": "167977",
+     "uuid": "2d7b158c-5f97-449b-b0e9-46f75c82a42f",
+     "name": "Amoxicillin / Esomeprazole / Levofloxacin combination kit"
+    },
+    {
+     "code": "167978",
+     "uuid": "cb933181-fd92-4725-91d5-2e851c9eb0b5",
+     "name": "Clarithromycin / Esomeprazole / Levofloxacin combination kit"
+    },
+    {
+     "code": "78788",
+     "uuid": "78788AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Levofloxacin"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1118",
+   "name": "Magnesium hydroxide",
+   "rxcui": "6581",
+   "rxnorm_name": "magnesium hydroxide",
+   "drugbank_id": "DB09104",
+   "atc": [
+    "A02AA04",
+    "G04BX01"
+   ],
+   "brand_names": [
+    "Almacone",
+    "Gelusil",
+    "Inon Ace Solution",
+    "Inon Ace Tablet",
+    "Maalox Max",
+    "Maalox Plus",
+    "Milantex",
+    "Mintox Plus",
+    "Mirafast",
+    "Pedia-Lax Chewable",
+    "Pepcid Complete",
+    "Phillips Milk of Magnesia",
+    "Rolaids Reformulated Aug 2006",
+    "Tums Dual Action"
+   ],
+   "international_names": [],
+   "abbreviations": [],
+   "ciel": [
+    {
+     "code": "103170",
+     "uuid": "103170AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / aluminum hydroxide / aspirin / caffeine / magnesium hydroxide"
+    },
+    {
+     "code": "103520",
+     "uuid": "103520AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aluminum hydroxide / aspirin / calcium carbonate / magnesium hydroxide"
+    },
+    {
+     "code": "103521",
+     "uuid": "103521AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aluminum hydroxide / aspirin / codeine / magnesium hydroxide"
+    },
+    {
+     "code": "103522",
+     "uuid": "103522AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aluminum hydroxide / aspirin / magnesium hydroxide"
+    },
+    {
+     "code": "103523",
+     "uuid": "103523AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aluminum hydroxide / calcium carbonate / magnesium hydroxide"
+    },
+    {
+     "code": "103524",
+     "uuid": "103524AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aluminum hydroxide / calcium carbonate / magnesium hydroxide / simethicone"
+    },
+    {
+     "code": "103526",
+     "uuid": "103526AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aluminum hydroxide / magnesium hydroxide"
+    },
+    {
+     "code": "103528",
+     "uuid": "103528AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aluminum hydroxide / magnesium hydroxide / simethicone"
+    },
+    {
+     "code": "104025",
+     "uuid": "104025AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Calcium carbonate / famotidine / magnesium"
+    },
+    {
+     "code": "104035",
+     "uuid": "104035AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Calcium carbonate / magnesium hydroxide"
+    },
+    {
+     "code": "104036",
+     "uuid": "104036AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Calcium carbonate / magnesium hydroxide / phenobarbital"
+    },
+    {
+     "code": "104037",
+     "uuid": "104037AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Calcium carbonate / magnesium hydroxide / simethicone"
+    },
+    {
+     "code": "104152",
+     "uuid": "104152AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Cascara sagrada / magnesium hydroxide"
+    },
+    {
+     "code": "105010",
+     "uuid": "105010AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Magnesium hydroxide / malic acid"
+    },
+    {
+     "code": "105011",
+     "uuid": "105011AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Magnesium hydroxide / mineral oil"
+    },
+    {
+     "code": "105012",
+     "uuid": "105012AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Magnesium hydroxide / omeprazole / sodium bicarbonate"
+    },
+    {
+     "code": "79236",
+     "uuid": "79236AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Magnesium hydroxide"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1340",
+   "name": "Omeprazole",
+   "rxcui": "283742",
+   "rxnorm_name": "esomeprazole",
+   "drugbank_id": "DB00338",
+   "atc": [
+    "A02BC05"
+   ],
+   "brand_names": [
+    "Nexium",
+    "Vimovo"
+   ],
+   "international_names": [],
+   "abbreviations": [],
+   "ciel": [
+    {
+     "code": "167977",
+     "uuid": "2d7b158c-5f97-449b-b0e9-46f75c82a42f",
+     "name": "Amoxicillin / Esomeprazole / Levofloxacin combination kit"
+    },
+    {
+     "code": "167978",
+     "uuid": "cb933181-fd92-4725-91d5-2e851c9eb0b5",
+     "name": "Clarithromycin / Esomeprazole / Levofloxacin combination kit"
+    },
+    {
+     "code": "167995",
+     "uuid": "a78c9f7d-87b8-4216-9153-53e14e5911aa",
+     "name": "Amoxicillin / clarithromycin / esomeprazole combination kit"
+    },
+    {
+     "code": "75875",
+     "uuid": "75875AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Esomeprazole"
+    },
+    {
+     "code": "75876",
+     "uuid": "75876AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Esomeprazole magnesium"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1683",
+   "name": "Sodium bicarbonate",
+   "rxcui": "36676",
+   "rxnorm_name": "sodium bicarbonate",
+   "drugbank_id": "DB01390",
+   "atc": [
+    "B05CB04",
+    "B05XA02"
+   ],
+   "brand_names": [
+    "Alka-Seltzer",
+    "Bromo Seltzer Antacid Pain Reliever",
+    "Ceo-Two",
+    "Desempacho",
+    "E-Z-Gas II",
+    "GaviLyte-C",
+    "GaviLyte-N",
+    "Gavilyte-G",
+    "Gavilyte-H",
+    "Golytely",
+    "Konvomep",
+    "Neut brand of sodium bicarbonate",
+    "Sinucleanse",
+    "TriLyte",
+    "Zegerid Reformulated Aug 2006"
+   ],
+   "international_names": [],
+   "abbreviations": [],
+   "ciel": [
+    {
+     "code": "103706",
+     "uuid": "103706AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / citric acid / sodium bicarbonate"
+    },
+    {
+     "code": "104324",
+     "uuid": "104324AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Citric acid / potassium bicarbonate / sodium bicarbonate"
+    },
+    {
+     "code": "104327",
+     "uuid": "104327AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Citric acid / simethicone / sodium bicarbonate"
+    },
+    {
+     "code": "104328",
+     "uuid": "104328AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Citric acid / sodium bicarbonate"
+    },
+    {
+     "code": "104876",
+     "uuid": "104876AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrogen peroxide / sodium bicarbonate"
+    },
+    {
+     "code": "105012",
+     "uuid": "105012AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Magnesium hydroxide / omeprazole / sodium bicarbonate"
+    },
+    {
+     "code": "105118",
+     "uuid": "105118AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Omeprazole / sodium bicarbonate"
+    },
+    {
+     "code": "105125",
+     "uuid": "105125AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Pancreatin / potassium bicarbonate / sodium bicarbonate"
+    },
+    {
+     "code": "105153",
+     "uuid": "105153AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Phenobarbital / potassium iodide / sodium bicarbonate / theobromine"
+    },
+    {
+     "code": "105183",
+     "uuid": "105183AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Polyethylene glycol 3350 / potassium chloride / sodium bicarbonate / sodium chloride / sodium sulfate"
+    },
+    {
+     "code": "105198",
+     "uuid": "105198AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Potassium bicarbonate / sodium bicarbonate"
+    },
+    {
+     "code": "105199",
+     "uuid": "105199AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Potassium bitartrate / sodium bicarbonate"
+    },
+    {
+     "code": "105259",
+     "uuid": "105259AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Sodium bicarbonate / sodium chloride"
+    },
+    {
+     "code": "105260",
+     "uuid": "105260AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Sodium bicarbonate / sodium citrate"
+    },
+    {
+     "code": "105261",
+     "uuid": "105261AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Sodium bicarbonate / tartaric acid"
+    },
+    {
+     "code": "84041",
+     "uuid": "84041AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Sodium bicarbonate"
+    }
+   ]
+  },
+  {
+   "id": "DDInter393",
+   "name": "Clarithromycin",
+   "rxcui": "21212",
+   "rxnorm_name": "clarithromycin",
+   "drugbank_id": "DB01211",
+   "atc": [
+    "J01FA09"
+   ],
+   "brand_names": [
+    "Biaxin"
+   ],
+   "international_names": [],
+   "abbreviations": [],
+   "ciel": [
+    {
+     "code": "167978",
+     "uuid": "cb933181-fd92-4725-91d5-2e851c9eb0b5",
+     "name": "Clarithromycin / Esomeprazole / Levofloxacin combination kit"
+    },
+    {
+     "code": "167995",
+     "uuid": "a78c9f7d-87b8-4216-9153-53e14e5911aa",
+     "name": "Amoxicillin / clarithromycin / esomeprazole combination kit"
+    },
+    {
+     "code": "168663",
+     "uuid": "39559906-b467-47a7-abaa-499cf6b51562",
+     "name": "Amoxicillin / clarithromycin / vonoprazan combination kit"
+    },
+    {
+     "code": "73498",
+     "uuid": "73498AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Clarithromycin"
+    }
+   ]
+  },
+  {
+   "id": "DDInter534",
+   "name": "Diazepam",
+   "rxcui": "3322",
+   "rxnorm_name": "diazepam",
+   "drugbank_id": "DB00829",
+   "atc": [
+    "N05BA01"
+   ],
+   "brand_names": [
+    "Diastat",
+    "Libervant",
+    "Valium",
+    "Valtoco"
+   ],
+   "international_names": [],
+   "abbreviations": [],
+   "ciel": [
+    {
+     "code": "74745",
+     "uuid": "74745AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Diazepam"
+    }
+   ]
+  },
+  {
+   "id": "DDInter676",
+   "name": "Esomeprazole",
+   "rxcui": "283742",
+   "rxnorm_name": "esomeprazole",
+   "drugbank_id": "DB00736",
+   "atc": [
+    "A02BC05"
+   ],
+   "brand_names": [
+    "Nexium",
+    "Vimovo"
+   ],
+   "international_names": [],
+   "abbreviations": [],
+   "ciel": [
+    {
+     "code": "167977",
+     "uuid": "2d7b158c-5f97-449b-b0e9-46f75c82a42f",
+     "name": "Amoxicillin / Esomeprazole / Levofloxacin combination kit"
+    },
+    {
+     "code": "167978",
+     "uuid": "cb933181-fd92-4725-91d5-2e851c9eb0b5",
+     "name": "Clarithromycin / Esomeprazole / Levofloxacin combination kit"
+    },
+    {
+     "code": "167995",
+     "uuid": "a78c9f7d-87b8-4216-9153-53e14e5911aa",
+     "name": "Amoxicillin / clarithromycin / esomeprazole combination kit"
+    },
+    {
+     "code": "75875",
+     "uuid": "75875AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Esomeprazole"
+    },
+    {
+     "code": "75876",
+     "uuid": "75876AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Esomeprazole magnesium"
+    }
+   ]
+  },
+  {
+   "id": "DDInter83",
+   "name": "Amoxicillin",
+   "rxcui": "723",
+   "rxnorm_name": "amoxicillin",
+   "drugbank_id": "DB01060",
+   "atc": [
+    "J01CA04"
+   ],
+   "brand_names": [
+    "Amoxi Drop",
+    "Amoxi-tabs",
+    "Augmentin",
+    "Betacilin",
+    "Biomox",
+    "Clavacillin",
+    "Clavamox",
+    "Kesium",
+    "Moxatag",
+    "Talicia",
+    "Trimox",
+    "Umbrellin"
+   ],
+   "international_names": [
+    "Amoxycillin"
+   ],
+   "abbreviations": [],
+   "ciel": [
+    {
+     "code": "167977",
+     "uuid": "2d7b158c-5f97-449b-b0e9-46f75c82a42f",
+     "name": "Amoxicillin / Esomeprazole / Levofloxacin combination kit"
+    },
+    {
+     "code": "167995",
+     "uuid": "a78c9f7d-87b8-4216-9153-53e14e5911aa",
+     "name": "Amoxicillin / clarithromycin / esomeprazole combination kit"
+    },
+    {
+     "code": "168005",
+     "uuid": "48f1556f-56e3-41ed-a2ba-773fa4e6de14",
+     "name": "Amoxicillin / floxacillin"
+    },
+    {
+     "code": "168663",
+     "uuid": "39559906-b467-47a7-abaa-499cf6b51562",
+     "name": "Amoxicillin / clarithromycin / vonoprazan combination kit"
+    },
+    {
+     "code": "450",
+     "uuid": "450AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Amoxicillin and clavulanic acid"
+    },
+    {
+     "code": "71160",
+     "uuid": "71160AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Amoxicillin"
+    },
+    {
+     "code": "71161",
+     "uuid": "71161AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Amoxicillin monosodium salt"
+    },
+    {
+     "code": "71162",
+     "uuid": "71162AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Amoxicillin trihydrate"
+    }
+   ]
+  }
+ ],
+ "interactions": [
+  [
+   "DDInter1055",
+   "DDInter1118",
+   "Moderate",
+   "3116"
+  ],
+  [
+   "DDInter1055",
+   "DDInter1683",
+   "Moderate",
+   "579"
+  ],
+  [
+   "DDInter1055",
+   "DDInter393",
+   "Moderate",
+   "1780"
+  ],
+  [
+   "DDInter1118",
+   "DDInter393",
+   "Moderate",
+   "3449"
+  ],
+  [
+   "DDInter1118",
+   "DDInter534",
+   "Minor",
+   "1622"
+  ],
+  [
+   "DDInter1340",
+   "DDInter1683",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1340",
+   "DDInter393",
+   "Minor",
+   "2910"
+  ],
+  [
+   "DDInter1340",
+   "DDInter534",
+   "Moderate",
+   "608"
+  ],
+  [
+   "DDInter1340",
+   "DDInter83",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1683",
+   "DDInter393",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1683",
+   "DDInter534",
+   "Minor",
+   "1622"
+  ],
+  [
+   "DDInter1683",
+   "DDInter83",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter393",
+   "DDInter534",
+   "Moderate",
+   "5024"
+  ],
+  [
+   "DDInter393",
+   "DDInter676",
+   "Minor",
+   "1699"
+  ],
+  [
+   "DDInter393",
+   "DDInter83",
+   "Minor",
+   "3556"
+  ],
+  [
+   "DDInter534",
+   "DDInter676",
+   "Moderate",
+   "5036"
+  ],
+  [
+   "DDInter534",
+   "DDInter83",
+   "Unknown",
+   "-1"
+  ]
+ ]
+}

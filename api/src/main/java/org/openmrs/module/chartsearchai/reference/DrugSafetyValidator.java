@@ -7394,9 +7394,10 @@ public class DrugSafetyValidator {
 
 	/**
 	 * @return true when {@code candidate} is the row worth chipping for a partner {@code incumbent}
-	 *         already covers — a more severe rating; failing that, the row that names no route; failing
-	 *         that, a longer note. See {@link #bestRulePerPartner} for the first and third, which predate
-	 *         issue #162 and are unchanged.
+	 *         already covers — a more severe rating; failing that, the rule about that partner order's own
+	 *         row ({@link #aboutItsOwnPartnerRow}, ADR Decision 238); failing that, the row that names no
+	 *         route; failing that, a longer note. See {@link #bestRulePerPartner} for the first and last,
+	 *         which predate issue #162 and are unchanged.
 	 *
 	 *         <p><b>The route step, and why it sits BETWEEN the other two (issue #162).</b> Once the
 	 *         candidates come from several rows of one substance, the winning row decides which MECHANISM
@@ -7448,7 +7449,34 @@ public class DrugSafetyValidator {
 	 *         {@code InteractionRouteVariantTest.severityStillOutranksTheRoutePreference}.
 	 */
 	private static boolean outranks(SubjectRule candidate, SubjectRule incumbent) {
+		// Two rules reaching ONE of her orders at one severity: the rule about that order's own row first (ADR Decision
+		// 238), so the chip names and describes the drug she takes and not a substance the source files under its name.
+		if (candidate.partner != null && candidate.partner == incumbent.partner && severityPriority(
+				candidate.rule.getSeverity()) == severityPriority(incumbent.rule.getSeverity())) {
+			int about = aboutItsOwnPartnerRow(candidate.rule, incumbent.rule, candidate.partner);
+			if (about != 0) {
+				return about > 0;
+			}
+		}
 		return outranks(candidate.subject, candidate.rule, incumbent.subject, incumbent.rule);
+	}
+
+	/**
+	 * Which of two rules reaching {@code partner} — an order entry of hers — is about that very row, as the source recorded
+	 * each rule's partner ({@link DrugReference.Interaction#getPartnerName()}, ADR Decision 238): positive for {@code
+	 * candidate} alone, negative for {@code incumbent} alone, zero where both or neither are, or the source records none.
+	 * The shipped knowledge base files Omeprazole under esomeprazole's rxnorm_name, so a drug's rule about the Esomeprazole
+	 * row reaches an omeprazole order through the token both rows carry. One step for the chip's collapse and the record's
+	 * ({@link DrugReferenceInjector}'s {@code onePerPartner}), so the two cannot keep different rules for one partner.
+	 */
+	static int aboutItsOwnPartnerRow(DrugReference.Interaction candidate, DrugReference.Interaction incumbent,
+			DrugReference partner) {
+		if (partner == null || partner.getName() == null) {
+			return 0;
+		}
+		boolean candidateAbout = partner.getName().equals(candidate.getPartnerName());
+		boolean incumbentAbout = partner.getName().equals(incumbent.getPartnerName());
+		return candidateAbout == incumbentAbout ? 0 : candidateAbout ? 1 : -1;
 	}
 
 	/**

@@ -5848,22 +5848,63 @@ public class DrugReferenceInjector {
 	 * started ({@link SafetyWarning#orderScheduledStart()}), the sentence saying so, which
 	 * {@code SafetyWarning.statingItsOrderHasNotStarted} appends as the detail's last — without it the line reads as a
 	 * drug she is taking (issue #553; ADR Decision 171, where a screen's brief lines first dropped it). The mechanism
-	 * prose is left to the chip, which carries the whole detail. Sentences are
-	 * {@link ChartSearchAiUtils#SENTENCE_BOUNDARY}'s.
+	 * prose is left to the chip, which carries the whole detail. Sentences are {@link #sentencesOf}'s.
 	 */
 	static String briefDetail(SafetyWarning finding) {
-		String[] sentences = ChartSearchAiUtils.SENTENCE_BOUNDARY.split(finding.getDetail().trim());
-		StringBuilder brief = new StringBuilder(sentences[0]);
-		int last = sentences.length - 1;
+		List<String> sentences = sentencesOf(finding);
+		StringBuilder brief = new StringBuilder(sentences.get(0));
+		int last = sentences.size() - 1;
 		boolean folded = SafetyWarning.TYPE_INTERACTION.equals(finding.getType())
 				&& finding.carriesUnratedRelationship();
 		boolean scheduled = finding.orderScheduledStart() != null;
-		for (int i = 1; i < sentences.length; i++) {
-			if (ChartSearchAiUtils.UNKNOWN_SIGNIFICANCE.matcher(sentences[i]).find() || (folded || scheduled) && i == last) {
-				brief.append(' ').append(sentences[i]);
+		for (int i = 1; i < sentences.size(); i++) {
+			if (ChartSearchAiUtils.UNKNOWN_SIGNIFICANCE.matcher(sentences.get(i)).find() || (folded || scheduled) && i == last) {
+				brief.append(' ').append(sentences.get(i));
 			}
 		}
 		return brief.toString();
+	}
+
+	/**
+	 * {@code finding}'s detail cut at {@link ChartSearchAiUtils#SENTENCE_BOUNDARY}, except at a boundary falling INSIDE a
+	 * name the finding states — its drug and the partners it names (ADR Decision 239). The shipped knowledge base names a
+	 * drug "St. John's Wort", whose abbreviation's period and space are a boundary to that pattern, so the brief line of a
+	 * finding about it read "St.". The module wrote those names into the detail itself, so where one sits is known
+	 * rather than guessed, and no list of abbreviations is needed.
+	 */
+	private static List<String> sentencesOf(SafetyWarning finding) {
+		String detail = finding.getDetail().trim();
+		Set<String> names = new LinkedHashSet<String>();
+		if (finding.getDrug() != null) {
+			names.add(finding.getDrug());
+		}
+		names.addAll(finding.namedPartners());
+		List<String> sentences = new ArrayList<String>();
+		int start = 0;
+		Matcher boundary = ChartSearchAiUtils.SENTENCE_BOUNDARY.matcher(detail);
+		while (boundary.find()) {
+			if (!insideAName(detail, boundary.start(), names)) {
+				sentences.add(detail.substring(start, boundary.start()));
+				start = boundary.end();
+			}
+		}
+		sentences.add(detail.substring(start));
+		return sentences;
+	}
+
+	/** @return true when {@code at} falls strictly inside an occurrence in {@code text} of one of {@code names}. */
+	private static boolean insideAName(String text, int at, Set<String> names) {
+		for (String name : names) {
+			if (name == null || name.isEmpty()) {
+				continue;
+			}
+			for (int from = text.indexOf(name); from >= 0 && from < at; from = text.indexOf(name, from + 1)) {
+				if (at < from + name.length()) {
+					return true;
+				}
+			}
+		}
+		return false;
 	}
 
 	/**

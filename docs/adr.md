@@ -17286,3 +17286,48 @@ Moderate"* in the chip and *"Interactions: esomeprazole (…)"* in the record: a
   were reworded around the new note.
 
 Pinned by `ConflatedPartnerRowContextTest`, over the real load of a verbatim slice of the shipped knowledge base.
+
+## Decision 239: A composed finding line is never cut inside a name the finding states
+
+**Status: Accepted** (October 2026) — the owner's standing request of 2026-10-15 to fix what misleads a clinician. It
+narrows where [Decision 153](#decision-153-a-modules-no-states-brief-lines-keeping-a-folded-class-sentence)'s brief line
+ends.
+
+### Context
+
+The shipped knowledge base names a drug "St. John's Wort". A composed answer states each finding's first sentence, cut at
+`ChartSearchAiUtils.SENTENCE_BOUNDARY`, and the abbreviation's period and space are a boundary to that pattern. On the
+3.7.1 standalone Mogan Kamwara, on nevirapine, asked *"Can she take St. John's Wort?"* and read *"No — this module's
+drug-safety check found a reason to withhold St. John's Wort."* over the finding line *"St. [8] [4]."*, with the module
+then appending *"Also covered by those findings and not named above: active order Nevirapine"*: the Major interaction's
+line named neither drug.
+
+### The decision
+
+- **A brief line is cut where `SENTENCE_BOUNDARY` cuts it, except at a boundary falling inside a name the finding
+  states** — its drug and the partners it names (`DrugReferenceInjector`'s `sentencesOf`). The module wrote those names
+  into the detail itself, so where one sits is known rather than guessed, and no list of abbreviations is needed.
+- The shared pattern is unchanged: the answers it cuts elsewhere are the model's, whose names the module did not write.
+
+Pinned by `AbbreviatedDrugNameContextTest.aFindingLineKeepsADrugNameCarryingAnAbbreviationWhole`.
+
+## Decision 240: A knowledge-base name is also matched without an abbreviation's period or a possessive's apostrophe
+
+**Status: Accepted** (October 2026) — the owner's standing request of 2026-10-15 to fix what misleads a clinician.
+
+### Context
+
+On the 3.7.1 standalone Edward Robinson, on nevirapine, asked *"Can I give him St John's wort?"* — the spelling British
+usage writes — and read *"The records do not address St John's wort."* The knowledge base carries the name only as
+"St. John's Wort", so the question named no drug the module knows, no check ran, and the Major interaction with his
+nevirapine (which *"Can she take St. John's Wort?"* reports) was never stated.
+
+### The decision
+
+- **The `ddinter` source carries each name it reads also without the periods whitespace follows inside it, without its
+  apostrophes, and without both** (`DdiDrugReferenceSource`'s `addAlias`): *"St John's wort"*, *"St Johns wort"* and *"St.
+  Johns Wort"* each name the St. John's Wort row. The variants follow the name, so a row's display name stays its first
+  alias, and they are spellings of that one name, never a synonym the data does not state.
+- A curly apostrophe in the question is not covered; neither is a name another dataset format carries.
+
+Pinned by `AbbreviatedDrugNameContextTest.aDrugNameWrittenWithoutItsPeriodOrApostropheResolves`.

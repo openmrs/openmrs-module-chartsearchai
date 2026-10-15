@@ -730,9 +730,31 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 				return;
 			}
 			String a = value.trim().toLowerCase(Locale.ROOT);
-			if (!a.isEmpty() && !aliases.contains(a)) {
-				aliases.add(a);
+			addOnce(aliases, a);
+			// The same name as a clinician writes it, without an abbreviation's period or a possessive's apostrophe
+			// (ADR Decision 240): "St. John's Wort" is asked about as "St John's wort" and "St Johns wort", and a name
+			// that resolves to nothing is never checked. After the name itself, so a row's display name stays alias[0].
+			String withoutPeriods = withoutAbbreviationPeriods(a);
+			addOnce(aliases, withoutPeriods);
+			addOnce(aliases, a.replace("'", ""));
+			addOnce(aliases, withoutPeriods.replace("'", ""));
+		}
+
+		private static void addOnce(List<String> aliases, String alias) {
+			if (!alias.isEmpty() && !aliases.contains(alias)) {
+				aliases.add(alias);
 			}
+		}
+
+		/** {@code name} without each period whitespace follows inside it — an abbreviation's, as in "st. john's wort". */
+		private static String withoutAbbreviationPeriods(String name) {
+			StringBuilder out = new StringBuilder(name.length());
+			for (int i = 0; i < name.length(); i++) {
+				if (name.charAt(i) != '.' || i + 1 == name.length() || !Character.isWhitespace(name.charAt(i + 1))) {
+					out.append(name.charAt(i));
+				}
+			}
+			return out.toString();
 		}
 	}
 

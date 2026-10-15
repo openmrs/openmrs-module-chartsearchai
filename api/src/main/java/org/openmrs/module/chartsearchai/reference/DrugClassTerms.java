@@ -129,7 +129,31 @@ final class DrugClassTerms {
 		TERMS = Collections.unmodifiableMap(terms);
 	}
 
+	/**
+	 * The WHO ATC group a class named here IS, by its own name — the one exception to the rule that a class is never
+	 * resolved to an ATC subtree, and only to say which of HER orders the data files in that group (ADR Decision 275).
+	 * Read off the shipped knowledge base's {@code atc} arrays on 2026-10-15, each group holds that class's members and no
+	 * other substance: {@code C10AA} the eight statins (not nystatin or pentostatin, which only sound like one),
+	 * {@code C09AA} ten ACE inhibitors (enalaprilat carries no ATC code at all, the residue), {@code A02BC} the proton pump
+	 * inhibitors with vonoprazan, which WHO files there. Never for a class whose group was measured not to be the class —
+	 * {@code oral contraceptive}, ADR Decision 67 — nor for {@code NSAID}, whose members span groups.
+	 */
+	private static final Map<String, String> ATC_GROUP_OF_CLASS;
+
+	static {
+		Map<String, String> groups = new LinkedHashMap<String, String>();
+		groups.put("statin", "C10AA");
+		groups.put("ACE inhibitor", "C09AA");
+		groups.put("proton pump inhibitor", "A02BC");
+		ATC_GROUP_OF_CLASS = Collections.unmodifiableMap(groups);
+	}
+
 	private DrugClassTerms() {
+	}
+
+	/** The ATC group {@code className} IS ({@link #ATC_GROUP_OF_CLASS}), or {@code null} where no group is that class. */
+	static String atcGroupOf(String className) {
+		return className == null ? null : ATC_GROUP_OF_CLASS.get(className);
 	}
 
 	/** The code table's terms, for the two data guards that enforce admission criterion (2) — one

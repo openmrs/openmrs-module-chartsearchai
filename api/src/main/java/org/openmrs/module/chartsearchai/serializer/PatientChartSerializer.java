@@ -552,6 +552,18 @@ public class PatientChartSerializer {
 		/** @see #getListedDrugsWithNoActiveOrder() */
 		private List<String> listedDrugsWithNoActiveOrder = Collections.<String> emptyList();
 
+		/** @see #statesADose() */
+		private boolean statesADose;
+
+		/** @see #getNamedClassAtcGroup() */
+		private String namedClassAtcGroup;
+
+		/** @see #getOrdersInTheNamedClass() */
+		private List<String> ordersInTheNamedClass;
+
+		/** @see #getNamedAsAsked() */
+		private List<NamedAsAsked> namedAsAsked = Collections.<NamedAsAsked> emptyList();
+
 		/** @see #getHistoryQuestionDrugRows() */
 		private List<String> historyQuestionDrugRows = Collections.<String> emptyList();
 
@@ -694,6 +706,60 @@ public class PatientChartSerializer {
 			return listedDrugsWithNoActiveOrder;
 		}
 
+		/** Records whether the question states a dose of the drug it asks about — ADR Decision 274, and
+		 *  {@code DrugReferenceInjector} is the only caller. */
+		public void markStatesADose(boolean statesADose) {
+			this.statesADose = statesADose;
+		}
+
+		/**
+		 * Whether the question states a dose beside the drug it asks about ({@code QueryScopeRouter.statesADose}) — ADR
+		 * Decision 274. {@code LlmInferenceService} says after the answer that the dose was not checked where the
+		 * dataset publishes no dose ceiling. False on every chart the injector did not stamp.
+		 */
+		public boolean statesADose() {
+			return statesADose;
+		}
+
+		/** Records the ATC group of the class the question names, where that group IS the class, and which of her orders
+		 *  the data files there — ADR Decision 275, and {@code DrugReferenceInjector} is the only caller. */
+		public void markOrdersInTheNamedClass(String atcGroup, List<String> orders) {
+			this.namedClassAtcGroup = atcGroup;
+			this.ordersInTheNamedClass = atcGroup == null || orders == null ? null
+					: Collections.unmodifiableList(new ArrayList<String>(orders));
+		}
+
+		/** The ATC group of the drug class the question names, where that group IS the class (statins {@code C10AA}, ACE
+		 *  inhibitors {@code C09AA}, proton pump inhibitors {@code A02BC}) — ADR Decision 275 — or {@code null}. */
+		public String getNamedClassAtcGroup() {
+			return namedClassAtcGroup;
+		}
+
+		/**
+		 * Her active orders the data files under {@link #getNamedClassAtcGroup()}, each as the statement names it — ADR
+		 * Decision 275. Empty is a statement that none of hers is, made only where every order was read and identified;
+		 * {@code null} is no statement. {@code LlmInferenceService} states it after the answer.
+		 */
+		public List<String> getOrdersInTheNamedClass() {
+			return ordersInTheNamedClass;
+		}
+
+		/** Records the drugs the question names by a name the label the module prints for them is not built from — ADR
+		 *  Decision 277, and {@code DrugReferenceInjector} is the only caller. */
+		public void markNamedAsAsked(List<NamedAsAsked> named) {
+			this.namedAsAsked = named == null || named.isEmpty() ? Collections.<NamedAsAsked> emptyList()
+					: Collections.unmodifiableList(new ArrayList<NamedAsAsked>(named));
+		}
+
+		/**
+		 * The drugs the question names by a name the label the module prints for them is not built from — "glibenclamide",
+		 * which the knowledge base labels Glyburide — ADR Decision 277. {@code LlmInferenceService} says after an answer
+		 * using the data's name which drug it is. Empty on every chart the injector did not stamp.
+		 */
+		public List<NamedAsAsked> getNamedAsAsked() {
+			return namedAsAsked;
+		}
+
 		/** Records the reference rows of the drug a question asks whether she has ever taken — ADR Decision 151, and
 		 *  {@code DrugReferenceInjector} is the only caller. */
 		public void markHistoryQuestionDrugRows(List<String> rowIds) {
@@ -772,6 +838,42 @@ public class PatientChartSerializer {
 		 *  carry the declaration across; empty on a full chart, which needs none. */
 		public Set<String> getCompleteResourceTypes() {
 			return completeResourceTypes;
+		}
+	}
+
+	/**
+	 * A drug the question names by a name the label the module prints for it is not built from —
+	 * {@link PatientChart#getNamedAsAsked()} (ADR Decision 277).
+	 */
+	public static final class NamedAsAsked {
+
+		private final String asAsked;
+
+		private final String dataLabel;
+
+		private final String dataName;
+
+		/**
+		 * @param asAsked the name as the question writes it
+		 * @param dataLabel the label the module prints for the drug — its chips' and its own answers'
+		 * @param dataName the knowledge base's own name for it, which that label opens with
+		 */
+		public NamedAsAsked(String asAsked, String dataLabel, String dataName) {
+			this.asAsked = asAsked;
+			this.dataLabel = dataLabel;
+			this.dataName = dataName;
+		}
+
+		public String getAsAsked() {
+			return asAsked;
+		}
+
+		public String getDataLabel() {
+			return dataLabel;
+		}
+
+		public String getDataName() {
+			return dataName;
 		}
 	}
 

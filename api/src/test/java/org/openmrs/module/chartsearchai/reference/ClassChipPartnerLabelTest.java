@@ -59,7 +59,8 @@ public class ClassChipPartnerLabelTest {
 	 *  the fixture publish — which is what makes "the entry carrying this code" ambiguous at all. */
 	private static final String CYCLOSPORINE_ORDER_CODE = "L04AD01";
 
-	/** The curated seed's own aspirin rule as the RULE's own token words it, unrated and so exempt from
+	/** The curated seed's own aspirin rule as the RULE's own token words it — first letter upper-cased, as a chip prints
+	 *  a token (ADR Decision 276) — unrated and so exempt from
 	 *  the severity floor, which is why these cases can carry it at all. Its ATC is {@code B01AC06} — one
 	 *  of the aspirin order's three codes, but not the one the NSAID group matches.
 	 *
@@ -70,7 +71,7 @@ public class ClassChipPartnerLabelTest {
 	 *  {@code Aspirin 81mg} order. So that case now words its rule sentence with the order's display and
 	 *  this constant is the unfolded wording only. */
 	private static final String CURATED_ASPIRIN_RULE_SENTENCE =
-			"Ibuprofen interacts with active order aspirin — additive GI and bleeding risk";
+			"Ibuprofen interacts with active order Aspirin — additive GI and bleeding risk";
 
 	@Test
 	public void anOrderTheDatasetDoesNotCoverIsNamedByItsOwnDisplayName() {

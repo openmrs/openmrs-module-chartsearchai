@@ -996,7 +996,7 @@ public class DrugReferenceInjector {
 					interactionsOnly ? BELOW_FLOOR_SCOPE : SCREEN_SCOPE,
 					questionDrugs.isEmpty() ? duplicateTherapyLines(orderEntries, context,
 							orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers)
-							: Collections.<String> emptyList());
+							: Collections.<String> emptyList(), combinationAskedAbout(question, questionDrugs, context));
 			// The question named it as hers, and she is not on it — admitted here only so (ADR Decision 260).
 			if (moduleAnswer != null && !questionDrugs.isEmpty()
 					&& QueryScopeRouter.asksAboutADrugNamedAsHers(wordsBesideItsNames(question, questionDrugs))) {
@@ -1268,6 +1268,18 @@ public class DrugReferenceInjector {
 		// And, for the same reason, the drugs the question lists that her chart holds no active order for
 		// (issue #515), which LlmInferenceService states after the answer.
 		injected.markListedDrugsWithNoActiveOrder(listed.stated());
+		// And whether the question states a dose of the drug it asks about, which the findings never weigh (ADR Decision
+		// 274), so LlmInferenceService says after the answer that it was not checked.
+		injected.markStatesADose(!questionDrugs.isEmpty()
+				&& QueryScopeRouter.statesADose(wordsBesideItsNames(question, questionDrugs)));
+		// And, where the question names a class whose ATC group IS that class, which of her orders the data files there —
+		// none only where every order of hers was read and identified (ADR Decision 275).
+		String classGroup = DrugClassTerms.atcGroupOf(namedClass);
+		injected.markOrdersInTheNamedClass(classGroup,
+				classGroup == null ? null : ordersFiledUnder(classGroup, orderEntries, context));
+		// And each drug the question names by a name the label printed for it is not built from — "glibenclamide", which
+		// the data labels Glyburide — so LlmInferenceService says which drug that label is (ADR Decision 277).
+		injected.markNamedAsAsked(namedAsAsked(question, questionDrugs, context));
 		// And the rows of the drug a question asks whether she has ever taken (ADR Decision 151), so LlmInferenceService
 		// publishes no chip about giving it beside that question either.
 		injected.markHistoryQuestionDrugRows(historyQuestionDrugRows);
@@ -2943,16 +2955,23 @@ public class DrugReferenceInjector {
 				return GIVE;
 			}
 			List<String> words = wordsBesideItsNames(question, questionDrugs);
-			return QueryScopeRouter.asksWhetherNotToGiveADrug(words) ? NOT_GIVE
+			// Whether it changes an effect of a group of hers: neither "Yes" nor "No" (ADR Decision 281).
+			return QueryScopeRouter.asksWhetherNotToGiveADrug(words)
+					|| QueryScopeRouter.asksWhetherADrugChangesHerMedications(words) ? NOT_GIVE
 					: QueryScopeRouter.asksWhetherADrugInteractsWithHerMedications(words)
 							|| QueryScopeRouter.asksAboutADrugNamedAsHers(words) ? INTERACTS : GIVE;
 		}
 	}
 
-	/** Whether {@code question} asks whether its one drug interacts with her medications (ADR Decision 181). */
+	/** Whether {@code question} asks whether its one drug interacts with her medications (ADR Decision 181), or changes an
+	 *  effect of a group of them, answered from the same findings (ADR Decision 281). */
 	static boolean asksWhetherItInteracts(String question, List<DrugReference> questionDrugs) {
-		return !questionDrugs.isEmpty()
-				&& QueryScopeRouter.asksWhetherADrugInteractsWithHerMedications(wordsBesideItsNames(question, questionDrugs));
+		if (questionDrugs.isEmpty()) {
+			return false;
+		}
+		List<String> words = wordsBesideItsNames(question, questionDrugs);
+		return QueryScopeRouter.asksWhetherADrugInteractsWithHerMedications(words)
+				|| QueryScopeRouter.asksWhetherADrugChangesHerMedications(words);
 	}
 
 	/** Whether {@code question} asks whether she is on its one drug now (ADR Decision 202). */
@@ -4138,12 +4157,17 @@ public class DrugReferenceInjector {
 		/** Where the question names it, in the folded question: a mark's span, or -1 where it names it nowhere. */
 		final int start;
 
-		AskedDrug(Set<Object> substances, List<DrugReference> rows, DrugReference row, String label, int start) {
+		/** The question's own words for it, or {@code null} where it names it nowhere. */
+		final String written;
+
+		AskedDrug(Set<Object> substances, List<DrugReference> rows, DrugReference row, String label, int start,
+				String written) {
 			this.substances = substances;
 			this.rows = rows;
 			this.row = row;
 			this.label = label;
 			this.start = start;
+			this.written = written;
 		}
 
 		boolean isHers(Set<Object> herSubstances) {
@@ -4218,7 +4242,8 @@ public class DrugReferenceInjector {
 		DrugReference row = context == null ? ofTheFirst.get(0) : DrugSafetyValidator.interactionSubject(ofTheFirst, context);
 		String label = substances.size() == 1 || written == null || written.isEmpty() ? row.displayLabel()
 				: Character.toUpperCase(written.charAt(0)) + written.substring(1);
-		return new AskedDrug(new LinkedHashSet<Object>(substances), all, row, label, start);
+		return new AskedDrug(new LinkedHashSet<Object>(substances), all, row, label, start,
+				written == null || written.isEmpty() ? null : written);
 	}
 
 	/** Whether the word before {@code drug}'s name in {@code question} names it as the patient's own — "her lopinavir" —
@@ -4462,13 +4487,22 @@ public class DrugReferenceInjector {
 			Map<String, Integer> orderRecordNumbers, Map<String, Integer> herOrderRecords, boolean proposal,
 			PairChipExtent pairs, Lead lead, String screenScope) {
 		return composeFromFindings(findings, numbers, orderRecordNumbers, herOrderRecords, proposal, pairs, lead, screenScope,
-				Collections.<String> emptyList());
+				Collections.<String> emptyList(), null);
+	}
+
+	/** As above, its lead naming the drug {@code askedLabel} where it is not {@code null} — a combination the question
+	 *  names by one name (ADR Decision 282). */
+	private static String composeFromFindings(List<SafetyWarning> findings, List<Integer> numbers,
+			Map<String, Integer> orderRecordNumbers, Map<String, Integer> herOrderRecords, boolean proposal,
+			PairChipExtent pairs, Lead lead, String screenScope, String askedLabel) {
+		return composeFromFindings(findings, numbers, orderRecordNumbers, herOrderRecords, proposal, pairs, lead, screenScope,
+				Collections.<String> emptyList(), askedLabel);
 	}
 
 	/** As above; on a screen, {@code groupLines} — {@link #duplicateTherapyLines} — follow its count (ADR Decision 197). */
 	private static String composeFromFindings(List<SafetyWarning> findings, List<Integer> numbers,
 			Map<String, Integer> orderRecordNumbers, Map<String, Integer> herOrderRecords, boolean proposal,
-			PairChipExtent pairs, Lead lead, String screenScope, List<String> groupLines) {
+			PairChipExtent pairs, Lead lead, String screenScope, List<String> groupLines, String askedLabel) {
 		final String[] clauses = new String[findings.size()];
 		List<Integer> order = new ArrayList<Integer>(findings.size());
 		for (int i = 0; i < findings.size(); i++) {
@@ -4522,23 +4556,26 @@ public class DrugReferenceInjector {
 							substances.get(findings.get(i)), saidOnce));
 		}
 		SafetyWarning first = findings.get(leadIndex);
+		// The drug the lead is about: the combination the question asked about by one name, whose lines name each
+		// ingredient (ADR Decision 282), else the finding's own.
+		String leadDrug = askedLabel != null ? askedLabel : first.getDrug();
 		if (proposal && lead == Lead.INTERACTS) {
 			// "Does it interact with her medications?" — every question admitted so has an interaction finding about the
 			// drug, so "Yes" is true of it, and the withholding call follows where a finding makes it (ADR Decision 181).
-			lines.add(0, "Yes — " + first.getDrug() + " interacts with this patient's active medications."
+			lines.add(0, "Yes — " + leadDrug + " interacts with this patient's active medications."
 					+ (STRENGTH_WITHHOLD.equals(clauses[leadIndex])
 							? " This module's drug-safety check found a reason to withhold it." : ""));
 		} else if (lead == Lead.NOT_GIVE && STRENGTH_WITHHOLD.equals(clauses[leadIndex]) && !licensesTheModulesNo(first)) {
 			// No rated reason to withhold, so no claim of one either: what the check found (ADR Decision 257).
-			lines.add(0, FOUND_LEAD_OPENING + first.getDrug() + ":");
+			lines.add(0, FOUND_LEAD_OPENING + leadDrug + ":");
 		} else if (STRENGTH_WITHHOLD.equals(clauses[leadIndex])) {
-			lines.add(0, (lead == Lead.NOT_GIVE ? NEUTRAL_WITHHOLD_LEAD_OPENING : WITHHOLD_LEAD_OPENING) + first.getDrug()
+			lines.add(0, (lead == Lead.NOT_GIVE ? NEUTRAL_WITHHOLD_LEAD_OPENING : WITHHOLD_LEAD_OPENING) + leadDrug
 					+ WITHHOLD_LEAD_CLOSING);
 		} else if (cautions) {
 			// Every line but her own orders sharing a substance is an interaction caution about this drug, which
 			// cautionsOnlyAbout admitted, so the count is of those lines: the duplicate is not a caution about the
 			// drug proposed (ADR Decision 160).
-			lines.add(0, cautionLead(notHerOwnOrdersSharingASubstance(findings).size(), first.getDrug()));
+			lines.add(0, cautionLead(notHerOwnOrdersSharingASubstance(findings).size(), leadDrug));
 		} else if (!proposal) {
 			// A screen opens with what it found, counted, and closes with what it does not cover (ADR Decision 171).
 			lines.add(0, screenLead(findings, pairs, saidOnce));
@@ -4594,11 +4631,16 @@ public class DrugReferenceInjector {
 									+ " listed; " + withheld + " more " + (withheld == 1 ? "is" : "are")
 									+ " not shown)"));
 		}
+		// Beside another count, "unrated" qualifies its own noun: a trailing ", none with a severity rated" read as about the
+		// rated interactions before it too (ADR Decision 279).
+		boolean several = (interactions > 0 ? 1 : 0) + (contraindications > 0 ? 1 : 0) + (sharing > 0 ? 1 : 0) > 1;
 		if (contraindications > 0) {
-			counts.add(contraindications + (contraindications == 1 ? " contraindication" : " contraindications")
+			counts.add(contraindications + (saidOnce && several ? " unrated" : "")
+					+ (contraindications == 1 ? " contraindication" : " contraindications")
 					+ (!saidOnce ? ""
-							: contraindications == 1 ? " about " + CURRENT_MEDICATION + ", with no severity rated"
-									: " about medications this patient is already taking, none with a severity rated"));
+							: contraindications == 1 ? " about " + CURRENT_MEDICATION + (several ? "" : ", with no severity rated")
+									: " about medications this patient is already taking"
+											+ (several ? "" : ", none with a severity rated")));
 		}
 		if (sharing > 0) {
 			counts.add(sharing + (sharing == 1 ? " substance" : " substances") + " carried by more than one of this patient's orders");
@@ -4926,16 +4968,21 @@ public class DrugReferenceInjector {
 		boolean unratedSaidOnce = unrated > 0;
 		List<String> counts = new ArrayList<String>();
 		// No interaction count where there is none: "0 interactions" would read as a clearance (ADR Decision 208).
+		// Beside another count, "unrated" qualifies its own noun, as in a screen's count (ADR Decision 279).
+		boolean several = (interactions > 0 ? 1 : 0) + (contraindications > 0 ? 1 : 0) + (sharing > 0 ? 1 : 0) > 1;
+		boolean allUnrated = unrated > 0 && unrated == interactions;
 		if (interactions > 0) {
-			counts.add(interactions + (interactions == 1 ? " interaction" : " interactions")
+			counts.add(interactions + (allUnrated && several ? " unrated" : "")
+				+ (interactions == 1 ? " interaction" : " interactions")
 				+ " with this patient's other active medications"
-				+ (unrated == 0 ? ""
-						: unrated == interactions ? (interactions == 1 ? ", with no severity rated" : ", none with a severity rated")
+				+ (unrated == 0 || allUnrated && several ? ""
+						: allUnrated ? (interactions == 1 ? ", with no severity rated" : ", none with a severity rated")
 								: ", " + unrated + " of them with no severity rated"));
 		}
 		if (contraindications > 0) {
-			counts.add(contraindications + (contraindications == 1 ? " contraindication" : " contraindications")
-					+ (!saidOnce ? "" : contraindications == 1 ? ", with no severity rated" : ", none with a severity rated"));
+			counts.add(contraindications + (saidOnce && several ? " unrated" : "")
+					+ (contraindications == 1 ? " contraindication" : " contraindications")
+					+ (!saidOnce || several ? "" : contraindications == 1 ? ", with no severity rated" : ", none with a severity rated"));
 		}
 		if (sharing > 0) {
 			counts.add("its substance in more than one of this patient's orders");
@@ -5520,7 +5567,7 @@ public class DrugReferenceInjector {
 				return null;
 			}
 			String composed = composeFromFindings(its, numbersOfEach.get(drug), orderRecordNumbers, herOrderRecords,
-					true, pairs, Lead.GIVE, SCREEN_SCOPE);
+					true, pairs, Lead.GIVE, SCREEN_SCOPE, drug.substances.size() > 1 ? drug.label : null);
 			if (composed == null) {
 				return null;
 			}
@@ -5631,7 +5678,7 @@ public class DrugReferenceInjector {
 		Lead lead = QueryScopeRouter.asksWhetherTwoDrugsInteract(words) ? Lead.INTERACTS
 				: QueryScopeRouter.asksWhetherOneDrugChangesTheOther(words) ? Lead.NOT_GIVE : Lead.of(question, proposedRows);
 		String composed = composeFromFindings(ofIt, ofItNumbers, orderRecordNumbers, herOrderRecords, true, pairs,
-				lead, SCREEN_SCOPE);
+				lead, SCREEN_SCOPE, proposed.substances.size() > 1 ? proposed.label : null);
 		return composed == null ? null : notHers + hers + ".\n" + composed;
 	}
 
@@ -5752,6 +5799,106 @@ public class DrugReferenceInjector {
 		List<String> words = wordsMarking(question, named.values());
 		return QueryScopeRouter.asksWhetherToGiveADrug(words) ? OneOfHerOrdersAsked.PROPOSED
 				: QueryScopeRouter.asksWhetherADrugInteractsWithHerMedications(words) ? OneOfHerOrdersAsked.INTERACTS : null;
+	}
+
+	/**
+	 * Her active orders the data files under the ATC group {@code group} — by the order's own codes, or by a reference row
+	 * her orders resolve it to — each as the statement names it: its display, an order known only by its codes as recorded
+	 * only by them, and one that has not started with the date it is scheduled to; or {@code null} where none is and that
+	 * cannot be said: her orders were not read, or one of them the drug data does not identify (ADR Decision 275).
+	 */
+	private List<String> ordersFiledUnder(String group, List<DrugReference> orderEntries, PatientClinicalContext context) {
+		if (context == null || !context.chartReadForSafety()) {
+			return null;
+		}
+		List<DrugReference> entries = orderEntries == null ? Collections.<DrugReference> emptyList() : orderEntries;
+		List<String> filed = new ArrayList<String>();
+		for (PatientClinicalContext.ActiveDrugOrder order : context.getActiveDrugOrders()) {
+			boolean inIt = false;
+			for (String code : order.getAtcCodes()) {
+				String normalized = DrugReference.normalizeAtcToken(code);
+				inIt |= normalized != null && normalized.startsWith(group);
+			}
+			for (DrugReference entry : entries) {
+				if (inIt) {
+					break;
+				}
+				boolean coded = false;
+				for (String code : entry.normalizedAtcCodes()) {
+					coded |= code.startsWith(group);
+				}
+				inIt = coded && DrugSafetyValidator.ordersOfSubstance(drugReferenceService, entry, entries, context)
+						.contains(order);
+			}
+			if (!inIt) {
+				continue;
+			}
+			String display = order.getDisplay() == null ? "" : order.getDisplay().trim();
+			String name = DrugSafetyValidator.displayNamesADrug(order) ? display
+					: ("an order recorded only by its codes " + display).trim();
+			if (!order.hasStarted()) {
+				name += " (" + PatientChartSerializer.scheduledToStart(order.getScheduledStart()) + ")";
+			}
+			if (!filed.contains(name)) {
+				filed.add(name);
+			}
+		}
+		if (filed.isEmpty() && !DrugSafetyValidator.unresolvedActiveOrders(drugReferenceService, context, entries).isEmpty()) {
+			return null;
+		}
+		return filed;
+	}
+
+	/**
+	 * Each single drug {@code question} names by words the label printed for it is not built from
+	 * ({@link DrugReference#labelNameOccursIn}): an international name, a brand, an abbreviation, a question-only term —
+	 * the row the findings name it by ({@link DrugSafetyValidator#interactionSubject}) and those words (ADR Decision 277).
+	 * A combination's name is the AskedDrug's own label already, so it is not one.
+	 */
+	private static List<PatientChartSerializer.NamedAsAsked> namedAsAsked(String question, List<DrugReference> questionDrugs,
+			PatientClinicalContext context) {
+		if (questionDrugs == null || questionDrugs.isEmpty()) {
+			return Collections.emptyList();
+		}
+		List<PatientChartSerializer.NamedAsAsked> named = new ArrayList<PatientChartSerializer.NamedAsAsked>();
+		Set<String> seen = new HashSet<String>();
+		for (AskedDrug drug : askedDrugs(question, questionDrugs, context, true)) {
+			// The data's own name punctuated otherwise — "St John's wort" for "St. John's Wort" — is no other name.
+			if (drug.substances.size() != 1 || drug.written == null || drug.row.labelNameOccursIn(drug.written)
+					|| lettersAndDigitsOf(drug.written).equals(lettersAndDigitsOf(drug.row.getName()))
+					|| !seen.add(DrugReference.foldedLower(drug.written))) {
+				continue;
+			}
+			named.add(new PatientChartSerializer.NamedAsAsked(drug.written, drug.row.displayLabel(), drug.row.getName()));
+		}
+		return named;
+	}
+
+	/**
+	 * The label of the one drug {@code question} asks about where it is a combination named by one name — "co-trimoxazole",
+	 * "Bactrim" — so the lead names what was asked about while each line names the ingredient its finding is about (ADR
+	 * Decision 282); else {@code null}.
+	 */
+	private static String combinationAskedAbout(String question, List<DrugReference> questionDrugs,
+			PatientClinicalContext context) {
+		if (questionDrugs == null || questionDrugs.isEmpty()) {
+			return null;
+		}
+		List<AskedDrug> asked = askedDrugs(question, questionDrugs, context, false);
+		return asked.size() == 1 && asked.get(0).substances.size() > 1 && asked.get(0).written != null ? asked.get(0).label
+				: null;
+	}
+
+	/** {@code name} folded, with every character but its letters and digits taken out. */
+	private static String lettersAndDigitsOf(String name) {
+		String folded = name == null ? "" : DrugReference.foldedLower(name);
+		StringBuilder out = new StringBuilder(folded.length());
+		for (int i = 0; i < folded.length(); i++) {
+			if (Character.isLetterOrDigit(folded.charAt(i))) {
+				out.append(folded.charAt(i));
+			}
+		}
+		return out.toString();
 	}
 
 	/** The words of {@code question} with each of {@code stems} marked a drug's name, where it stands. */

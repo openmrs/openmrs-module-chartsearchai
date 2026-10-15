@@ -121,7 +121,7 @@ public class InteractionRouteVariantTest {
 				"the rows of one substance are one chip against one order, was: " + warnings);
 		assertEquals("Hydrocortisone", warnings.get(0).getDrug(),
 				"and the chip names the SUBSTANCE, not one of its routes");
-		assertEquals("Hydrocortisone interacts with active order diclofenac — Moderate. The combined use"
+		assertEquals("Hydrocortisone interacts with active order Diclofenac — Moderate. The combined use"
 				+ " of corticosteroids and nonsteroidal anti-inflammatory drugs (NSAIDs) may increase the"
 				+ " potential for serious gastrointestinal (GI) toxicity, including inflammation,"
 				+ " bleeding, ulceration, and perforation.", warnings.get(0).getDetail(),
@@ -170,7 +170,7 @@ public class InteractionRouteVariantTest {
 						DrugReferenceTestSupport.set("Lepirudin 15mg"), null, null, null));
 
 		assertEquals(1, warnings.size(), "one substance, one partner, one chip, was: " + warnings);
-		assertEquals("Ketorolac interacts with active order lepirudin — Moderate. Theoretically, the"
+		assertEquals("Ketorolac interacts with active order Lepirudin — Moderate. Theoretically, the"
 				+ " coadministration of nonsteroidal anti-inflammatory drugs (NSAIDs) and thrombin"
 				+ " inhibitors may potentiate the risk of bleeding. NSAIDs interfere with platelet"
 				+ " adhesion and aggregation and may prolong bleeding time in healthy individuals.",
@@ -212,7 +212,7 @@ public class InteractionRouteVariantTest {
 		SafetyWarning chip = interactionChips(warnings).get(0);
 		assertEquals("Sirolimus", chip.getDrug(),
 				"named by the route-unspecified row whatever supplies the rating");
-		assertTrue(chip.getDetail().startsWith("Sirolimus interacts with active order lapatinib — Major. "),
+		assertTrue(chip.getDetail().startsWith("Sirolimus interacts with active order Lapatinib — Major. "),
 				"and the pair's most severe rating survives, was: " + chip.getDetail());
 	}
 
@@ -295,7 +295,7 @@ public class InteractionRouteVariantTest {
 		// The note comes from the unqualified row, which is where lorazepam's rule sits; under a
 		// first-wins label that same note would have been printed under "Chloroprocaine (ophthalmic)",
 		// i.e. the chip-versus-prose divergence with the label rather than the prose wrong.
-		assertEquals("Chloroprocaine interacts with active order lorazepam — Moderate. The concomitant use"
+		assertEquals("Chloroprocaine interacts with active order Lorazepam — Moderate. The concomitant use"
 				+ " of local anesthetics and benzodiazepines may have additive CNS-depressant effects."
 				+ " Both types of drugs are CNS depressants.",
 				chips.get(0).getDetail(), "was: " + warnings);
@@ -315,9 +315,9 @@ public class InteractionRouteVariantTest {
 
 		assertEquals(1, warnings.size(), "one chip per MECHANISM, was: " + warnings);
 		String detail = warnings.get(0).getDetail();
-		assertTrue(detail.contains("diclofenac"),
+		assertTrue(detail.contains("Diclofenac"),
 				"diclofenac must still be named by the chip that covers it, was: " + detail);
-		assertTrue(detail.contains("ketorolac"),
+		assertTrue(detail.contains("Ketorolac"),
 				"and so must ketorolac — collapsing may not drop a partner, was: " + detail);
 	}
 

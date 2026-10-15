@@ -597,7 +597,7 @@ public class NonCodedDrugOrderNameTest extends BaseModuleContextSensitiveTest {
 		List<String> details = DrugReferenceTestSupport.details(validator.validate("", QUESTION, context));
 
 		assertEquals(java.util.Arrays.asList(
-			"Ibuprofen interacts with active order warfarin — increased risk of GI bleeding",
+			"Ibuprofen interacts with active order Warfarin — increased risk of GI bleeding",
 			"Ibuprofen is in the same ATC class (M01AE) as active order Warfarin 5mg"
 					+ " — possible duplicate therapy"), details,
 				"the SECOND chip is pinned AS WRONG: its class comes from the concept's M01AE02 and its"
@@ -657,7 +657,7 @@ public class NonCodedDrugOrderNameTest extends BaseModuleContextSensitiveTest {
 				folded = detail;
 			}
 		}
-		assertEquals("Ibuprofen interacts with active order warfarin — increased risk of GI bleeding."
+		assertEquals("Ibuprofen interacts with active order Warfarin — increased risk of GI bleeding."
 				+ " Ibuprofen is in the same cross-reactivity group (NSAID) as active order ASPIRIN —"
 				+ " possible additive or duplicate-class therapy", folded,
 				"the rule the fold picked is the seed's WARFARIN rule — unrated, which is why it clears"

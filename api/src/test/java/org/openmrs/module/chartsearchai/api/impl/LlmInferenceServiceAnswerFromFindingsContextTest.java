@@ -2332,8 +2332,8 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		assertEquals(0, provider.calls);
 		// On a screen every contraindication is about a medication she already takes, so the count says it once rather
 		// than every line (ADR Decision 191); the line is the finding.
-		assertTrue(answer.getAnswer().split("\n")[0].endsWith(" contraindication about a medication this patient is "
-				+ "already taking, with no severity rated:"),
+		assertTrue(answer.getAnswer().split("\n")[0].endsWith(", and 1 unrated contraindication about a medication this "
+				+ "patient is already taking:"),
 				"the count says the drug is one she already takes: " + answer.getAnswer());
 		assertTrue(answer.getAnswer().contains("\n" + answerFacingBody(allergy).replace(
 				" No severity is rated for this finding.", "") + " [" + allergy.index + "]"),
@@ -2673,8 +2673,8 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		assertEquals(0, provider.calls, "the module answers: " + answer.getAnswer());
 		String[] lines = answer.getAnswer().split("\n");
 		assertEquals(4, lines.length, "a count, two findings and the scope: " + answer.getAnswer());
-		assertEquals("1 interaction among this patient's active medications, and 1 contraindication about a medication "
-				+ "this patient is already taking, with no severity rated:", lines[0]);
+		assertEquals("1 interaction among this patient's active medications, and 1 unrated contraindication about a "
+				+ "medication this patient is already taking:", lines[0]);
 		assertTrue(lines[1].startsWith("Acetylsalicylic acid (aspirin) interacts with active order Warfarin — Major. ["),
 				"the interaction's brief line — its first sentence, then its markers: " + lines[1]);
 		assertTrue(lines[2].startsWith("The patient has a recorded allergy to Acetylsalicylic acid (aspirin)."),
@@ -2888,6 +2888,26 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		ChartAnswer answer = serviceWith(new RecordingProvider(), shipped()).search(patient, "Can I give her co-zorblatine?");
 		assertTrue(answer.getAnswer().startsWith("No interaction check was run: \"co-zorblatine\" is not a drug name the "
 				+ "interaction data recognises."), answer.getAnswer());
+	}
+
+	/**
+	 * A dose the question states is said after the model's answer not to have been checked, where the dataset publishes no
+	 * dose ceiling (ADR Decision 274): on the 3.7.1 standalone "Is 1 g of paracetamol safe for him?" read only the model's
+	 * answer, which says nothing of the dose, while the knowledge base the module ships carries no dosing at all.
+	 */
+	@Test
+	public void aDoseTheQuestionStatesIsSaidNotToHaveBeenCheckedAfterTheModelsAnswer() {
+		answerFromFindings(true);
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider).search(patient, "Can I give her ibuprofen 400mg?");
+		assertEquals(1, provider.calls, "the model answers a question stating a dose");
+		assertTrue(answer.getAnswer().endsWith(" The dose asked about was not checked: the drug data this module carries has "
+				+ "no dosing."), answer.getAnswer());
+
+		RecordingProvider noDose = new RecordingProvider();
+		ChartAnswer without = serviceWith(noDose).search(patient, "Does she take ibuprofen?");
+		assertEquals(1, noDose.calls, "precondition: the model answers it too");
+		assertFalse(without.getAnswer().contains(DoseStatement.NOT_CHECKED), "no dose, no sentence: " + without.getAnswer());
 	}
 
 	/** An unrecognised name in an interaction question raises no screen of her own orders beside "no check was run": on the

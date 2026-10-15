@@ -64,11 +64,11 @@ public class DrugInPlayFindingStrengthOrderTest {
 	@Test
 	public void theArmStatesItsMostSevereFindingFirst() {
 		assertEquals(Arrays.asList(
-			"interaction | Major | Warfarin interacts with active order fluconazole",
-			"interaction | Major | Warfarin interacts with active order amiodarone",
-			"interaction | Major | Warfarin interacts with active order ibuprofen",
-			"interaction | Moderate | Warfarin interacts with active order metformin",
-			"interaction | Minor | Warfarin interacts with active order methotrexate"),
+			"interaction | Major | Warfarin interacts with active order Fluconazole",
+			"interaction | Major | Warfarin interacts with active order Amiodarone",
+			"interaction | Major | Warfarin interacts with active order Ibuprofen",
+			"interaction | Moderate | Warfarin interacts with active order Metformin",
+			"interaction | Minor | Warfarin interacts with active order Methotrexate"),
 			DrugReferenceTestSupport.chipLeads(chips()),
 			"the drug-in-play arm's chips reach the prompt in this order, so the strongest finding must "
 					+ "be the one a truncated answer keeps, not the one the knowledge base filed first "
@@ -86,8 +86,8 @@ public class DrugInPlayFindingStrengthOrderTest {
 	@Test
 	public void partnersTiedOnStrengthKeepTheDatasetsOwnOrder() {
 		List<String> leads = DrugReferenceTestSupport.chipLeads(chips());
-		assertTrue(leads.indexOf("interaction | Major | Warfarin interacts with active order fluconazole")
-				< leads.indexOf("interaction | Major | Warfarin interacts with active order amiodarone"),
+		assertTrue(leads.indexOf("interaction | Major | Warfarin interacts with active order Fluconazole")
+				< leads.indexOf("interaction | Major | Warfarin interacts with active order Amiodarone"),
 			"the dataset files Fluconazole before Amiodarone and rates them alike, so nothing about this "
 					+ "arm's ordering may separate them, was: " + leads);
 	}

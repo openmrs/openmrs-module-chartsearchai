@@ -219,7 +219,7 @@ public class OneNameAcrossChipAndInjectedRecordTest {
 			"Is pantoprazole safe here?");
 
 		String finding = DrugReferenceTestSupport.safetyFindingIn(chart).getText();
-		assertTrue(finding.contains("interacts with active order esomeprazole"),
+		assertTrue(finding.contains("interacts with active order Esomeprazole"),
 			"precondition: the fold must have REFUSED, keeping the rule's own token, was: " + finding);
 
 		String record = recordFor(chart, "Pantoprazole");
@@ -290,8 +290,8 @@ public class OneNameAcrossChipAndInjectedRecordTest {
 					DrugReferenceTestSupport.namelessAspirinOrder(), QUESTION);
 
 		String finding = DrugReferenceTestSupport.safetyFindingIn(chart).getText();
-		assertTrue(finding.contains("interacts with active order aspirin")
-				&& finding.contains("cross-reactivity group (NSAID) as active order aspirin"),
+		assertTrue(finding.contains("interacts with active order Aspirin")
+				&& finding.contains("cross-reactivity group (NSAID) as active order Aspirin"),
 			"precondition: the ladder found no name, so both sentences take the rule's token, was: "
 					+ finding);
 

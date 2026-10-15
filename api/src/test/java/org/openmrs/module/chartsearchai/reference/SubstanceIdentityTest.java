@@ -231,7 +231,7 @@ public class SubstanceIdentityTest {
 		assertEquals(1, warnings.size(), "the genuine pair must still chip, was: " + warnings);
 		assertEquals(SafetyWarning.TYPE_INTERACTION, warnings.get(0).getType());
 		assertTrue(warnings.get(0).getDetail().startsWith("Daxibotulinumtoxina (botulinum toxin type a) "
-				+ "interacts with active order botulinum toxin type b — Moderate. "),
+				+ "interacts with active order Botulinum toxin type b — Moderate. "),
 				"was: " + warnings.get(0).getDetail());
 	}
 
@@ -278,10 +278,10 @@ public class SubstanceIdentityTest {
 
 		assertEquals(2, warnings.size(), "a prodrug and its metabolite are two drugs, was: " + warnings);
 		assertTrue(warnings.get(0).getDetail().startsWith(
-				"Enalapril interacts with active order potassium chloride — Major. "),
+				"Enalapril interacts with active order Potassium chloride — Major. "),
 				"was: " + warnings.get(0).getDetail());
 		assertTrue(warnings.get(1).getDetail().startsWith(
-				"Enalaprilat interacts with active order potassium chloride — Major. "),
+				"Enalaprilat interacts with active order Potassium chloride — Major. "),
 				"was: " + warnings.get(1).getDetail());
 	}
 }

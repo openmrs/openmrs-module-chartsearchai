@@ -23,6 +23,7 @@ import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Date;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -463,6 +464,48 @@ public final class DrugReferenceTestSupport {
 		return injectedOrThrow(curatedFixtureService(fixtureResource), oneRecordChart(),
 				ctx(60, null, null, null, new LinkedHashSet<String>(allergies), null), question,
 				"allergies " + allergies);
+	}
+
+	/** The chart the real injector produces over the shipped knowledge base for a patient on {@code orderDisplays}, each
+	 *  one active order named by its display, asked {@code question} — for a test outside this package. */
+	public static PatientChart injectedChartOverOrders(String question, String... orderDisplays) {
+		List<PatientClinicalContext.ActiveDrugOrder> orders = new ArrayList<PatientClinicalContext.ActiveDrugOrder>();
+		for (int i = 0; i < orderDisplays.length; i++) {
+			orders.add(activeOrder("order-" + i, orderDisplays[i]));
+		}
+		return injectedChartOverOrders(question, orders);
+	}
+
+	/** As {@link #injectedChartOverOrders(String, String...)}, over {@code orders} as given — their names and codes the
+	 *  context's own, as {@link PatientClinicalContextBuilder} folds them in. */
+	public static PatientChart injectedChartOverOrders(String question, List<PatientClinicalContext.ActiveDrugOrder> orders) {
+		LinkedHashSet<String> names = new LinkedHashSet<String>();
+		LinkedHashSet<String> codes = new LinkedHashSet<String>();
+		for (PatientClinicalContext.ActiveDrugOrder order : orders) {
+			names.addAll(order.getNames());
+			codes.addAll(order.getAtcCodes());
+		}
+		return injectorWithSafety(shippedServiceWithGroups()).injectRecords(oneRecordChart(),
+				ctx(50, null, names, codes, null, null, orders), question);
+	}
+
+	/** One active order named by {@code display} — {@link #activeOrder(String, String, String...)}, for a test outside
+	 *  this package. */
+	public static PatientClinicalContext.ActiveDrugOrder namedOrder(String uuid, String display) {
+		return activeOrder(uuid, display);
+	}
+
+	/** An active order the module could read no name for, known by {@code codes} as the builder makes it (issue #290). */
+	public static PatientClinicalContext.ActiveDrugOrder codesOnlyOrder(String uuid, String... codes) {
+		Set<String> set = new LinkedHashSet<String>(Arrays.asList(codes));
+		return PatientClinicalContext.ActiveDrugOrder.namedByCodesOnly(uuid, PatientClinicalContextBuilder.codeOnlyDisplay(set),
+				set);
+	}
+
+	/** An active order named by {@code display} that has not started: scheduled to start on {@code start} (issue #553). */
+	public static PatientClinicalContext.ActiveDrugOrder notStartedOrder(String uuid, String display, Date start) {
+		return PatientClinicalContext.ActiveDrugOrder.named(uuid, display, new LinkedHashSet<String>(Arrays.asList(display)),
+				null, null, null, start);
 	}
 
 	/**

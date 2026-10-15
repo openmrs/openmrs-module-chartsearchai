@@ -18156,3 +18156,236 @@ medications."* — then each finding of the screen relating a substance of that 
 shares with another order. With no such finding the model answers, as before.
 
 Pinned by `HerOrdersNamedByTheirOwnNamesTest.oneOfHisOrdersNamedAloneIsAnsweredAsHisMedication`.
+
+## Decision 274: A dose the question states is said not to have been checked
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-15 to fix the errors left after Decision 271.
+
+### Context
+
+[Decision 269](#decision-269-a-proposal-stating-a-dose-raises-the-findings-the-proposal-does) let a question stating a dose
+raise its drug's findings and left the answer to the model, since the findings weigh no dose. The model then answered
+*"Is 1 g of paracetamol safe for him?"* from the findings and said nothing of the dose, and the knowledge base the module
+ships publishes no dose ceiling at all — so an answer that does not say so reads as a word on that dose, for a child above
+all. The dataset's verdict was already on the wire, as `doseCeilingCoverage`, and in no sentence.
+
+### The decision
+
+The pre-answer pass stamps whether the question states a dose beside the drug it asks about
+(`PatientChart.statesADose()`, off `QueryScopeRouter.statesADose`), and after the model's answer — the search answer, and
+the streaming one's early and final answers alike, in the same place among the module's sentences — `DoseStatement` appends
+*"The dose asked about was not checked: the drug data this module carries has no dosing."* where
+`DrugSafetyValidator.doseCeilingCoverage()` is not `PUBLISHED`. A dataset that publishes dose ceilings keeps its dose arm.
+No marker, no chip, and never a word about whether the drug may be given.
+
+Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aDoseTheQuestionStatesIsSaidNotToHaveBeenCheckedAfterTheModelsAnswer`.
+
+## Decision 275: Which of her orders are in a drug class the question names is said, where the class's ATC group IS the class
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-15 to fix the errors left after Decision 271.
+
+### Context
+
+[Decision 262](#decision-262-statins-ace-inhibitors-and-proton-pump-inhibitors-are-named-classes) made *statin*, *ACE
+inhibitor* and *proton pump inhibitor* named classes, so *"Is it safe to give her a statin?"* is told the class was not
+resolved to any substance and to ask by name — of a patient on the 3.7.1 standalone already taking simvastatin, which
+nothing said. [Decision 67](#decision-67-a-question-naming-a-drug-class-is-told-so-rather-than-resolved-to-members-the-classification-cannot-honestly-supply) refuses to resolve a class to an ATC subtree, because for the class it was
+written about, the oral contraceptives, `G03A` is wrong in both directions.
+
+### The decision
+
+**For three classes the WHO ATC group IS the class**, and that is measured rather than assumed: read off the shipped
+knowledge base's `atc` arrays on 2026-10-15, `C10AA` (HMG CoA reductase inhibitors) holds the eight statins and nothing
+else — not nystatin or pentostatin, which only sound like one — `C09AA` (ACE inhibitors, plain) ten ACE inhibitors and
+nothing else, and `A02BC` (proton pump inhibitors) the six PPIs with vonoprazan, which WHO itself files there.
+`DrugClassTerms.atcGroupOf` maps those three classes and no other, and is used for one thing: the pre-answer pass names
+her active orders the data files under that group — by the order's own codes, or by a reference row her orders resolve it
+to; an order known only by its codes as *"an order recorded only by its codes [ATC C10AA01]"*, and one that has not
+started with the date it is scheduled to — and `DrugClassMembersStatement` states them after the answer: *"Already among
+this patient's active medication orders in that class (ATC group C10AA): Simvastatin 20mg."*, or *"None of this patient's
+active medication orders is in that class (ATC group C10AA)."* — the second only where every order of hers was read and
+identified. No class is resolved to substances for the check, the class note's citable words are unchanged, and the
+residue is a member the data files under no code (enalaprilat).
+
+Pinned by `LlmInferenceServiceUnresolvedDrugClassTest.search_statesHerOrdersInTheNamedClassWhereItsAtcGroupIsTheClass` and
+`.search_namesAnOrderKnownOnlyByItsCodesAndOneNotYetStartedInTheNamedClass`.
+
+## Decision 276: A rule's partner token is printed with its first letter upper-cased
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-15 to fix the errors left after Decision 271, among
+them the lower-case drug names that follow-up's report left for the owner to decide.
+
+### Context
+
+A chip names her order by the matched rule's token wherever no other name was reconciled, and the `ddinter` source
+lower-cases every token it derives (`DrugSafetyValidator.partnerLabel`'s javadoc). So the chips, and the module's answers
+that quote them, read *"Lopinavir interacts with active order sulfamethoxazole"* and *"active order rifampin"* beside
+*"Simvastatin interacts with active order Clarithromycin"* in one answer. The suite pinned that rendering.
+
+### The decision
+
+`DrugSafetyValidator.printedPartnerLabel` — `partnerLabel` with its first letter upper-cased — is the name a chip PRINTS
+wherever it prints a rule's token: the unfolded chip, the folded one, the screen's, and `reconciledPartnerName`'s
+token-only answer where the ladder holds no name. A bridge clause quotes the chip's name, so it reads *"Trimethoprim from
+Cotrimoxazole 960mg"*. Nothing else moves: every grouping key is still `partnerLabel` case-folded, an order's own display
+is printed as recorded (an order named `ASPIRIN` stays so), a partner labelled by an ATC code is unchanged, and the
+injected record's notes keep the token as the data spells it, the vocabulary their prose is in.
+
+The tests that pinned the lower-case tokens were changed to the new rendering at the owner's request, each by its
+partner's first letter alone. The negative assertions naming a lower-case partner were checked to compare
+case-insensitively (`DrugReferenceTestSupport.detailContains`, or a case-folded `contains`), so none passes by vacuity.
+
+Pinned by `DdiDrugReferenceSourceTest.interactionChipDetailIsFreeOfTheResidualFieldMarker`,
+`FoldedChipOnePartnerNameTest.theTicketsLiveCaseNamesTheOrderOnce` and
+`BridgedConceptOrderResolutionTest.theFindingSaysWhichPrescriptionTheSubstanceCameFrom`.
+
+## Decision 277: A drug the question names otherwise is said to be the drug the data's name in the answer is
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-15 to fix the errors left after Decision 271.
+
+### Context
+
+On the 3.7.1 standalone *"Is it safe to start glibenclamide?"* read *"3 interaction cautions for Glyburide:"*, and every
+question about paracetamol read *"Acetaminophen"*: the knowledge base names those substances by their US names and
+carries the international ones only as aliases. The label the module prints appends the RxNorm generic where it diverges
+from the dataset's name (*"Acetylsalicylic acid (aspirin)"*), never an international name. Appending the curated
+international names to the label itself was measured over the shipped knowledge base and refused: those names include
+the combinations [Decision 266](#decision-266-co-trimoxazole-is-checked-as-both-of-its-ingredients-by-every-name-a-clinician-writes-it-with)
+files under each ingredient, so it would print *"Sulfamethoxazole (co-trimoxazole)"*, and spellings a clinician reads as
+a typo, *"Amoxicillin (amoxycillin)"*, on every answer about those drugs whatever the question called them.
+
+### The decision
+
+The pre-answer pass records each single drug the question names by words the label printed for it is not built from
+(`DrugReference.labelNameOccursIn`) — an international name, a brand, an abbreviation, a question-only term such as
+*alcohol* — with the label of the row its findings name it by (`PatientChart.getNamedAsAsked()`). After an answer that
+names that drug by the data's name and nowhere by the question's, `NameAsAskedStatement` appends *"Glibenclamide, as the
+question names it, is named Glyburide in this module's drug data."* — after the model's answer and its module sentences,
+and on a line of its own after the module's composed answer. A combination the question names by one name is its own
+label already ([Decision 272](#decision-272-a-combination-a-question-names-by-one-name-is-one-drug-asked-about)) and is
+not one, nor is the data's own name punctuated otherwise — *St John's wort* for *St. John's Wort*. The chips and records
+keep the data's label.
+
+Pinned by `LlmInferenceServiceNameAsAskedContextTest`.
+
+## Decision 278: An ingredient of her combination order is said to come from that order
+
+**Status: Accepted** (October 2026) — found while verifying Decisions 272–277 on the 3.7.1 standalone.
+
+### Context
+
+A finding about one ingredient of her prescription says which prescription it came from — *"Trimethoprim from
+Cotrimoxazole 960mg"* — except where the order's display already names that ingredient, where the clause is noise (issue
+#347). Since the knowledge base names co-trimoxazole under both of its ingredients
+([Decision 266](#decision-266-co-trimoxazole-is-checked-as-both-of-its-ingredients-by-every-name-a-clinician-writes-it-with)),
+"Cotrimoxazole 960mg" displays a name of each, so the clause was refused: Amina, on that order, asked *"Can I give her
+phenytoin?"* and read *"Phenytoin interacts with active order Trimethoprim — Moderate."* and *"… active order
+Sulfamethoxazole — Minor."*, with nothing saying either is her co-trimoxazole.
+
+### The decision
+
+The refusal asks whether the display names the substance by a name of its OWN: a name a row of another substance among
+her resolved orders carries too is a combination's, which says no one ingredient
+(`DrugSafetyValidator.displaysAnOwnNameOfAny`). So the finding states *"Trimethoprim from Cotrimoxazole 960mg"* again,
+and a display naming the ingredient itself — *"Trimethoprim 200mg"*, *"Lamivudine / zidovudine 150mg/300mg"* — still
+states none.
+
+Pinned by `CombinationOrderIngredientAttributionTest`.
+
+## Decision 279: Beside another count, "unrated" qualifies its own noun
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-15 to fix the errors left after Decision 271; the
+sweep's report named it an ambiguous count line.
+
+### Context
+
+A count says once what is true of every line of one kind
+([Decision 191](#decision-191-a-screens-answer-states-a-mechanism-across-a-grid-of-drugs-once-and-says-once-what-is-true-of-every-contraindication-line)), at its end:
+*"3 interactions among this patient's active medications, and 2 contraindications about medications this patient is
+already taking, none with a severity rated:"*, above three interactions rated Major, Major and Minor. Read to its end the
+qualifier covers every count before it, so it says the Major interactions are unrated.
+
+### The decision
+
+Where the count names more than one kind of finding, an unrated kind says so on its own noun — *"… and 2 unrated
+contraindications about medications this patient is already taking:"*, *"3 interactions with this patient's other active
+medications, and 1 unrated contraindication:"* — and a count of one kind keeps its trailing *"…, none with a severity
+rated:"*, which nothing else can be read under. A count of interactions some of which are unrated keeps *"…, 2 of them
+with no severity rated"*.
+
+Pinned by `ScreenInteractionsOnlyContextTest.aQuestionAboutSafetyStillStatesThem`,
+`OwnMedicationSafetyContextTest.aRecordedAllergyToHerOwnDrugIsStatedWithItsInteractions` and
+`LlmInferenceServiceAnswerFromFindingsContextTest.aScreensAnswerCountsItsFindingsStatesBriefLinesAndSaysWhatItDoesNotCover`.
+
+## Decision 280: An answer naming her combination order names the ingredients its findings print
+
+**Status: Accepted** (October 2026) — found while verifying Decisions 272–279 on the 3.7.1 standalone.
+
+### Context
+
+After an answer citing a finding, the module names the orders that finding covers and the prose left unnamed
+([Decision 100](#decision-100-an-order-the-answer-leaves-unnamed-is-named-by-the-module-not-by-asking-the-model-again)).
+A partner counts as named where the prose writes its printed name or the NAME of a row it was resolved to — never the
+row's other names, which include everyday words (issue #555's review: *lactate*). Ruth, on "Cotrimoxazole 960mg", asked
+*"Which of her medications interact with rifampicin?"* and the model wrote *"… Cotrimoxazole 960mg (Moderate) [15] …"*;
+the module then appended *"Also covered by those findings and not named above: active order Sulfamethoxazole and active
+order Trimethoprim."* — the order the answer had named, by its two ingredients, read as two more orders of hers.
+
+### The decision
+
+`DrugSafetyValidator.namesThePartner` also credits a name of the row that a row of another substance carries too: a
+combination's name, *Cotrimoxazole*, filed under both of its ingredients
+([Decision 266](#decision-266-co-trimoxazole-is-checked-as-both-of-its-ingredients-by-every-name-a-clinician-writes-it-with)).
+A name two substances share is no everyday word of either's, so the *lactate* rule stands. The residue, toward silence:
+a brand two substances share without being their combination is credited as naming each.
+
+Pinned by `CitedFindingPartnerCompletionTest.aCombinationOrderTheAnswerNamedByItsDisplayIsNotListedAgainByItsIngredients`.
+
+## Decision 281: Whether one drug changes an effect of a group of her medications is answered with neither "Yes" nor "No"
+
+**Status: Accepted** (October 2026) — found while verifying Decisions 272–280 on the 3.7.1 standalone.
+
+### Context
+
+Ruth, on lopinavir with ritonavir and nevirapine, asked *"Will rifampicin reduce the effect of her ARVs?"*. One run of the
+model answered *"Yes, rifampicin could reduce the effect of her ARVs …"*; the next, its prompt moved by
+[Decision 276](#decision-276-a-rules-partner-token-is-printed-with-its-first-letter-upper-cased)'s capitals, *"No,
+rifampicin should not be used because …"* — a "No" to whether it reduces their effect. The question names one drug and a
+group of her medications, which no shape held: [Decision 249](#decision-249-whether-one-drug-changes-an-effect-of-the-other-is-answered-with-the-finding-and-neither-yes-nor-no)
+holds the effect question between two named drugs, and
+[Decision 271](#decision-271-one-drug-asked-about-beside-a-group-of-her-medications-is-asked-as-whether-it-interacts-with-them)
+the group beside one drug only as whether they interact.
+
+### The decision
+
+*"Does/Will X increase, lower, reduce, change, affect … (the effect of) her ARVs / her ARV levels?"*
+(`QueryScopeRouter.asksWhetherADrugChangesHerMedications`) is answered from the drug's findings against her orders, as a
+question whether it interacts with them is, under Decision 249's lead: *"This module's drug-safety check found a reason
+to withhold Rifampicin (rifampin)."*, or the count of its cautions, and the lines. The effect asked about is left
+unanswered.
+
+Pinned by `DrugBesideHerMedicationGroupTest.whetherADrugChangesAnEffectOfAGroupOfHerMedicationsIsAnsweredWithTheFindingAndNeitherYesNorNo`.
+
+## Decision 282: A combination proposed by one name is the drug the answer's lead names
+
+**Status: Accepted** (October 2026) — found while verifying Decisions 272–281 on the 3.7.1 standalone.
+
+### Context
+
+Since [Decision 266](#decision-266-co-trimoxazole-is-checked-as-both-of-its-ingredients-by-every-name-a-clinician-writes-it-with)
+a combination's name puts each ingredient in play, and the module's answer opened with the drug of its strongest finding:
+*"Can I give her Bactrim?"* read *"No — this module's drug-safety check found a reason to withhold Trimethoprim."*, and
+*"Can I give him co-trimoxazole with his warfarin?"* *"… withhold Sulfamethoxazole."* — a drug nobody asked about by that
+name, whose sibling ingredient the lead then says nothing of.
+
+### The decision
+
+Where the question asks about one combination by one name
+([Decision 272](#decision-272-a-combination-a-question-names-by-one-name-is-one-drug-asked-about)) — alone, beside her
+own drug, or as one of two proposals — the lead names it as the question does: *"No — this module's drug-safety check
+found a reason to withhold Co-trimoxazole."*, *"2 interaction cautions for Bactrim:"*. Each line still names the ingredient
+its finding is about.
+
+Pinned by `CombinationNamedAsOneDrugTest.aCombinationProposedByOneNameIsTheDrugTheLeadNames` and
+`.aCombinationProposedBesideHerDrugIsAnsweredAsOneProposal`; `CotrimoxazoleByEveryNameTest`, which pinned the
+ingredient's name in that lead beside its subject, both ingredients checked, now pins the asked name.

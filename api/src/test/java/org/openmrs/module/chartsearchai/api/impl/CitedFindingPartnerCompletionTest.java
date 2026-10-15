@@ -479,6 +479,24 @@ public class CitedFindingPartnerCompletionTest extends BaseModuleContextSensitiv
 		assertCoverage(2, 1, answer);
 	}
 
+	@Test
+	public void aCombinationOrderTheAnswerNamedByItsDisplayIsNotListedAgainByItsIngredients() {
+		// ADR Decision 280: on the 3.7.1 standalone "Which of her medications interact with rifampicin?" read "…
+		// Cotrimoxazole 960mg (Moderate) [15] … Also covered by those findings and not named above: active order
+		// Sulfamethoxazole and active order Trimethoprim." — the order the answer had named, by its two ingredients.
+		// "Cotrimoxazole" is a name of both, which no ordinary word is.
+		OverShippedData arrangement = new OverShippedData("Can I give her rifampicin?",
+				new String[][] { { "Cotrimoxazole 960mg", null } });
+		RecordMapping finding = arrangement.findingNaming(Arrays.asList("Sulfamethoxazole", "Trimethoprim"));
+		String modelAnswer = "Rifampicin interacts with active order Cotrimoxazole 960mg, a Moderate caution ["
+				+ finding.getIndex() + "].";
+
+		ChartAnswer answer = arrangement.service(modelAnswer).search(patient(), arrangement.question);
+
+		assertEquals(modelAnswer, answer.getAnswer(), "the order the answer named is not named again by its ingredients");
+		assertCoverage(2, 2, answer);
+	}
+
 	private static final String ALPRAZOLAM_QUESTION = "Can I give her alprazolam?";
 
 	/** The knowledge base's label for her rifampicin order, which issue #555's finding names it by. */

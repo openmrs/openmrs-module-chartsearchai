@@ -65,7 +65,7 @@ public class OwnMedicationSafetyContextTest extends BaseModuleContextSensitiveTe
 
 		assertNotNull(answer, "the module answers");
 		assertTrue(answer.split("\n")[0].endsWith("3 interactions with this patient's other active medications, and 1 "
-				+ "contraindication, with no severity rated:"), "was: " + answer);
+				+ "unrated contraindication:"), "was: " + answer);
 		// The lead has said it is her medication, so the line does not say it again.
 		assertTrue(answer.matches("(?s).*\nThe patient has a recorded allergy to Ibuprofen\\. \\[\\d+\\]\n.*"),
 			"was: " + answer);

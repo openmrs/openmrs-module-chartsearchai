@@ -829,6 +829,25 @@ public final class QueryScopeRouter {
 	}
 
 	/**
+	 * One drug asked whether it changes an effect of a GROUP of her medications — "Will rifampicin reduce the effect of her
+	 * ARVs?", "Does rifampicin affect her ARVs?", "Will rifampicin lower her ARV levels?" — answered as ADR Decision 249
+	 * answers it of one of her drugs, with the findings and neither "Yes" nor "No" (ADR Decision 281): the data relates
+	 * the drug to her orders and never states the effect asked about.
+	 */
+	private static final List<Pattern> CHANGES_A_GROUP_OF_HER_MEDICATIONS_SHAPES = shapes(
+			"(?:does|do|will|would|can|could|might) " + D + " (?:increase|raise|elevate|boost|decrease|lower|reduce|change|alter"
+					+ "|potentiate|affect) (?:the " + MEASURE + " of )?" + HER_MEDICATION_GROUP + "(?: " + MEASURE + ")?");
+
+	/**
+	 * Whether a question asks whether ONE drug changes an effect of a group of her medications, and nothing else — one of
+	 * {@link #CHANGES_A_GROUP_OF_HER_MEDICATIONS_SHAPES} (ADR Decision 281). Fail-CLOSED as {@link #asksWhetherToGiveADrug}
+	 * is.
+	 */
+	public static boolean asksWhetherADrugChangesHerMedications(List<String> wordsWithTheDrugMarked) {
+		return fitsAShape(wordsWithTheDrugMarked, CHANGES_A_GROUP_OF_HER_MEDICATIONS_SHAPES);
+	}
+
+	/**
 	 * The question shapes asking whether to SWITCH one drug to another, the drug switched FROM named first (ADR Decision
 	 * 219): "Can I switch her nevirapine to efavirenz?", "Can I switch her from nevirapine to efavirenz?", "Can I replace
 	 * her nevirapine with efavirenz?", "Is it safe to switch nevirapine to efavirenz?"; and "swap" (ADR Decision 253).

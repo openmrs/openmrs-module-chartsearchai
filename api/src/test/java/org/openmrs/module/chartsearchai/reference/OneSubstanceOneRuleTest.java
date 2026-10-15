@@ -190,7 +190,7 @@ public class OneSubstanceOneRuleTest {
 
 		assertEquals(1, chips.size(), "one substance, one partner, one chip, was: " + chips);
 		assertTrue(chips.get(0).getDetail()
-				.startsWith("Sirolimus interacts with active order lapatinib — Major. "),
+				.startsWith("Sirolimus interacts with active order Lapatinib — Major. "),
 				"the screen must not report the milder of a pair's two ratings, was: "
 						+ chips.get(0).getDetail());
 		assertFalse(chips.get(0).getDetail().contains(SIROLIMUS_MODERATE_OPENING),

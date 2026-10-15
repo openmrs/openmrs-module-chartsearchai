@@ -71,9 +71,26 @@ public class CombinationNamedAsOneDrugTest extends BaseModuleContextSensitiveTes
 	public void aCombinationProposedBesideHerDrugIsAnsweredAsOneProposal() {
 		String answer = ask("Is co-trimoxazole safe with her warfarin?", WARFARIN);
 		assertNotNull(answer, "the module answers");
-		assertTrue(answer.startsWith("Warfarin" + DrugReferenceInjector.OWN_MEDICATION_LEAD + ".\nNo — "), "was: " + answer);
+		assertTrue(answer.startsWith("Warfarin" + DrugReferenceInjector.OWN_MEDICATION_LEAD + ".\n"
+				+ DrugReferenceInjector.WITHHOLD_LEAD_OPENING + "Co-trimoxazole.\n"), "was: " + answer);
 		assertTrue(answer.contains("\nSulfamethoxazole interacts with active order Warfarin — Major."), "was: " + answer);
 		assertTrue(answer.contains("\nTrimethoprim interacts with active order Warfarin — Moderate."), "was: " + answer);
+	}
+
+	/**
+	 * A combination proposed by one name is the drug the "No" is about (ADR Decision 282): on the 3.7.1 standalone "Can I
+	 * give her Bactrim?" read "No — this module's drug-safety check found a reason to withhold Trimethoprim.", of a drug
+	 * nobody asked about by that name.
+	 */
+	@Test
+	public void aCombinationProposedByOneNameIsTheDrugTheLeadNames() {
+		for (String name : java.util.Arrays.asList("co-trimoxazole", "Bactrim")) {
+			String answer = ask("Can I give her " + name + "?", WARFARIN);
+			assertNotNull(answer, name + ": the module answers");
+			String asked = Character.toUpperCase(name.charAt(0)) + name.substring(1);
+			assertTrue(answer.startsWith(DrugReferenceInjector.WITHHOLD_LEAD_OPENING + asked + ".\n"), "was: " + answer);
+			assertTrue(answer.contains("\nSulfamethoxazole interacts with active order Warfarin — Major."), "was: " + answer);
+		}
 	}
 
 	@Test

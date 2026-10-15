@@ -59,7 +59,7 @@ public class InteractionPartnerGroupingTest {
 
 		assertEquals(1, warnings.size(),
 				"two rows naming one partner in different case/whitespace must raise one chip, was: " + warnings);
-		assertEquals("Fluconazole interacts with active order warfarin — Major. Fluconazole markedly"
+		assertEquals("Fluconazole interacts with active order Warfarin — Major. Fluconazole markedly"
 				+ " increases warfarin exposure; monitor INR and adjust the warfarin dose.",
 				warnings.get(0).getDetail(),
 				"the surviving chip must carry the most severe row's note under a clean partner label");
@@ -81,7 +81,7 @@ public class InteractionPartnerGroupingTest {
 
 		assertEquals(1, warnings.size(),
 				"two rows naming one partner must raise one chip, was: " + warnings);
-		assertEquals("Phenobarbital interacts with active order valproate — Locally curated rule: do"
+		assertEquals("Phenobarbital interacts with active order Valproate — Locally curated rule: do"
 				+ " not co-prescribe without measuring the phenobarbital level first.",
 				warnings.get(0).getDetail(),
 				"the operator's unrated rule must keep the chip, not the source-rated Major row");
@@ -105,7 +105,7 @@ public class InteractionPartnerGroupingTest {
 
 		assertEquals(1, warnings.size(),
 				"two rows naming one partner must raise one chip, was: " + warnings);
-		assertEquals("Linezolid interacts with active order citalopram — Major. Linezolid is a"
+		assertEquals("Linezolid interacts with active order Citalopram — Major. Linezolid is a"
 				+ " reversible MAO inhibitor and risks serotonin syndrome with an SSRI.",
 				warnings.get(0).getDetail(),
 				"the fuller note is the one carrying more PROSE, not the one carrying more whitespace");
@@ -126,7 +126,7 @@ public class InteractionPartnerGroupingTest {
 
 		assertEquals(1, warnings.size(),
 				"two rows naming one partner must raise one chip, was: " + warnings);
-		assertEquals("Amiodarone interacts with active order digoxin — Moderate. Amiodarone reduces"
+		assertEquals("Amiodarone interacts with active order Digoxin — Moderate. Amiodarone reduces"
 				+ " digoxin clearance; halve the digoxin dose and check a level in a week.",
 				warnings.get(0).getDetail(),
 				"a full tie must keep the dataset's first row, not the last one seen");

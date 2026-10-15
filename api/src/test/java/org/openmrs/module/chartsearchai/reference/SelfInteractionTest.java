@@ -183,7 +183,7 @@ public class SelfInteractionTest {
 		assertEquals(1, warnings.size(), "the genuine pair must still chip, was: " + warnings);
 		assertEquals("Lidocaine", warnings.get(0).getDrug());
 		assertTrue(warnings.get(0).getDetail()
-				.startsWith("Lidocaine interacts with active order metoclopramide — Major. "),
+				.startsWith("Lidocaine interacts with active order Metoclopramide — Major. "),
 				"at the pair's most severe rating, was: " + warnings.get(0).getDetail());
 	}
 
@@ -239,7 +239,7 @@ public class SelfInteractionTest {
 		assertEquals(1, warnings.size(), "the genuine pair must still chip, was: " + warnings);
 		assertEquals("Liotrix", warnings.get(0).getDrug());
 		assertTrue(warnings.get(0).getDetail().startsWith(
-				"Liotrix interacts with active order multivitamin with iron — Moderate. "),
+				"Liotrix interacts with active order Multivitamin with iron — Moderate. "),
 				"was: " + warnings.get(0).getDetail());
 	}
 

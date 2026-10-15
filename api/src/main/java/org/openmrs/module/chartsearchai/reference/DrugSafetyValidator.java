@@ -2380,11 +2380,16 @@ public class DrugSafetyValidator {
 	 * covers is the row's name, both in {@link DrugReference#foldedLower} form, so nothing here decides
 	 * whether the prose names a drug. It only decides by WHICH name.
 	 *
+	 * <p>And by a COMBINATION's name (ADR Decision 280): a name of the row that a row of another substance carries
+	 * too — <em>Cotrimoxazole</em>, which the knowledge base files under both of its ingredients (ADR Decision
+	 * 266) — so an answer naming her "Cotrimoxazole 960mg" names the Sulfamethoxazole and Trimethoprim its findings
+	 * print. A name two substances share is no everyday word of either's.
+	 *
 	 * <p>Its residues. Toward reporting: a partner the prose names only by another name of its row — the
 	 * label's own parenthetical (<em>rifampin</em>) included — reads as unstated. Toward silence: a row's
 	 * name that is itself an everyday word (<em>Iron</em>, <em>Oxygen</em>) is credited from the prose
-	 * naming that word, and an order the module resolved to several substances is credited by the name of any
-	 * of them.
+	 * naming that word, an order the module resolved to several substances is credited by the name of any
+	 * of them, and a brand two substances share without being their combination is credited as naming each.
 	 */
 	public boolean namesThePartner(String prose, List<String> partnerRowIds) {
 		if (prose == null || partnerRowIds == null || partnerRowIds.isEmpty() || drugReferenceService == null) {
@@ -2398,9 +2403,22 @@ public class DrugSafetyValidator {
 			}
 			String name = DrugReference.foldedLower(row.getName().trim());
 			for (DrugReference.NamedOccurrence occurrence : row.namedOccurrences(folded, 0)) {
-				if (folded.substring(occurrence.getStart(), occurrence.getEnd()).equals(name)) {
+				String written = folded.substring(occurrence.getStart(), occurrence.getEnd());
+				if (written.equals(name) || namesAnotherSubstanceToo(written, row)) {
 					return true;
 				}
+			}
+		}
+		return false;
+	}
+
+	/** Whether a row of a substance other than {@code row}'s carries {@code name} among its names — a combination's name
+	 *  (ADR Decision 280). */
+	private boolean namesAnotherSubstanceToo(String name, DrugReference row) {
+		Object substance = row.substanceGroupKey();
+		for (DrugReference other : drugReferenceService.getAll()) {
+			if (!other.substanceGroupKey().equals(substance) && other.isNamed(name)) {
+				return true;
 			}
 		}
 		return false;
@@ -4977,7 +4995,7 @@ public class DrugSafetyValidator {
 				Date partnerStart = scheduledStartOf(orderEntries, rule.partner, context.getActiveDrugOrders(),
 					bridgedOrders);
 				folded.put(rule, new FoldedClassSentence(
-						reconciled != null ? reconciled.chipName : partnerLabel(rule.rule),
+						reconciled != null ? reconciled.chipName : printedPartnerLabel(rule.rule),
 						reconciled != null ? reconciled.noteName : null,
 						hit.getValue().sentence(ref, reconciled != null ? reconciled.chipName
 								: classPartnerName(hit.getKey(), subjects), partnerStart), partnerStart));
@@ -5022,7 +5040,7 @@ public class DrugSafetyValidator {
 			// The name this chip is ABOUT to print, so the bridge is asked of that very string and not
 			// of a second answer to the same question (#349).
 			String partnerName = fold != null ? fold.partnerName
-					: reconciled != null ? reconciled.chipName : partnerLabel(rule.rule);
+					: reconciled != null ? reconciled.chipName : printedPartnerLabel(rule.rule);
 			// The WHOLE order list as partner witnesses: this arm applies no activeOrdersOtherThan
 			// reduction (see its own note beside classRelationships), so an order that resolves the
 			// subject was allowed to witness the partner here and the bridge must be able to name it.
@@ -6379,6 +6397,19 @@ public class DrugSafetyValidator {
 	}
 
 	/**
+	 * {@link #partnerLabel} as a chip PRINTS it where no other name was reconciled — its first letter upper-cased, so a
+	 * rule's lower-case match token reads as the drug name it is: "active order Sulfamethoxazole", "active order Rifampin",
+	 * not "sulfamethoxazole" (ADR Decision 276). Only the printed name and the keys each chip derives from that very string:
+	 * every grouping key stays {@link #partnerLabel} case-folded, which this cannot move, and the injected record keeps its
+	 * own vocabulary.
+	 */
+	static String printedPartnerLabel(DrugReference.Interaction interaction) {
+		String label = partnerLabel(interaction);
+		return label == null || label.isEmpty() || !Character.isLowerCase(label.charAt(0)) ? label
+				: Character.toUpperCase(label.charAt(0)) + label.substring(1);
+	}
+
+	/**
 	 * The partner label a chip names for {@code interaction} — its match token, else its ATC code.
 	 *
 	 * <p>One definition, because {@link #bestRulePerPartner} groups on it wherever the dataset
@@ -6633,12 +6664,12 @@ public class DrugSafetyValidator {
 			// its codes AS codes.
 			//
 			// The RECORD's name here is that same token, which is what it already printed: the ladder
-			// holds no name, so the dataset has none to offer this note (issue #297).
+			// holds no name, so the dataset has none to offer this note (issue #297). The chip prints it
+			// as every chip prints a rule's token (ADR Decision 276).
 			if (ChartSearchAiUtils.isBlank(rule.getToken())) {
 				return null;
 			}
-			String token = partnerLabel(rule);
-			return new ReconciledPartner(token, token);
+			return new ReconciledPartner(printedPartnerLabel(rule), partnerLabel(rule));
 		}
 		if (partner.namingOrder != null) {
 			// The label names an ORDER, and an order is not a substance — so it goes to the rule sentence
@@ -8397,7 +8428,7 @@ public class DrugSafetyValidator {
 	private static SafetyWarning interactionWarning(DrugReference ref, DrugReference.Interaction i,
 			List<SafetyWarning.ChartOrderBridge> chartOrderBridges, boolean aboutACurrentMedication,
 			Date subjectStart, Date partnerStart) {
-		return interactionWarning(ref, i, partnerLabel(i), null, null, chartOrderBridges,
+		return interactionWarning(ref, i, printedPartnerLabel(i), null, null, chartOrderBridges,
 			aboutACurrentMedication, subjectStart, partnerStart);
 	}
 
@@ -9082,7 +9113,7 @@ public class DrugSafetyValidator {
 		}
 		matchedNames.add(order.getDisplay().trim());
 		addSubstanceLabelsOf(order, orderEntries, bridged, subjects, matchedNames);
-		if (displaysANameOfAny(rows, order) || restsOnAnAmbiguousBridge(rows, order, bridged)) {
+		if (displaysAnOwnNameOfAny(rows, order, orderEntries) || restsOnAnAmbiguousBridge(rows, order, bridged)) {
 			return;
 		}
 		SafetyWarning.ChartOrderBridge bridge = new SafetyWarning.ChartOrderBridge(printedName.trim(),
@@ -9430,6 +9461,46 @@ public class DrugSafetyValidator {
 		return matchesDrugNameAny(rows, order.getDisplay());
 	}
 
+	/**
+	 * {@link #displaysANameOfAny}, where the name is the substance's OWN: a name a row of another substance among
+	 * {@code orderEntries} carries too is a combination's — co-trimoxazole, which the knowledge base files under both of its
+	 * ingredients (ADR Decision 266) — and a display naming the order by it does not say which ingredient a finding is
+	 * about, so the clause saying it is no noise (ADR Decision 278). Without {@code orderEntries}, every name counts, as
+	 * before.
+	 */
+	private static boolean displaysAnOwnNameOfAny(List<DrugReference> rows, PatientClinicalContext.ActiveDrugOrder order,
+			List<DrugReference> orderEntries) {
+		if (!displaysANameOfAny(rows, order)) {
+			return false;
+		}
+		if (orderEntries == null) {
+			return true;
+		}
+		for (DrugReference row : rows) {
+			for (String alias : row.aliasesNaming(order.getDisplay())) {
+				if (!carriedByAnotherSubstance(alias, row, orderEntries)) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	/** Whether a row of {@code entries} of a substance other than {@code row}'s carries {@code alias} among its names. */
+	private static boolean carriedByAnotherSubstance(String alias, DrugReference row, List<DrugReference> entries) {
+		Object substance = row.substanceGroupKey();
+		for (DrugReference entry : entries) {
+			if (!entry.substanceGroupKey().equals(substance) && entry.getAliases() != null) {
+				for (String other : entry.getAliases()) {
+					if (other.equalsIgnoreCase(alias)) {
+						return true;
+					}
+				}
+			}
+		}
+		return false;
+	}
+
 	/** @return every row of {@code row}'s substance that {@code entries} carries, or EMPTY where it
 	 *          carries none — fail-closed, so a partner the resolved order list does not hold states
 	 *          nothing rather than being attributed off one row's codes. Its one caller draws
@@ -9731,7 +9802,7 @@ public class DrugSafetyValidator {
 				// Asked of the name the chip is about to print, and of the orders THIS pass used: the
 				// subject's own orders name the subject, and only the orders activeOrdersOtherThan kept
 				// may name the partner (#349 — see chartOrderBridges).
-				String chipPartnerName = reconciled != null ? reconciled.chipName : partnerLabel(i);
+				String chipPartnerName = reconciled != null ? reconciled.chipName : printedPartnerLabel(i);
 				// Only the orders THIS arm let witness the partner — the same reduction
 				// activeOrdersOtherThan applied to `others` above, through its own predicate, so the
 				// bridge cannot name an order this arm refused as a self-witness.

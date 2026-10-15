@@ -40,21 +40,23 @@ public class CotrimoxazoleByEveryNameTest extends BaseModuleContextSensitiveTest
 
 	@Test
 	public void aBrandOfTheCombinationIsCheckedAsBothOfItsIngredients() {
-		assertWithholdsForHisWarfarinOnBothIngredients(ask("Can I give him Bactrim?"), "Bactrim");
+		assertWithholdsForHisWarfarinOnBothIngredients(ask("Can I give him Bactrim?"), "Bactrim", "Bactrim");
 	}
 
 	@Test
 	public void theCombinationsOwnNameIsCheckedAsBothOfItsIngredients() {
-		for (String question : Arrays.asList("Can I give him co-trimoxazole?", "Can I give him cotrimoxazole?",
-			"Can I give him Co-trimoxazole?")) {
-			assertWithholdsForHisWarfarinOnBothIngredients(ask(question), question);
+		for (String name : Arrays.asList("co-trimoxazole", "cotrimoxazole", "Co-trimoxazole")) {
+			String question = "Can I give him " + name + "?";
+			assertWithholdsForHisWarfarinOnBothIngredients(ask(question), question,
+				Character.toUpperCase(name.charAt(0)) + name.substring(1));
 		}
 	}
 
-	private static void assertWithholdsForHisWarfarinOnBothIngredients(String answer, String question) {
+	/** {@code asked}: the combination as the question names it, which the lead names (ADR Decision 282). */
+	private static void assertWithholdsForHisWarfarinOnBothIngredients(String answer, String question, String asked) {
 		assertNotNull(answer, question + ": the module answers");
 		String[] lines = answer.split("\n");
-		assertEquals("No — this module's drug-safety check found a reason to withhold Sulfamethoxazole.", lines[0],
+		assertEquals("No — this module's drug-safety check found a reason to withhold " + asked + ".", lines[0],
 			question + " was: " + answer);
 		assertTrue(Arrays.stream(lines).anyMatch(
 			l -> l.matches("Sulfamethoxazole interacts with active order Warfarin — Major\\.( \\[\\d+\\])+")),

@@ -247,7 +247,7 @@ public class OneOrderNameAcrossOneResponseTest {
 		String detail = warnings.get(0).getDetail();
 		assertFalse(detail.contains("is in the same"),
 			"precondition: nothing may have folded, or this repeats the folded case, was: " + detail);
-		assertEquals(java.util.Arrays.asList("esomeprazole"), orderNames(warnings),
+		assertEquals(java.util.Arrays.asList("Esomeprazole"), orderNames(warnings),
 			"a token two substances name cannot tell the chip which of them the rule is about, so the"
 					+ " rule keeps its own token — on an unfolded chip as on a folded one, was: "
 					+ detail);

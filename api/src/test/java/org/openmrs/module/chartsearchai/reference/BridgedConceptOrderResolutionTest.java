@@ -243,7 +243,7 @@ public class BridgedConceptOrderResolutionTest {
 			"an order the dataset can only be joined to by its concept must still be screened, was: "
 					+ DrugReferenceTestSupport.details(warnings));
 		assertTrue(warnings.get(0).getDetail()
-				.startsWith("Lamivudine interacts with active order trimethoprim \u2014 Minor."),
+				.startsWith("Lamivudine interacts with active order Trimethoprim \u2014 Minor."),
 			"the chip the ticket measured in an en session, in a locale that spells the order"
 					+ " differently, was: " + warnings.get(0).getDetail());
 	}
@@ -273,7 +273,7 @@ public class BridgedConceptOrderResolutionTest {
 		for (SafetyWarning.ChartOrderBridge bridge : warnings.get(0).chartOrderBridges()) {
 			bridged.add(bridge.toString());
 		}
-		assertEquals(Arrays.asList("trimethoprim from " + COTRIMOXAZOLE_ORDER), bridged,
+		assertEquals(Arrays.asList("Trimethoprim from " + COTRIMOXAZOLE_ORDER), bridged,
 			"the prescription the concept key resolved must be named as the substance's source");
 	}
 
@@ -313,14 +313,14 @@ public class BridgedConceptOrderResolutionTest {
 
 		assertEquals(1, warnings.size(), "one pair, was: " + DrugReferenceTestSupport.details(warnings));
 		assertTrue(warnings.get(0).getDetail()
-				.startsWith("Lamivudine interacts with active order trimethoprim \u2014 Minor."),
+				.startsWith("Lamivudine interacts with active order Trimethoprim \u2014 Minor."),
 			"the pair must be reported from the side whose own prescription is not the bridged one,"
 					+ " was: " + warnings.get(0).getDetail());
 		List<String> bridged = new ArrayList<String>();
 		for (SafetyWarning.ChartOrderBridge bridge : warnings.get(0).chartOrderBridges()) {
 			bridged.add(bridge.toString());
 		}
-		assertEquals(Arrays.asList("trimethoprim from " + COTRIMOXAZOLE_ORDER), bridged,
+		assertEquals(Arrays.asList("Trimethoprim from " + COTRIMOXAZOLE_ORDER), bridged,
 			"and the bridged substance must be attributed to the prescription the concept resolved");
 	}
 
@@ -483,10 +483,10 @@ public class BridgedConceptOrderResolutionTest {
 
 		assertEquals(1, warnings.size(), "one pair, was: " + DrugReferenceTestSupport.details(warnings));
 		assertTrue(warnings.get(0).getDetail()
-				.startsWith("Trimethoprim interacts with active order lamivudine \u2014 Minor."),
+				.startsWith("Trimethoprim interacts with active order Lamivudine \u2014 Minor."),
 			"precondition: the pair must be reported from the named order's side, was: "
 					+ warnings.get(0).getDetail());
-		assertEquals(Arrays.asList("lamivudine from " + KIVEXA_ORDER), bridgeTexts(warnings.get(0)),
+		assertEquals(Arrays.asList("Lamivudine from " + KIVEXA_ORDER), bridgeTexts(warnings.get(0)),
 			"a combination the bridge's own name names is attributed to the prescription it came from");
 	}
 
@@ -712,10 +712,10 @@ public class BridgedConceptOrderResolutionTest {
 			assertEquals(1, partnerSide.size(), "precondition: the pair must chip from this side too,"
 					+ " rows " + order + ", was: " + DrugReferenceTestSupport.details(partnerSide));
 			assertTrue(partnerSide.get(0).getDetail()
-					.startsWith("Clopidogrel interacts with active order esomeprazole \u2014 Major"),
+					.startsWith("Clopidogrel interacts with active order Esomeprazole \u2014 Major"),
 				"precondition: the chip names the partner by the rule's own token, rows " + order
 						+ ", was: " + partnerSide.get(0).getDetail());
-			assertEquals(Arrays.asList("esomeprazole from " + INEXIUM_ORDER),
+			assertEquals(Arrays.asList("Esomeprazole from " + INEXIUM_ORDER),
 				bridgeTexts(partnerSide.get(0)),
 				"the substance the chip PRINTS is the one the bridge's name names, so the prescription"
 						+ " it came from is stated — rows " + order);
@@ -725,7 +725,7 @@ public class BridgedConceptOrderResolutionTest {
 
 			assertEquals(1, screened.size(), "precondition: one pair, rows " + order + ", was: "
 					+ DrugReferenceTestSupport.details(screened));
-			assertEquals(Arrays.asList("esomeprazole from " + INEXIUM_ORDER),
+			assertEquals(Arrays.asList("Esomeprazole from " + INEXIUM_ORDER),
 				bridgeTexts(screened.get(0)),
 				"and the screening arm, which resolves its own partner, states it too — rows " + order);
 
@@ -753,6 +753,9 @@ public class BridgedConceptOrderResolutionTest {
 	 */
 	private static final String TIED_TOKEN = "esomeprazole magnesium trihydrate";
 
+	/** {@link #TIED_TOKEN} as a chip prints it, its first letter upper-cased (ADR Decision 276). */
+	private static final String TIED_TOKEN_PRINTED = "Esomeprazole magnesium trihydrate";
+
 	/** @return the chart-order clauses of the one chip a question about the PARTNER raises over
 	 *          {@code rows} — the side {@code activeOrderEntryFor}'s election decides. The two
 	 *          preconditions are asserted here rather than per arrangement because a tie that stopped
@@ -771,7 +774,7 @@ public class BridgedConceptOrderResolutionTest {
 		assertEquals(1, chips.size(), "precondition: the pair must chip, rows " + order + ", was: "
 				+ DrugReferenceTestSupport.details(chips));
 		assertTrue(chips.get(0).getDetail()
-				.startsWith("Clopidogrel interacts with active order " + TIED_TOKEN + " \u2014 Major"),
+				.startsWith("Clopidogrel interacts with active order " + TIED_TOKEN_PRINTED + " \u2014 Major"),
 			"precondition: a tied token is not unambiguous, so the chip prints the rule's own token"
 					+ " whichever row is elected — rows " + order + ", was: " + chips.get(0).getDetail());
 		return bridgeTexts(chips.get(0));
@@ -825,7 +828,7 @@ public class BridgedConceptOrderResolutionTest {
 		assertEquals(Collections.<String> emptyList(), partnerSideBridgeClauses(entries),
 			"the tied group is answered by the row the dataset lists FIRST, whose substance the"
 					+ " bridge's own name does not name, so no prescription is stated");
-		assertEquals(Arrays.asList(TIED_TOKEN + " from " + INEXIUM_ORDER),
+		assertEquals(Arrays.asList(TIED_TOKEN_PRINTED + " from " + INEXIUM_ORDER),
 			partnerSideBridgeClauses(esomeprazoleFirst),
 			"and reversed, the first of the same tied group is the substance the bridge's name names,"
 					+ " so the same screen states the prescription it came from");

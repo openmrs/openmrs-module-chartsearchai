@@ -194,8 +194,8 @@ public class FoldedChipOnePartnerNameTest {
 		List<SafetyWarning> warnings = validator.validate("", QUESTION, namelessAspirinOrder());
 
 		assertEquals(1, warnings.size(), "one prescription, one folded chip, was: " + warnings);
-		assertEquals("Ibuprofen interacts with active order aspirin — additive GI and bleeding risk."
-				+ " Ibuprofen is in the same cross-reactivity group (NSAID) as active order aspirin"
+		assertEquals("Ibuprofen interacts with active order Aspirin — additive GI and bleeding risk."
+				+ " Ibuprofen is in the same cross-reactivity group (NSAID) as active order Aspirin"
 				+ " — possible additive or duplicate-class therapy", warnings.get(0).getDetail());
 		assertFalse(warnings.get(0).getDetail().contains("[ATC"),
 			"a code list is the absence of a name and must not survive beside the name the rule"
@@ -272,7 +272,7 @@ public class FoldedChipOnePartnerNameTest {
 		assertTrue(detail.contains("interacts with active order") && detail.contains("is in the same"),
 			"precondition: the two arms must have folded, or there is no displacement to refuse, was: "
 					+ detail);
-		assertEquals(DrugReferenceTestSupport.set("esomeprazole", "Omeprazole"), orderNamesIn(detail),
+		assertEquals(DrugReferenceTestSupport.set("Esomeprazole", "Omeprazole"), orderNamesIn(detail),
 			"the rule's mechanism must stay under the name the RULE names, and the class sentence under"
 					+ " the one the class arm resolved — two partners, two names, was: " + detail);
 	}
@@ -328,7 +328,7 @@ public class FoldedChipOnePartnerNameTest {
 		assertTrue(detail.contains("interacts with active order") && detail.contains("is in the same"),
 			"precondition: the two arms must have folded, or there is no displacement to refuse, was: "
 					+ detail);
-		assertTrue(detail.contains("interacts with active order esomeprazole "),
+		assertTrue(detail.contains("interacts with active order Esomeprazole "),
 			"the rule's mechanism must stay under the name the RULE names: its token is named by two"
 					+ " substances here, so it cannot tell the fold which of them the rule is about,"
 					+ " was: " + detail);
@@ -428,7 +428,7 @@ public class FoldedChipOnePartnerNameTest {
 		assertTrue(detail.contains("interacts with active order") && detail.contains("is in the same"),
 			"precondition: the two arms must have folded, or there is no displacement to refuse, was: "
 					+ detail);
-		assertEquals(DrugReferenceTestSupport.set("atropine", "Atropine (ophthalmic)"),
+		assertEquals(DrugReferenceTestSupport.set("Atropine", "Atropine (ophthalmic)"),
 			orderNamesIn(detail),
 			"the rule's mechanism must stay under the name the RULE names: this row's claim on the token"
 					+ " only TIES Hyoscyamine's, so it cannot tell the fold which substance the rule is"
@@ -651,7 +651,7 @@ public class FoldedChipOnePartnerNameTest {
 
 		assertEquals(1, warnings.size(), "one partner, one folded chip, was: " + warnings);
 		String detail = warnings.get(0).getDetail();
-		assertTrue(detail.contains("interacts with active order naproxen "),
+		assertTrue(detail.contains("interacts with active order Naproxen "),
 			"the rule's finding must stay under the name the RULE names — the label here was supplied by"
 					+ " a DIFFERENT order and naming the finding after it loses the prescription the"
 					+ " finding is about, was: " + detail);
@@ -701,7 +701,7 @@ public class FoldedChipOnePartnerNameTest {
 		String detail = DrugReferenceTestSupport.classChipDetails(warnings).get(0);
 		assertTrue(detail.contains("is in the same cross-reactivity group"),
 			"precondition: the first chip must be the FOLDED one, was: " + detail);
-		assertTrue(detail.contains("interacts with active order warfarin "),
+		assertTrue(detail.contains("interacts with active order Warfarin "),
 			"the rule the fold picked is the WARFARIN rule, so its finding must stay under that name —"
 					+ " the label names the whole prescription and the rule is about one code of it,"
 					+ " was: " + detail);
@@ -824,15 +824,15 @@ public class FoldedChipOnePartnerNameTest {
 			QUESTION, DrugReferenceTestSupport.ctx(60, null, null, anticoagulantOnly, null, null,
 				Arrays.asList(PatientClinicalContext.ActiveDrugOrder.namedByCodesOnly(
 					"order-nameless-anticoagulant", "[ATC B01AA03]", anticoagulantOnly)))));
-		assertEquals(Arrays.asList("Ibuprofen interacts with active order warfarin"
+		assertEquals(Arrays.asList("Ibuprofen interacts with active order Warfarin"
 				+ " — increased risk of GI bleeding"), ruleCodeAlone,
 			"premise: the code the picked rule is filed under classifies NOTHING here, so the class"
 					+ " sentence below cannot be about the drug that rule names");
 
 		assertEquals(1, warnings.size(), "one prescription, one folded chip, was: " + warnings);
 		String detail = warnings.get(0).getDetail();
-		assertEquals("Ibuprofen interacts with active order warfarin — increased risk of GI bleeding."
-				+ " Ibuprofen is in the same cross-reactivity group (NSAID) as active order warfarin"
+		assertEquals("Ibuprofen interacts with active order Warfarin — increased risk of GI bleeding."
+				+ " Ibuprofen is in the same cross-reactivity group (NSAID) as active order Warfarin"
 				+ " — possible additive or duplicate-class therapy", detail,
 			"the residue, pinned as WRONG so a change that closes it is visible here: the class sentence"
 					+ " names warfarin, which is in no cross-reactivity group — the NSAID group was"
@@ -899,7 +899,7 @@ public class FoldedChipOnePartnerNameTest {
 
 		List<SafetyWarning> ruleOnly = curated.validate("", QUESTION, DrugReferenceTestSupport.ctx(60,
 			null, DrugReferenceTestSupport.set("aspirin 81mg"), null, null, null));
-		assertEquals(Arrays.asList("Ibuprofen interacts with active order aspirin"
+		assertEquals(Arrays.asList("Ibuprofen interacts with active order Aspirin"
 				+ " — additive GI and bleeding risk"), DrugReferenceTestSupport.classChipDetails(ruleOnly),
 			"a rule-only chip carries the rule's own token, as it always has where the ladder reaches no co-medication");
 
@@ -1006,12 +1006,12 @@ public class FoldedChipOnePartnerNameTest {
 
 		assertEquals(1, warnings.size(), "one prescription, one folded chip, was: " + warnings);
 		String detail = warnings.get(0).getDetail();
-		assertEquals("Ibuprofen interacts with active order aspirin — additive GI and bleeding risk."
-				+ " Ibuprofen is in the same cross-reactivity group (NSAID) as active order aspirin"
+		assertEquals("Ibuprofen interacts with active order Aspirin — additive GI and bleeding risk."
+				+ " Ibuprofen is in the same cross-reactivity group (NSAID) as active order Aspirin"
 				+ " — possible additive or duplicate-class therapy", detail,
 			"the whole detail and not just its names: both sentences must be PRESENT as well as agreeing,"
 					+ " or a fold that stopped firing would satisfy the name assertion below by vacuity");
-		assertEquals(DrugReferenceTestSupport.set("aspirin"), orderNamesIn(detail),
+		assertEquals(DrugReferenceTestSupport.set("Aspirin"), orderNamesIn(detail),
 			"the rule's own token is the only name either arm holds, and it must be the only one the"
 					+ " detail carries, was: " + detail);
 		assertFalse(detail.contains("A01AD05") || detail.contains("B01AC06")

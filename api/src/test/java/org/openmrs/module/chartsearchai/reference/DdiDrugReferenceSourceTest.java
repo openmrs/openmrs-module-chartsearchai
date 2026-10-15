@@ -320,7 +320,7 @@ public class DdiDrugReferenceSourceTest {
 				DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set("Iron"), null, null, null));
 
 		assertEquals(1, warnings.size(), "the fixture pair must yield exactly one chip, was: " + warnings);
-		assertEquals("Dolutegravir interacts with active order iron — Major. " + DOLUTEGRAVIR_MECHANISM,
+		assertEquals("Dolutegravir interacts with active order Iron — Major. " + DOLUTEGRAVIR_MECHANISM,
 				warnings.get(0).getDetail(),
 				"the chip detail must read as a sentence, with the mechanism text intact");
 	}
@@ -372,7 +372,7 @@ public class DdiDrugReferenceSourceTest {
 		// constant rather than spelled out: this assertion guards the field marker and the sentence
 		// shape, and its wording is pinned by literal in SafetyFindingSeverityStrengthTest, which is
 		// where a reword should fail. Spelling it out here would make one property fail in two files.
-		assertEquals("Safety finding — Dolutegravir: Dolutegravir interacts with active order iron — Major. "
+		assertEquals("Safety finding — Dolutegravir: Dolutegravir interacts with active order Iron — Major. "
 				+ DOLUTEGRAVIR_MECHANISM + DrugReferenceInjector.STRENGTH_WITHHOLD,
 				findings.get(0).getText(),
 				"the finding line the model reads first must read as a sentence, with no field marker");
@@ -424,7 +424,7 @@ public class DdiDrugReferenceSourceTest {
 		assertEquals(1, warnings.size(),
 				"one drug against one active order must raise exactly one chip, was: " + warnings);
 		String detail = warnings.get(0).getDetail();
-		assertTrue(detail.startsWith("Voxelotor interacts with active order dexamethasone — Major. "),
+		assertTrue(detail.startsWith("Voxelotor interacts with active order Dexamethasone — Major. "),
 				"the surviving chip must carry the pair's most severe rating, was: " + detail);
 		assertFalse(detail.contains("Cushing"),
 				"the surviving note must be the Major row's mechanism, not a Moderate variant's, was: " + detail);
@@ -447,9 +447,9 @@ public class DdiDrugReferenceSourceTest {
 		assertEquals(1, warnings.size(),
 				"one mechanism, one chip — the sentence does not vary between them, was: " + warnings);
 		String detail = warnings.get(0).getDetail();
-		assertTrue(detail.contains("dexamethasone"),
+		assertTrue(detail.contains("Dexamethasone"),
 				"dexamethasone must still be named, was: " + detail);
-		assertTrue(detail.contains("phenytoin"),
+		assertTrue(detail.contains("Phenytoin"),
 				"and phenytoin must still be named — neither warning may be silently dropped, was: "
 						+ detail);
 	}
@@ -470,7 +470,7 @@ public class DdiDrugReferenceSourceTest {
 		assertEquals(1, warnings.size(),
 				"the two sirolimus rows must collapse to one chip, was: " + warnings);
 		assertTrue(warnings.get(0).getDetail()
-				.startsWith("Lapatinib interacts with active order sirolimus — Major. "),
+				.startsWith("Lapatinib interacts with active order Sirolimus — Major. "),
 				"the chip must carry the Major rating even though its row is neither first nor longest,"
 						+ " was: " + warnings.get(0).getDetail());
 	}
@@ -493,7 +493,7 @@ public class DdiDrugReferenceSourceTest {
 
 		assertEquals(1, warnings.size(),
 				"the two iron rows must collapse to one chip, was: " + warnings);
-		assertEquals("Dolutegravir interacts with active order iron — Major. " + DOLUTEGRAVIR_MECHANISM,
+		assertEquals("Dolutegravir interacts with active order Iron — Major. " + DOLUTEGRAVIR_MECHANISM,
 				warnings.get(0).getDetail(),
 				"the surviving chip must carry the fuller of the two equally-rated notes");
 	}
@@ -526,13 +526,13 @@ public class DdiDrugReferenceSourceTest {
 		// row wins the iron group is equalSeveritiesKeepTheRowCarryingTheFullerMechanismNote's
 		// business, and pinning its opening words here would couple this case to the note text.
 		assertTrue(warnings.get(0).getDetail()
-				.startsWith("Dolutegravir interacts with active order iron — Major. "),
+				.startsWith("Dolutegravir interacts with active order Iron — Major. "),
 				"iron is Major and dexamethasone Minor, so the arm's ordering must lead with iron even"
 						+ " though iron's group winner was decided last — before issue #346 what kept"
 						+ " it there was the dataset's own order of first appearance, was: "
 						+ warnings.get(0).getDetail());
 		assertTrue(warnings.get(1).getDetail()
-				.startsWith("Dolutegravir interacts with active order dexamethasone — Minor. "),
+				.startsWith("Dolutegravir interacts with active order Dexamethasone — Minor. "),
 				"dexamethasone's chip must stay second, was: " + warnings.get(1).getDetail());
 	}
 
@@ -574,12 +574,12 @@ public class DdiDrugReferenceSourceTest {
 						+ warnings);
 		}
 		assertTrue(warnings.get(0).getDetail()
-				.startsWith("Sirolimus interacts with active order lapatinib and voxelotor — Major. "),
+				.startsWith("Sirolimus interacts with active order Lapatinib and Voxelotor — Major. "),
 			"lapatinib's group is opened before phenytoin's, so replacing its winner afterwards must"
 					+ " not move it behind phenytoin — and voxelotor, which shares its mechanism, is"
 					+ " named by that same chip, was: " + warnings.get(0).getDetail());
 		assertTrue(warnings.get(1).getDetail()
-				.startsWith("Sirolimus interacts with active order phenytoin — Major. "),
+				.startsWith("Sirolimus interacts with active order Phenytoin — Major. "),
 			"phenytoin's chip must stay second, was: " + warnings.get(1).getDetail());
 	}
 

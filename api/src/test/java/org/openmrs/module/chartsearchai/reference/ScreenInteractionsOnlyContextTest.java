@@ -71,8 +71,8 @@ public class ScreenInteractionsOnlyContextTest extends BaseModuleContextSensitiv
 		String answer = answer(SAFETY);
 
 		// What is true of every contraindication line is said once, in the count (ADR Decision 191).
-		assertTrue(answer.split("\n")[0].endsWith(", and 1 contraindication about a medication this patient is already "
-				+ "taking, with no severity rated:"), "was: " + answer);
+		assertTrue(answer.split("\n")[0].endsWith(", and 1 unrated contraindication about a medication this patient is "
+				+ "already taking:"), "was: " + answer);
 		assertTrue(answer.matches("(?s).*\nThe patient has a recorded allergy to Ibuprofen\\. \\[\\d+\\]\n.*"),
 			"the line is the finding alone: " + answer);
 		for (SafetyWarning chip : contraindications(SAFETY)) {

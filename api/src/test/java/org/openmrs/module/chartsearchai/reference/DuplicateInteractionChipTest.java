@@ -194,7 +194,7 @@ public class DuplicateInteractionChipTest {
 				"Can I give ibuprofen?", DrugReferenceTestSupport.ctx(60, null,
 						DrugReferenceTestSupport.set("aspirin 81mg"), null, null, null));
 
-		assertEquals("Ibuprofen interacts with active order aspirin — Major. Ibuprofen blunts the "
+		assertEquals("Ibuprofen interacts with active order Aspirin — Major. Ibuprofen blunts the "
 				+ "irreversible platelet inhibition of low-dose aspirin.", onlyDetail(warnings),
 				"an unfolded rule chip must be unchanged");
 	}

@@ -310,7 +310,7 @@ public class InjectedInteractionNoteCollapseTest {
 				.validate("", "is it safe to give voriconazole?", context);
 		assertEquals(1, warnings.size(),
 				"precondition: exactly one chip, for the partner the patient IS on, was: " + warnings);
-		assertTrue(warnings.get(0).getDetail().contains("active order warfarin — Moderate."),
+		assertTrue(warnings.get(0).getDetail().contains("active order Warfarin — Moderate."),
 				"precondition: the chip must quote the row whose ATC the patient matches, was: "
 						+ warnings.get(0).getDetail());
 

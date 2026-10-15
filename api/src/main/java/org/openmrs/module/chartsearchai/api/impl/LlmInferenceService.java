@@ -343,8 +343,16 @@ public class LlmInferenceService implements ChartSearchService {
 			// #515), as the pre-answer pass stamped them on the chart.
 			completedAnswer = ListedDrugStatement.withListedDrugsStated(completedAnswer,
 					chart.getListedDrugsWithNoActiveOrder());
+			// And that a dose the question states was not checked, where the dataset publishes no dose ceiling (ADR
+			// Decision 274).
+			completedAnswer = DoseStatement.withDoseNotChecked(completedAnswer, chart.statesADose(), doseCeilingCoverage);
 			// And the drug-class note's own sentence where the answer does not cite the note (ADR Decision 166).
 			completedAnswer = DrugClassStatement.withDrugClassStated(completedAnswer, unresolvedDrugClass, cited);
+			// And which of her orders are in that class, where its ATC group IS the class (ADR Decision 275).
+			completedAnswer = DrugClassMembersStatement.withMembersStated(completedAnswer, chart.getNamedClassAtcGroup(),
+					chart.getOrdersInTheNamedClass());
+			// And which drug the data's name in the answer is, where the question named it otherwise (ADR Decision 277).
+			completedAnswer = NameAsAskedStatement.withNamesAsAskedStated(completedAnswer, chart.getNamedAsAsked());
 			// And, on a question asking only for her allergies, which of her own orders conflict with them
 			// (ADR Decision 124), or after a model's answer that names such an order (ADR Decision 210) — last, so it
 			// follows every sentence the module appends, and it marks the chips it states, which is why the chips it
@@ -804,10 +812,14 @@ public class LlmInferenceService implements ChartSearchService {
 			// The listed-drug sentence (issue #515) is on this answer too: the chart stamped it before the
 			// model was asked, so unlike the ended-order sentence it owes the chips nothing.
 			ungroundedAnswerConsumer.accept(new ChartAnswer(
-					DrugClassStatement.withDrugClassStated(ListedDrugStatement.withListedDrugsStated(
-							OwnOrderFindingStatement.withUnstatedOwnOrderFindings(response.getAnswer(), cited,
-									chart.getMappings(), chart.getProposalOwnOrderFindingLines()),
-							chart.getListedDrugsWithNoActiveOrder()), unresolvedDrugClass, cited),
+					NameAsAskedStatement.withNamesAsAskedStated(DrugClassMembersStatement.withMembersStated(
+							DrugClassStatement.withDrugClassStated(DoseStatement.withDoseNotChecked(
+									ListedDrugStatement.withListedDrugsStated(OwnOrderFindingStatement
+											.withUnstatedOwnOrderFindings(response.getAnswer(), cited, chart.getMappings(),
+												chart.getProposalOwnOrderFindingLines()),
+										chart.getListedDrugsWithNoActiveOrder()), chart.statesADose(), doseCeilingCoverage),
+								unresolvedDrugClass, cited), chart.getNamedClassAtcGroup(), chart.getOrdersInTheNamedClass()),
+						chart.getNamedAsAsked()),
 					// ADR Decision 170: the records the own-order statement cites, as the module's, on this answer too.
 					withReferencesTheModuleStated(cited, OwnOrderFindingStatement.citedRecords(response.getAnswer(), cited,
 							chart.getMappings(), chart.getProposalOwnOrderFindingLines()), chart.getMappings()),
@@ -935,8 +947,16 @@ public class LlmInferenceService implements ChartSearchService {
 			// #515), as the pre-answer pass stamped them on the chart.
 			completedAnswer = ListedDrugStatement.withListedDrugsStated(completedAnswer,
 					chart.getListedDrugsWithNoActiveOrder());
+			// And that a dose the question states was not checked, where the dataset publishes no dose ceiling (ADR
+			// Decision 274).
+			completedAnswer = DoseStatement.withDoseNotChecked(completedAnswer, chart.statesADose(), doseCeilingCoverage);
 			// And the drug-class note's own sentence where the answer does not cite the note (ADR Decision 166).
 			completedAnswer = DrugClassStatement.withDrugClassStated(completedAnswer, unresolvedDrugClass, cited);
+			// And which of her orders are in that class, where its ATC group IS the class (ADR Decision 275).
+			completedAnswer = DrugClassMembersStatement.withMembersStated(completedAnswer, chart.getNamedClassAtcGroup(),
+					chart.getOrdersInTheNamedClass());
+			// And which drug the data's name in the answer is, where the question named it otherwise (ADR Decision 277).
+			completedAnswer = NameAsAskedStatement.withNamesAsAskedStated(completedAnswer, chart.getNamedAsAsked());
 			// And, on a question asking only for her allergies, which of her own orders conflict with them
 			// (ADR Decision 124), or after a model's answer that names such an order (ADR Decision 210) — last, so it
 			// follows every sentence the module appends, and it marks the chips it states, which is why the chips it
@@ -1048,6 +1068,8 @@ public class LlmInferenceService implements ChartSearchService {
 		// And issue #515's: a proposal after a list is composed since ADR Decision 149, and the sentence takes a
 		// line of its own, since the composed lines end in markers.
 		answer = ListedDrugStatement.withListedDrugsStatedOnALine(answer, chart.getListedDrugsWithNoActiveOrder());
+		// And which drug the data's name in it is, where the question named it otherwise (ADR Decision 277).
+		answer = NameAsAskedStatement.withNamesAsAskedStatedOnALine(answer, chart.getNamedAsAsked());
 		List<RecordReference> references = extractCitedReferences(answer, null, mappings);
 		List<ChartSearchService.OrderStopDate> orderStopDates =
 				ChartSearchAiUtils.orderStopDates(answer, references, mappings);

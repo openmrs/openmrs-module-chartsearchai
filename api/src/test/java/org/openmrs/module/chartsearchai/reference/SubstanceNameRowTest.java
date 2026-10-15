@@ -115,7 +115,7 @@ public class SubstanceNameRowTest {
 		assertEquals("Estradiol", warnings.get(0).getDrug(),
 		    "the chip must name the row the data names the substance after, was: " + warnings);
 		assertTrue(warnings.get(0).getDetail()
-		        .startsWith("Estradiol interacts with active order dexamethasone — Moderate."),
+		        .startsWith("Estradiol interacts with active order Dexamethasone — Moderate."),
 		    "and its detail must lead with that same name, was: " + warnings.get(0).getDetail());
 		// On the STEM and case-insensitively, because the KB spells the tracer three ways and a guard
 		// written on the display name alone is blind to the other two: the tracer's own mechanism prose
@@ -198,7 +198,7 @@ public class SubstanceNameRowTest {
 		    "the chip must name the elected row even where the rule it renders is a sibling's, was: "
 		            + warnings);
 		assertTrue(warnings.get(0).getDetail().startsWith("Estradiol interacts with active order "
-		        + tracerRule.getToken() + " — Major."),
+		        + TRACER_RULE_PARTNER + " — Major."),
 		    "and its detail must lead with that same name at the winning rule's rating, was: "
 		            + warnings.get(0).getDetail());
 		// The residue, not a promise: the mechanism prose under that name is the tracer's own. Read the
@@ -936,7 +936,7 @@ public class SubstanceNameRowTest {
 		assertEquals(SUBSTANCE_ROW, warnings.get(0).getDrug(),
 		    "the chip must name the row the data files the family under, was: " + warnings);
 		assertTrue(warnings.get(0).getDetail().startsWith(SUBSTANCE_ROW
-		        + " interacts with active order ozanimod — Moderate."),
+		        + " interacts with active order Ozanimod — Moderate."),
 		    "and its detail must lead with that same name, was: " + warnings.get(0).getDetail());
 		assertTrue(warnings.get(0).getDetail().contains(FULLER_NOTE_CLAUSE),
 		    "and must carry that row's OWN note rather than the typo row's shorter one, was: "

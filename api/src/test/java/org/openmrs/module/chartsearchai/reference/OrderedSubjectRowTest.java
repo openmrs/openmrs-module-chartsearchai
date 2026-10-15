@@ -127,7 +127,7 @@ public class OrderedSubjectRowTest {
 		assertEquals(BOTULINUM_A_ORDER, warnings.get(0).getDrug(),
 				"the chip must name the row the patient's own order names, was: " + warnings);
 		assertTrue(warnings.get(0).getDetail()
-				.startsWith(BOTULINUM_A_ORDER + " interacts with active order botulinum toxin type b — "),
+				.startsWith(BOTULINUM_A_ORDER + " interacts with active order Botulinum toxin type b — "),
 				"and its detail must lead with that same name, was: " + warnings.get(0).getDetail());
 		assertFalse(warnings.get(0).getDetail().contains("Daxibotulinumtoxina"),
 				"and must not assert a presentation the chart does not record, was: "

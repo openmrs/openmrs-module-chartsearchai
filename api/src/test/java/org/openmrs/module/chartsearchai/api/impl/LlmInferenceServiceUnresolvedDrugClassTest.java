@@ -17,7 +17,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Calendar;
 import java.util.Collections;
+import java.util.Date;
+import java.util.GregorianCalendar;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -35,6 +38,7 @@ import org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport;
 import org.openmrs.module.chartsearchai.reference.DrugSafetyValidator;
 import org.openmrs.module.chartsearchai.reference.PairChipExtent;
 import org.openmrs.module.chartsearchai.reference.SafetyWarning;
+import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.AlreadyOrderedDrug;
@@ -113,6 +117,52 @@ public class LlmInferenceServiceUnresolvedDrugClassTest extends BaseModuleContex
 			}
 		});
 		return service;
+	}
+
+	/**
+	 * Which of her orders are in the class the question names, where its ATC group IS that class, is stated after the answer
+	 * (ADR Decision 275): on the 3.7.1 standalone "Is it safe to give her a statin?" was told the class was not resolved to
+	 * any substance, of a patient already on simvastatin. A class whose group is not the class states nothing.
+	 */
+	@Test
+	public void search_statesHerOrdersInTheNamedClassWhereItsAtcGroupIsTheClass() {
+		String question = "Is it safe to give her a statin?";
+		ChartAnswer onOne = serviceOver(DrugReferenceTestSupport.injectedChartOverOrders(question, "Simvastatin 20mg",
+			"Lisinopril 10mg")).search(patient(), question);
+		assertTrue(onOne.getAnswer().endsWith(" Already among this patient's active medication orders in that class (ATC group "
+				+ "C10AA): Simvastatin 20mg."), onOne.getAnswer());
+
+		ChartAnswer onNone = serviceOver(DrugReferenceTestSupport.injectedChartOverOrders(question, "Lisinopril 10mg"))
+				.search(patient(), question);
+		assertTrue(onNone.getAnswer().endsWith(" None of this patient's active medication orders is in that class (ATC group "
+				+ "C10AA)."), onNone.getAnswer());
+
+		ChartAnswer oral = serviceOver(DrugReferenceTestSupport.injectedChartOverOrders(CLASS_QUESTION, "Simvastatin 20mg"))
+				.search(patient(), CLASS_QUESTION);
+		assertTrue(!oral.getAnswer().contains("in that class (ATC group"), oral.getAnswer());
+	}
+
+	/**
+	 * An order of hers in that class the module could read no name for, or that has not started, is still in it, so it is
+	 * never told that none of hers is (ADR Decision 275): the first is named as recorded only by its codes, the second with
+	 * the date it is scheduled to start.
+	 */
+	@Test
+	public void search_namesAnOrderKnownOnlyByItsCodesAndOneNotYetStartedInTheNamedClass() {
+		String question = "Is it safe to give her a statin?";
+		ChartAnswer codesOnly = serviceOver(DrugReferenceTestSupport.injectedChartOverOrders(question, Arrays.asList(
+			DrugReferenceTestSupport.namedOrder("order-0", "Lisinopril 10mg"),
+			DrugReferenceTestSupport.codesOnlyOrder("order-1", "C10AA01")))).search(patient(), question);
+		assertTrue(codesOnly.getAnswer().endsWith(" Already among this patient's active medication orders in that class (ATC "
+				+ "group C10AA): an order recorded only by its codes [ATC C10AA01]."), codesOnly.getAnswer());
+
+		Date start = new GregorianCalendar(2099, Calendar.MARCH, 1).getTime();
+		ChartAnswer scheduled = serviceOver(DrugReferenceTestSupport.injectedChartOverOrders(question, Arrays.asList(
+			DrugReferenceTestSupport.namedOrder("order-0", "Lisinopril 10mg"),
+			DrugReferenceTestSupport.notStartedOrder("order-1", "Simvastatin 20mg", start)))).search(patient(), question);
+		assertTrue(scheduled.getAnswer().endsWith(" Already among this patient's active medication orders in that class (ATC "
+				+ "group C10AA): Simvastatin 20mg (" + PatientChartSerializer.scheduledToStart(start) + ")."),
+			scheduled.getAnswer());
 	}
 
 	/**

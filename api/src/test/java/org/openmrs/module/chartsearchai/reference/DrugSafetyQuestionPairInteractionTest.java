@@ -649,7 +649,7 @@ public class DrugSafetyQuestionPairInteractionTest {
 		assertEquals(2, warnings.size(),
 				"precondition: her active order and the question's pair must both be raised, was: "
 						+ warnings);
-		assertTrue(warnings.get(0).getDetail().contains("active order simvastatin"),
+		assertTrue(warnings.get(0).getDetail().contains("active order Simvastatin"),
 				"the patient-specific chip must lead, was: " + warnings);
 		assertTrue(warnings.get(1).getDetail().contains("named in the question"),
 				"and the question-pair lookup must follow it, was: " + warnings);

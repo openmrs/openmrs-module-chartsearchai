@@ -1,7 +1,7 @@
 # Drug-interaction questions tested on 2026-10-15
 
-Every question asked of the RefApp 3.7.1 standalone during the drug-interaction sweep of 2026-10-15 and the follow-up
-that fixed the errors it left, which produced [ADR Decisions 227 to 271](adr.md#decision-227-the-placeholder-a-free-text-allergy-is-saved-on-is-no-allergen-and-an-unchecked-allergy-is-named-as-the-chart-spells-it).
+Every question asked of the RefApp 3.7.1 standalone during the drug-interaction sweep of 2026-10-15 and the follow-ups
+that fixed the errors it left, which produced [ADR Decisions 227 to 278](adr.md#decision-227-the-placeholder-a-free-text-allergy-is-saved-on-is-no-allergen-and-an-unchecked-allergy-is-named-as-the-chart-spells-it).
 Each question is written exactly as it was asked, misspellings and phone-keyboard apostrophes included, under the
 patient it was asked about. Each patient's active medication orders and recorded drug allergies are as the chart held
 them at the end of the sweep, so that "her" and "his" in a question can be read.
@@ -32,6 +32,8 @@ Drug allergies: none.
 - Can I add fluconazole to her cotrimoxazole?
 - Can I give her trimethoprim?
 - Does her cotrimoxazole interact with her lopinavir?
+- Can I give her Tylenol?
+- Can I give her lithium?
 
 ## Barbara Miller
 
@@ -159,6 +161,8 @@ Drug allergies: none.
 - Is it alright to start her on clarithromycin?
 - Can I start her on enalapril?
 - Can I also give her ibuprofen?
+- Can I give her clopidogrel?
+- Is it safe to give her a statin 20 mg?
 
 ## David Williams
 
@@ -232,6 +236,7 @@ Drug allergies: none.
 - Can I give him sulfamethoxazole and trimethoprim?
 - Can he drink alcohol?
 - Can I give him diazepam for alcohol withdrawal?
+- Is co-trimoxazole safe with his warfarin?
 
 ## Donna Roberts
 

@@ -597,7 +597,10 @@ public final class QueryScopeRouter {
 			// "Does X cause interactions with her other meds?" (ADR Decision 209)
 			"is " + D + " (?:causing (?:any )?(?:drug )?interactions? with|interacting with) (?:any of )?" + POSSESSIVE
 					+ " (?:other )?" + MEDICATIONS,
-			"does " + D + " cause (?:any )?(?:drug )?interactions? with (?:any of )?" + POSSESSIVE + " (?:other )?" + MEDICATIONS);
+			"does " + D + " cause (?:any )?(?:drug )?interactions? with (?:any of )?" + POSSESSIVE + " (?:other )?" + MEDICATIONS,
+			// "Any interactions with her metronidazole?", "Are there any problems with his lisinopril?" — her drug named as
+			// hers, the interactions or problems of it asked after (ADR Decision 237)
+			"(?:(?:are|is) there )?any (?:drug )?(?:interactions?|problems?|issues?|concerns?) with " + POSSESSIVE + " " + D);
 
 	/**
 	 * Whether a question asks about ONE drug beside her other medications, and nothing else — one of {@link

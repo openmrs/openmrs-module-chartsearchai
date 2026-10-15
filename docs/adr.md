@@ -17226,3 +17226,27 @@ screen note was not written beside a contraindication at all (Decision 87's stat
   medications?"*, outside the screen grammar — the model now reads the note beside the conflicts as well.
 
 Pinned by `ScreenBesideHerOwnConflictsTest`.
+
+## Decision 237: "Any interactions with her X?" about her own drug is answered as hers
+
+**Status: Accepted** (October 2026) — the owner's standing request of 2026-10-15 to fix what misleads a clinician. It
+widens [Decision 202](#decision-202-a-question-whether-she-is-on-her-own-drug-or-whether-it-is-safe-with-her-other-medications-is-answered-as-her-own-medication-and-the-answer-names-the-order)'s
+grammar.
+
+### Context
+
+On the 3.7.1 standalone Karen Sanchez's *"Any problems with her metronidazole?"* and Joshua Johnson's *"Any interactions
+with his lisinopril?"* — each about the patient's own and only drug — reached the model, which recited the reference's
+partners neither patient takes: *"Metronidazole has several major interactions: salmonella typhi ty21a live antigen,
+vibrio cholerae cvd 103-hgr strain live antigen, warfarin, bcg, live, tice strain, and busulfan"*.
+
+### The decision
+
+- **"Any interactions/problems/issues/concerns with her X?"**, with or without "are there", **is one of Decision 202's
+  shapes** (`QueryScopeRouter.BESIDE_HER_MEDICATIONS_SHAPES`): about a drug her orders carry, it gets Decision 193's
+  own-medication answer — her order named, and what relates it to her other medications. About a drug she does not
+  take, the model answers as before, and so it does for her ONLY order where no finding is about it, which Decision 193
+  pins (`OwnMedicationSafetyContextTest.herOwnDrugWithNoInteractionIsLeftToTheModel`): Karen Sanchez's and Joshua
+  Johnson's own questions are that case, so they are unchanged.
+
+Pinned by `OwnMedicationSafetyContextTest.anyInteractionsOrProblemsWithHerOwnDrugIsAnsweredAsHers`.

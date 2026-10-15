@@ -310,6 +310,23 @@ public class OwnMedicationSafetyContextTest extends BaseModuleContextSensitiveTe
 	}
 
 	@Test
+	public void anyInteractionsOrProblemsWithHerOwnDrugIsAnsweredAsHers() throws IOException {
+		// Karen Sanchez's "Any problems with her metronidazole?" and Joshua Johnson's "Any interactions with his
+		// lisinopril?" — each patient's own drug — went to the model, which recited the reference's partners neither
+		// patient takes: "Metronidazole has several major interactions: salmonella typhi ty21a live antigen, … warfarin,
+		// bcg …" (ADR Decision 237).
+		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
+			DrugReferenceTestSupport.activeOrder("order-ibuprofen", "Ibuprofen 400mg"),
+			DrugReferenceTestSupport.activeOrder("order-prednisone", "Prednisone 5mg"));
+		String expected = answer("Is ibuprofen safe with her other medications?", null, orders);
+		assertNotNull(expected, "precondition: the module answers the shape Decision 202 admits");
+		for (String question : Arrays.asList("Any interactions with her ibuprofen?", "Are there any drug interactions with "
+				+ "her ibuprofen?", "Any problems with her ibuprofen?", "Are there any issues with her ibuprofen?")) {
+			assertEquals(expected, answer(question, null, orders), question);
+		}
+	}
+
+	@Test
 	public void herOwnDrugWithNoOtherMedicationToCheckItAgainstSaysSo() throws IOException {
 		// James Thompson holds two orders of metronidazole and nothing else: there is no other medication to relate it
 		// to, as Decision 178 says of one order on a screen (ADR Decision 206).

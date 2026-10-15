@@ -17581,3 +17581,34 @@ was left to the model.
 - **"Co-prescribe" is a verb of the together shape** *"Is it OK to … X with her Y?"*, so the second question above is one.
 
 Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aTwoDrugQuestionWithOneUnrecognisedNameSaysThePairWasNotChecked`.
+
+## Decision 251: More questions whose "No" would read backwards are answered with the finding and neither "Yes" nor "No"
+
+**Status: Accepted** (October 2026) — the owner's standing request of 2026-10-15 to fix what misleads a clinician. It
+widens [Decision 247](#decision-247-should-i-avoid-x-is-answered-as-is-there-any-reason-not-to-give-x-is-with-neither-yes-nor-no)
+and [Decision 249](#decision-249-whether-one-drug-changes-an-effect-of-the-other-is-answered-with-the-finding-and-neither-yes-nor-no).
+
+### Context
+
+The model opens a drug it would withhold *"No — X should not be given"* whatever the question asked. On the 3.7.1
+standalone that lead answered, backwards: Donald Thompson's *"Does he need INR monitoring if I add metronidazole?"*
+(*"No — Metronidazole should not be added due to a Major interaction with Warfarin"*), Brian Lopez's *"Should he avoid
+codeine with his tramadol?"* (*"No — Codeine should not be used with Tramadol"*), and Donald Thompson's *"Should his
+warfarin dose be adjusted if I start fluconazole?"* (*"No — Fluconazole should not be started"*). A clinician reading the
+first word reads the opposite of the finding.
+
+### The decision
+
+- **Of one drug, these are Decision 181's shapes** (`QueryScopeRouter.NEGATED_PROPOSAL_SHAPES`), answered with the finding
+  and neither "Yes" nor "No": *"Should she avoid X?"*, *"Does she need (INR) monitoring if I add X?"*, *"Is she at risk (of
+  bleeding) if I add X?"*, *"What happens if I give her X?"*.
+- **Of two, they are Decision 249's question** (`QueryScopeRouter.asksWhetherOneDrugChangesTheOther`), answered as it is:
+  *"Should he avoid X with his Y?"*, *"What happens if I give X with his Y?"*, *"What is the risk of combining X with his
+  Y?"*, *"Should his Y dose be adjusted if I start X?"* — and an effect on her drug's absorption, bioavailability,
+  clearance or metabolism (*"Will omeprazole lower his levothyroxine absorption?"*, which the model answered *"Omeprazole
+  can be given, with one caution"* of a drug he already takes).
+- What was asked — whether to monitor, by how much to change a dose — is left unanswered; the finding's line says what
+  the data relates.
+
+Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.moreQuestionsWhoseNoWouldReadBackwardsAreAnsweredWithoutAYesOrNo`
+and `TogetherWithHerOwnMedicationContextTest.whatADrugDoesBesideHerDrugIsAnsweredWithTheFindingAndNeitherYesNorNo`.

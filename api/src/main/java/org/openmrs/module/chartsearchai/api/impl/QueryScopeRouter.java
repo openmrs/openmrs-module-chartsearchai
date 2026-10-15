@@ -394,6 +394,15 @@ public final class QueryScopeRouter {
 			"(?:should|must) (?:i|we) avoid (?:giving )?(?:" + PATIENT + " )?" + D + "(?: (?:for|in) " + PATIENT + ")?",
 			"(?:should|must) " + D + " be avoided(?: (?:for|in) " + PATIENT + ")?",
 			"do (?:i|we) (?:need|have) to avoid (?:giving )?(?:" + PATIENT + " )?" + D + "(?: (?:for|in) " + PATIENT + ")?",
+			// "Should she avoid ibuprofen?", "Does she need INR monitoring if I add ibuprofen?", "Is she at risk of bleeding if
+			// I add ibuprofen?", "What happens if I give her ibuprofen?" (ADR Decision 251)
+			"(?:should|must) (?:she|he|they|the patient|this patient) avoid (?:taking )?" + D + "(?: now| today)?",
+			"(?:does|do|will|would) (?:she|he|they|the patient|this patient) need (?:any )?(?:[a-z]+ )?monitoring (?:if|when) (?:i|we)"
+					+ " (?:add|give|start|prescribe) (?:" + PATIENT + " )?(?:on )?" + D,
+			"(?:is|are|will|would) (?:she|he|they|the patient|this patient) (?:be )?at (?:any )?risk(?: of [a-z]+)? (?:if|when) (?:i|we)"
+					+ " (?:add|give|start|prescribe) (?:" + PATIENT + " )?(?:on )?" + D,
+			"what (?:happens|would happen|will happen) if (?:i|we) (?:give|add|start|prescribe) (?:" + PATIENT + " )?(?:on )?" + D
+					+ "(?: (?:to|for) " + PATIENT + ")?",
 			// "Any problem giving her ibuprofen?", "Are there any concerns with starting ibuprofen?"
 			"(?:(?:is|are) there )?any (?:problems?|issues?|concerns?) (?:with )?(?:giving|starting|prescribing|adding) (?:"
 					+ PATIENT + " )?(?:on )?" + D + "(?: (?:to|for) " + PATIENT + ")?",
@@ -636,6 +645,10 @@ public final class QueryScopeRouter {
 			+ " (?:interact with|affect) " + HER_D + "|(?:do|will|would|can) " + HER_D + " and " + HER_D
 			+ " interact(?: with (?:each other|one another))?)";
 
+	/** What a drug may change of another: its levels, its effect, its absorption (ADR Decisions 249, 251). */
+	private static final String MEASURE = "(?:levels?|concentrations?|effects?|effectiveness|efficacy|toxicity|exposure"
+			+ "|absorption|bioavailability|clearance|metabolism)";
+
 	/**
 	 * "Will fluconazole raise his warfarin levels?", "Does rifampicin reduce the effect of her nevirapine?", "Does
 	 * metronidazole increase the bleeding risk with his warfarin?" — a question whether one drug CHANGES a particular effect
@@ -643,9 +656,27 @@ public final class QueryScopeRouter {
 	 */
 	private static final String DOES_ONE_CHANGE_THE_OTHER = "(?:does|do|will|would|can|could|might) " + HER_D
 			+ " (?:increase|raise|elevate|boost|decrease|lower|reduce|change|alter|potentiate) (?:(?:the |" + POSSESSIVE + " )?"
-			+ D + " (?:levels?|concentrations?|effects?|effectiveness|efficacy|toxicity|exposure)|(?:the )?(?:[a-z]+ )?(?:risk"
-			+ "|levels?|concentrations?|effects?|effectiveness|efficacy|toxicity|exposure)(?: of [a-z]+)? (?:of|with|from|on|for) "
-			+ HER_D + ")";
+			+ D + " " + MEASURE + "|(?:the )?(?:[a-z]+ )?(?:risk|" + MEASURE + ")(?: of [a-z]+)? (?:of|with|from|on|for) " + HER_D
+			+ ")";
+
+	/**
+	 * What a drug does beside another, asked otherwise than as an effect (ADR Decision 251): whether to avoid the two
+	 * together, what happens or what the risk is if they are combined, whether her drug's dose needs changing because of
+	 * the other. Each answered as {@link #DOES_ONE_CHANGE_THE_OTHER} is, with neither "Yes" nor "No" — the model answered
+	 * "Should he avoid codeine with his tramadol?" and "Should his warfarin dose be adjusted if I start fluconazole?" "No —".
+	 */
+	private static final String AVOID_ONE_WITH_THE_OTHER = "(?:(?:should|must) (?:i|we|she|he|they|the patient|this patient)"
+			+ "|do (?:i|we) (?:need|have) to) avoid (?:giving |taking )?(?:" + PATIENT + " )?" + HER_D + " (?:with|alongside|and) "
+			+ HER_D + "(?: together)?";
+
+	private static final String WHAT_COMBINING_THEM_DOES = "(?:what (?:happens|would happen|will happen) if (?:i|we) (?:give|add"
+			+ "|start|combine|prescribe) (?:" + PATIENT + " )?(?:on )?" + HER_D + " (?:to|with|and|alongside) " + HER_D
+			+ "|what (?:is|are) the (?:risks?|dangers?) (?:of|in) (?:combining|giving|using|taking|adding) " + HER_D
+			+ " (?:and|with|to) " + HER_D + ")(?: together)?";
+
+	private static final String DOSE_BECAUSE_OF_THE_OTHER = "should " + POSSESSIVE + " " + D + " dose be (?:reduced|lowered"
+			+ "|decreased|increased|raised|adjusted|changed)(?: (?:because of|due to|with|for) (?:the |" + POSSESSIVE + " )?" + D
+			+ "| if (?:i|we) (?:add|give|start|prescribe) " + D + ")";
 
 	/** "Any interactions between ibuprofen and celecoxib?", "Is there an interaction between X and Y?" (ADR Decisions 203, 218). */
 	private static final String ANY_INTERACTION_BETWEEN = "(?:are there |is there )?(?:any |an )?(?:drug )?interactions? between "
@@ -656,7 +687,7 @@ public final class QueryScopeRouter {
 			"is it (?:safe|ok|okay|appropriate) to (?:combine|give|take|use) " + HER_D + " (?:and|with) " + HER_D
 					+ "(?: together)?",
 			DOES_ONE_INTERACT_WITH_THE_OTHER,
-			DOES_ONE_CHANGE_THE_OTHER,
+			DOES_ONE_CHANGE_THE_OTHER, AVOID_ONE_WITH_THE_OTHER, WHAT_COMBINING_THEM_DOES, DOSE_BECAUSE_OF_THE_OTHER,
 			// "Is ibuprofen safe with celecoxib?", "Is simvastatin ok with clopidogrel?", "Is her ibuprofen safe with her
 			// celecoxib?"
 			"is " + HER_D + " (?:safe|ok|okay|compatible) (?:with|alongside) " + HER_D,
@@ -676,12 +707,15 @@ public final class QueryScopeRouter {
 
 	private static final List<Pattern> TWO_DRUGS_INTERACT_SHAPES = shapes(DOES_ONE_INTERACT_WITH_THE_OTHER, ANY_INTERACTION_BETWEEN);
 
-	private static final List<Pattern> ONE_DRUG_CHANGES_THE_OTHER_SHAPES = shapes(DOES_ONE_CHANGE_THE_OTHER);
+	private static final List<Pattern> ONE_DRUG_CHANGES_THE_OTHER_SHAPES = shapes(DOES_ONE_CHANGE_THE_OTHER,
+			AVOID_ONE_WITH_THE_OTHER, WHAT_COMBINING_THEM_DOES, DOSE_BECAUSE_OF_THE_OTHER);
 
 	/**
-	 * Whether a question asks whether one of two drugs changes a particular effect of the other, and nothing else — {@link
-	 * #DOES_ONE_CHANGE_THE_OTHER} (ADR Decision 249). Its answer states what relates the pair and neither "Yes" nor "No".
-	 * Fail-CLOSED as {@link #asksWhetherToGiveADrug} is.
+	 * Whether a question asks whether one of two drugs changes a particular effect of the other — {@link
+	 * #DOES_ONE_CHANGE_THE_OTHER} (ADR Decision 249) — or what else it does beside it, whose "No" would read backwards
+	 * ({@link #AVOID_ONE_WITH_THE_OTHER}, {@link #WHAT_COMBINING_THEM_DOES}, {@link #DOSE_BECAUSE_OF_THE_OTHER}; ADR
+	 * Decision 251), and nothing else. Its answer states what relates the pair and neither "Yes" nor "No". Fail-CLOSED as
+	 * {@link #asksWhetherToGiveADrug} is.
 	 */
 	public static boolean asksWhetherOneDrugChangesTheOther(List<String> wordsWithTheDrugsMarked) {
 		return fitsAShape(wordsWithTheDrugsMarked, ONE_DRUG_CHANGES_THE_OTHER_SHAPES);

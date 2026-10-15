@@ -500,6 +500,25 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	}
 
 	/**
+	 * More questions about giving a drug whose "No" would answer them backwards (ADR Decision 251). On the 3.7.1 standalone
+	 * Donald Thompson's "Does he need INR monitoring if I add metronidazole?" and Brian Lopez's "Should he avoid codeine
+	 * with his tramadol?" reached the model, which opened "No — Metronidazole should not be added" and "No — Codeine should
+	 * not be used with Tramadol": a "No" to whether monitoring is needed, and to whether to avoid it.
+	 */
+	@Test
+	public void moreQuestionsWhoseNoWouldReadBackwardsAreAnsweredWithoutAYesOrNo() {
+		for (String question : new String[] { "Should she avoid ibuprofen?", "Does she need monitoring if I give her ibuprofen?",
+				"Does she need INR monitoring if I add ibuprofen?", "Is she at risk of bleeding if I add ibuprofen?",
+				"What happens if I give her ibuprofen?" }) {
+			RecordingProvider provider = new RecordingProvider();
+			ChartAnswer answer = serviceWith(provider).search(patient, question);
+			assertEquals(0, provider.calls, question + " — " + answer.getAnswer());
+			assertTrue(answer.getAnswer().startsWith(DrugReferenceInjector.NEUTRAL_WITHHOLD_LEAD_OPENING + "Ibuprofen.\n"),
+					question + " — " + answer.getAnswer());
+		}
+	}
+
+	/**
 	 * "As well", "too" and "also" propose the drug beside her medications, which is what every proposal is screened against
 	 * (ADR Decision 244). On the 3.7.1 standalone Carol Brown, on lisinopril among six orders, asked "Can I start her on
 	 * enalapril as well?", reached the model, and read "Enalapril can be started, with several cautions" — a second ACE

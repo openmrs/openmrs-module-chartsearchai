@@ -155,6 +155,25 @@ public class TogetherWithHerOwnMedicationContextTest extends BaseModuleContextSe
 		}
 	}
 
+	/**
+	 * What a drug does beside her drug — whether to avoid the two together, what happens or what the risk is if they are
+	 * combined, whether her drug's dose needs changing — is answered as Decision 249 answers an effect (ADR Decision 251).
+	 * On the 3.7.1 standalone Brian Lopez's "Should he avoid codeine with his tramadol?" and Donald Thompson's "Should his
+	 * warfarin dose be adjusted if I start fluconazole?" were answered by the model with a "No —".
+	 */
+	@Test
+	public void whatADrugDoesBesideHerDrugIsAnsweredWithTheFindingAndNeitherYesNorNo() {
+		for (String question : Arrays.asList("Should she avoid rifampicin with her nevirapine?",
+			"What happens if I give her rifampicin with her nevirapine?", "What is the risk of combining rifampicin with her nevirapine?",
+			"Should her nevirapine dose be adjusted if I start rifampicin?", "Will rifampicin lower her nevirapine absorption?")) {
+			String answer = askOverTheShippedData(question, "Nevirapine 200mg", "Nevirapine").getModuleAnswer();
+
+			assertTrue(answer != null && answer.startsWith("Nevirapine is one of this patient's active medications.\n"
+					+ DrugReferenceInjector.NEUTRAL_WITHHOLD_LEAD_OPENING + "Rifampicin (rifampin).\n"), question + " was: " + answer);
+			assertTrue(!answer.contains("No —") && !answer.contains("Yes —"), "neither Yes nor No: " + answer);
+		}
+	}
+
 	@Test
 	public void aQuestionWhetherOneOfHerDrugsChangesAnEffectOfAnotherOfHersStatesThemSideBySide() {
 		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(

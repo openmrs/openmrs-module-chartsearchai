@@ -17979,3 +17979,26 @@ out of the curated international names, which listed single substances only. (Is
 
 Pinned by `CotrimoxazoleByEveryNameTest`, `ProposedDrugAlreadyInHerOrdersTest.aCombinationOrderIsSaidToCarryTheProposedDrugAndNotToBeDuplicatedByIt`
 (its `Cotrimoxazole 960mg` and `Augmentin 625mg` cells), and `BridgedConceptLegBoundsTest`.
+
+## Decision 267: The module's answer names a drug it asks about by the row its findings name it by
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-15 to fix the errors the sweep left.
+
+### Context
+
+On the 3.7.1 standalone Helen, on methotrexate and salicylic acid, asked *"Does her methotrexate interact with her
+salicylic acid?"* and read *"Methotrexate (Methotrexate [2]) and Salicylic acid (sodium) (Salicylic acid [1]) are both
+among this patient's active medications."* above *"Methotrexate interacts with active order Salicylic acid — Major."* The
+knowledge base files salicylic acid as three rows, and the module's answer took the first of them in the data's order —
+the sodium salt, a systemic salicylate — while every finding names the substance by the row her chart names
+(`DrugSafetyValidator.interactionSubject`, issues #174 and #194). One drug, two names, in one answer.
+
+### The decision
+
+The composers that name the drugs a question asks about elect each one's row by `DrugSafetyValidator.interactionSubject`
+over that substance's rows, as the findings do: `DrugReferenceInjector.inTheQuestionsOrder` and `inQuestionOrder` take the
+context (two of her drugs together, one beside hers, the interaction between two, a switch, two not hers, two proposals
+together, the drug named as hers she is not on, the unrecognised-partner statement), and so does the own-medication
+answer with no pair. Without a context the first row stands, as before. Which row a record or chip renders is unchanged.
+
+Pinned by `ModuleAnswerSubstanceNameTest`.

@@ -999,7 +999,7 @@ public class DrugReferenceInjector {
 			// The question named it as hers, and she is not on it — admitted here only so (ADR Decision 260).
 			if (moduleAnswer != null && !questionDrugs.isEmpty()
 					&& QueryScopeRouter.asksAboutADrugNamedAsHers(wordsBesideItsNames(question, questionDrugs))) {
-				moduleAnswer = inTheQuestionsOrder(question, questionDrugs).values().iterator().next().displayLabel()
+				moduleAnswer = inTheQuestionsOrder(question, questionDrugs, context).values().iterator().next().displayLabel()
 						+ NOT_HER_MEDICATION + "\n" + moduleAnswer;
 			}
 		} else if (!findings.isEmpty() && context != null
@@ -1078,7 +1078,8 @@ public class DrugReferenceInjector {
 				&& context.chartReadForSafety()
 				&& (aboutThePair = composeAboutThePair(question, questionDrugs, screenedSubstances, findings, findingNumbers,
 						orderRecordNumbers,
-						orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers)) != null) {
+						orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers,
+						context)) != null) {
 			// What the interaction between two drugs is: the findings relating them, whole (ADR Decision 264).
 			moduleAnswer = aboutThePair;
 		} else if (!findings.isEmpty() && context != null
@@ -1091,7 +1092,7 @@ public class DrugReferenceInjector {
 			moduleAnswer = composeTogetherWithHerOwn(question, questionDrugs, screenedSubstances, findings, findingNumbers,
 					orderRecordNumbers,
 					orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers,
-					pairExtent.stated());
+					pairExtent.stated(), context);
 		} else if (context != null
 				&& ChartSearchAiUtils.getBooleanGlobalProperty(
 						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
@@ -1100,7 +1101,7 @@ public class DrugReferenceInjector {
 				&& (switchAnswer = composeSwitch(question, questionDrugs, screenedSubstances, findings, findingNumbers,
 						orderRecordNumbers,
 						orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers,
-						pairExtent.stated())) != null) {
+						pairExtent.stated(), context)) != null) {
 			// One of her drugs switched to another: the new drug against her medications other than the one it replaces
 			// (ADR Decision 219).
 			moduleAnswer = switchAnswer;
@@ -1111,8 +1112,8 @@ public class DrugReferenceInjector {
 				&& context.chartReadForSafety()
 				&& (pairAnswer = composeWhetherTwoDrugsNotHersInteract(question, questionDrugs, screenedSubstances, findings,
 						findingNumbers, orderRecordNumbers,
-						orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers))
-						!= null) {
+						orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers,
+						context)) != null) {
 			// Whether two drugs, neither hers, interact: "Yes" where the data relates them (ADR Decision 220).
 			moduleAnswer = pairAnswer;
 		} else if (context != null
@@ -1123,7 +1124,7 @@ public class DrugReferenceInjector {
 				&& (twoProposalsAnswer = composeTwoProposalsTogether(question, questionDrugs, screenedSubstances, findings,
 						findingNumbers, orderRecordNumbers,
 						orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers,
-						pairExtent.stated())) != null) {
+						pairExtent.stated(), context)) != null) {
 			// Two drugs proposed together, neither hers: each answered as its own proposal (ADR Decision 222).
 			moduleAnswer = twoProposalsAnswer;
 		} else if (onlyHerOwnOrdersSharingASubstance(findings) && context != null
@@ -1198,7 +1199,7 @@ public class DrugReferenceInjector {
 		if (moduleAnswer == null && namedClass == null && drugReferenceService != null
 				&& ChartSearchAiUtils.getBooleanGlobalProperty(ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
 						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS)) {
-			Map<Object, DrugReference> named = inTheQuestionsOrder(question, questionDrugs);
+			Map<Object, DrugReference> named = inTheQuestionsOrder(question, questionDrugs, context);
 			UnrecognisedDrugName beside = named.size() == 1
 					? UnrecognisedDrugName.besideANamedDrug(question, questionDrugs, drugReferenceService.getAll(), context) : null;
 			if (beside != null) {
@@ -4919,7 +4920,7 @@ public class DrugReferenceInjector {
 			return null;
 		}
 		if (others == 0) {
-			StringBuilder alone = new StringBuilder(questionDrugs.get(0).displayLabel() + OWN_MEDICATION_LEAD + herOrders
+			StringBuilder alone = new StringBuilder(DrugSafetyValidator.interactionSubject(questionDrugs, context).displayLabel() + OWN_MEDICATION_LEAD + herOrders
 					+ ", and this patient has no other active medication to check it against.");
 			for (Integer i : lines) {
 				alone.append("\n").append(findingLine(findings.get(i), findingNumbers.get(i), orderRecordNumbers,
@@ -4942,7 +4943,7 @@ public class DrugReferenceInjector {
 		if (record == null) {
 			return null;
 		}
-		StringBuilder answer = new StringBuilder(questionDrugs.get(0).displayLabel() + OWN_MEDICATION_LEAD + herOrders
+		StringBuilder answer = new StringBuilder(DrugSafetyValidator.interactionSubject(questionDrugs, context).displayLabel() + OWN_MEDICATION_LEAD + herOrders
 				+ ". The interaction check relates it to none of this patient's " + others + " other active medication"
 				+ (others == 1 ? "" : "s") + ". [" + record.getIndex() + "]");
 		for (Integer i : lines) {
@@ -4966,7 +4967,7 @@ public class DrugReferenceInjector {
 	private static List<Integer> twoOfHerOwnAskedTogether(String question, List<DrugReference> questionDrugs,
 			Set<Object> herSubstances, List<SafetyWarning> findings) {
 		List<Integer> relating = new ArrayList<Integer>();
-		List<Object> asked = new ArrayList<Object>(inTheQuestionsOrder(question, questionDrugs).keySet());
+		List<Object> asked = new ArrayList<Object>(inTheQuestionsOrder(question, questionDrugs, null).keySet());
 		if (asked.size() != 2 || !herSubstances.containsAll(asked)
 				|| !QueryScopeRouter.asksAboutTwoDrugsTogether(wordsBesideItsNames(question, questionDrugs))) {
 			return relating;
@@ -4985,25 +4986,30 @@ public class DrugReferenceInjector {
 	}
 
 	/** One row of each substance {@code questionDrugs} resolve, keyed on the substance, in the order the question first
-	 *  names them ({@link DrugReference#namedOccurrences}); a row named nowhere goes last. */
-	private static Map<Object, DrugReference> inTheQuestionsOrder(String question, List<DrugReference> questionDrugs) {
+	 *  names them ({@link DrugReference#namedOccurrences}); a row named nowhere goes last. The row is the one the
+	 *  findings name the substance by — {@link DrugSafetyValidator#interactionSubject} over its rows, ranked by what her
+	 *  chart records — so an answer printing it names one drug one way (ADR Decision 267): the first of salicylic acid's
+	 *  three rows in the data's order is the sodium salt. Without a {@code context}, that first row. */
+	private static Map<Object, DrugReference> inTheQuestionsOrder(String question, List<DrugReference> questionDrugs,
+			PatientClinicalContext context) {
 		String folded = DrugReference.foldedLower(question);
 		final Map<Object, Integer> first = new HashMap<Object, Integer>();
-		Map<Object, DrugReference> rows = new LinkedHashMap<Object, DrugReference>();
+		Map<Object, List<DrugReference>> rows = new LinkedHashMap<Object, List<DrugReference>>();
 		for (DrugReference entry : questionDrugs) {
 			int at = Integer.MAX_VALUE;
 			for (DrugReference.NamedOccurrence occurrence : entry.namedOccurrences(folded, 0)) {
 				at = Math.min(at, occurrence.getStart());
 			}
 			Object substance = entry.substanceGroupKey();
-			rows.putIfAbsent(substance, entry);
+			rows.computeIfAbsent(substance, k -> new ArrayList<DrugReference>()).add(entry);
 			first.put(substance, Math.min(at, first.containsKey(substance) ? first.get(substance) : Integer.MAX_VALUE));
 		}
 		List<Object> ordered = new ArrayList<Object>(rows.keySet());
 		Collections.sort(ordered, Comparator.comparingInt(first::get));
 		Map<Object, DrugReference> inOrder = new LinkedHashMap<Object, DrugReference>();
 		for (Object substance : ordered) {
-			inOrder.put(substance, rows.get(substance));
+			List<DrugReference> ofIt = rows.get(substance);
+			inOrder.put(substance, context == null ? ofIt.get(0) : DrugSafetyValidator.interactionSubject(ofIt, context));
 		}
 		return inOrder;
 	}
@@ -5032,7 +5038,7 @@ public class DrugReferenceInjector {
 	private String composeTwoOfHerOwn(String question, List<DrugReference> questionDrugs, List<SafetyWarning> findings,
 			List<Integer> numbers, List<Integer> relating, Map<String, Integer> orderRecordNumbers,
 			Map<String, Integer> herOrderRecords, List<DrugReference> orderEntries, PatientClinicalContext context) {
-		Map<Object, DrugReference> rows = inTheQuestionsOrder(question, questionDrugs);
+		Map<Object, DrugReference> rows = inTheQuestionsOrder(question, questionDrugs, context);
 		List<String> named = new ArrayList<String>();
 		for (DrugReference row : rows.values()) {
 			String orders = herStartedOrdersOf(row, orderEntries, context, herOrderRecords);
@@ -5129,7 +5135,7 @@ public class DrugReferenceInjector {
 	 */
 	private static String composeSwitch(String question, List<DrugReference> questionDrugs, Set<Object> herSubstances,
 			List<SafetyWarning> findings, List<Integer> numbers, Map<String, Integer> orderRecordNumbers,
-			Map<String, Integer> herOrderRecords, PairChipExtent pairs) {
+			Map<String, Integer> herOrderRecords, PairChipExtent pairs, PatientClinicalContext context) {
 		if (questionDrugs.isEmpty()) {
 			return null;
 		}
@@ -5140,7 +5146,7 @@ public class DrugReferenceInjector {
 		if (!fromFirst && !QueryScopeRouter.asksWhetherToGiveADrugInsteadOfAnother(words)) {
 			return null;
 		}
-		Map<Object, DrugReference> rowOf = inQuestionOrder(question, questionDrugs);
+		Map<Object, DrugReference> rowOf = inQuestionOrder(question, questionDrugs, context);
 		if (rowOf.size() != 2) {
 			return null;
 		}
@@ -5211,12 +5217,12 @@ public class DrugReferenceInjector {
 	 */
 	private static String composeWhetherTwoDrugsNotHersInteract(String question, List<DrugReference> questionDrugs,
 			Set<Object> herSubstances, List<SafetyWarning> findings, List<Integer> numbers,
-			Map<String, Integer> orderRecordNumbers, Map<String, Integer> herOrderRecords) {
+			Map<String, Integer> orderRecordNumbers, Map<String, Integer> herOrderRecords, PatientClinicalContext context) {
 		if (questionDrugs.isEmpty()
 				|| !QueryScopeRouter.asksWhetherTwoDrugsInteract(wordsBesideItsNames(question, questionDrugs))) {
 			return null;
 		}
-		Map<Object, DrugReference> rowOf = inQuestionOrder(question, questionDrugs);
+		Map<Object, DrugReference> rowOf = inQuestionOrder(question, questionDrugs, context);
 		if (rowOf.size() != 2 || !Collections.disjoint(rowOf.keySet(), herSubstances)) {
 			return null;
 		}
@@ -5266,12 +5272,13 @@ public class DrugReferenceInjector {
 	 */
 	private static String composeTwoProposalsTogether(String question, List<DrugReference> questionDrugs,
 			Set<Object> herSubstances, List<SafetyWarning> findings, List<Integer> numbers,
-			Map<String, Integer> orderRecordNumbers, Map<String, Integer> herOrderRecords, PairChipExtent pairs) {
+			Map<String, Integer> orderRecordNumbers, Map<String, Integer> herOrderRecords, PairChipExtent pairs,
+			PatientClinicalContext context) {
 		if (questionDrugs.isEmpty()
 				|| !QueryScopeRouter.asksWhetherToGiveDrugsTogether(wordsBesideItsNames(question, questionDrugs))) {
 			return null;
 		}
-		Map<Object, DrugReference> rowOf = inQuestionOrder(question, questionDrugs);
+		Map<Object, DrugReference> rowOf = inQuestionOrder(question, questionDrugs, context);
 		if (rowOf.size() != 2 || !Collections.disjoint(rowOf.keySet(), herSubstances)) {
 			return null;
 		}
@@ -5343,12 +5350,14 @@ public class DrugReferenceInjector {
 	/**
 	 * One row per substance {@code questionDrugs} resolve, in the order {@code question} first NAMES each — the order a
 	 * clinician wrote them, which the resolution does not keep (ADR Decisions 219, 222). A substance the question names
-	 * nowhere is left out.
+	 * nowhere is left out. Each by the row the findings name it by, as {@link #inTheQuestionsOrder} elects it (ADR
+	 * Decision 267).
 	 */
-	private static Map<Object, DrugReference> inQuestionOrder(String question, List<DrugReference> questionDrugs) {
+	private static Map<Object, DrugReference> inQuestionOrder(String question, List<DrugReference> questionDrugs,
+			PatientClinicalContext context) {
 		String folded = DrugReference.foldedLower(question);
 		final Map<Object, Integer> firstAt = new HashMap<Object, Integer>();
-		Map<Object, DrugReference> rowOf = new HashMap<Object, DrugReference>();
+		Map<Object, List<DrugReference>> rowsOf = new HashMap<Object, List<DrugReference>>();
 		for (DrugReference entry : questionDrugs) {
 			for (DrugReference.NamedOccurrence occurrence : entry.namedOccurrences(folded, 0)) {
 				Integer seen = firstAt.get(entry.substanceGroupKey());
@@ -5356,13 +5365,14 @@ public class DrugReferenceInjector {
 					firstAt.put(entry.substanceGroupKey(), occurrence.getStart());
 				}
 			}
-			rowOf.putIfAbsent(entry.substanceGroupKey(), entry);
+			rowsOf.computeIfAbsent(entry.substanceGroupKey(), k -> new ArrayList<DrugReference>()).add(entry);
 		}
 		List<Object> byPosition = new ArrayList<Object>(firstAt.keySet());
 		Collections.sort(byPosition, (a, b) -> firstAt.get(a).compareTo(firstAt.get(b)));
 		Map<Object, DrugReference> ordered = new LinkedHashMap<Object, DrugReference>();
 		for (Object substance : byPosition) {
-			ordered.put(substance, rowOf.get(substance));
+			List<DrugReference> ofIt = rowsOf.get(substance);
+			ordered.put(substance, context == null ? ofIt.get(0) : DrugSafetyValidator.interactionSubject(ofIt, context));
 		}
 		return ordered;
 	}
@@ -5420,7 +5430,8 @@ public class DrugReferenceInjector {
 	 */
 	private static String composeTogetherWithHerOwn(String question, List<DrugReference> questionDrugs,
 			Set<Object> herSubstances, List<SafetyWarning> findings, List<Integer> numbers,
-			Map<String, Integer> orderRecordNumbers, Map<String, Integer> herOrderRecords, PairChipExtent pairs) {
+			Map<String, Integer> orderRecordNumbers, Map<String, Integer> herOrderRecords, PairChipExtent pairs,
+			PatientClinicalContext context) {
 		Object proposed = theOneOfTwoDrugsNotHers(question, questionDrugs, herSubstances, findings);
 		List<DrugReference> proposedRows = new ArrayList<DrugReference>();
 		for (DrugReference entry : questionDrugs) {
@@ -5430,7 +5441,7 @@ public class DrugReferenceInjector {
 		}
 		// Each of hers once, in the question's order (ADR Decision 263): "Nevirapine and Lopinavir are among …".
 		List<String> herLabels = new ArrayList<String>();
-		for (Map.Entry<Object, DrugReference> row : inTheQuestionsOrder(question, questionDrugs).entrySet()) {
+		for (Map.Entry<Object, DrugReference> row : inTheQuestionsOrder(question, questionDrugs, context).entrySet()) {
 			if (!row.getKey().equals(proposed)) {
 				herLabels.add(row.getValue().displayLabel());
 			}
@@ -5633,12 +5644,12 @@ public class DrugReferenceInjector {
 	 */
 	private static String composeAboutThePair(String question, List<DrugReference> questionDrugs, Set<Object> herSubstances,
 			List<SafetyWarning> findings, List<Integer> numbers, Map<String, Integer> orderRecordNumbers,
-			Map<String, Integer> herOrderRecords) {
+			Map<String, Integer> herOrderRecords, PatientClinicalContext context) {
 		if (questionDrugs.isEmpty()
 				|| !QueryScopeRouter.asksAboutThePairsInteraction(wordsBesideItsNames(question, questionDrugs))) {
 			return null;
 		}
-		Map<Object, DrugReference> rows = inTheQuestionsOrder(question, questionDrugs);
+		Map<Object, DrugReference> rows = inTheQuestionsOrder(question, questionDrugs, context);
 		if (rows.size() != 2) {
 			return null;
 		}

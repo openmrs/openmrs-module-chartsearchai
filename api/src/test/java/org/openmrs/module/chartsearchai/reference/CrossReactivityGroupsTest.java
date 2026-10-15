@@ -137,8 +137,9 @@ public class CrossReactivityGroupsTest {
 		//
 		// Driven through CrossReactivityGroup.sharedGroupForCodes, the production order-code entry
 		// point — the one that takes a SET because one order's concept can map to several codes
-		// (issue #171) — over the real bundled groups' own prefixes and three real WHO level-5 codes
-		// from the ATC sample: paracetamol, amoxicillin and gentamicin, none of them an NSAID. A
+		// (issue #171) — over the real bundled groups' own prefixes and three real WHO level-5 codes:
+		// paracetamol, metformin and gentamicin, none of them in a curated group. (Amoxicillin was the
+		// third until the Penicillins group claimed it, ADR Decision 229.) A
 		// non-matching set is deliberately the case chosen, because it is the one that scans every
 		// code instead of returning on the first match.
 		//
@@ -149,9 +150,9 @@ public class CrossReactivityGroupsTest {
 		}
 		assertFalse(counted.isEmpty(), "the bundled groups file must load, or this counts nothing");
 
-		Set<String> orderCodes = set("N02BE01", "J01CA04", "J01GB03");
+		Set<String> orderCodes = set("N02BE01", "A10BA02", "J01GB03");
 		assertNull(CrossReactivityGroup.sharedGroupForCodes(counted, orderCodes),
-				"paracetamol/amoxicillin/gentamicin must be in no curated group — that is what makes "
+				"paracetamol/metformin/gentamicin must be in no curated group — that is what makes "
 						+ "every code get scanned. If a curated group is ever added that claims one of "
 						+ "them, replace them with three the shipped file does not claim rather than "
 						+ "relaxing this: a matching set returns early and counts nothing.");

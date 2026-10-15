@@ -1,0 +1,233 @@
+{
+ "metadata": {
+  "note": "Verbatim DDInter slice for ADR Decision 229: benzylpenicillin (J01CE), phenoxymethylpenicillin (J01CE), amoxicillin (J01CA), cloxacillin (J01CF) and ceftriaxone (J01DD), for the Penicillins cross-reactivity group. Rows are field-for-field their rows in the shipped ddi-knowledge-base.json, in KB order, and the interaction rows are every KB pair among these five drugs, with the mechanisms they cite."
+ },
+ "mechanisms": {
+  "-1": {
+   "text": null,
+   "categories": []
+  }
+ },
+ "drugs": [
+  {
+   "id": "DDInter1445",
+   "name": "Phenoxymethylpenicillin",
+   "rxcui": "7984",
+   "rxnorm_name": "penicillin V",
+   "drugbank_id": "DB00417",
+   "atc": [
+    "J01CE02"
+   ],
+   "brand_names": [],
+   "international_names": [],
+   "abbreviations": [],
+   "ciel": [
+    {
+     "code": "72039",
+     "uuid": "72039AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Benzathine penicillin V"
+    },
+    {
+     "code": "81730",
+     "uuid": "81730AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Penicillin V"
+    },
+    {
+     "code": "81731",
+     "uuid": "81731AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Penicillin V calcium"
+    },
+    {
+     "code": "81732",
+     "uuid": "81732AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Penicillin V potassium"
+    }
+   ]
+  },
+  {
+   "id": "DDInter189",
+   "name": "Benzylpenicillin",
+   "rxcui": "7980",
+   "rxnorm_name": "penicillin G",
+   "drugbank_id": "DB01053",
+   "atc": [
+    "J01CE01",
+    "S01AA14"
+   ],
+   "brand_names": [
+    "Albadry",
+    "Bactracillin G",
+    "Bicillin",
+    "Bicillin L-A",
+    "Extencilline",
+    "Lentocilin",
+    "Norocillin",
+    "Pfizerpen"
+   ],
+   "international_names": [],
+   "abbreviations": [],
+   "ciel": [
+    {
+     "code": "81725",
+     "uuid": "81725AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Penicillin G"
+    },
+    {
+     "code": "81726",
+     "uuid": "81726AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Penicillin G potassium"
+    },
+    {
+     "code": "81727",
+     "uuid": "81727AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Penicillin G sodium"
+    },
+    {
+     "code": "81728",
+     "uuid": "81728AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Penicillin G, benzathine"
+    },
+    {
+     "code": "81729",
+     "uuid": "81729AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Penicillin G, procaine"
+    }
+   ]
+  },
+  {
+   "id": "DDInter334",
+   "name": "Ceftriaxone",
+   "rxcui": "2193",
+   "rxnorm_name": "ceftriaxone",
+   "drugbank_id": "DB01212",
+   "atc": [
+    "J01DD04"
+   ],
+   "brand_names": [],
+   "international_names": [],
+   "abbreviations": [],
+   "ciel": [
+    {
+     "code": "73041",
+     "uuid": "73041AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ceftriaxone"
+    },
+    {
+     "code": "73042",
+     "uuid": "73042AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ceftriaxone sodium"
+    }
+   ]
+  },
+  {
+   "id": "DDInter418",
+   "name": "Cloxacillin",
+   "rxcui": "2625",
+   "rxnorm_name": "cloxacillin",
+   "drugbank_id": "DB01147",
+   "atc": [
+    "J01CF02"
+   ],
+   "brand_names": [
+    "Dry Clox"
+   ],
+   "international_names": [],
+   "abbreviations": [],
+   "ciel": [
+    {
+     "code": "294",
+     "uuid": "294AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ampicillin and cloxacillin"
+    },
+    {
+     "code": "73628",
+     "uuid": "73628AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Cloxacillin"
+    },
+    {
+     "code": "73629",
+     "uuid": "73629AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Cloxacillin sodium"
+    }
+   ]
+  },
+  {
+   "id": "DDInter83",
+   "name": "Amoxicillin",
+   "rxcui": "723",
+   "rxnorm_name": "amoxicillin",
+   "drugbank_id": "DB01060",
+   "atc": [
+    "J01CA04"
+   ],
+   "brand_names": [
+    "Amoxi Drop",
+    "Amoxi-tabs",
+    "Augmentin",
+    "Betacilin",
+    "Biomox",
+    "Clavacillin",
+    "Clavamox",
+    "Kesium",
+    "Moxatag",
+    "Talicia",
+    "Trimox",
+    "Umbrellin"
+   ],
+   "international_names": [
+    "Amoxycillin"
+   ],
+   "abbreviations": [],
+   "ciel": [
+    {
+     "code": "167977",
+     "uuid": "2d7b158c-5f97-449b-b0e9-46f75c82a42f",
+     "name": "Amoxicillin / Esomeprazole / Levofloxacin combination kit"
+    },
+    {
+     "code": "167995",
+     "uuid": "a78c9f7d-87b8-4216-9153-53e14e5911aa",
+     "name": "Amoxicillin / clarithromycin / esomeprazole combination kit"
+    },
+    {
+     "code": "168005",
+     "uuid": "48f1556f-56e3-41ed-a2ba-773fa4e6de14",
+     "name": "Amoxicillin / floxacillin"
+    },
+    {
+     "code": "168663",
+     "uuid": "39559906-b467-47a7-abaa-499cf6b51562",
+     "name": "Amoxicillin / clarithromycin / vonoprazan combination kit"
+    },
+    {
+     "code": "450",
+     "uuid": "450AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Amoxicillin and clavulanic acid"
+    },
+    {
+     "code": "71160",
+     "uuid": "71160AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Amoxicillin"
+    },
+    {
+     "code": "71161",
+     "uuid": "71161AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Amoxicillin monosodium salt"
+    },
+    {
+     "code": "71162",
+     "uuid": "71162AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Amoxicillin trihydrate"
+    }
+   ]
+  }
+ ],
+ "interactions": [
+  [
+   "DDInter334",
+   "DDInter83",
+   "Unknown",
+   "-1"
+  ]
+ ]
+}

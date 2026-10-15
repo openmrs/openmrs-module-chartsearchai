@@ -16999,3 +16999,40 @@ demo re-orders every drug at each visit, so a patient on one drug there has this
   now pins the module's.
 
 Pinned by `OneActiveOrderScreenContextTest.aScreenOfOneDrugInSeveralOrdersSaysThereIsNothingElseToCheckItAgainst`.
+
+## Decision 229: A penicillin allergy is cross-reactive with every penicillin
+
+**Status: Accepted** (October 2026) — the owner's standing request of 2026-10-15 to choose what serves a clinician. A
+change to the bundled `cross-reactivity-groups.json`, as
+[Decision 195](#decision-195-the-nsaid-cross-reactivity-group-spans-the-cox-1-inhibiting-branches-and-leaves-the-cox-2-inhibitors-out)
+was.
+
+### Context
+
+ATC files the penicillins in four level-4 subgroups — extended-spectrum (`J01CA`), beta-lactamase-sensitive (`J01CE`),
+beta-lactamase-resistant (`J01CF`) and those combined with a beta-lactamase inhibitor (`J01CR`) — so no shared subgroup
+relates them, and the bundled file carried the NSAID group alone. On the 3.7.1 standalone Edward Robinson, recorded
+allergic to *"Penicillin G"*, asked *"Can I give him amoxicillin?"*, was answered *"The interaction data gives no rated
+reason to withhold Amoxicillin …"* with no allergy finding at all; Susan Lopez, allergic to amoxicillin-clavulanate, asked
+*"Is penicillin V safe for her?"*, the same. A recorded allergy to one penicillin is the textbook cross-reactivity, and
+standard guidance treats it as an allergy to them all.
+
+### The decision
+
+- **The bundled file adds a `Penicillins` group** over `J01CA`, `J01CE`, `J01CF` and `J01CR`, its reasoning in the file's
+  `rationale`. It leaves out the beta-lactamase inhibitors alone (`J01CG`), which are not penicillins, and the
+  cephalosporins and carbapenems, whose cross-reactivity with a penicillin allergy is low and which such patients are
+  often given — the shape of Decision 195's choice for the COX-2 inhibitors. This is reasoning from the pharmacology, not
+  a clinician's review.
+- What a group carries comes with it: a proposed penicillin beside a penicillin she takes states a duplicate-class
+  relationship, and *"penicillins"* in a question is a recognised drug class
+  ([Decision 67](#decision-67-a-question-naming-a-drug-class-is-told-so-rather-than-resolved-to-members-the-classification-cannot-honestly-supply)).
+- `CrossReactivityGroupsTest.aMembershipQuestionNormalizesEachGroupsPrefixesOnce_notOncePerCode` needs three codes no
+  group claims; amoxicillin is now claimed, so it uses metformin instead, as that test's own message asks.
+
+### What it leaves
+
+An allergy recorded as the drug CLASS (CIEL's *"Penicillins"*, Decision 223's case) still resolves to no substance, so it
+is still reported unchecked rather than matched to this group.
+
+Pinned by `PenicillinCrossReactivityGroupTest`, over the bundled file and a verbatim slice of the shipped knowledge base.

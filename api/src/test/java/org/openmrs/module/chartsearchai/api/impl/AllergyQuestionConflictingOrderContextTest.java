@@ -264,6 +264,57 @@ public class AllergyQuestionConflictingOrderContextTest extends BaseModuleContex
 	 * order is not one of her allergies, so the answer is the model's alone and the finding stays a chip, drawn apart
 	 * from the answer (ADR Decision 188, which leaves a cross-reactivity finding out of Decision 124's statement).
 	 */
+	/** A concept of the standard test dataset standing in for a severity concept: CD4 COUNT, which no drug resolves from. */
+	private static final int SEVERITY_PLACEHOLDER_CONCEPT = 5497;
+
+	/** Voids the aspirin allergy every case starts from and records {@code allergen} with a severity in its place. */
+	private void recordInsteadOfAspirin(String allergen, String severityProperty) {
+		Context.getPatientService().voidAllergy(Context.getPatientService().getAllergyByUuid(aspirinAllergyUuid),
+				"this case records its own allergy");
+		Context.flushSession();
+		Context.clearSession();
+		patient = Context.getPatientService().getPatient(7);
+		DrugReferenceTestSupport.recordFreeTextAllergy(patient, SECOND_PLACEHOLDER_CONCEPT, allergen,
+				SEVERITY_PLACEHOLDER_CONCEPT, severityProperty);
+	}
+
+	/**
+	 * A cross-reactivity finding names the allergy's RECORDED severity: a possible cross-reactivity with a severe
+	 * allergy is the fact a clinician weighs first, and it reached neither the answer, the chip nor the finding's record
+	 * (Betty Williams' severe aspirin allergy and ibuprofen, 2026-10-14; ADR Decision 226).
+	 */
+	@Test
+	public void search_aCrossReactivityFindingNamesTheAllergysRecordedSeverity() throws IOException {
+		recordInsteadOfAspirin("Clopidogrel", "allergy.concept.severity.severe");
+
+		ChartAnswer answer = serviceAnswering("Yes — the patient has a recorded allergy to Clopidogrel [1].",
+				CROSS_REACTIVE_SLICE).search(patient, ALLERGY_QUESTION);
+
+		SafetyWarning chip = theAspirinChip(answer);
+		assertEquals("Acetylsalicylic acid (aspirin) is in the same ATC class (B01AC) as the patient's severe allergy to Clopidogrel"
+				+ " — possible cross-reactivity", chip.getDetail());
+	}
+
+	/** And so does the identity finding, an allergy recorded to the very drug she is prescribed. */
+	@Test
+	public void search_anIdentityFindingNamesTheAllergysRecordedSeverity() throws IOException {
+		recordInsteadOfAspirin("Aspirin", "allergy.concept.severity.moderate");
+
+		ChartAnswer answer = serviceAnswering(MODEL_ANSWER).search(patient, ALLERGY_QUESTION);
+
+		assertEquals("The patient has a recorded moderate allergy to Acetylsalicylic acid (aspirin).", theAspirinChip(answer).getDetail());
+	}
+
+	/** A severity concept the install does not map to mild, moderate or severe names no severity at all. */
+	@Test
+	public void search_aSeverityTheInstallDoesNotMapIsNotNamed() throws IOException {
+		recordInsteadOfAspirin("Aspirin", null);
+
+		ChartAnswer answer = serviceAnswering(MODEL_ANSWER).search(patient, ALLERGY_QUESTION);
+
+		assertEquals("The patient has a recorded allergy to Acetylsalicylic acid (aspirin).", theAspirinChip(answer).getDetail());
+	}
+
 	@Test
 	public void search_aCrossReactiveAllergyAloneIsLeftToItsChip() throws IOException {
 		Context.getPatientService().voidAllergy(Context.getPatientService().getAllergyByUuid(aspirinAllergyUuid),

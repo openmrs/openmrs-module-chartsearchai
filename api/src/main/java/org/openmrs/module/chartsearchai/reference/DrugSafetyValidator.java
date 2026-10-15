@@ -10977,7 +10977,8 @@ public class DrugSafetyValidator {
 					chips.add(subject, implied.substanceGroupKey(), ContraindicationChips.SAME_CLASS,
 							SafetyWarning.recordedAllergenContraindication(subject.displayLabel(),
 									subject.displayLabel() + " is in the same ATC class (" + shared
-											+ ") as the patient's allergy to " + recorded.allergenName(implied)
+											+ ") as the patient's " + recorded.severityWord() + "allergy to "
+											+ recorded.allergenName(implied)
 											+ " — possible cross-reactivity", subjectIsACurrentMedication,
 									recorded.chartRecords(), SafetyWarning.AllergyToItsDrug.CROSS_REACTIVE),
 							recorded.names(implied));
@@ -10994,7 +10995,7 @@ public class DrugSafetyValidator {
 					chips.add(subject, implied.substanceGroupKey(), ContraindicationChips.SAME_GROUP,
 							SafetyWarning.recordedAllergenContraindication(subject.displayLabel(),
 									subject.displayLabel() + " is in the same cross-reactivity group ("
-											+ group.getName() + ") as the patient's allergy to "
+											+ group.getName() + ") as the patient's " + recorded.severityWord() + "allergy to "
 											+ recorded.allergenName(implied) + " — possible cross-reactivity",
 									subjectIsACurrentMedication, recorded.chartRecords(), SafetyWarning.AllergyToItsDrug.CROSS_REACTIVE),
 							recorded.names(implied));
@@ -11247,13 +11248,14 @@ public class DrugSafetyValidator {
 			// which is what the normalization rule buys; whether the map has an entry for it is that
 			// accessor's question, not one to restate here.
 			Set<String> records = context.allergyRecordsNaming(allergyToken);
+			Set<String> severities = context.allergySeveritiesNaming(allergyToken);
 			RecordedAllergen seen = resolvedAlike(out, implied);
 			if (seen == null) {
-				out.add(new RecordedAllergen(allergyToken, implied, named, records));
+				out.add(new RecordedAllergen(allergyToken, implied, named, records, severities));
 			}
 			else {
 				seen.alsoNames(named);
-				seen.alsoRecordedIn(records);
+				seen.alsoRecordedIn(records, severities);
 			}
 		}
 		return out;
@@ -11303,12 +11305,17 @@ public class DrugSafetyValidator {
 		 *  (issue #305). */
 		private final Set<String> chartRecords;
 
+		/** The severity words those records carry ({@code PatientClinicalContext.allergySeveritiesNaming}, ADR
+		 *  Decision 226), unioned across merged spellings as the records are. */
+		private final Set<String> severities;
+
 		private RecordedAllergen(String token, List<DrugReference> substances,
-				List<DrugReference> named, Set<String> chartRecords) {
+				List<DrugReference> named, Set<String> chartRecords, Set<String> severities) {
 			this.token = token;
 			this.substances = substances;
 			this.named = new ArrayList<DrugReference>(named);
 			this.chartRecords = new LinkedHashSet<String>(chartRecords);
+			this.severities = new LinkedHashSet<String>(severities);
 		}
 
 		/**
@@ -11345,8 +11352,24 @@ public class DrugSafetyValidator {
 		 * click-through depend on the order {@code PatientService} returned the allergies in, which is
 		 * the dependence this merge exists to remove.
 		 */
-		private void alsoRecordedIn(Set<String> records) {
+		private void alsoRecordedIn(Set<String> records, Set<String> recordedSeverities) {
 			chartRecords.addAll(records);
+			severities.addAll(recordedSeverities);
+		}
+
+		/**
+		 * @return the allergy's recorded severity as the word the sentences put before "allergy", with its trailing
+		 *         space — {@code "severe "} — or {@code ""} where no record of it carries one (ADR Decision 226). Where
+		 *         merged spellings carry different severities the GRAVEST is stated, the one a clinician must weigh.
+		 *         It is a fact about the patient's allergy and never a rating of the finding, so it moves no strength.
+		 */
+		private String severityWord() {
+			for (String word : new String[] { "severe", "moderate", "mild" }) {
+				if (severities.contains(word)) {
+					return word + " ";
+				}
+			}
+			return "";
 		}
 
 		/** @return the chart records this recorded allergen was read off, unmodifiable — what a finding
@@ -11389,9 +11412,9 @@ public class DrugSafetyValidator {
 		 * de-duplication rule and is not deciding a claim.
 		 */
 		private String identitySentence(DrugReference row) {
-			return names(row) ? "The patient has a recorded allergy to " + row.displayLabel() + "."
-					: row.displayLabel() + " is contraindicated by a recorded allergy to " + quotedToken()
-							+ ".";
+			return names(row) ? "The patient has a recorded " + severityWord() + "allergy to " + row.displayLabel() + "."
+					: row.displayLabel() + " is contraindicated by a recorded " + severityWord() + "allergy to "
+							+ quotedToken() + ".";
 		}
 
 		/**

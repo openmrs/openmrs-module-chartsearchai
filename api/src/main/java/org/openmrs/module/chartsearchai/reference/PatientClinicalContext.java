@@ -211,10 +211,16 @@ public class PatientClinicalContext {
 		// re-keying a copy is a no-op rather than a second normalization. Dropping them instead would be
 		// silent and fail-open — the finding would simply cite nothing, on the path that resolves the
 		// reference names for EVERY request.
-		return new PatientClinicalContext(ageYears, weightKg, activeDrugNames, activeDrugAtcCodes,
+		PatientClinicalContext copy = new PatientClinicalContext(ageYears, weightKg, activeDrugNames, activeDrugAtcCodes,
 				allergyTokens, conditionTokens, activeDrugOrders, referenceNames,
 				contraindicationRecordsRead, activeDrugOrderReadCompleted, activeDrugOrderUnaccountedFor,
 				allergyRecordUuids, conditionRecordUuids);
+		// And what the builder records after construction, already normalized, for the same fail-open reason: a copy
+		// dropping them states no allergy's severity (ADR Decision 226), which the validator reads off this copy. ADR
+		// Decision 223's non-drug set travels too, though its reader does not take the copy today.
+		copy.nonDrugAllergyTokens.addAll(nonDrugAllergyTokens);
+		copy.allergySeverities = allergySeverities;
+		return copy;
 	}
 
 	/** @return whether the allergy and condition lists were read at all — see
@@ -492,6 +498,24 @@ public class PatientClinicalContext {
 	/** @return the allergy tokens of allergies recorded as not to a drug (ADR Decision 223), never null. */
 	public Set<String> getNonDrugAllergyTokens() {
 		return Collections.unmodifiableSet(nonDrugAllergyTokens);
+	}
+
+	/**
+	 * Each allergen token's recorded severity words — {@code severe}, {@code moderate} or {@code mild}, as core's severity
+	 * global properties map the allergy's severity concept (ADR Decision 226) — keyed as {@link #allergyRecordsNaming} is.
+	 * Written once, by {@link PatientClinicalContextBuilder}; empty for a context built otherwise, and for an allergy
+	 * recorded with no severity, or one the install maps to none of the three.
+	 */
+	private Map<String, Set<String>> allergySeverities = Collections.emptyMap();
+
+	/** Called by {@link PatientClinicalContextBuilder} alone, keyed on the raw tokens it added. */
+	void recordAllergySeverities(Map<String, Set<String>> rawSeverities) {
+		allergySeverities = lowerKeys(rawSeverities);
+	}
+
+	/** @return the severity words recorded for {@code allergen}'s allergy records, never null — see {@link #allergySeverities}. */
+	Set<String> allergySeveritiesNaming(String allergen) {
+		return recordsOf(allergySeverities, allergen);
 	}
 
 	/** @return lowercased text of the patient's active conditions. */

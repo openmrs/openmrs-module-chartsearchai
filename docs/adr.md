@@ -16900,3 +16900,42 @@ the conflict, was named but could not be opened from the answer, and the owner a
 The quoted form, for an allergy recorded under another name or a rule finding, still cites only the order.
 
 Pinned by `AllergyQuestionConflictingOrderContextTest.search_theLineCitesTheRecordedAllergyAsWellAsHerOrder`.
+
+## Decision 226: An allergy finding states the allergy's recorded severity
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-14.
+
+### Context
+
+On the 3.7.1 standalone, Betty Williams (`a7090f70…`) has an aspirin allergy recorded as Severe. Asked *"Is ibuprofen
+safe for her?"*, the module raised *"Ibuprofen is in the same cross-reactivity group (NSAID) as the patient's allergy to
+Acetylsalicylic acid (aspirin) — possible cross-reactivity"*, and the answer, the chip and the finding's record all
+carried that sentence. None of them said the allergy was severe, the fact a clinician weighs first; it was on the
+allergy record alone.
+
+### The decision
+
+- **Every allergy finding states the allergy's recorded severity**: *"…as the patient's severe allergy to …"*,
+  *"The patient has a recorded severe allergy to …"*. The answer, the chip and the record are all built from that one
+  sentence, so all three carry it.
+- **The word comes from core's own mapping and never from a concept's name.** `PatientClinicalContextBuilder` reads the
+  allergy's severity concept against the three global properties core's `AllergyProperties` reads
+  (`allergy.concept.severity.severe`, `.moderate`, `.mild`). A concept mapped to none of them, "unknown" included,
+  states nothing, so a locale or a site's own concept cannot put an arbitrary word into a finding.
+- **Where merged spellings of one allergy carry different severities, the gravest is stated** — the unit
+  `DrugSafetyValidator.recordedAllergens` already merges records over.
+- **It is a fact about the allergy and moves no strength.** Strength is `DrugSafetyValidator.licensesWithholding`'s,
+  asked of the finding and never read off its prose, so "severe" changes neither the lead nor withholding. *"No severity is rated for this finding."* stays as it is: it speaks of the
+  finding, and the adjective sits on the allergy.
+- `PatientClinicalContext.withActiveDrugReferenceNames` now carries what the builder records after construction. The
+  validator reads the severities off that copy, and without it they were dropped.
+
+### What it leaves
+
+- A finding on an allergy recorded as *moderate* now holds the word "moderate", which is also a rating word.
+  `UnfoundedFindingSeverityCheck` exempts a rating the finding's own record states, so it does not report prose
+  quoting the sentence, and for the same reason it no longer reports an answer calling that finding "Moderate".
+- Reactions ("hives") are not stated.
+
+Pinned by `AllergyQuestionConflictingOrderContextTest.search_aCrossReactivityFindingNamesTheAllergysRecordedSeverity`,
+`.search_anIdentityFindingNamesTheAllergysRecordedSeverity` and `.search_aSeverityTheInstallDoesNotMapIsNotNamed`.

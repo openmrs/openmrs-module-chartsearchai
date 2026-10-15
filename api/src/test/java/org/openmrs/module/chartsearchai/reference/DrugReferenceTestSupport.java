@@ -1991,6 +1991,30 @@ public final class DrugReferenceTestSupport {
 	}
 
 	/**
+	 * As {@link #recordFreeTextAllergy(Patient, int, String)}, recording the allergy's SEVERITY as the concept
+	 * {@code severityConceptId}, and first configuring that concept as the one core's {@code severityProperty} global
+	 * property names ({@code allergy.concept.severity.severe}, {@code .moderate} or {@code .mild}) — or configuring
+	 * nothing where {@code severityProperty} is null, for a severity the install does not map.
+	 */
+	public static String recordFreeTextAllergy(Patient patient, int placeholderConceptId, String allergen,
+			int severityConceptId, String severityProperty) {
+		Concept otherNonCoded = Context.getConceptService().getConcept(placeholderConceptId);
+		Context.getAdministrationService()
+				.setGlobalProperty("allergy.concept.otherNonCoded", otherNonCoded.getUuid());
+		Concept severity = Context.getConceptService().getConcept(severityConceptId);
+		if (severityProperty != null) {
+			Context.getAdministrationService().setGlobalProperty(severityProperty, severity.getUuid());
+		}
+		Allergy allergy = new Allergy(patient,
+				new Allergen(AllergenType.DRUG, otherNonCoded, allergen), severity,
+				null, null);
+		Context.getPatientService().saveAllergy(allergy);
+		Context.flushSession();
+		Context.clearSession();
+		return allergy.getUuid();
+	}
+
+	/**
 	 * Saves an ACTIVE condition recorded as free text, and returns the saved {@code Condition}'s uuid
 	 * — which is what a querystore {@code condition} chart record carries as its resource uuid (see
 	 * {@link #conditionRecord}).

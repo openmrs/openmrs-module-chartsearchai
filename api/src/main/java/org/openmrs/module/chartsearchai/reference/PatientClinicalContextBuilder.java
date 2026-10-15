@@ -162,9 +162,12 @@ final class PatientClinicalContextBuilder {
 		Map<String, Set<String>> allergyRecords = new LinkedHashMap<String, Set<String>>();
 		Map<String, Set<String>> conditionRecords = new LinkedHashMap<String, Set<String>>();
 		Set<String> nonDrugAllergyTokens = new LinkedHashSet<String>();
+		// Each allergen token's recorded SEVERITY word, keyed as allergyRecords is (ADR Decision 226).
+		Map<String, Set<String>> allergySeverities = new LinkedHashMap<String, Set<String>>();
 
 		// Active allergies -> allergen tokens (for contraindication checks).
 		try {
+			Map<String, String> severityWords = allergySeverityWords();
 			for (Allergy allergy : Context.getPatientService().getAllergies(patient)) {
 				if (allergy.getAllergen() != null) {
 					// One row can contribute BOTH tokens — the coded allergen's name and the clinician's
@@ -173,6 +176,10 @@ final class PatientClinicalContextBuilder {
 					String free = addRaw(allergyTokens, allergy.getAllergen().getNonCodedAllergen());
 					attribute(allergyRecords, allergy.getUuid(), coded);
 					attribute(allergyRecords, allergy.getUuid(), free);
+					String severity = allergy.getSeverity() == null ? null
+							: severityWords.get(allergy.getSeverity().getUuid());
+					attribute(allergySeverities, severity, coded);
+					attribute(allergySeverities, severity, free);
 					// Which are NOT a drug's: a food or environmental allergy the drug data does not identify is
 					// no unchecked drug allergy (ADR Decision 223). An allergy with no type recorded counts as a
 					// drug's, the conservative reading.
@@ -216,7 +223,29 @@ final class PatientClinicalContextBuilder {
 				conditionTokens, activeOrders, null, contraindicationRecordsRead, activeDrugOrderReadCompleted,
 				activeDrugOrderUnaccountedFor, allergyRecords, conditionRecords);
 		built.recordNonDrugAllergyTokens(nonDrugAllergyTokens);
+		built.recordAllergySeverities(allergySeverities);
 		return built;
+	}
+
+	/**
+	 * Core's three allergy severity concepts, by uuid, each to the word a finding states it in — read off the global
+	 * properties core's own {@code AllergyProperties} reads, and nothing else (ADR Decision 226). A severity concept the
+	 * install maps to none of the three, "unknown" included, has no word and is never stated: the module never names a
+	 * severity off a concept's display, which a locale or a site's own concept could make any string at all.
+	 */
+	private static Map<String, String> allergySeverityWords() {
+		Map<String, String> words = new LinkedHashMap<String, String>();
+		putSeverityWord(words, "allergy.concept.severity.severe", "severe");
+		putSeverityWord(words, "allergy.concept.severity.moderate", "moderate");
+		putSeverityWord(words, "allergy.concept.severity.mild", "mild");
+		return words;
+	}
+
+	private static void putSeverityWord(Map<String, String> words, String property, String word) {
+		String uuid = Context.getAdministrationService().getGlobalProperty(property);
+		if (uuid != null && !uuid.trim().isEmpty() && !words.containsKey(uuid.trim())) {
+			words.put(uuid.trim(), word);
+		}
 	}
 
 	/**

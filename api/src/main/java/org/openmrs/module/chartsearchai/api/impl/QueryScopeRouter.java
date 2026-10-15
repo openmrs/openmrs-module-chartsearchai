@@ -613,19 +613,28 @@ public final class QueryScopeRouter {
 	 * Decision 203). Kept apart from {@link #TOGETHER_SHAPES} for that grammar's reason: its readers answer for drugs
 	 * proposed, and this one's single reader asks it of two drugs her own orders BOTH carry.
 	 */
-	/** "Does ibuprofen interact with celecoxib?" — a question whether two drugs INTERACT (ADR Decisions 203, 218). */
-	private static final String DOES_ONE_INTERACT_WITH_THE_OTHER = "(?:does|do|will|would|can) " + D + " interact with " + D;
+	/** A drug slot of the two-drug shapes below, which may name the drug as hers — "her methotrexate" (ADR Decision 233):
+	 *  a "her" fitted none of them, and the model answered "No — Methotrexate and Salicylic acid interact". */
+	private static final String HER_D = "(?:" + POSSESSIVE + " )?" + D;
+
+	/** "Does ibuprofen interact with celecoxib?", "Do her ibuprofen and celecoxib interact?" — a question whether two drugs
+	 *  INTERACT (ADR Decisions 203, 218, 233). */
+	private static final String DOES_ONE_INTERACT_WITH_THE_OTHER = "(?:(?:does|do|will|would|can) " + HER_D + " interact with "
+			+ HER_D + "|(?:do|will|would|can) " + HER_D + " and " + HER_D
+			+ " interact(?: with (?:each other|one another))?)";
 
 	/** "Any interactions between ibuprofen and celecoxib?", "Is there an interaction between X and Y?" (ADR Decisions 203, 218). */
 	private static final String ANY_INTERACTION_BETWEEN = "(?:are there |is there )?(?:any |an )?(?:drug )?interactions? between "
-			+ D + " and " + D;
+			+ HER_D + " and " + HER_D;
 
 	private static final List<Pattern> TWO_DRUGS_SHAPES = shapes(
 			// "Is it safe to combine ibuprofen and celecoxib?", "Is it ok to give ibuprofen with celecoxib together?"
-			"is it (?:safe|ok|okay|appropriate) to (?:combine|give|take|use) " + D + " (?:and|with) " + D + "(?: together)?",
+			"is it (?:safe|ok|okay|appropriate) to (?:combine|give|take|use) " + HER_D + " (?:and|with) " + HER_D
+					+ "(?: together)?",
 			DOES_ONE_INTERACT_WITH_THE_OTHER,
-			// "Is ibuprofen safe with celecoxib?", "Is simvastatin ok with clopidogrel?"
-			"is " + D + " (?:safe|ok|okay|compatible) (?:with|alongside) " + D,
+			// "Is ibuprofen safe with celecoxib?", "Is simvastatin ok with clopidogrel?", "Is her ibuprofen safe with her
+			// celecoxib?"
+			"is " + HER_D + " (?:safe|ok|okay|compatible) (?:with|alongside) " + HER_D,
 			ANY_INTERACTION_BETWEEN,
 			// "Can she take ibuprofen and celecoxib together?", "Can she have prednisone and ibuprofen together?" (ADR
 			// Decision 209), "Can the patient be on X and Y together?"

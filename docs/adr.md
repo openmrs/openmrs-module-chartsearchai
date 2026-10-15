@@ -17121,3 +17121,26 @@ and her pairs' interaction findings were never made, and the prompt carried only
   duplicate is the model's to answer, now with the screen's findings in its prompt.
 
 Pinned by `DuplicateTherapyQuestionTest`, over the bundled groups file and a verbatim slice of the shipped knowledge base.
+
+## Decision 233: Two drugs named as hers reach the two-drug answers
+
+**Status: Accepted** (October 2026) — the owner's standing request of 2026-10-15 to fix what misleads a clinician. It
+widens the grammar [Decisions 203](#decision-203-two-drugs-she-already-takes-asked-about-together-are-answered-with-what-relates-them--never-that-they-may-be-combined),
+218 and 220 share.
+
+### Context
+
+On the 3.7.1 standalone Helen Roberts, on methotrexate and salicylic acid, asked *"Does her methotrexate interact with
+her salicylic acid?"*, was answered by the model *"No — Methotrexate and Salicylic acid interact: …"* — a "No" leading a
+Major interaction. "Is there an interaction between her rifampicin and nevirapine?" and "Is clopidogrel safe with her
+simvastatin?" reached the model too. A "her" before either drug fitted none of the two-drug shapes, which name each drug
+bare.
+
+### The decision
+
+- **Each drug slot of the two-drug shapes may name the drug as hers** (`QueryScopeRouter.HER_D`: "her", "his", "their",
+  "the patient's"), and "Do X and Y interact (with each other)?" joins them. The answers are unchanged — Decision 203's
+  for two of her drugs, 218's for one, 220's for neither — since what is hers is read off her chart and never off the
+  word.
+
+Pinned by `OwnMedicationSafetyContextTest.twoOfHerOwnDrugsNamedAsHersAreAnsweredWithWhatRelatesThem`.

@@ -357,6 +357,23 @@ public class OwnMedicationSafetyContextTest extends BaseModuleContextSensitiveTe
 	}
 
 	@Test
+	public void twoOfHerOwnDrugsNamedAsHersAreAnsweredWithWhatRelatesThem() throws IOException {
+		// Helen Roberts' "Does her methotrexate interact with her salicylic acid?" — both hers — was answered "No —
+		// Methotrexate and Salicylic acid interact" by the model: a "her" before either drug fitted none of Decision 203's
+		// shapes, so the model wrote a "No" over a Major interaction (ADR Decision 233).
+		for (String question : Arrays.asList("Does her ibuprofen interact with her celecoxib?",
+			"Is there an interaction between her ibuprofen and celecoxib?", "Is her ibuprofen safe with her celecoxib?",
+			"Do her ibuprofen and celecoxib interact?", "Do ibuprofen and celecoxib interact with each other?")) {
+			String answer = answer(question);
+
+			assertNotNull(answer, "the module answers " + question);
+			assertTrue(answer.split("\n")[0].matches("Ibuprofen \\(Ibuprofen 400mg \\[\\d+\\]\\) and Celecoxib \\(Celecoxib 200mg "
+					+ "\\[\\d+\\]\\) are both among this patient's active medications\\. What the interaction check relates "
+					+ "between them:"), question + " was: " + answer);
+		}
+	}
+
+	@Test
 	public void twoOfHerOwnDrugsAskedAboutAsWhetherSheCanHaveThemTogetherAreAnsweredAsHers() throws IOException {
 		// Sarah Taylor's "Can she have prednisone and ibuprofen together?" — both hers — was answered "Prednisone can be
 		// given with Ibuprofen, with one caution" by the model: Decision 203's shape took "take" and not "have" (ADR

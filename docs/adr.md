@@ -17144,3 +17144,31 @@ bare.
   word.
 
 Pinned by `OwnMedicationSafetyContextTest.twoOfHerOwnDrugsNamedAsHersAreAnsweredWithWhatRelatesThem`.
+
+## Decision 234: A partner a rule names by another substance's name is printed by its own
+
+**Status: Accepted** (October 2026) — the owner's standing request of 2026-10-15 to fix what misleads a clinician. It
+extends [Decision 216](#decision-216-a-drugs-label-does-not-print-a-synonym-the-loads-check-reports-as-another-substances)
+from a row's label to the partner a rule names.
+
+### Context
+
+The shipped knowledge base files `Sulfamethoxazole` under `rxnorm_name: sulfamethazine`, a different sulfonamide, and the
+`ddinter` source makes a rule's partner token from that name, so every rule about sulfamethoxazole carries
+"sulfamethazine". Decision 216 kept the name out of the row's label, but a chip naming the PARTNER prints the rule's token
+wherever nothing reconciles it — which a co-trimoxazole order does not, its display ("Cotrimoxazole 960mg") carrying
+neither constituent and its concept's code (J01EE01) no row's. On the 3.7.1 standalone every co-trimoxazole patient read
+*"Methotrexate interacts with active order sulfamethazine"*, *"Warfarin should not be given due to a Major interaction
+with sulfamethazine"*: a drug none of them takes.
+
+### The decision
+
+- **A rule naming the very row the load's check reports, by that row's contradicted substance name, prints the row's own
+  name** (`DrugReference.Interaction.printedName`, set by `DrugReferenceValidity` beside Decision 216's label rule, read
+  first by `DrugSafetyValidator.partnerLabel`): *"Methotrexate interacts with active order Sulfamethoxazole"*. The
+  `ddinter` source records each rule's partner row, so a rule another row's substance shares a token with is never
+  renamed. The token itself stays for matching, as the row's names do under Decision 216.
+- Every rule naming that row prints it alike, so `partnerLabel` stays one grouping key per partner.
+
+Pinned by `ContradictedPartnerTokenContextTest.aCoTrimoxazoleOrderIsNamedSulfamethoxazoleAndNeverSulfamethazine`, over
+the real load of the #476 slice.

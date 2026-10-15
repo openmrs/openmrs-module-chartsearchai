@@ -3236,6 +3236,13 @@ public class DrugReference {
 
 		private String token;
 
+		/** The display name of the row this rule's partner is, where the source names one ({@code ddinter} does): see
+		 *  {@link #printedName()}. */
+		private String partnerName;
+
+		/** See {@link #printedName()}. */
+		private String printedName;
+
 		private String atc;
 
 		private String note;
@@ -3247,6 +3254,30 @@ public class DrugReference {
 		 *  for DDInter rows), or {@code null} for sources that don't rate rules (the curated
 		 *  seed) — a null severity is exempt from the validator's severity floor. */
 		private String severity;
+
+		/** @return the display name of the row this rule's partner is, or {@code null} where the source names none. */
+		public String getPartnerName() {
+			return partnerName;
+		}
+
+		public void setPartnerName(String partnerName) {
+			this.partnerName = partnerName;
+		}
+
+		/**
+		 * The name a response PRINTS for this rule's partner in place of its {@link #getToken()} — set by the load's
+		 * validity check where the token is a synonym that check reports as another substance's for the very row the rule
+		 * names (ADR Decision 234: the shipped knowledge base files Sulfamethoxazole under "sulfamethazine"), else
+		 * {@code null}. Matching keeps the token, as Decision 216 keeps the row's names.
+		 */
+		public String printedName() {
+			return printedName;
+		}
+
+		/** Called by the load's validity check alone — see {@link #printedName()}. */
+		void printAs(String name) {
+			this.printedName = name;
+		}
 
 		public String getToken() {
 			return token;

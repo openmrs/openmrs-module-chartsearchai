@@ -6432,7 +6432,10 @@ public class DrugSafetyValidator {
 	 *         callers inside the matched loop never see it
 	 */
 	static String partnerLabel(DrugReference.Interaction interaction) {
-		String label = ChartSearchAiUtils.firstNonBlank(interaction.getToken(), interaction.getAtc());
+		// The printed name first: a token the load's check reports as another substance's name for the very row the rule
+		// names is never shown (ADR Decision 234). Every rule naming that row prints it alike, so the key stays one key.
+		String label = ChartSearchAiUtils.firstNonBlank(interaction.printedName(), interaction.getToken(),
+				interaction.getAtc());
 		return label == null ? null : label.trim();
 	}
 

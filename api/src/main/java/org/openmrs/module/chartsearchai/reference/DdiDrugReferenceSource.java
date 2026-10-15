@@ -583,6 +583,8 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 			// token to start a word of that name); fall back to the display name.
 			String token = p.rxnormName != null && !p.rxnormName.isEmpty() ? p.rxnormName : p.name;
 			i.setToken(token.toLowerCase(Locale.ROOT));
+			// Which row the partner is, so the load's validity check can tell a token naming it apart (ADR Decision 234).
+			i.setPartnerName(p.name);
 			i.setAtc(p.atc.isEmpty() ? null : p.atc.get(0));
 			i.setSeverity(link.severity);
 			i.setNote(link.note);

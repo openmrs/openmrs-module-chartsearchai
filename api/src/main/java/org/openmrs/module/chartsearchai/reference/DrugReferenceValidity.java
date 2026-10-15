@@ -1240,6 +1240,23 @@ public final class DrugReferenceValidity {
 	}
 
 	/**
+	 * Has every rule naming {@code row} by its contradicted substance name {@code substance} print the row's own name
+	 * (ADR Decision 234) — a rule whose partner IS that row, by the name the source recorded for it, never merely one
+	 * carrying the same token, which another row's rules may carry for its own substance.
+	 */
+	private static void printTheRowsOwnNameForRulesNamingIt(List<DrugReference> entries, DrugReference row,
+			String substance) {
+		for (DrugReference entry : entries) {
+			for (DrugReference.Interaction rule : entry.getInteractions()) {
+				if (row.getName().equals(rule.getPartnerName()) && rule.getToken() != null
+						&& rule.getToken().trim().equalsIgnoreCase(substance.trim())) {
+					rule.printAs(row.getName());
+				}
+			}
+		}
+	}
+
+	/**
 	 * The check for issue #476: a row whose published substance name is another substance's. Neither
 	 * sibling sees the shipped case — the dataset has no row of that other substance for
 	 * {@link #reportAliasesNamingAnotherSubstance} to collide with, and nothing merged for
@@ -1353,8 +1370,10 @@ public final class DrugReferenceValidity {
 			details.add(row.getName() + " is filed as '" + substance + "', but the bridge files "
 					+ sample(elsewhere) + " on other rows and not on it");
 			// Reported, and the data left as loaded for matching; but a clinician is not shown the contradicted name as
-			// the drug's synonym (ADR Decision 216).
+			// the drug's synonym (ADR Decision 216), nor as the name of a partner a rule about this row prints (ADR
+			// Decision 234).
 			row.withholdTheContradictedGenericNameFromItsLabel();
+			printTheRowsOwnNameForRulesNamingIt(entries, row, substance);
 		}
 		if (contradicted > 0) {
 			report(SUBSTANCE_NAME_CONTRADICTED_BY_THE_BRIDGE, Remedy.REPORTED, contradicted,

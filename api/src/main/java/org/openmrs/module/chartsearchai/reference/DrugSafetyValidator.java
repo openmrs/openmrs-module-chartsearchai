@@ -1179,11 +1179,17 @@ public class DrugSafetyValidator {
 		// says no check ran for, so a screen of her own orders would put chips no one asked for beside that statement
 		// (ADR Decision 183).
 		// And where the question names two of her orders by their own names, which the reference data does not carry: it is
-		// about those two, and the screen is what relates them (ADR Decision 265).
+		// about those two, and the screen is what relates them (ADR Decision 265). So for one of them named alone, whose word
+		// in a drug's place names her order and is no unrecognised drug (ADR Decision 273).
+		boolean wordInADrugsPlace = warnInteractions && questionDrugs.isEmpty()
+				&& UnrecognisedDrugName.namesAWordInADrugsPlace(question);
+		boolean oneOfHerOrdersByName = wordInADrugsPlace
+				&& DrugReferenceInjector.asksAboutOneOfHerOrdersByName(question, context, drugReferenceService) != null;
 		if (warnInteractions && questionDrugs.isEmpty()
 				&& (QueryScopeRouter.isInteractionScreening(question)
-						|| DrugReferenceInjector.asksAboutTwoOfHerOrdersByName(question, context, drugReferenceService))
-				&& !UnrecognisedDrugName.namesAWordInADrugsPlace(question)) {
+						|| DrugReferenceInjector.asksAboutTwoOfHerOrdersByName(question, context, drugReferenceService)
+						|| oneOfHerOrdersByName)
+				&& (oneOfHerOrdersByName || !wordInADrugsPlace)) {
 			int screenedFrom = warnings.size();
 			pairExtent = addActiveOrderPairInteractions(warnings, subjects, context, severityFloor,
 					orderEntries, interactionPairs, coMedications, statedChips, bridgedOrders);

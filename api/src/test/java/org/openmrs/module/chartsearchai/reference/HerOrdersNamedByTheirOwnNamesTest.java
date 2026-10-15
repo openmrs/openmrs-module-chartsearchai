@@ -59,6 +59,26 @@ public class HerOrdersNamedByTheirOwnNamesTest extends BaseModuleContextSensitiv
 		}
 	}
 
+	/**
+	 * One of his orders named alone by its own name is answered as his medication, with what the screen relates it to (ADR
+	 * Decision 273): on the 3.7.1 standalone Michael Turner asked "Can I give him Zolvimix?" and read "The records do not
+	 * address the safety of Zolvimix." — of a drug he takes, which the check relates to his Klarizom by a Major interaction.
+	 */
+	@Test
+	public void oneOfHisOrdersNamedAloneIsAnsweredAsHisMedication() {
+		String proposal = ask("Can I give him Zolvimix?").getModuleAnswer();
+		assertTrue(proposal != null && proposal.startsWith("Zolvimix" + DrugReferenceInjector.OWN_MEDICATION_LEAD + " (Zolvimix"),
+			"was: " + proposal);
+		assertTrue(proposal.contains("adding it would duplicate that order."), "was: " + proposal);
+		assertTrue(proposal.contains("\nSimvastatin interacts with active order Clarithromycin — Major."), "was: " + proposal);
+		assertTrue(!proposal.contains("No —") && !proposal.contains("Yes —"), "was: " + proposal);
+
+		String interacts = ask("Does Zolvimix interact with his medications?").getModuleAnswer();
+		assertTrue(interacts != null && interacts.startsWith("Yes — Zolvimix interacts with this patient's other active "
+				+ "medications.\n"), "was: " + interacts);
+		assertTrue(interacts.contains("\nSimvastatin interacts with active order Clarithromycin — Major."), "was: " + interacts);
+	}
+
 	private static PatientChart ask(String question) {
 		return DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.shippedServiceWithGroups()).injectRecords(
 			DrugReferenceTestSupport.oneRecordChart(), DrugReferenceTestSupport.ctx(60, null,

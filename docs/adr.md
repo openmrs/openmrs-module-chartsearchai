@@ -18100,3 +18100,59 @@ treatment?"* — is one of `QueryScopeRouter.asksWhetherADrugInteractsWithHerMed
 findings against her orders, the group's among them.
 
 Pinned by `DrugBesideHerMedicationGroupTest`.
+
+## Decision 272: A combination a question names by one name is one drug asked about
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-15 to fix the errors left after Decision 271.
+
+### Context
+
+Since [Decision 266](#decision-266-co-trimoxazole-is-checked-as-both-of-its-ingredients-by-every-name-a-clinician-writes-it-with)
+the knowledge base names co-trimoxazole under sulfamethoxazole and trimethoprim, so *"Any interaction between her lopinavir
+and cotrimoxazole?"* put three substances in play. Every two-drug answer counted substances, and each took only two: on the
+3.7.1 standalone Ruth, on both drugs, read the model's *"Lopinavir interacts with active order sulfamethoxazole …"* with no
+severity, and Amina, on co-trimoxazole alone, asked *"Does her cotrimoxazole interact with her lopinavir?"* and was not
+told she takes no lopinavir. *"Is co-trimoxazole safe with her warfarin?"* was the model's too.
+
+### The decision
+
+- **The drugs a question asks about are its marked names** (`DrugReferenceInjector.askedDrugs`): one per run
+  `wordsBesideItsNames` marks — the unit the question shapes already read a drug in — holding every substance first named
+  inside it. A combination's name (*co-trimoxazole*, *Bactrim*) or two names joined into one product
+  (*lopinavir/ritonavir*, [Decision 217](#decision-217-a-proposal-naming-one-combination-product-is-answered-as-the-proposal-it-is)) is one drug asked about, labelled as the question wrote it; a
+  single substance keeps the row the findings name it by ([Decision 267](#decision-267-the-modules-answer-names-a-drug-it-asks-about-by-the-row-its-findings-name-it-by)).
+- **Every two-drug answer counts drugs asked about, not substances**: two of hers together
+  ([Decision 203](#decision-203-two-drugs-she-already-takes-asked-about-together-are-answered-with-what-relates-them--never-that-they-may-be-combined)), one hers and one not ([Decision 196](#decision-196-two-drugs-asked-about-together-one-of-them-hers-are-answered-for-the-other-and-her-drugs-other-findings-are-drawn-apart)), the interaction between two
+  ([Decision 264](#decision-264-what-the-interaction-between-two-drugs-is-is-answered-with-the-findings-relating-them-whole)),
+  a switch ([Decision 219](#decision-219-a-question-whether-to-switch-one-of-her-drugs-to-another-is-answered-for-the-new-drug-against-her-other-medications)), two not hers ([Decision 220](#decision-220-whether-two-drugs-neither-hers-interact-is-answered-yes-where-the-data-relates-them)) and two proposals
+  ([Decision 222](#decision-222-two-drugs-proposed-together-neither-hers-are-each-answered-as-their-own-proposal)). A finding is about a drug asked about where its subject rows are of that drug's
+  substances; one relating two ingredients of one combination is within that product, and stated as neither the pair nor
+  either drug's own.
+- **A drug the question names as hers that she does not take is said not to be**, before anything is said of it, as
+  [Decision 260](#decision-260-a-question-naming-as-hers-a-drug-she-is-not-on-says-she-is-not-on-it) says it of one drug —
+  never of "give her X", whose "her" is the patient given to.
+
+Pinned by `CombinationNamedAsOneDrugTest`.
+
+## Decision 273: One of her orders named alone by its own name is answered as her medication
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-15 to fix the errors left after Decision 271.
+
+### Context
+
+[Decision 265](#decision-265-a-question-naming-her-orders-by-their-own-names-is-about-those-orders) answered two of her
+orders named by names the reference data does not carry, and left one named alone unchanged: on the 3.7.1 standalone
+Michael Turner asked *"Can I give him Zolvimix?"* and read *"The records do not address the safety of Zolvimix."* — of a
+drug he takes, which the check relates to his Klarizom by a Major interaction.
+
+### The decision
+
+A question naming exactly one of her orders by its own name (`DrugReferenceInjector.asksAboutOneOfHerOrdersByName`), in
+a proposal shape or a shape asking whether it interacts with her medications, runs the screen of her orders (the
+validator's screening gate, where the word in a drug's place is her order and no unrecognised drug) and is answered by the
+module: *"Zolvimix is one of this patient's active medications (Zolvimix [7]), so adding it would duplicate that order.
+What the interaction check relates it to:"* — or *"Yes — Zolvimix interacts with this patient's other active
+medications."* — then each finding of the screen relating a substance of that order to another of her orders, and one it
+shares with another order. With no such finding the model answers, as before.
+
+Pinned by `HerOrdersNamedByTheirOwnNamesTest.oneOfHisOrdersNamedAloneIsAnsweredAsHisMedication`.

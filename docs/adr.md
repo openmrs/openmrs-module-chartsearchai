@@ -18058,3 +18058,23 @@ not run either.
   holds: a question stating a dose (`QueryScopeRouter.statesADose`) is never answered by the module.
 
 Pinned by `StatedDoseProposalTest`.
+
+## Decision 270: Whether to separate two drugs' doses is answered with the finding relating them, whole
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-15 to fix the errors the sweep left.
+
+### Context
+
+On the 3.7.1 standalone Rhoda, on didanosine, asked *"Should I separate the doses of ciprofloxacin and her didanosine?"*
+and the model opened *"Didanosine can be given, with one caution"* — the verdict of a proposal, about the drug she already
+takes, to a question about timing. The finding relating the two says why spacing them helps: didanosine's buffered
+formulations chelate the quinolone.
+
+### The decision
+
+A question whether to separate, space or stagger the doses of two drugs, or whether two drugs must be given apart, is one
+of [Decision 264](#decision-264-what-the-interaction-between-two-drugs-is-is-answered-with-the-findings-relating-them-whole)'s
+shapes (`QueryScopeRouter.asksAboutThePairsInteraction`): the module states what the interaction check relates between them,
+each finding whole with its mechanism, and neither "Yes" nor "No".
+
+Pinned by `TogetherWithHerOwnMedicationContextTest.whetherToSeparateTwoDrugsDosesIsAnsweredWithTheFindingWhole`.

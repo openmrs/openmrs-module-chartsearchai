@@ -782,7 +782,12 @@ public final class QueryScopeRouter {
 	/** "What is the mechanism of the interaction between simvastatin and clarithromycin?" — what relates the two, asked of
 	 *  the interaction itself (ADR Decision 264). */
 	private static final List<Pattern> ABOUT_THE_PAIRS_INTERACTION_SHAPES = shapes("(?:what|which) (?:is|are) the (?:mechanisms?"
-			+ "|cause|reason|basis) (?:of|for|behind) (?:the )?(?:drug )?interactions? between " + HER_D + " and " + HER_D);
+			+ "|cause|reason|basis) (?:of|for|behind) (?:the )?(?:drug )?interactions? between " + HER_D + " and " + HER_D,
+			// "Should I separate the doses of ciprofloxacin and her didanosine?" — the mechanism says whether spacing them
+			// helps (ADR Decision 270).
+			"(?:should|do|must|can) (?:i|we) (?:need to )?(?:separate|space|space out|stagger) (?:the )?(?:doses?|dosing"
+					+ "|administration|timing) of " + HER_D + " (?:and|from) " + HER_D,
+			"(?:should|must|do) " + HER_D + " and " + HER_D + " (?:need to )?be (?:given|taken) (?:apart|separately|at different times)");
 
 	/**
 	 * Whether a question asks what the interaction between two drugs IS — its mechanism, its cause — and nothing else (ADR

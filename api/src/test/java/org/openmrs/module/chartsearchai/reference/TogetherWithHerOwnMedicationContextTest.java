@@ -347,6 +347,23 @@ public class TogetherWithHerOwnMedicationContextTest extends BaseModuleContextSe
 		assertTrue(!answer.contains("No —") && !answer.contains("Yes —"), "neither Yes nor No: " + answer);
 	}
 
+	/**
+	 * Whether to separate two drugs' doses is answered as the mechanism is, with the finding relating them whole (ADR
+	 * Decision 270): it is the mechanism that says whether spacing them helps. On the 3.7.1 standalone Rhoda, on didanosine,
+	 * asked "Should I separate the doses of ciprofloxacin and her didanosine?" and the model opened "Didanosine can be given".
+	 */
+	@Test
+	public void whetherToSeparateTwoDrugsDosesIsAnsweredWithTheFindingWhole() {
+		for (String question : Arrays.asList("Should I separate the doses of ciprofloxacin and her didanosine?",
+			"Do I need to space out the doses of ciprofloxacin and didanosine?")) {
+			String answer = askOverTheShippedData(question, "Didanosine 250mg", "Didanosine").getModuleAnswer();
+			assertTrue(answer != null && answer.startsWith("Didanosine is one of this patient's active medications.\nWhat the "
+					+ "interaction check relates between Ciprofloxacin and Didanosine:\nCiprofloxacin interacts with active order "
+					+ "Didanosine — Moderate. Coadministration with didanosine"), question + " was: " + answer);
+			assertTrue(!answer.contains("No —") && !answer.contains("Yes —"), "neither Yes nor No: " + answer);
+		}
+	}
+
 	private static PatientChart askOverTheseOrders(String question) {
 		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
 			DrugReferenceTestSupport.activeOrder("order-nvp", "Nevirapine 200mg", "Nevirapine"),

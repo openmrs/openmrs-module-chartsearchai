@@ -178,6 +178,37 @@ final class DrugClassTerms {
 		return bestClass;
 	}
 
+	/**
+	 * The curated group a recorded allergen's WHOLE name names, or {@code null} (ADR Decision 231): the group's own name,
+	 * that name with or without a closing plural "s" ("Penicillin" for "Penicillins"), or a term of the code table above
+	 * whose class is that name ("NSAIDs" for the group "NSAID"). The whole name and never a word inside it, so an allergen
+	 * says nothing of a group unless it is that group — what {@link #namedIn} looks for in a question would put "NSAID
+	 * eye drops" in the NSAID group. A class the table names that no curated group carries has no members, so names none.
+	 *
+	 * @param allergen a recorded allergen, as the patient's context holds it; {@code null} names nothing
+	 * @param groups the curated cross-reactivity groups; {@code null} names nothing
+	 */
+	static CrossReactivityGroup groupNamedBy(String allergen, List<CrossReactivityGroup> groups) {
+		// DrugReference.normalizeName: the one identity normalisation, which the context's tokens are already in.
+		String name = DrugReference.normalizeName(allergen);
+		if (name == null || groups == null) {
+			return null;
+		}
+		String tableClass = DrugReference.normalizeName(TERMS.get(name));
+		for (CrossReactivityGroup group : groups) {
+			String groupName = group == null ? null : DrugReference.normalizeName(group.getName());
+			if (groupName == null) {
+				continue;
+			}
+			if (name.equals(groupName) || name.equals(groupName + "s")
+					|| groupName.endsWith("s") && name.equals(groupName.substring(0, groupName.length() - 1))
+					|| groupName.equals(tableClass)) {
+				return group;
+			}
+		}
+		return null;
+	}
+
 	/** Whether {@code candidate} is longer than the term already matched, {@code null} counting as no
 	 *  match at all — the comparison the longest-match rule is written in terms of, named so the two
 	 *  loops above cannot express it differently. */

@@ -68,28 +68,28 @@ public class FreeTextAllergenPlaceholderContextTest extends BaseModuleContextSen
 	@Test
 	public void thePlaceholderBehindAFreeTextAllergyIsNotReportedUnchecked() {
 		Patient patient = Context.getPatientService().getPatient(PATIENT_ON_ASPIRIN);
-		DrugReferenceTestSupport.recordFreeTextAllergy(patient, PLACEHOLDER_NAMING_NO_DRUG, "Penicillins");
+		DrugReferenceTestSupport.recordFreeTextAllergy(patient, PLACEHOLDER_NAMING_NO_DRUG, "Cephalosporins");
 
 		PatientClinicalContext context = PatientClinicalContextBuilder.build(
 			Context.getPatientService().getPatient(PATIENT_ON_ASPIRIN));
 
-		assertEquals(Arrays.asList("penicillins"), DrugSafetyValidator.unresolvedDrugAllergens(shipped(), context));
+		assertEquals(Arrays.asList("cephalosporins"), DrugSafetyValidator.unresolvedDrugAllergens(shipped(), context));
 	}
 
 	/**
-	 * The answer names the allergy as the chart records it, never the placeholder: "NSAID", where the line printed "other;
-	 * nsaid" on the standalone.
+	 * The answer names the allergy as the chart records it, never the placeholder: "ACE inhibitors", where the standalone's
+	 * line printed "other; nsaid" for George Anderson's "NSAID" — a class ADR Decision 231 now compares with its group.
 	 */
 	@Test
 	public void theUncheckedLineNamesTheFreeTextAllergenAsTheChartRecordsIt() {
 		Patient patient = Context.getPatientService().getPatient(PATIENT_ON_ASPIRIN);
-		DrugReferenceTestSupport.recordFreeTextAllergy(patient, PLACEHOLDER_NAMING_NO_DRUG, "NSAID");
+		DrugReferenceTestSupport.recordFreeTextAllergy(patient, PLACEHOLDER_NAMING_NO_DRUG, "ACE inhibitors");
 
 		String answer = ask(PATIENT_ON_ASPIRIN, "Can I give her amoxicillin?").getModuleAnswer();
 
 		assertNotNull(answer, "the module answers");
 		String[] lines = answer.split("\n");
-		assertEquals("Not checked: a recorded allergy the drug data does not identify — NSAID. Whether it covers "
+		assertEquals("Not checked: a recorded allergy the drug data does not identify — ACE inhibitors. Whether it covers "
 				+ "Amoxicillin is not established.", lines[lines.length - 1], "was: " + answer);
 	}
 

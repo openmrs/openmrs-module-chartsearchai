@@ -179,7 +179,8 @@ public class SafetyWarning {
 	enum AllergyToItsDrug {
 		/** Not the allergen arm's: a rule finding, or any other chip. */
 		NONE,
-		/** An allergy to ANOTHER drug of its class or cross-reactivity group — "possible cross-reactivity". */
+		/** An allergy to ANOTHER drug of its class or cross-reactivity group — "possible cross-reactivity" — or to the
+		 *  group itself, recorded by its name (ADR Decision 231). */
 		CROSS_REACTIVE,
 		/** The recorded name names its drug: "The patient has a recorded allergy to X." */
 		NAMED,
@@ -1456,9 +1457,9 @@ public class SafetyWarning {
 	}
 
 	/**
-	 * Whether this chip is one of the allergen arm's two cross-reactivity sentences: an allergy to another drug of its
-	 * class or group, which an allergy question leaves a chip rather than states (ADR Decision 188). Package-private
-	 * and unpublished.
+	 * Whether this chip is one of the allergen arm's cross-reactivity sentences: an allergy to another drug of its class
+	 * or group, or to a group recorded by its name (ADR Decision 231), which an allergy question leaves a chip rather
+	 * than states (ADR Decision 188). Package-private and unpublished.
 	 */
 	boolean isACrossReactivityFinding() {
 		return allergyToItsDrug == AllergyToItsDrug.CROSS_REACTIVE;

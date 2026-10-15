@@ -35,11 +35,13 @@ public class UncheckedDrugAllergyContextTest extends BaseModuleContextSensitiveT
 		// concept cannot carry both, the platform reading two non-coded allergens on it as one.
 		Context.getPatientService().saveAllergy(new Allergy(patient,
 			new Allergen(AllergenType.FOOD, Context.getConceptService().getConcept(5089), null), null, null, null));
-		record(patient, AllergenType.DRUG, "Penicillins");
+		// A drug class no curated group carries; "Penicillins", this case's first example, is compared with the Penicillins
+		// group's members since ADR Decision 231.
+		record(patient, AllergenType.DRUG, "Cephalosporins");
 
 		PatientClinicalContext context = PatientClinicalContextBuilder.build(Context.getPatientService().getPatient(7));
 
-		assertEquals(Arrays.asList("penicillins"), DrugSafetyValidator.unresolvedDrugAllergens(
+		assertEquals(Arrays.asList("cephalosporins"), DrugSafetyValidator.unresolvedDrugAllergens(
 			DrugReferenceTestSupport.shippedServiceWithGroups(), context));
 	}
 

@@ -17060,3 +17060,36 @@ naming the old drug first ("switch her nevirapine to efavirenz", "replace her ne
 
 Pinned by `SwitchingHerDrugContextTest.aSwitchNamingTheNewDrugFirstIsAnsweredTheSameWay` and
 `.aDrugGivenInsteadOfOneHeDoesNotTakeIsLeftToTheModel`.
+
+## Decision 231: An allergy recorded by a drug group's name is an allergy to the group's members
+
+**Status: Accepted** (October 2026) — the owner's standing request of 2026-10-15 to choose what serves a clinician. It
+closes what [Decision 223](#decision-223-a-recorded-drug-allergy-the-data-does-not-identify-is-said-to-be-unchecked) left:
+a path from a recorded allergen's name to a curated group.
+
+### Context
+
+An allergy is often recorded as a drug class: CIEL's *"Penicillins"* concept, a clinician's free-text *"NSAID"*. Such a
+name resolves to no substance, so the allergy arm compared nothing with it, and Decision 223 could only say so: on the
+public demo two patients recorded allergic to "Penicillins" were answered about amoxicillin *"Not checked: a recorded
+allergy the drug data does not identify — penicillins"*, and on the 3.7.1 standalone George Anderson's "NSAID" allergy
+was reported unchecked beside every drug. Decision 223 named what flagging needs: a group the module trusts, and a path
+from the allergen's name to it. The curated groups are that group — Decision 229 added Penicillins beside NSAID.
+
+### The decision
+
+- **A recorded allergen whose WHOLE name is a curated group's** (`DrugClassTerms.groupNamedBy`: the group's name, with or
+  without a closing plural "s", or a term of the class-term table naming that group, "NSAIDs") **is an allergy to every
+  member of the group**: *"Amoxicillin is in the drug group (Penicillins) the patient has a recorded allergy to."* — with
+  Decision 226's severity word where the record carries one. The whole name and never a word inside it, so "NSAID eye
+  drops" names no group. A class the table knows that no curated group carries has no members, and stays unchecked.
+- It is a cross-reactivity finding for every reader that asks (`SafetyWarning.isACrossReactivityFinding`), so an allergy
+  question leaves it a chip ([Decision 188](#decision-188-an-allergy-answer-states-only-the-orders-her-records-directly-conflict-with)),
+  and Decision 223's line no longer names the allergy, which has now been compared.
+- **A drug's own curated allergy rule naming the group states the fact instead** (`hasAnAllergyRuleNaming`): a json
+  dataset authoring "penicillin-class hypersensitivity" on amoxicillin keeps that one chip in its own words, rather than
+  two chips for one recorded allergy.
+- The cases of Decisions 223 and 227 used "Penicillins" and "NSAID" as classes the data cannot identify; they now use
+  "Cephalosporins" and "ACE inhibitors", which no curated group carries, and assert what they asserted.
+
+Pinned by `ClassNamedAllergyTest`, over the bundled groups file and verbatim slices of the shipped knowledge base.

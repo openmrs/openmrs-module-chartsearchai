@@ -11002,7 +11002,43 @@ public class DrugSafetyValidator {
 					break;
 				}
 			}
+			// An allergy recorded by a group's name, which has no substance for either comparison above: the drug is a
+			// member of the very group the allergy names (ADR Decision 231). Keyed on the group, so two such spellings
+			// and the drug stay one finding — and left to the drug's own curated allergy rule where one names that group,
+			// which states the fact in the deployment's words.
+			if (recorded.group() != null && isAMemberOf(refGroups, recorded.group())
+					&& !hasAnAllergyRuleNaming(ref, recorded.group())) {
+				chips.add(subject, "drug group " + recorded.group().getName(), ContraindicationChips.SAME_GROUP,
+						SafetyWarning.recordedAllergenContraindication(subject.displayLabel(),
+								subject.displayLabel() + " is in the drug group (" + recorded.group().getName()
+										+ ") the patient has a recorded " + recorded.severityWord() + "allergy to.",
+								subjectIsACurrentMedication, recorded.chartRecords(), SafetyWarning.AllergyToItsDrug.CROSS_REACTIVE),
+						false);
+			}
 		}
+	}
+
+	/** Whether {@code ref} carries a curated ALLERGY rule whose token names {@code group} (ADR Decision 231) — a rule the
+	 *  curated arm raises on the same recorded allergy, so the group finding would state its fact a second time. */
+	private boolean hasAnAllergyRuleNaming(DrugReference ref, CrossReactivityGroup group) {
+		for (DrugReference.Contraindication rule : ref.getContraindications()) {
+			if (isAllergyRule(rule) && DrugClassTerms.groupNamedBy(rule.getToken(),
+					Collections.singletonList(group)) != null) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/** Whether {@code group} is one of {@code refGroups}, the groups the drug checked is a member of — by name, the one
+	 *  key a group is printed and recognised by (ADR Decision 231). */
+	private static boolean isAMemberOf(List<CrossReactivityGroup> refGroups, CrossReactivityGroup group) {
+		for (CrossReactivityGroup candidate : refGroups) {
+			if (candidate.getName().equalsIgnoreCase(group.getName())) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/** @return the first of {@code allergen}'s implied substances that IS {@code refSubstance}, else
@@ -11212,9 +11248,11 @@ public class DrugSafetyValidator {
 	/**
 	 * The patient's recorded DRUG allergies the reference data resolves to no substance — the ones
 	 * {@link #recordedAllergens} skips, since there is nothing to compare — in the order the context lists them (ADR
-	 * Decision 223). An allergy recorded as a drug CLASS the data does not carry ("Penicillins") is the shape this names:
-	 * every comparison the allergy arm makes stood silent on it, and an answer saying her records were checked must say
-	 * this one was not. Food and environmental allergies are left out ({@link PatientClinicalContext#getNonDrugAllergyTokens}).
+	 * Decision 223). An allergy recorded as a drug CLASS the data does not carry ("Cephalosporins") is the shape this
+	 * names: every comparison the allergy arm makes stood silent on it, and an answer saying her records were checked
+	 * must say this one was not. A class a curated group carries ("Penicillins") is left out, being compared with the
+	 * group's members (ADR Decision 231), and so are food and environmental allergies
+	 * ({@link PatientClinicalContext#getNonDrugAllergyTokens}).
 	 */
 	static List<String> unresolvedDrugAllergens(DrugReferenceService drugReferenceService, PatientClinicalContext context) {
 		if (context == null) {
@@ -11222,8 +11260,10 @@ public class DrugSafetyValidator {
 		}
 		List<String> out = new ArrayList<String>();
 		for (String allergyToken : context.getAllergyTokens()) {
+			// A curated group's name is checked against the group's members (ADR Decision 231).
 			if (!context.getNonDrugAllergyTokens().contains(allergyToken)
-					&& drugReferenceService.findImpliedSubstances(allergyToken).isEmpty()) {
+					&& drugReferenceService.findImpliedSubstances(allergyToken).isEmpty()
+					&& DrugClassTerms.groupNamedBy(allergyToken, drugReferenceService.getCrossReactivityGroups()) == null) {
 				out.add(allergyToken);
 			}
 		}
@@ -11239,6 +11279,21 @@ public class DrugSafetyValidator {
 		for (String allergyToken : context.getAllergyTokens()) {
 			List<DrugReference> implied = drugReferenceService.findImpliedSubstances(allergyToken);
 			if (implied.isEmpty()) {
+				// A name no substance answers can still be a curated group's (ADR Decision 231): an allergy to its members.
+				// Two spellings of one group are one allergy, as two of one substance are.
+				CrossReactivityGroup group = DrugClassTerms.groupNamedBy(allergyToken,
+						drugReferenceService.getCrossReactivityGroups());
+				if (group != null) {
+					RecordedAllergen seen = toTheSameGroup(out, group);
+					if (seen == null) {
+						out.add(RecordedAllergen.toTheGroup(allergyToken, group, context.allergyRecordsNaming(allergyToken),
+								context.allergySeveritiesNaming(allergyToken)));
+					}
+					else {
+						seen.alsoRecordedIn(context.allergyRecordsNaming(allergyToken),
+								context.allergySeveritiesNaming(allergyToken));
+					}
+				}
 				continue;
 			}
 			List<DrugReference> named = drugReferenceService.findNamedSubstances(allergyToken, implied);
@@ -11259,6 +11314,17 @@ public class DrugSafetyValidator {
 			}
 		}
 		return out;
+	}
+
+	/** @return the entry of {@code out} recorded by a name of {@code group}, else null — ADR Decision 231's counterpart
+	 *          of {@link #resolvedAlike}, by the group's NAME, the one key its readers print. */
+	private static RecordedAllergen toTheSameGroup(List<RecordedAllergen> out, CrossReactivityGroup group) {
+		for (RecordedAllergen seen : out) {
+			if (seen.group() != null && seen.group().getName().equalsIgnoreCase(group.getName())) {
+				return seen;
+			}
+		}
+		return null;
 	}
 
 	/** @return the entry of {@code out} that already resolved to exactly {@code implied}, else null —
@@ -11309,13 +11375,35 @@ public class DrugSafetyValidator {
 		 *  Decision 226), unioned across merged spellings as the records are. */
 		private final Set<String> severities;
 
+		/** The curated group this allergen's whole name names where it names no substance — CIEL's "Penicillins", a
+		 *  free-text "NSAIDs" (ADR Decision 231) — else {@code null}. Such an allergen has no {@link #substances}. */
+		private final CrossReactivityGroup group;
+
 		private RecordedAllergen(String token, List<DrugReference> substances,
 				List<DrugReference> named, Set<String> chartRecords, Set<String> severities) {
+			this(token, substances, named, chartRecords, severities, null);
+		}
+
+		private RecordedAllergen(String token, List<DrugReference> substances, List<DrugReference> named,
+				Set<String> chartRecords, Set<String> severities, CrossReactivityGroup group) {
 			this.token = token;
 			this.substances = substances;
 			this.named = new ArrayList<DrugReference>(named);
 			this.chartRecords = new LinkedHashSet<String>(chartRecords);
 			this.severities = new LinkedHashSet<String>(severities);
+			this.group = group;
+		}
+
+		/** An allergy recorded by the name of {@code group} (ADR Decision 231): no substance, the group's members. */
+		private static RecordedAllergen toTheGroup(String token, CrossReactivityGroup group, Set<String> chartRecords,
+				Set<String> severities) {
+			return new RecordedAllergen(token, Collections.<DrugReference> emptyList(),
+					Collections.<DrugReference> emptyList(), chartRecords, severities, group);
+		}
+
+		/** @return the curated group this allergen's name names, or {@code null} — see {@link #group}. */
+		private CrossReactivityGroup group() {
+			return group;
 		}
 
 		/**

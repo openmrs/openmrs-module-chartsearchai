@@ -91,11 +91,13 @@ public class UnidentifiedActiveOrdersAnswerTest extends BaseModuleContextSensiti
 	 */
 	@Test
 	public void aRecordedAllergyTheDataDoesNotIdentifyIsSaidToBeUnchecked() {
-		String answer = askBesideAnAllergy("Penicillins", "Can I give her amoxicillin?").getModuleAnswer();
+		// A drug class no curated group carries; "Penicillins", the demo's own case, is compared with the Penicillins group's
+		// members since ADR Decision 231.
+		String answer = askBesideAnAllergy("Cephalosporins", "Can I give her amoxicillin?").getModuleAnswer();
 
 		assertNotNull(answer, "the module answers");
 		String[] lines = answer.split("\n");
-		assertEquals("Not checked: a recorded allergy the drug data does not identify — penicillins. Whether it covers "
+		assertEquals("Not checked: a recorded allergy the drug data does not identify — cephalosporins. Whether it covers "
 				+ "Amoxicillin is not established.", lines[lines.length - 1], "was: " + answer);
 	}
 

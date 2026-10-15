@@ -925,20 +925,29 @@ public final class QueryScopeRouter {
 	private static final Pattern CHANGE_CUES = cues("stop(?:ped|ping)?", "discontinue(?:d)?", "deprescribe(?:d)?",
 		"change(?:d|s)?", "adjust(?:ed|ment|ments)?");
 
-	/** "Should I stop any of her medications?" — a change asked about ANY of them, which is what a screen informs. */
-	private static final Pattern CHANGE_REQUEST = Pattern.compile("\\b(?:should|do|must|can) (?:i|we) (?:need to )?(?:stop|"
-			+ "change|discontinue|adjust|deprescribe|modify) (?:any|some)\\b", Pattern.CASE_INSENSITIVE);
-
 	private static final String MEDICATION_NOUN = "(?:medications?|meds|medicines?|drugs?|prescriptions?|regimens?)";
+
+	/**
+	 * "Should I stop any of her medications?" — a change asked about ANY of them, which is what a screen informs; and
+	 * "Which of her medications should I stop?" or "… should be stopped?", the same change asked of WHICH of them (ADR
+	 * Decision 241), which the model answered by choosing a drug the data does not choose.
+	 */
+	private static final Pattern CHANGE_REQUEST = Pattern.compile("\\b(?:should|do|must|can) (?:i|we) (?:need to )?(?:stop|"
+			+ "change|discontinue|adjust|deprescribe|modify) (?:any|some)\\b|\\bwhich (?:of (?:her|his|their|the patient's|"
+			+ "this patient's) )?(?:current |active )?" + MEDICATION_NOUN + " (?:(?:should|do|must|can) (?:i|we) (?:need to )?"
+			+ "(?:stop|change|discontinue|adjust|deprescribe|modify)|(?:should|must|need to|ought to) (?:be )?(?:stopped|changed"
+			+ "|discontinued|adjusted|deprescribed))\\b", Pattern.CASE_INSENSITIVE);
 
 	private static final Pattern SECOND_QUESTION = Pattern.compile("\\b(?:and|also|plus)\\s+(?:what|which|when|where|who|how|is"
 			+ "|are|does|do|did|has|have|can|could|should|list|show|tell)\\b");
 
 	// "Which of her medications should be stopped because of interactions?" asks what to CHANGE, which a screen informs,
-	// and is no request for her list (ADR Decision 207): a change asked of the medications the noun names ends it.
+	// and is no request for her list (ADR Decision 207): a change asked of the medications the noun names ends it, in
+	// either voice — "should I stop" as well (ADR Decision 241).
 	private static final Pattern ENUMERATION = Pattern.compile("\\b(?:what|which|list|show|name|tell me)\\b(?:(?!\\binteract)"
 			+ "[^?.])*\\b" + MEDICATION_NOUN + "\\b(?!\\s+(?:interact|interacting|interactions?|have any interactions|clash"
-			+ "|(?:should|must|need to|ought to) (?:be )?(?:stopped|changed|discontinued|adjusted|deprescribed|avoided)))");
+			+ "|(?:should|must|need to|ought to) (?:be )?(?:stopped|changed|discontinued|adjusted|deprescribed|avoided)"
+			+ "|(?:should|must|do|can) (?:i|we) (?:need to )?(?:stop|change|discontinue|adjust|deprescribe|modify|avoid)))");
 
 	private static final Pattern OUTSIDE_AGENT = Pattern.compile("\\b(?:interact\\w*|safe|ok|okay|fine|compatible|combined|"
 			+ "mixed|taken|given) with (?:(?:any of )?(?:her|his|their|the patient's|this patient's) (?:current |active )?"

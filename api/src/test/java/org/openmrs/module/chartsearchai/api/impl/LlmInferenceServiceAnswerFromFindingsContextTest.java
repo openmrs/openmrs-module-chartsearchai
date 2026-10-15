@@ -2821,6 +2821,30 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	}
 
 	/**
+	 * The same question in the active voice (ADR Decision 241). Measured on the 3.7.1 standalone: Rhoda Ritonavirb's
+	 * "Which of her medications should I stop?" went to the model, which answered "Nevirapine should be changed because it
+	 * interacts with Lopinavir / ritonavir" — a choice of drug the data does not make, over one of thirteen interactions.
+	 */
+	@Test
+	public void askingWhichOfHerMedicationsIShouldStopIsAScreen() throws Exception {
+		executeDataSet(WARFARIN_ORDER);
+		for (String question : new String[] { "Which of her medications should I stop?",
+				"Which of her meds should we change?", "Which medications should I discontinue?",
+				"Which of her medications should be stopped?" }) {
+			RecordingProvider provider = new RecordingProvider();
+			ChartAnswer answer = serviceWith(provider).search(patient, question);
+
+			assertEquals(0, provider.calls, question + " — the module answers: " + answer.getAnswer());
+			assertTrue(answer.isAnsweredByTheModule(), question);
+			assertTrue(answer.getAnswer().split("\n")[1].startsWith("Acetylsalicylic acid (aspirin) interacts with active order"),
+					question + " — was: " + answer.getAnswer());
+		}
+		RecordingProvider provider = new RecordingProvider();
+		serviceWith(provider).search(patient, "Which of her medications should I give with food?");
+		assertEquals(1, provider.calls, "a question about giving them with food is still the model's");
+	}
+
+	/**
 	 * A screen that related nothing is answered by the module with its own screen note, word for word, citing it (ADR
 	 * Decision 162). Until then the model answered from the note and dropped its scope — on the demo (2026-10-07)
 	 * "No interactions were found among this patient's active medications [46]", beside six orders that were never

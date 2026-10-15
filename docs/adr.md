@@ -17331,3 +17331,29 @@ nevirapine (which *"Can she take St. John's Wort?"* reports) was never stated.
 - A curly apostrophe in the question is not covered; neither is a name another dataset format carries.
 
 Pinned by `AbbreviatedDrugNameContextTest.aDrugNameWrittenWithoutItsPeriodOrApostropheResolves`.
+
+## Decision 241: "Which of her medications should I stop?" is a screen, in either voice
+
+**Status: Accepted** (October 2026) — the owner's standing request of 2026-10-15 to fix what misleads a clinician. It
+completes [Decision 207](#decision-207-asking-which-of-her-medications-to-stop-because-of-interactions-is-a-screen-not-a-request-for-her-list).
+
+### Context
+
+On the 3.7.1 standalone Rhoda Ritonavirb, on seven antiretroviral and antibiotic orders the screen relates in thirteen
+pairs, asked *"Which of her medications should I stop?"* and the model answered *"Nevirapine should be changed because
+it interacts with Lopinavir / ritonavir 200mg/50mg, a Major problem. Stavudine should be changed because it interacts
+with Didanosine"*: a choice of drug the data does not make — which side of a pair to change is the prescriber's — over
+two of the thirteen. Decision 207 had made the passive *"… should be stopped because of interactions?"* a screen; the
+active voice still read as a request for her medication list, and with no interaction word beside the change word it
+was no screen request at all.
+
+### The decision
+
+- **"Which (of her) medications should I/we stop, change, discontinue, adjust, deprescribe or modify?"**, and the
+  passive *"… should be stopped?"* without an interaction word, **are change requests** (`QueryScopeRouter.CHANGE_REQUEST`)
+  **and no request for her list** (its `ENUMERATION` exclusion): the module answers with its screen, which states every
+  pair it related and chooses no drug.
+- *"Should I stop all her medications?"* stays the model's, as Decision 182 pins, and so does a question that also asks
+  about food, a dose or a patient factor.
+
+Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.askingWhichOfHerMedicationsIShouldStopIsAScreen`.

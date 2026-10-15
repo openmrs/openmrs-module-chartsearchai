@@ -954,6 +954,7 @@ public class DrugReferenceInjector {
 		String noPairAboutHerOwn;
 		String switchAnswer;
 		String pairAnswer;
+		String aboutThePair;
 		String twoProposalsAnswer;
 		// Her active orders the drug data does not identify — once, for every composition below (ADR Decision 161).
 		List<PatientClinicalContext.ActiveDrugOrder> unidentified = context == null
@@ -1055,6 +1056,16 @@ public class DrugReferenceInjector {
 					twoOfHerOwnAskedTogether(question, questionDrugs, screenedSubstances, findings), orderRecordNumbers,
 					orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers,
 					orderEntries, context);
+		} else if (!findings.isEmpty() && context != null
+				&& ChartSearchAiUtils.getBooleanGlobalProperty(
+						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
+						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS)
+				&& context.chartReadForSafety()
+				&& (aboutThePair = composeAboutThePair(question, questionDrugs, screenedSubstances, findings, findingNumbers,
+						orderRecordNumbers,
+						orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers)) != null) {
+			// What the interaction between two drugs is: the findings relating them, whole (ADR Decision 264).
+			moduleAnswer = aboutThePair;
 		} else if (!findings.isEmpty() && context != null
 				&& ChartSearchAiUtils.getBooleanGlobalProperty(
 						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
@@ -5041,21 +5052,23 @@ public class DrugReferenceInjector {
 		List<String> words = wordsBesideItsNames(question, questionDrugs);
 		boolean interact = QueryScopeRouter.asksWhetherTwoDrugsInteract(words);
 		boolean changes = QueryScopeRouter.asksWhetherOneDrugChangesTheOther(words);
-		if (asked.size() != 2 || !QueryScopeRouter.asksWhetherToGiveDrugsTogether(words) && !interact && !changes) {
+		// Two, or one beside several of hers — "with her nevirapine and lopinavir" (ADR Decision 263).
+		if (asked.size() < 2 || asked.size() > 2 && !QueryScopeRouter.asksWhetherToGiveDrugsTogether(words)
+				|| !QueryScopeRouter.asksWhetherToGiveDrugsTogether(words) && !interact && !changes) {
 			return null;
 		}
 		Object proposed = null;
-		Object herDrug = null;
-		int hers = 0;
+		List<Object> herDrugs = new ArrayList<Object>();
+		int notHers = 0;
 		for (Object substance : asked) {
 			if (herSubstances.contains(substance)) {
-				hers++;
-				herDrug = substance;
+				herDrugs.add(substance);
 			} else {
 				proposed = substance;
+				notHers++;
 			}
 		}
-		if (hers != 1 || proposed == null) {
+		if (notHers != 1 || herDrugs.isEmpty()) {
 			return null;
 		}
 		List<SafetyWarning> ofIt = new ArrayList<SafetyWarning>();
@@ -5063,7 +5076,9 @@ public class DrugReferenceInjector {
 		for (SafetyWarning finding : findings) {
 			if (isAbout(finding, proposed)) {
 				ofIt.add(finding);
-				relatesThePair |= namesAPartnerOf(finding, herDrug);
+				for (Object herDrug : herDrugs) {
+					relatesThePair |= namesAPartnerOf(finding, herDrug);
+				}
 			}
 		}
 		// A question whether the two interact is answered "Yes" only where a finding relates them; otherwise the model
@@ -5392,15 +5407,22 @@ public class DrugReferenceInjector {
 			Set<Object> herSubstances, List<SafetyWarning> findings, List<Integer> numbers,
 			Map<String, Integer> orderRecordNumbers, Map<String, Integer> herOrderRecords, PairChipExtent pairs) {
 		Object proposed = theOneOfTwoDrugsNotHers(question, questionDrugs, herSubstances, findings);
-		String hers = null;
 		List<DrugReference> proposedRows = new ArrayList<DrugReference>();
 		for (DrugReference entry : questionDrugs) {
 			if (entry.substanceGroupKey().equals(proposed)) {
 				proposedRows.add(entry);
-			} else if (hers == null) {
-				hers = entry.displayLabel();
 			}
 		}
+		// Each of hers once, in the question's order (ADR Decision 263): "Nevirapine and Lopinavir are among …".
+		List<String> herLabels = new ArrayList<String>();
+		for (Map.Entry<Object, DrugReference> row : inTheQuestionsOrder(question, questionDrugs).entrySet()) {
+			if (!row.getKey().equals(proposed)) {
+				herLabels.add(row.getValue().displayLabel());
+			}
+		}
+		String hers = herLabels.size() == 1 ? herLabels.get(0) + OWN_MEDICATION_LEAD
+				: String.join(", ", herLabels.subList(0, herLabels.size() - 1)) + " and " + herLabels.get(herLabels.size() - 1)
+						+ " are among this patient's active medications";
 		List<SafetyWarning> ofIt = new ArrayList<SafetyWarning>();
 		List<Integer> ofItNumbers = new ArrayList<Integer>();
 		for (int i = 0; i < findings.size(); i++) {
@@ -5417,7 +5439,58 @@ public class DrugReferenceInjector {
 				: QueryScopeRouter.asksWhetherOneDrugChangesTheOther(words) ? Lead.NOT_GIVE : Lead.of(question, proposedRows);
 		String composed = composeFromFindings(ofIt, ofItNumbers, orderRecordNumbers, herOrderRecords, true, pairs,
 				lead, SCREEN_SCOPE);
-		return composed == null ? null : hers + OWN_MEDICATION_LEAD + ".\n" + composed;
+		return composed == null ? null : hers + ".\n" + composed;
+	}
+
+	/**
+	 * The module's answer to what the interaction between two drugs IS — its mechanism, its cause (ADR Decision 264) — or
+	 * {@code null} where the model answers: which of the two are hers, then <em>"What the interaction check relates between
+	 * Nevirapine and Rifampicin (rifampin):"</em> and each interaction finding relating the two, WHOLE — the mechanism is
+	 * what was asked, so the brief line a composed "No" states would leave it out — then {@link #BELOW_FLOOR_SCOPE}. Never a
+	 * verdict. Fail-closed: two substances, a finding relating them.
+	 */
+	private static String composeAboutThePair(String question, List<DrugReference> questionDrugs, Set<Object> herSubstances,
+			List<SafetyWarning> findings, List<Integer> numbers, Map<String, Integer> orderRecordNumbers,
+			Map<String, Integer> herOrderRecords) {
+		if (questionDrugs.isEmpty()
+				|| !QueryScopeRouter.asksAboutThePairsInteraction(wordsBesideItsNames(question, questionDrugs))) {
+			return null;
+		}
+		Map<Object, DrugReference> rows = inTheQuestionsOrder(question, questionDrugs);
+		if (rows.size() != 2) {
+			return null;
+		}
+		List<Object> pair = new ArrayList<Object>(rows.keySet());
+		List<String> lines = new ArrayList<String>();
+		for (int i = 0; i < findings.size(); i++) {
+			SafetyWarning finding = findings.get(i);
+			if (SafetyWarning.TYPE_INTERACTION.equals(finding.getType()) && !finding.statesOrdersSharingASubstance()
+					&& (isAbout(finding, pair.get(0)) && hasPartnerOf(finding, pair.get(1))
+							|| isAbout(finding, pair.get(1)) && hasPartnerOf(finding, pair.get(0)))) {
+				lines.add(findingLine(finding, numbers.get(i), orderRecordNumbers, herOrderRecords, false));
+			}
+		}
+		if (lines.isEmpty()) {
+			return null;
+		}
+		String first = rows.get(pair.get(0)).displayLabel();
+		String second = rows.get(pair.get(1)).displayLabel();
+		List<String> hers = new ArrayList<String>();
+		for (Object substance : pair) {
+			if (herSubstances.contains(substance)) {
+				hers.add(rows.get(substance).displayLabel());
+			}
+		}
+		List<String> lead = new ArrayList<String>();
+		if (hers.size() == 1) {
+			lead.add(hers.get(0) + OWN_MEDICATION_LEAD + ".");
+		} else if (hers.size() == 2) {
+			lead.add(hers.get(0) + " and " + hers.get(1) + " are both among this patient's active medications.");
+		}
+		lead.add("What the interaction check relates between " + first + " and " + second + ":");
+		lead.addAll(lines);
+		lead.add(BELOW_FLOOR_SCOPE);
+		return String.join("\n", lead);
 	}
 
 	/**

@@ -457,6 +457,9 @@ public final class QueryScopeRouter {
 	 *  shapes' slots too (ADR Decision 246): "Is fluconazole safe with his warfarin?" fitted none of them. */
 	private static final String HER_D = "(?:" + POSSESSIVE + " )?" + D;
 
+	/** Several drug slots after "with": "with her nevirapine and lopinavir" (ADR Decision 263). */
+	private static final String HER_DS = HER_D + "(?:(?: and)? " + HER_D + ")*";
+
 	/**
 	 * The question shapes asking whether TWO drugs may be given together, over {@link #words} with each drug's name
 	 * marked {@link #DRUG_NAME} — ADR Decision 169. A grammar for the reason {@link #PROPOSAL_SHAPES} is, and kept apart
@@ -470,23 +473,23 @@ public final class QueryScopeRouter {
 					+ " be (?:safely )?(?:given|started|prescribed|administered|taken|used)(?: together)?(?: (?:to|for) "
 					+ PATIENT + ")?(?: now| today)?",
 			"(?:can|could|may|should) " + HER_D + " be (?:safely )?(?:given|started|prescribed|administered|taken|used) (?:with|alongside) "
-					+ HER_D + "(?: (?:to|for) " + PATIENT + ")?(?: now| today)?",
+					+ HER_DS + "(?: (?:to|for) " + PATIENT + ")?(?: now| today)?",
 			// "Can I give her warfarin with ibuprofen?", "Can I give her warfarin and ibuprofen together?"
 			"(?:can|could|may|should) (?:i|we) (?:safely )?(?:give|start|prescribe|administer) (?:" + PATIENT
-					+ " )?(?:on )?" + HER_D + " (?:and|with|alongside) " + HER_D + "(?: together)?(?: to " + PATIENT
+					+ " )?(?:on )?" + HER_D + " (?:and|with|alongside) " + HER_DS + "(?: together)?(?: to " + PATIENT
 					+ ")?(?: now| today)?",
 			// "Can she take warfarin and ibuprofen together?"
 			"(?:can|could|may|should) (?:she|he|they|the patient|this patient) (?:safely )?(?:take|be given) " + HER_D
-					+ " (?:and|with|alongside) " + HER_D + "(?: together)?(?: now| today)?",
+					+ " (?:and|with|alongside) " + HER_DS + "(?: together)?(?: now| today)?",
 			// "Is it safe to give her warfarin and ibuprofen together?", "Is it safe to take warfarin with ibuprofen?", "Is it OK
 			// to co-prescribe warfarin with her ibuprofen?" (ADR Decision 250)
 			"is it (?:safe|ok|okay|appropriate) (?:for " + PATIENT + " )?to (?:(?:give|start|prescribe|co prescribe|administer) (?:"
-					+ PATIENT + " )?(?:on )?|take )" + HER_D + " (?:and|with|alongside) " + HER_D + "(?: together)?(?: for "
+					+ PATIENT + " )?(?:on )?|take )" + HER_D + " (?:and|with|alongside) " + HER_DS + "(?: together)?(?: for "
 					+ PATIENT + ")?(?: now| today)?",
 			// "Are warfarin and ibuprofen safe together?", "Is warfarin safe with ibuprofen?"
 			"are " + HER_D + " and " + HER_D + " (?:safe|ok|okay|appropriate)(?: to (?:give|take|use))?(?: together)?(?: for "
 					+ PATIENT + ")?",
-			"is " + HER_D + " (?:safe|ok|okay|appropriate) (?:with|alongside) " + HER_D + "(?: for " + PATIENT + ")?");
+			"is " + HER_D + " (?:safe|ok|okay|appropriate) (?:with|alongside) " + HER_DS + "(?: for " + PATIENT + ")?");
 
 	/**
 	 * Whether a question asks whether two drugs may be given together and nothing else — one of
@@ -774,6 +777,20 @@ public final class QueryScopeRouter {
 	}
 
 	private static final List<Pattern> TWO_DRUGS_INTERACT_SHAPES = shapes(DOES_ONE_INTERACT_WITH_THE_OTHER, ANY_INTERACTION_BETWEEN);
+
+	/** "What is the mechanism of the interaction between simvastatin and clarithromycin?" — what relates the two, asked of
+	 *  the interaction itself (ADR Decision 264). */
+	private static final List<Pattern> ABOUT_THE_PAIRS_INTERACTION_SHAPES = shapes("(?:what|which) (?:is|are) the (?:mechanisms?"
+			+ "|cause|reason|basis) (?:of|for|behind) (?:the )?(?:drug )?interactions? between " + HER_D + " and " + HER_D);
+
+	/**
+	 * Whether a question asks what the interaction between two drugs IS — its mechanism, its cause — and nothing else (ADR
+	 * Decision 264). Its answer states the findings relating the two, each whole, and neither "Yes" nor "No". Fail-CLOSED as
+	 * {@link #asksWhetherToGiveADrug} is.
+	 */
+	public static boolean asksAboutThePairsInteraction(List<String> wordsWithTheDrugsMarked) {
+		return fitsAShape(wordsWithTheDrugsMarked, ABOUT_THE_PAIRS_INTERACTION_SHAPES);
+	}
 
 	private static final List<Pattern> ONE_DRUG_CHANGES_THE_OTHER_SHAPES = shapes(DOES_ONE_CHANGE_THE_OTHER,
 			AVOID_ONE_WITH_THE_OTHER, WHAT_COMBINING_THEM_DOES, DOSE_BECAUSE_OF_THE_OTHER, STOP_OR_KEEP_ONE_FOR_THE_OTHER,

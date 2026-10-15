@@ -311,6 +311,56 @@ public class TogetherWithHerOwnMedicationContextTest extends BaseModuleContextSe
 		assertTrue(!both.contains("No —") && !both.contains("Yes —"), "neither Yes nor No: " + both);
 	}
 
+	/**
+	 * One drug asked about beside several of hers is answered for it, saying which are hers (ADR Decision 263). On the 3.7.1
+	 * standalone Rhoda Ritonavirb's "Can I give her fluconazole with her nevirapine and lopinavir?" fitted no shape — the
+	 * together grammar took one drug after "with" — and the model answered "Fluconazole can be given, with two cautions",
+	 * leaving out a third: fluconazole with her zidovudine.
+	 */
+	@Test
+	public void aDrugAskedAboutBesideSeveralOfHersIsAnsweredForItSayingWhichAreHers() {
+		String answer = askOverTheseOrders("Can I give her fluconazole with her nevirapine and lopinavir?").getModuleAnswer();
+
+		assertTrue(answer != null && answer.startsWith("Nevirapine and Lopinavir are among this patient's active medications.\n"),
+			"was: " + answer);
+		assertTrue(answer.contains("interaction cautions for Fluconazole:"), "fluconazole's own answer: " + answer);
+		assertTrue(answer.contains("\nFluconazole interacts with active order Zidovudine — Moderate. ["),
+			"every caution, the one the model left out among them: " + answer);
+		assertTrue(!answer.contains("can be given"), "never a clearance: " + answer);
+	}
+
+	/**
+	 * What the mechanism of the interaction between two drugs is, is answered with the finding relating them, its
+	 * mechanism whole, and neither "Yes" nor "No" (ADR Decision 264). On the 3.7.1 standalone Mary Smith, on simvastatin,
+	 * asked "What is the mechanism of the interaction between simvastatin and clarithromycin?" and the model opened "No —
+	 * Clarithromycin should not be given".
+	 */
+	@Test
+	public void theMechanismOfAnInteractionIsAnsweredWithTheFindingWhole() {
+		String answer = askOverTheShippedData("What is the mechanism of the interaction between nevirapine and rifampicin?",
+			"Nevirapine 200mg", "Nevirapine").getModuleAnswer();
+
+		assertTrue(answer != null && answer.startsWith("Nevirapine is one of this patient's active medications.\nWhat the "
+				+ "interaction check relates between Nevirapine and Rifampicin (rifampin):\nRifampicin (rifampin) interacts with "
+				+ "active order Nevirapine — Major. Coadministration with rifampin may substantially decrease the plasma "
+				+ "concentrations of nevirapine"), "the finding, its mechanism whole: " + answer);
+		assertTrue(!answer.contains("No —") && !answer.contains("Yes —"), "neither Yes nor No: " + answer);
+	}
+
+	private static PatientChart askOverTheseOrders(String question) {
+		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
+			DrugReferenceTestSupport.activeOrder("order-nvp", "Nevirapine 200mg", "Nevirapine"),
+			DrugReferenceTestSupport.activeOrder("order-lpv", "Lopinavir / ritonavir 200mg/50mg", "Lopinavir / ritonavir"),
+			DrugReferenceTestSupport.activeOrder("order-azt", "Lamivudine / zidovudine 150mg/300mg", "Lamivudine / zidovudine"));
+		LinkedHashSet<String> names = new LinkedHashSet<String>();
+		for (PatientClinicalContext.ActiveDrugOrder order : orders) {
+			names.addAll(order.getNames());
+		}
+		return DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.shippedServiceWithGroups()).injectRecords(
+			DrugReferenceTestSupport.oneRecordChart(), DrugReferenceTestSupport.ctx(40, null, names, null, null, null, orders),
+			question);
+	}
+
 	@Test
 	public void aQuestionWhetherHerDrugAndAnotherInteractIsLeftToTheModelWhereNoFindingRelatesThem() {
 		// Rifampicin relates to nothing of hers above the floor here, so neither "Yes" nor the proposal's "No" is the module's.

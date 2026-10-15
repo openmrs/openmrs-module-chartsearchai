@@ -17858,3 +17858,46 @@ said the question named a class, which the data cannot resolve, to ask about by 
   never resolved to members, so the answer does not say which of her drugs belong to it.
 
 Pinned by `DrugClassQuestionNoteTest.statinsAceInhibitorsAndProtonPumpInhibitorsAreClasses`.
+
+## Decision 263: One drug asked about beside several of hers is answered for it, saying which are hers
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-15 to fix the errors the sweep left. It widens
+[Decision 196](#decision-196-two-drugs-asked-about-together-one-of-them-hers-are-answered-for-the-other-and-her-drugs-other-findings-are-drawn-apart)
+from one of hers to several.
+
+### Context
+
+On the 3.7.1 standalone Rhoda Ritonavirb, on seven antiretroviral and antibiotic orders, asked *"Can I give her
+fluconazole with her nevirapine and lopinavir?"*. The together grammar took one drug after "with", so the model answered:
+*"Fluconazole can be given, with two cautions"* — a clearance, which leaves out a third Moderate caution, fluconazole with
+her zidovudine.
+
+### The decision
+
+- **A together shape may name several drugs after "with" or "and"** (`QueryScopeRouter`'s `HER_DS`): with exactly one
+  of the drugs not hers, the module says which are hers — *"Nevirapine and Lopinavir are among this patient's active
+  medications."* — then answers the other as a proposal of it alone, against all her medications: its "No", or every
+  caution about it, never a clearance. More than one drug not hers stays the model's.
+
+Pinned by `TogetherWithHerOwnMedicationContextTest.aDrugAskedAboutBesideSeveralOfHersIsAnsweredForItSayingWhichAreHers`.
+
+## Decision 264: What the interaction between two drugs is, is answered with the findings relating them, whole
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-15 to fix the errors the sweep left.
+
+### Context
+
+On the 3.7.1 standalone Mary Smith, on simvastatin, asked *"What is the mechanism of the interaction between simvastatin
+and clarithromycin?"*, and the model opened *"No — Clarithromycin should not be given:"* before the mechanism: a "No" to
+a question asking what.
+
+### The decision
+
+- **"What is the mechanism / cause / reason of the interaction between X and Y?"**
+  (`QueryScopeRouter.asksAboutThePairsInteraction`) is answered by the module (`DrugReferenceInjector`'s
+  `composeAboutThePair`): which of the two are hers, then *"What the interaction check relates between X and Y:"* and
+  each interaction finding relating them, WHOLE — the mechanism is what was asked, so the brief line a composed "No"
+  states would leave it out — then what the check does not cover. Never a verdict. With no finding relating them, the
+  model answers.
+
+Pinned by `TogetherWithHerOwnMedicationContextTest.theMechanismOfAnInteractionIsAnsweredWithTheFindingWhole`.

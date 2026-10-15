@@ -457,8 +457,9 @@ public final class QueryScopeRouter {
 			// "Can she take warfarin and ibuprofen together?"
 			"(?:can|could|may|should) (?:she|he|they|the patient|this patient) (?:safely )?(?:take|be given) " + HER_D
 					+ " (?:and|with|alongside) " + HER_D + "(?: together)?(?: now| today)?",
-			// "Is it safe to give her warfarin and ibuprofen together?", "Is it safe to take warfarin with ibuprofen?"
-			"is it (?:safe|ok|okay|appropriate) (?:for " + PATIENT + " )?to (?:(?:give|start|prescribe|administer) (?:"
+			// "Is it safe to give her warfarin and ibuprofen together?", "Is it safe to take warfarin with ibuprofen?", "Is it OK
+			// to co-prescribe warfarin with her ibuprofen?" (ADR Decision 250)
+			"is it (?:safe|ok|okay|appropriate) (?:for " + PATIENT + " )?to (?:(?:give|start|prescribe|co prescribe|administer) (?:"
 					+ PATIENT + " )?(?:on )?|take )" + HER_D + " (?:and|with|alongside) " + HER_D + "(?: together)?(?: for "
 					+ PATIENT + ")?(?: now| today)?",
 			// "Are warfarin and ibuprofen safe together?", "Is warfarin safe with ibuprofen?"

@@ -2760,6 +2760,34 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		assertTrue(both.getAnswer().contains("Tenofovir alafenamide"), "every substance the word begins: " + both.getAnswer());
 	}
 
+	/**
+	 * A two-drug question whose one drug the data recognises and whose other it does not says so of the pair (ADR Decision
+	 * 250). On the 3.7.1 standalone Helen Roberts' "Is penicillin safe with her methotrexate?" was answered by the model
+	 * "The records do not address the safety of penicillin with methotrexate." — though every penicillin the data carries is
+	 * rated Major with methotrexate: the word resolved to nothing, so nothing was checked, and nothing said so.
+	 */
+	@Test
+	public void aTwoDrugQuestionWithOneUnrecognisedNameSaysThePairWasNotChecked() throws Exception {
+		executeDataSet(WARFARIN_ORDER);
+		String[][] cases = {
+			{ "Is penicillin safe with her warfarin?", "penicillin", "Did you mean Phenoxymethylpenicillin" },
+			{ "Can I give her penicillin with her warfarin?", "penicillin", "Benzylpenicillin" },
+			{ "Is it OK to co-prescribe penicillin with her warfarin?", "penicillin", "Benzylpenicillin" },
+			{ "Does zorblatine interact with her warfarin?", "zorblatine", null } };
+		for (String[] c : cases) {
+			RecordingProvider provider = new RecordingProvider();
+			ChartAnswer answer = serviceWith(provider, shipped()).search(patient, c[0]);
+			assertEquals(0, provider.calls, c[0] + " — " + answer.getAnswer());
+			assertTrue(answer.getAnswer().startsWith("No interaction check was run for \"" + c[1] + "\" and Warfarin: \""
+					+ c[1] + "\" is not a drug name the interaction data recognises."), c[0] + " — " + answer.getAnswer());
+			if (c[2] == null) {
+				assertFalse(answer.getAnswer().contains("Did you mean"), answer.getAnswer());
+			} else {
+				assertTrue(answer.getAnswer().contains(c[2]), answer.getAnswer());
+			}
+		}
+	}
+
 	/** The unrecognised name is quoted as the question wrote it, hyphen and all (ADR Decision 245): on the 3.7.1 standalone
 	 *  "Can I give him co-trimoxazole?" was told that "co trimoxazole" is not a name the data recognises — a spelling the
 	 *  clinician never wrote, which reads as the module having misread the question. */

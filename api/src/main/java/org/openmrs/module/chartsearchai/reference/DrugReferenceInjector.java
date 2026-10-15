@@ -1161,6 +1161,18 @@ public class DrugReferenceInjector {
 		if (moduleAnswer == null && unrecognised != null) {
 			moduleAnswer = unrecognised.statement();
 		}
+		// A two-drug question whose one drug the data recognises and whose other it does not: said so, of the pair (ADR
+		// Decision 250), where nothing above answered it.
+		if (moduleAnswer == null && namedClass == null && drugReferenceService != null
+				&& ChartSearchAiUtils.getBooleanGlobalProperty(ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
+						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS)) {
+			Map<Object, DrugReference> named = inTheQuestionsOrder(question, questionDrugs);
+			UnrecognisedDrugName beside = named.size() == 1
+					? UnrecognisedDrugName.besideANamedDrug(question, questionDrugs, drugReferenceService.getAll(), context) : null;
+			if (beside != null) {
+				moduleAnswer = beside.statementBeside(named.values().iterator().next().displayLabel());
+			}
+		}
 		// An order the drug data does not identify no longer gives the question up (ADR Decision 161): the answer says
 		// which, and that it was not checked. History questions are answered below under their own gate, unchanged.
 		if (moduleAnswer != null && !unidentified.isEmpty()) {

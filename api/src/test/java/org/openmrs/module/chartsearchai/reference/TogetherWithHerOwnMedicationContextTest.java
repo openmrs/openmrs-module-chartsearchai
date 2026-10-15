@@ -169,6 +169,36 @@ public class TogetherWithHerOwnMedicationContextTest extends BaseModuleContextSe
 		assertTrue(!answer.contains("No —") && !answer.contains("Yes —"), "neither Yes nor No: " + answer);
 	}
 
+	/**
+	 * A word naming one of her own orders is her drug, checked through the order, and never said to be unrecognised (ADR
+	 * Decision 250). Measured on the 3.7.1 standalone while that decision was verified: Amina Wekesa, on "Cotrimoxazole
+	 * 960mg", asked "Is warfarin safe with her cotrimoxazole?" — "cotrimoxazole" being no name the data carries — and was
+	 * told "No interaction check was run for "cotrimoxazole" and Warfarin", beside the Major finding the check had raised
+	 * against that very order.
+	 */
+	@Test
+	public void aWordNamingHerOwnOrderIsNeverSaidToBeUnrecognised() {
+		PatientChart chart = askOverTheShippedData("Is warfarin safe with her cotrimoxazole?", "Cotrimoxazole 960mg",
+			"Sulfamethoxazole / trimethoprim");
+
+		assertTrue(chart.getText().contains("Warfarin interacts with active order"), "precondition: the check ran against her "
+				+ "order:\n" + chart.getText());
+		String answer = chart.getModuleAnswer();
+		assertTrue(answer == null || !answer.contains("No interaction check was run"), "was: " + answer);
+	}
+
+	/**
+	 * Nor is a word the question names as hers (ADR Decision 250): Ruth Ritonavira's "Will rifampicin reduce the effect of
+	 * her ARVs?" names a group of her own orders, every one of which was checked — and was told "No interaction check was
+	 * run for "ARVs" and Rifampicin (rifampin)" while that decision was verified.
+	 */
+	@Test
+	public void aWordTheQuestionNamesAsHersIsNeverSaidToBeUnrecognised() {
+		String answer = askOverTheShippedData("Will rifampicin reduce the effect of her ARVs?", "Nevirapine 200mg", "Nevirapine")
+				.getModuleAnswer();
+		assertTrue(answer == null || !answer.contains("No interaction check was run"), "was: " + answer);
+	}
+
 	@Test
 	public void aQuestionWhetherHerDrugAndAnotherInteractIsLeftToTheModelWhereNoFindingRelatesThem() {
 		// Rifampicin relates to nothing of hers above the floor here, so neither "Yes" nor the proposal's "No" is the module's.

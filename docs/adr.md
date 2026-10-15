@@ -17541,3 +17541,43 @@ effect such a question asks about — a level, an effect, a risk — so neither 
 
 Pinned by `TogetherWithHerOwnMedicationContextTest.aQuestionWhetherADrugChangesAnEffectOfHerDrugIsAnsweredWithTheFindingAndNeitherYesNorNo`
 and `.aQuestionWhetherOneOfHerDrugsChangesAnEffectOfAnotherOfHersStatesThemSideBySide`.
+
+## Decision 250: A two-drug question whose one drug the data does not recognise says the pair was not checked
+
+**Status: Accepted** (October 2026) — the owner's standing request of 2026-10-15 to fix what misleads a clinician. It
+extends [Decision 183](#decision-183-a-drug-name-the-data-does-not-recognise-is-said-to-be-unrecognised-with-the-names-it-carries-and-never-guessed)
+from one drug to a pair.
+
+### Context
+
+On the 3.7.1 standalone Helen Roberts, on methotrexate, asked *"Is penicillin safe with her methotrexate?"* and *"Is it
+OK to co-prescribe penicillin with her methotrexate?"*. The shipped knowledge base names no drug "penicillin" — it
+carries Benzylpenicillin ("Penicillin G") and Phenoxymethylpenicillin ("Penicillin V"), each rated Major with
+methotrexate — so nothing was checked, and the model answered *"The records do not address the safety of penicillin
+with methotrexate."* Decision 183 says so of a question naming one drug; a question naming a second, recognised drug
+was left to the model.
+
+### The decision
+
+- **Where a two-drug question (the together, two-drug, interact and change shapes) names one substance the data
+  recognises and stands a word it does not in the other drug's place** (`UnrecognisedDrugName.besideANamedDrug`), and
+  nothing else answered it, the module answers *"No interaction check was run for "penicillin" and Methotrexate:
+  "penicillin" is not a drug name the interaction data recognises. Did you mean Phenoxymethylpenicillin (penicillin v),
+  Benzylpenicillin (penicillin g) or …? Ask again with the name it carries."* — Decision 183's statement, scoped to the
+  pair, its suggestions found as that decision finds them.
+- **A word one of the recognised drug's own names carries is not such a word** — a combination name may be what the
+  question names, which the module cannot tell — so it stays the model's, as
+  `LlmInferenceServiceAnswerFromFindingsContextTest.aSecondDrugInsideTheFirstsCombinationNameStillAsksTheModel` pins.
+- **Nor is a word one of her active orders' names carries**: that is her drug, checked through the order whatever the
+  data calls it. Verifying this decision on the standalone found the case — Amina Wekesa, on "Cotrimoxazole 960mg",
+  asked *"Is warfarin safe with her cotrimoxazole?"* and was told no check had run, beside the Major finding the check
+  had raised against that order (`TogetherWithHerOwnMedicationContextTest.aWordNamingHerOwnOrderIsNeverSaidToBeUnrecognised`).
+- **Nor is a word the question names as hers** — *"his ARVs"*, *"her ARVs"* except where "her" is the patient a verb of
+  giving names (*"give her penicillin"*): it is something she takes, all of which was checked. The same verification found
+  Ruth Ritonavira's *"Will rifampicin reduce the effect of her ARVs?"* told no check had run
+  (`TogetherWithHerOwnMedicationContextTest.aWordTheQuestionNamesAsHersIsNeverSaidToBeUnrecognised`).
+- A finding about the recognised drug against her other orders is still raised: it was checked, and the statement says
+  only that the pair was not.
+- **"Co-prescribe" is a verb of the together shape** *"Is it OK to … X with her Y?"*, so the second question above is one.
+
+Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aTwoDrugQuestionWithOneUnrecognisedNameSaysThePairWasNotChecked`.

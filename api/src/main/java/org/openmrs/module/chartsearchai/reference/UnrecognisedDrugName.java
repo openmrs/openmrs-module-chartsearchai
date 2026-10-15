@@ -54,6 +54,13 @@ final class UnrecognisedDrugName {
 
 	private static final int MAX_SUGGESTIONS = 4;
 
+	/** The words naming what follows as the patient's own: "his ARVs", "their tablets" (ADR Decision 250). "Her" is one
+	 *  too, except as the patient a verb of {@link #GIVING} gives to — "give her penicillin". */
+	private static final Set<String> POSSESSIVES = new HashSet<String>(Arrays.asList("his", "their", "patient's"));
+
+	private static final Set<String> GIVING = new HashSet<String>(Arrays.asList("give", "start", "prescribe", "administer",
+		"add", "offer", "put", "get"));
+
 	private final String word;
 
 	private final List<String> suggestions;
@@ -71,6 +78,81 @@ final class UnrecognisedDrugName {
 	static UnrecognisedDrugName in(String question, List<DrugReference> entries) {
 		String word = wordInADrugsPlace(question);
 		return word == null ? null : new UnrecognisedDrugName(asWritten(word, question), suggestionsFor(word, entries));
+	}
+
+	/**
+	 * @return the unrecognised word standing in the OTHER drug's place of a two-drug question whose one drug the data does
+	 *         recognise — {@code questionDrugs}, one substance — with its suggestions, or {@code null} where no two-drug shape
+	 *         puts a word there, or the word is no name (ADR Decision 250). <em>"Is penicillin safe with her
+	 *         methotrexate?"</em>: the data names no drug "penicillin", so the pair was never checked, and the model answered
+	 *         "The records do not address …" beside a Major rating for every penicillin it carries.
+	 */
+	static UnrecognisedDrugName besideANamedDrug(String question, List<DrugReference> questionDrugs,
+			List<DrugReference> entries, PatientClinicalContext context) {
+		List<String> words = DrugReferenceInjector.wordsBesideItsNames(question, questionDrugs);
+		for (int length = 1; length <= 2; length++) {
+			for (int i = 0; i + length <= words.size(); i++) {
+				List<String> span = words.subList(i, i + length);
+				if (span.contains(QueryScopeRouter.DRUG_NAME)) {
+					continue;
+				}
+				List<String> marked = new ArrayList<String>(words.subList(0, i));
+				marked.add(QueryScopeRouter.DRUG_NAME);
+				marked.addAll(words.subList(i + length, words.size()));
+				if (!QueryScopeRouter.asksAboutTwoDrugsTogether(marked) && !QueryScopeRouter.asksWhetherTwoDrugsInteract(marked)
+						&& !QueryScopeRouter.asksWhetherOneDrugChangesTheOther(marked)) {
+					continue;
+				}
+				String word = String.join(" ", span);
+				// A word one of the named drug's own names carries — a combination name — is no drug apart from it: the
+				// question may be naming that combination, which the module cannot tell, so the model answers. A word one of
+				// her active orders' names carries is her drug, checked through the order: "Is warfarin safe with her
+				// cotrimoxazole?" of a patient on "Cotrimoxazole 960mg" was checked, whatever the data calls it.
+				// And a word the question names as hers — "her ARVs" — is something she takes, all of which was checked.
+				if (!isAName(span) || namedByOneOf(questionDrugs, word) || namesOneOfHerOrders(context, word)
+						|| namedAsHers(words, i)) {
+					return null;
+				}
+				return new UnrecognisedDrugName(asWritten(word, question), suggestionsFor(word, entries));
+			}
+		}
+		return null;
+	}
+
+	/** Whether the word at {@code i} of {@code words} is named as the patient's own — "her ARVs", never "give her X". */
+	private static boolean namedAsHers(List<String> words, int i) {
+		if (i == 0) {
+			return false;
+		}
+		String before = words.get(i - 1);
+		return POSSESSIVES.contains(before) || "her".equals(before) && !(i > 1 && GIVING.contains(words.get(i - 2)));
+	}
+
+	/** Whether one of her active orders' names carries {@code word} as a word of it. */
+	private static boolean namesOneOfHerOrders(PatientClinicalContext context, String word) {
+		if (context == null) {
+			return false;
+		}
+		for (PatientClinicalContext.ActiveDrugOrder order : context.getActiveDrugOrders()) {
+			for (String name : order.getNames()) {
+				if (name != null && DrugReference.containsWord(name, word)) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	/** Whether one of {@code entries}' names carries {@code word} as a word of it. */
+	private static boolean namedByOneOf(List<DrugReference> entries, String word) {
+		for (DrugReference entry : entries) {
+			for (String alias : entry.getAliases()) {
+				if (DrugReference.containsWord(alias, word)) {
+					return true;
+				}
+			}
+		}
+		return false;
 	}
 
 	/**
@@ -196,8 +278,21 @@ final class UnrecognisedDrugName {
 	 * Rifampicin (rifampin)? Ask again with the name it carries."</em> — or without the suggestion where there is none.
 	 */
 	String statement() {
-		StringBuilder sb = new StringBuilder("No interaction check was run: \"").append(word)
-				.append("\" is not a drug name the interaction data recognises.");
+		return withSuggestions(new StringBuilder("No interaction check was run: \"").append(word)
+				.append("\" is not a drug name the interaction data recognises."));
+	}
+
+	/**
+	 * <em>"No interaction check was run for "penicillin" and Methotrexate: "penicillin" is not a drug name the interaction
+	 * data recognises. Did you mean …?"</em> — {@link #statement} for a two-drug question whose other drug, {@code
+	 * namedDrug}, the data does recognise, so that what was not checked is the pair (ADR Decision 250).
+	 */
+	String statementBeside(String namedDrug) {
+		return withSuggestions(new StringBuilder("No interaction check was run for \"").append(word).append("\" and ")
+				.append(namedDrug).append(": \"").append(word).append("\" is not a drug name the interaction data recognises."));
+	}
+
+	private String withSuggestions(StringBuilder sb) {
 		if (!suggestions.isEmpty()) {
 			sb.append(" Did you mean ");
 			for (int i = 0; i < suggestions.size(); i++) {

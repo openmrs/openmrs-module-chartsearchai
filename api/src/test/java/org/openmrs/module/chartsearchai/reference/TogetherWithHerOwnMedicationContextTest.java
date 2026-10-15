@@ -174,6 +174,26 @@ public class TogetherWithHerOwnMedicationContextTest extends BaseModuleContextSe
 		}
 	}
 
+	/**
+	 * Whether to stop or keep her drug for another, or to monitor the two, is answered with the finding and neither "Yes" nor
+	 * "No" (ADR Decision 252). On the 3.7.1 standalone Carol Brown's "Do I need to stop her simvastatin before starting
+	 * clarithromycin?" and "Does she need potassium monitoring on lisinopril and spironolactone?" were answered by the model
+	 * "No — Clarithromycin should not be started" and "No — Spironolactone should not be given": a "No" to whether to stop
+	 * it, and to whether to monitor.
+	 */
+	@Test
+	public void stoppingOrKeepingHerDrugForAnotherAndMonitoringBothAreAnsweredWithTheFindingAndNeitherYesNorNo() {
+		for (String question : Arrays.asList("Do I need to stop her nevirapine before starting rifampicin?",
+			"Should I stop her nevirapine before giving rifampicin?", "Can she continue her nevirapine if I start rifampicin?",
+			"Does she need monitoring on nevirapine and rifampicin?", "Does she need any monitoring if I add rifampicin to her nevirapine?")) {
+			String answer = askOverTheShippedData(question, "Nevirapine 200mg", "Nevirapine").getModuleAnswer();
+
+			assertTrue(answer != null && answer.startsWith("Nevirapine is one of this patient's active medications.\n"
+					+ DrugReferenceInjector.NEUTRAL_WITHHOLD_LEAD_OPENING + "Rifampicin (rifampin).\n"), question + " was: " + answer);
+			assertTrue(!answer.contains("No —") && !answer.contains("Yes —"), "neither Yes nor No: " + answer);
+		}
+	}
+
 	@Test
 	public void aQuestionWhetherOneOfHerDrugsChangesAnEffectOfAnotherOfHersStatesThemSideBySide() {
 		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(

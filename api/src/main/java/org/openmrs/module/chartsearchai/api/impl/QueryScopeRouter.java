@@ -505,11 +505,18 @@ public final class QueryScopeRouter {
 	private static final String TWO_OF_HER_MEDICATION_GROUPS_INTERACT = "(?:does|do|will|would) " + HER_MEDICATION_GROUP
 			+ " interact with " + HER_MEDICATION_GROUP;
 
-	/** That shape alone — the one screen shape naming no medication word the trigger's own cues know (ADR Decision 221). */
-	private static final List<Pattern> MEDICATION_GROUPS_SHAPES = shapes(TWO_OF_HER_MEDICATION_GROUPS_INTERACT);
+	/** "Is it safe to continue all her ARVs together?", "Are her ARVs safe together?" — whether a group of her own
+	 *  medications is safe together, a screen of them (ADR Decision 254). */
+	private static final String HER_MEDICATION_GROUP_SAFE_TOGETHER = "(?:is it (?:safe|ok|okay|fine|appropriate) to (?:continue"
+			+ "|give|take|keep|use|combine) (?:all )?(?:of )?" + HER_MEDICATION_GROUP + "|are (?:all )?(?:of )?" + HER_MEDICATION_GROUP
+			+ " (?:safe|ok|okay|fine)(?: to (?:take|give|continue))?) together";
+
+	/** The screen shapes naming no medication word the trigger's own cues know (ADR Decisions 221, 254). */
+	private static final List<Pattern> MEDICATION_GROUPS_SHAPES = shapes(TWO_OF_HER_MEDICATION_GROUPS_INTERACT,
+			HER_MEDICATION_GROUP_SAFE_TOGETHER);
 
 	private static final List<Pattern> SCREEN_SHAPES = shapes(
-			TWO_OF_HER_MEDICATION_GROUPS_INTERACT,
+			TWO_OF_HER_MEDICATION_GROUPS_INTERACT, HER_MEDICATION_GROUP_SAFE_TOGETHER,
 			// "Are there any drug interactions with her current medications?"
 			"(?:are|is) there (?:any )?(?:drug )?interactions? (?:with|between|among) " + POSSESSIVE + " " + MEDICATIONS,
 			// "Are any of her current medications interacting with each other?", "Do any of her meds
@@ -674,6 +681,20 @@ public final class QueryScopeRouter {
 			+ "|what (?:is|are) the (?:risks?|dangers?) (?:of|in) (?:combining|giving|using|taking|adding) " + HER_D
 			+ " (?:and|with|to) " + HER_D + ")(?: together)?";
 
+	/** "Do I need to stop her simvastatin before starting clarithromycin?", "Can she continue her simvastatin if I start
+	 *  clarithromycin?" — whether to stop or keep her drug for another (ADR Decision 252). */
+	private static final String STOP_OR_KEEP_ONE_FOR_THE_OTHER = "(?:(?:(?:do|will) (?:i|we) (?:need|have) to|should (?:i|we))"
+			+ " (?:stop|hold|pause|suspend|discontinue) " + HER_D + " (?:before|when|while|if) (?:starting|giving|adding|prescribing"
+			+ "|(?:i|we) (?:start|give|add|prescribe)) " + D + "|(?:can|could|should) (?:she|he|they|the patient|this patient)"
+			+ " (?:continue|keep taking|stay on|remain on) " + HER_D + " (?:if|when|while) (?:i|we) (?:start|give|add|prescribe) "
+			+ D + ")";
+
+	/** "Does she need potassium monitoring on lisinopril and spironolactone?", "Does she need monitoring if I add
+	 *  spironolactone to her lisinopril?" — whether the two need monitoring (ADR Decision 252). */
+	private static final String MONITORING_ON_BOTH = "(?:does|do|will|would) (?:she|he|they|the patient|this patient) need"
+			+ " (?:any )?(?:[a-z]+ )?monitoring (?:(?:on|with|for|while on) " + HER_D + " and " + HER_D + "(?: together)?|(?:if|when)"
+			+ " (?:i|we) (?:add|give|start|prescribe) " + D + " (?:to|with) " + HER_D + ")";
+
 	private static final String DOSE_BECAUSE_OF_THE_OTHER = "should " + POSSESSIVE + " " + D + " dose be (?:reduced|lowered"
 			+ "|decreased|increased|raised|adjusted|changed)(?: (?:because of|due to|with|for) (?:the |" + POSSESSIVE + " )?" + D
 			+ "| if (?:i|we) (?:add|give|start|prescribe) " + D + ")";
@@ -688,6 +709,7 @@ public final class QueryScopeRouter {
 					+ "(?: together)?",
 			DOES_ONE_INTERACT_WITH_THE_OTHER,
 			DOES_ONE_CHANGE_THE_OTHER, AVOID_ONE_WITH_THE_OTHER, WHAT_COMBINING_THEM_DOES, DOSE_BECAUSE_OF_THE_OTHER,
+			STOP_OR_KEEP_ONE_FOR_THE_OTHER, MONITORING_ON_BOTH,
 			// "Is ibuprofen safe with celecoxib?", "Is simvastatin ok with clopidogrel?", "Is her ibuprofen safe with her
 			// celecoxib?"
 			"is " + HER_D + " (?:safe|ok|okay|compatible) (?:with|alongside) " + HER_D,
@@ -708,13 +730,14 @@ public final class QueryScopeRouter {
 	private static final List<Pattern> TWO_DRUGS_INTERACT_SHAPES = shapes(DOES_ONE_INTERACT_WITH_THE_OTHER, ANY_INTERACTION_BETWEEN);
 
 	private static final List<Pattern> ONE_DRUG_CHANGES_THE_OTHER_SHAPES = shapes(DOES_ONE_CHANGE_THE_OTHER,
-			AVOID_ONE_WITH_THE_OTHER, WHAT_COMBINING_THEM_DOES, DOSE_BECAUSE_OF_THE_OTHER);
+			AVOID_ONE_WITH_THE_OTHER, WHAT_COMBINING_THEM_DOES, DOSE_BECAUSE_OF_THE_OTHER, STOP_OR_KEEP_ONE_FOR_THE_OTHER,
+			MONITORING_ON_BOTH);
 
 	/**
 	 * Whether a question asks whether one of two drugs changes a particular effect of the other — {@link
 	 * #DOES_ONE_CHANGE_THE_OTHER} (ADR Decision 249) — or what else it does beside it, whose "No" would read backwards
 	 * ({@link #AVOID_ONE_WITH_THE_OTHER}, {@link #WHAT_COMBINING_THEM_DOES}, {@link #DOSE_BECAUSE_OF_THE_OTHER}; ADR
-	 * Decision 251), and nothing else. Its answer states what relates the pair and neither "Yes" nor "No". Fail-CLOSED as
+	 * Decision 251; {@link #STOP_OR_KEEP_ONE_FOR_THE_OTHER}, {@link #MONITORING_ON_BOTH}; ADR Decision 252), and nothing else. Its answer states what relates the pair and neither "Yes" nor "No". Fail-CLOSED as
 	 * {@link #asksWhetherToGiveADrug} is.
 	 */
 	public static boolean asksWhetherOneDrugChangesTheOther(List<String> wordsWithTheDrugsMarked) {
@@ -724,13 +747,13 @@ public final class QueryScopeRouter {
 	/**
 	 * The question shapes asking whether to SWITCH one drug to another, the drug switched FROM named first (ADR Decision
 	 * 219): "Can I switch her nevirapine to efavirenz?", "Can I switch her from nevirapine to efavirenz?", "Can I replace
-	 * her nevirapine with efavirenz?", "Is it safe to switch nevirapine to efavirenz?".
+	 * her nevirapine with efavirenz?", "Is it safe to switch nevirapine to efavirenz?"; and "swap" (ADR Decision 253).
 	 */
 	private static final List<Pattern> SWITCH_SHAPES = shapes(
-			"(?:can|could|may|should) (?:i|we) (?:switch|change) (?:" + PATIENT + " (?:from )?|" + POSSESSIVE + " |from )?" + D
+			"(?:can|could|may|should) (?:i|we) (?:switch|change|swap) (?:" + PATIENT + " (?:from )?|" + POSSESSIVE + " |from )?" + D
 					+ " (?:to|for) " + D + "(?: now| today)?",
 			"(?:can|could|may|should) (?:i|we) replace (?:" + POSSESSIVE + " )?" + D + " (?:with|by) " + D + "(?: now| today)?",
-			"is it (?:safe|ok|okay|appropriate) to (?:switch|change) (?:" + PATIENT + " (?:from )?|" + POSSESSIVE + " |from )?" + D
+			"is it (?:safe|ok|okay|appropriate) to (?:switch|change|swap) (?:" + PATIENT + " (?:from )?|" + POSSESSIVE + " |from )?" + D
 					+ " (?:to|for) " + D,
 			"is it (?:safe|ok|okay|appropriate) to replace (?:" + POSSESSIVE + " )?" + D + " (?:with|by) " + D);
 

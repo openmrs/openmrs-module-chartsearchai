@@ -59,6 +59,24 @@ public class SwitchingHerDrugContextTest extends BaseModuleContextSensitiveTest 
 		}
 	}
 
+	/**
+	 * "Swap" is a switch (ADR Decision 253). On the 3.7.1 standalone Donald Thompson's "Can I swap his atorvastatin for
+	 * rosuvastatin?" fitted no shape, and the model answered "No — Rosuvastatin should not be given … as Rosuvastatin is in
+	 * the same ATC class (C10AA) as active order Atorvastatin": a duplicate of the very order the swap stops.
+	 */
+	@Test
+	public void aSwapIsASwitch() {
+		for (String question : Arrays.asList("Can I swap his nevirapine for efavirenz?", "Can I swap his nevirapine to efavirenz?",
+			"Is it safe to swap nevirapine for efavirenz?")) {
+			String answer = ask(question).getModuleAnswer();
+
+			assertNotNull(answer, "the module answers " + question);
+			assertTrue(answer.split("\n")[0].equals("Nevirapine is one of this patient's active medications, and this switch "
+					+ "replaces it."), question + " was: " + answer);
+			assertTrue(!answer.contains("No —"), "the order the swap stops is no reason to withhold: " + answer);
+		}
+	}
+
 	@Test
 	public void aSwitchToADrugSheAlreadyTakesOrFromOneSheDoesNotIsLeftToTheModel() {
 		assertNull(ask("Can I switch his lamivudine to nevirapine?").getModuleAnswer(), "the new drug is already his");

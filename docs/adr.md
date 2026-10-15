@@ -17612,3 +17612,65 @@ first word reads the opposite of the finding.
 
 Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.moreQuestionsWhoseNoWouldReadBackwardsAreAnsweredWithoutAYesOrNo`
 and `TogetherWithHerOwnMedicationContextTest.whatADrugDoesBesideHerDrugIsAnsweredWithTheFindingAndNeitherYesNorNo`.
+
+## Decision 252: Whether to stop or keep her drug for another, or to monitor the two, is answered with neither "Yes" nor "No"
+
+**Status: Accepted** (October 2026) — the owner's standing request of 2026-10-15 to fix what misleads a clinician. It
+widens [Decision 251](#decision-251-more-questions-whose-no-would-read-backwards-are-answered-with-the-finding-and-neither-yes-nor-no)'s
+two-drug question.
+
+### Context
+
+On the 3.7.1 standalone Carol Brown's *"Do I need to stop her simvastatin before starting clarithromycin?"* was answered
+*"No — Clarithromycin should not be started with Simvastatin"* — to a clinician reading the first word, no need to stop
+the simvastatin — and *"Does she need potassium monitoring on lisinopril and spironolactone?"* was answered *"No —
+Spironolactone should not be given"*: no monitoring, beside the hyperkalaemia the finding describes.
+
+### The decision
+
+- **"Do I need to / Should I stop (hold, pause, suspend, discontinue) her Y before starting X?"**, **"Can she continue her
+  Y if I start X?"**, **"Does she need (… ) monitoring on Y and X?"** and **"… monitoring if I add X to her Y?"** are
+  Decision 249's question (`QueryScopeRouter.asksWhetherOneDrugChangesTheOther`), answered with the finding and neither
+  "Yes" nor "No"; whether to stop, keep or monitor is left to the clinician the finding informs.
+
+Pinned by `TogetherWithHerOwnMedicationContextTest.stoppingOrKeepingHerDrugForAnotherAndMonitoringBothAreAnsweredWithTheFindingAndNeitherYesNorNo`.
+
+## Decision 253: "Swap" is a switch
+
+**Status: Accepted** (October 2026) — the owner's standing request of 2026-10-15 to fix what misleads a clinician. It
+widens [Decision 219](#decision-219-a-question-whether-to-switch-one-of-her-drugs-to-another-is-answered-for-the-new-drug-against-her-other-medications)'s
+grammar.
+
+### Context
+
+On the 3.7.1 standalone Donald Thompson's *"Can I swap his atorvastatin for rosuvastatin?"* fitted no shape, and the
+model answered *"No — Rosuvastatin should not be given: … Rosuvastatin is in the same ATC class (C10AA) as active order
+Atorvastatin"*: a duplicate of the very order the swap would stop.
+
+### The decision
+
+- **"Swap" is one of the switch verbs** (`QueryScopeRouter.SWITCH_SHAPES`, beside "switch" and "change"), so *"Can I swap
+  his atorvastatin for rosuvastatin?"* gets Decision 219's answer: the new drug against her other medications, and what
+  relates it to the order it replaces stated apart.
+
+Pinned by `SwitchingHerDrugContextTest.aSwapIsASwitch`.
+
+## Decision 254: Whether a group of her medications is safe together is a screen of them
+
+**Status: Accepted** (October 2026) — the owner's standing request of 2026-10-15 to fix what misleads a clinician. It
+widens [Decision 221](#decision-221-whether-two-groups-of-her-own-medications-interact-is-a-screen-of-her-medications)'s
+grammar.
+
+### Context
+
+On the 3.7.1 standalone Rhoda Ritonavirb's *"Is it safe to continue all her ARVs together?"* ran no screen — "ARVs" is
+none of the medication words — and the model answered *"The records do not address the safety of continuing all her ARVs
+together."* beside two Major interactions among them.
+
+### The decision
+
+- **"Is it safe to continue (give, take, keep, use, combine) all her ARVs together?"** and **"Are her ARVs safe
+  together?"**, over Decision 221's words for a group of her medications (`QueryScopeRouter`'s `HER_MEDICATION_GROUP`),
+  are screen shapes: the screen runs and the module answers with what it found, every pair among her orders.
+
+Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.whetherAGroupOfHerMedicationsIsSafeTogetherIsAScreen`.

@@ -2732,6 +2732,25 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		}
 	}
 
+	/**
+	 * Whether a group of her medications is safe together is a screen of them (ADR Decision 254). On the 3.7.1 standalone
+	 * Rhoda Ritonavirb's "Is it safe to continue all her ARVs together?" ran no screen — "ARVs" is none of the medication
+	 * words — and the model answered "The records do not address the safety of continuing all her ARVs together." beside
+	 * two Major interactions among them.
+	 */
+	@Test
+	public void whetherAGroupOfHerMedicationsIsSafeTogetherIsAScreen() throws Exception {
+		executeDataSet(WARFARIN_ORDER);
+		for (String question : new String[] { "Is it safe to continue all her ARVs together?", "Are her ARVs safe together?",
+				"Is it safe to give her TB drugs together?" }) {
+			RecordingProvider provider = new RecordingProvider();
+			ChartAnswer answer = serviceWith(provider).search(patient, question);
+			assertEquals(0, provider.calls, question + " — the module answers: " + answer.getAnswer());
+			assertTrue(answer.getAnswer().startsWith("1 interaction among this patient's active medications:\n"),
+					question + " — the screen's count leads: " + answer.getAnswer());
+		}
+	}
+
 	/** A screen request that also asks for something the screen does not answer keeps the model (ADR Decision 182). */
 	@Test
 	public void aScreenRequestAskingForSomethingElseToo_keepsTheModel() throws Exception {

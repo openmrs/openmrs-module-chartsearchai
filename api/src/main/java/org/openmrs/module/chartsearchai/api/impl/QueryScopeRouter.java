@@ -344,9 +344,9 @@ public final class QueryScopeRouter {
 			// "Can I add ibuprofen to her medications?" (ADR Decision 180)
 			"(?:can|could|may|should) (?:i|we) (?:also )?(?:safely )?add " + D + " to " + POSSESSIVE + " " + MEDICATIONS
 					+ "(?: now| today)?",
-			// "Can this patient take warfarin?", "Can she take ibuprofen?"
+			// "Can this patient take warfarin?", "Can she take ibuprofen?", "Can she drink alcohol?" (ADR Decision 268)
 			"(?:can|could|may|should) (?:she|he|they|the patient|this patient) (?:also )?(?:safely )?(?:take|start|be given|be started on"
-					+ "|have|use) " + D + "(?: now| today)?",
+					+ "|have|use|drink) " + D + "(?: now| today)?",
 			// "Would it be safe to start ibuprofen?", "OK to give ibuprofen?", "Is it safe to add ibuprofen to her regimen?"
 			// (ADR Decision 180)
 			"would it be (?:safe|ok|okay|appropriate) (?:for " + PATIENT + " )?to (?:(?:give|start|prescribe|administer|add) (?:"
@@ -478,9 +478,10 @@ public final class QueryScopeRouter {
 			"(?:can|could|may|should) (?:i|we) (?:safely )?(?:give|start|prescribe|administer) (?:" + PATIENT
 					+ " )?(?:on )?" + HER_D + " (?:and|with|alongside) " + HER_DS + "(?: together)?(?: to " + PATIENT
 					+ ")?(?: now| today)?",
-			// "Can she take warfarin and ibuprofen together?"
-			"(?:can|could|may|should) (?:she|he|they|the patient|this patient) (?:safely )?(?:take|be given) " + HER_D
-					+ " (?:and|with|alongside) " + HER_DS + "(?: together)?(?: now| today)?",
+			// "Can she take warfarin and ibuprofen together?", "Can she drink alcohol while on metronidazole?", "Can she have
+			// alcohol with her metronidazole?" (ADR Decision 268)
+			"(?:can|could|may|should) (?:she|he|they|the patient|this patient) (?:safely )?(?:take|be given|drink|have) " + HER_D
+					+ " (?:and|with|alongside|while on|while taking) " + HER_DS + "(?: together)?(?: now| today)?",
 			// "Is it safe to give her warfarin and ibuprofen together?", "Is it safe to take warfarin with ibuprofen?", "Is it OK
 			// to co-prescribe warfarin with her ibuprofen?" (ADR Decision 250)
 			"is it (?:safe|ok|okay|appropriate) (?:for " + PATIENT + " )?to (?:(?:give|start|prescribe|co prescribe|administer) (?:"

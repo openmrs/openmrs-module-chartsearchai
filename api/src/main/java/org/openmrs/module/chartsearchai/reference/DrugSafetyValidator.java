@@ -820,8 +820,9 @@ public class DrugSafetyValidator {
 		// hydrocortisone chipped about `Hydrocortisone butyrate`, an ester nobody named. The prose matcher
 		// itself is unchanged (it answers "is this entry mentioned", correctly); the ranking is applied
 		// where the answer has to be a substance.
+		// The question's own words too, which no entry carries as a name: "alcohol" (ADR Decision 268).
 		Set<DrugReference> questionDrugs = new LinkedHashSet<DrugReference>(
-				drugReferenceService.findImpliedByQuery(question));
+				drugReferenceService.findImpliedByQuestion(question));
 		Set<DrugReference> inPlay = new LinkedHashSet<DrugReference>(questionDrugs);
 		// Built lazily and at most once, for two consumers now: the echo test below, and the subject
 		// matter the order-driven contraindication arm is scoped to. The laziness is therefore no

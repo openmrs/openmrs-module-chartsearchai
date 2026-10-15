@@ -642,7 +642,7 @@ public class DrugReferenceInjector {
 		// Resolved ONCE for the pass and handed down, never derived twice (issue #151): matchingEntries
 		// scopes both its legs with this list, and since issue #354 this method also reads its
 		// EMPTINESS — a question that resolves no substance is the one that may have named a class.
-		List<DrugReference> questionDrugs = drugReferenceService.findImpliedByQuery(question);
+		List<DrugReference> questionDrugs = drugReferenceService.findImpliedByQuestion(question);
 		// Read once for the whole chart, beside the other once-per-injection global-property reads
 		// below, rather than inside the loop-bearing method it gates.
 		boolean fromQuery = ChartSearchAiUtils.getBooleanGlobalProperty(
@@ -4029,12 +4029,28 @@ public class DrugReferenceInjector {
 		return markedWordsFrom(folded, namedCharacters(folded, entries), 0);
 	}
 
+	/** Where {@code folded}, a question, names {@code entry}: by its own names ({@link DrugReference#namedOccurrences}),
+	 *  and by a word only a question names it by ({@link QuestionSubstanceTerms}, ADR Decision 268) — so "alcohol" is
+	 *  marked where the question resolved Ethanol from it. */
+	static List<DrugReference.NamedOccurrence> occurrencesInTheQuestion(DrugReference entry, String folded) {
+		List<DrugReference.NamedOccurrence> own = entry.namedOccurrences(folded, 0);
+		List<int[]> spans = QuestionSubstanceTerms.spansNaming(folded, entry.getName());
+		if (spans.isEmpty()) {
+			return own;
+		}
+		List<DrugReference.NamedOccurrence> all = new ArrayList<DrugReference.NamedOccurrence>(own);
+		for (int[] span : spans) {
+			all.add(new DrugReference.NamedOccurrence(span[0], span[0], span[1]));
+		}
+		return all;
+	}
+
 	/** Which characters of {@code folded} one of {@code entries} names — the spans
 	 *  {@link DrugReference#namedOccurrences} reports. */
 	private static boolean[] namedCharacters(String folded, List<DrugReference> entries) {
 		boolean[] named = new boolean[folded.length()];
 		for (DrugReference entry : entries) {
-			for (DrugReference.NamedOccurrence occurrence : entry.namedOccurrences(folded, 0)) {
+			for (DrugReference.NamedOccurrence occurrence : occurrencesInTheQuestion(entry, folded)) {
 				for (int k = occurrence.getStart(); k < occurrence.getEnd(); k++) {
 					named[k] = true;
 				}
@@ -4124,7 +4140,7 @@ public class DrugReferenceInjector {
 			Set<Object> proposed = new HashSet<Object>();
 			final Map<DrugReference, Integer> firstNamed = new LinkedHashMap<DrugReference, Integer>();
 			for (DrugReference entry : questionDrugs) {
-				for (DrugReference.NamedOccurrence occurrence : entry.namedOccurrences(folded, 0)) {
+				for (DrugReference.NamedOccurrence occurrence : occurrencesInTheQuestion(entry, folded)) {
 					if (occurrence.getStart() >= from) {
 						proposed.add(entry.substanceGroupKey());
 					} else if (!firstNamed.containsKey(entry)
@@ -4997,7 +5013,7 @@ public class DrugReferenceInjector {
 		Map<Object, List<DrugReference>> rows = new LinkedHashMap<Object, List<DrugReference>>();
 		for (DrugReference entry : questionDrugs) {
 			int at = Integer.MAX_VALUE;
-			for (DrugReference.NamedOccurrence occurrence : entry.namedOccurrences(folded, 0)) {
+			for (DrugReference.NamedOccurrence occurrence : occurrencesInTheQuestion(entry, folded)) {
 				at = Math.min(at, occurrence.getStart());
 			}
 			Object substance = entry.substanceGroupKey();
@@ -5359,7 +5375,7 @@ public class DrugReferenceInjector {
 		final Map<Object, Integer> firstAt = new HashMap<Object, Integer>();
 		Map<Object, List<DrugReference>> rowsOf = new HashMap<Object, List<DrugReference>>();
 		for (DrugReference entry : questionDrugs) {
-			for (DrugReference.NamedOccurrence occurrence : entry.namedOccurrences(folded, 0)) {
+			for (DrugReference.NamedOccurrence occurrence : occurrencesInTheQuestion(entry, folded)) {
 				Integer seen = firstAt.get(entry.substanceGroupKey());
 				if (seen == null || occurrence.getStart() < seen) {
 					firstAt.put(entry.substanceGroupKey(), occurrence.getStart());

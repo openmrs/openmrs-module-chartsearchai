@@ -18002,3 +18002,34 @@ together, the drug named as hers she is not on, the unrecognised-partner stateme
 answer with no pair. Without a context the first row stands, as before. Which row a record or chip renders is unchanged.
 
 Pinned by `ModuleAnswerSubstanceNameTest`.
+
+## Decision 268: Alcohol a clinician asks about is checked as the knowledge base's Ethanol
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-15 to fix the errors the sweep left.
+
+### Context
+
+On the 3.7.1 standalone Karen, on metronidazole, asked *"Can she drink alcohol while on metronidazole?"* and read *"The
+records do not address alcohol consumption while on Metronidazole."*, beside a knowledge base rating ethanol with
+metronidazole Major (a disulfiram-like reaction). Donald, on warfarin, asked *"Does alcohol interact with his warfarin?"*
+and read *"No interaction check was run"*. The knowledge base names the substance `Ethanol`, and its curated names leave
+"alcohol" out as an ordinary word, rightly: a name it carries is matched in every order name and prose this module reads,
+and an order of polyvinyl alcohol eye drops would have been read as ethanol.
+
+### The decision
+
+- **A word only a question names a substance by** (`QuestionSubstanceTerms`: "alcohol", "alcoholic drinks", for the
+  row named `Ethanol`) puts that row in play through `DrugReferenceService.findImpliedByQuestion` — the question's
+  candidates at both of its readers, the injector and the validator — and is marked as a drug in the question's own words
+  (`DrugReferenceInjector.occurrencesInTheQuestion`). Never as one of the row's names, so no order, allergy, record or
+  answer is read through it.
+- **Not where the word names something else**: after a word making the phrase another substance's name (*benzyl*,
+  *isopropyl*, *polyvinyl* alcohol), or before one making it a condition or a product (*alcohol withdrawal*, *alcohol use
+  disorder*, *alcohol swabs*). The residue is in the class javadoc.
+- **Drinking is a way of taking a drug** in the proposal and together shapes, and *"while on"* or *"while taking"* joins a
+  drug to hers: *"Can she drink alcohol?"*, *"Can she drink alcohol while on metronidazole?"* — answered as any proposal
+  beside her medications is: *"No — this module's drug-safety check found a reason to withhold Ethanol."* with *"Ethanol
+  interacts with active order Metronidazole — Major."*
+
+Pinned by `AlcoholAskedAboutTest`, whose last case is a data guard: each term names a row of the shipped knowledge base and
+is none of its names.

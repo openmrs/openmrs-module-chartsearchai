@@ -324,6 +324,30 @@ public class DrugReferenceService {
 	}
 
 	/**
+	 * The entries a clinician's QUESTION puts in play: {@link #findImpliedByQuery}'s, and the rows it names by a word
+	 * the knowledge base cannot carry as their name — {@link QuestionSubstanceTerms}, "alcohol" for {@code Ethanol} (ADR
+	 * Decision 268). The question alone: an answer, a record or an order is read through the accessors above, where such a
+	 * word stays nobody's name.
+	 *
+	 * @return {@link #findImpliedByQuery}'s entries, then each row a term names that they do not already hold
+	 */
+	public List<DrugReference> findImpliedByQuestion(String question) {
+		List<DrugReference> implied = findImpliedByQuery(question);
+		Set<String> named = question == null ? Collections.<String> emptySet()
+				: QuestionSubstanceTerms.rowNamesIn(DrugReference.foldedLower(question));
+		if (named.isEmpty()) {
+			return implied;
+		}
+		List<DrugReference> withTerms = new ArrayList<DrugReference>(implied);
+		for (DrugReference entry : getAll()) {
+			if (named.contains(entry.getName()) && !withTerms.contains(entry)) {
+				withTerms.add(entry);
+			}
+		}
+		return withTerms;
+	}
+
+	/**
 	 * The entries a clinician-entered drug NAME puts in play — {@link #findByDrugName}, restricted to the
 	 * entries whose SUBSTANCE that name is read to name. The recorded-name counterpart of
 	 * {@link #findImpliedByQuery}, and the multi-row counterpart of {@link #findImpliedSubstances}: that

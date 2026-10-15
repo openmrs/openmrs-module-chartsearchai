@@ -708,7 +708,10 @@ public class DrugReferenceInjector {
 		//     with a finding, a monograph or a class note in the slice the model has material to
 		//     describe, and the failure this note exists to stop is the model describing an EMPTY slice
 		//     as the records not addressing interactions. A screen that related nothing beside a
-		//     contraindication finding therefore states no note — a stated residue, not an oversight.
+		//     contraindication finding therefore states no note — a stated residue, not an oversight — except
+		//     beside her own records conflicting with her orders on a safety question with the interaction
+		//     checks on (ADR Decision 236): they relate no pair either, and the module's answer to such a
+		//     screen cites the note for what the screen found before it states them.
 		//     The finding that two of her orders share a substance (issue #477) does not count as
 		//     something here: it relates no pair, so beside it the screen still ran and related nothing,
 		//     and without the note the model can present the duplicate as the interaction it found.
@@ -723,7 +726,9 @@ public class DrugReferenceInjector {
 		// come to disagree about whether this injection had anything to say.
 		boolean nothingResolved = matched.isEmpty() && findings.isEmpty() && namedClass == null;
 		boolean screenRelatedNothing = matched.isEmpty() && namedClass == null
-				&& nothingButOrdersSharingASubstance(findings) && questionDrugs.isEmpty()
+				&& (nothingButOrdersSharingASubstance(findings)
+						|| statesHerOwnConflicts(question) && nothingButOrdersSharingASubstanceOrHerOwnConflicts(findings))
+				&& questionDrugs.isEmpty()
 				&& QueryScopeRouter.isInteractionScreening(question)
 				&& screenedSubstances.size() >= 2 && context.activeDrugOrdersRead();
 		// A question listing drugs her chart holds no active order for is stated even where nothing else
@@ -1148,7 +1153,7 @@ public class DrugReferenceInjector {
 						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS)
 				&& context.chartReadForSafety() && questionDrugs.isEmpty()
 				&& QueryScopeRouter.asksOnlyToScreenHerMedications(question)) {
-			moduleAnswer = composeFromAScreenThatRelatedNothing(screenNoteIndex, screenedSubstances.size(), findings,
+			moduleAnswer = composeFromAScreenThatRelatedNothing(question, screenNoteIndex, screenedSubstances.size(), findings,
 					findingNumbers, orderRecordNumbers,
 					orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers,
 					context, unidentified.size());
@@ -4074,6 +4079,32 @@ public class DrugReferenceInjector {
 	}
 
 	/**
+	 * Whether a screen of {@code question} states her own records conflicting with her orders after what it found (ADR
+	 * Decision 236): a question asking more than whether her medications interact — "Are her medications safe to take
+	 * together?" — where the interaction checks ran. A question asking only about interactions leaves them to their
+	 * chips (Decision 190) and keeps the model call, and with the interaction checks off no screen ran to state.
+	 */
+	private static boolean statesHerOwnConflicts(String question) {
+		return !QueryScopeRouter.asksOnlyAboutInteractions(question) && ChartSearchAiUtils.getBooleanGlobalProperty(
+				ChartSearchAiConstants.GP_DRUG_SAFETY_WARN_ON_INTERACTIONS,
+				ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_WARN_ON_INTERACTIONS);
+	}
+
+	/**
+	 * As {@link #nothingButOrdersSharingASubstance}, admitting a contraindication about one of her own medications — her
+	 * records conflicting with an order of hers, which relates no pair either (ADR Decision 236).
+	 */
+	private static boolean nothingButOrdersSharingASubstanceOrHerOwnConflicts(List<SafetyWarning> findings) {
+		for (SafetyWarning finding : findings) {
+			if (!finding.statesOrdersSharingASubstance() && !(SafetyWarning.TYPE_CONTRAINDICATION.equals(finding.getType())
+					&& finding.isAboutACurrentMedication())) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/**
 	 * The module's own answer to a question {@link #answersFromFindings} admitted: one line per
 	 * finding, each in its record's own words and cited by its own number — issue #469 — with the one
 	 * addition described below for a contraindication about a medication she already takes.
@@ -4309,9 +4340,40 @@ public class DrugReferenceInjector {
 	 * Metronidazole, so there is no other active medication to check it against."</em>, then the finding that they share
 	 * it (ADR Decision 228). Anything else — a contraindication finding among them — keeps the model call.
 	 */
-	private static String composeFromAScreenThatRelatedNothing(Integer screenNoteIndex, int screened,
+	private static String composeFromAScreenThatRelatedNothing(String question, Integer screenNoteIndex, int screened,
 			List<SafetyWarning> findings, List<Integer> findingNumbers, Map<String, Integer> orderRecordNumbers,
 			Map<String, Integer> herOrderRecords, PatientClinicalContext context, int unidentified) {
+		// Her own records directly conflicting with her orders are no pair the screen relates (ADR Decision 236): on a
+		// safety question what the screen found is answered from the rest, and they follow it. A question asking only
+		// about interactions keeps the model call, as before.
+		List<SafetyWarning> contraindications = new ArrayList<SafetyWarning>();
+		List<Integer> contraindicationNumbers = new ArrayList<Integer>();
+		List<SafetyWarning> rest = new ArrayList<SafetyWarning>();
+		List<Integer> restNumbers = new ArrayList<Integer>();
+		for (int i = 0; i < findings.size(); i++) {
+			SafetyWarning finding = findings.get(i);
+			boolean herOwnConflict = SafetyWarning.TYPE_CONTRAINDICATION.equals(finding.getType())
+					&& finding.isAboutACurrentMedication();
+			(herOwnConflict ? contraindications : rest).add(finding);
+			(herOwnConflict ? contraindicationNumbers : restNumbers).add(findingNumbers.get(i));
+		}
+		if (!contraindications.isEmpty() && !statesHerOwnConflicts(question)) {
+			return null;
+		}
+		String opening = noPairOpening(screenNoteIndex, screened, rest, restNumbers, orderRecordNumbers, herOrderRecords,
+				context, unidentified);
+		if (opening == null || contraindications.isEmpty()) {
+			return opening;
+		}
+		String stated = composeFromFindings(contraindications, contraindicationNumbers, orderRecordNumbers, herOrderRecords,
+				false, null, Lead.of(question, Collections.<DrugReference> emptyList()), SCREEN_SCOPE);
+		return stated == null ? null : opening + "\n" + stated;
+	}
+
+	/** {@link #composeFromAScreenThatRelatedNothing}'s answer to what the screen found, her own conflicts set apart. */
+	private static String noPairOpening(Integer screenNoteIndex, int screened, List<SafetyWarning> findings,
+			List<Integer> findingNumbers, Map<String, Integer> orderRecordNumbers, Map<String, Integer> herOrderRecords,
+			PatientClinicalContext context, int unidentified) {
 		if (screenNoteIndex != null && onlyHerOwnOrdersSharingASubstance(findings)) {
 			return withHerOwnOrdersSharingASubstance(interactionScreenNoteWords(screened) + " [" + screenNoteIndex + "]",
 					findings, findingNumbers, orderRecordNumbers, herOrderRecords);

@@ -17192,3 +17192,37 @@ abbreviation a clinician wrote came back as a word none of them uses.
   the grammar's reading stands.
 
 Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.thePurposeIsEchoedAsTheQuestionWroteIt`.
+
+## Decision 236: A safety screen that related no pair states her own conflicts after what it found
+
+**Status: Accepted** (October 2026) — the owner's standing request of 2026-10-15 to fix what misleads a clinician. It
+extends [Decisions 162](#decision-162-a-screen-that-related-nothing-is-answered-with-the-screen-notes-own-words), 178
+and 228 to a screen beside her own records conflicting with her orders.
+
+### Context
+
+On the 3.7.1 standalone Richard Jones, on dexamethasone and topical hydrocortisone and allergic to dexamethasone, asked
+*"Are his medications safe to take together?"*, was answered by the model *"Dexamethasone is related to the patient's
+recorded allergy to Dexamethasone, a finding that is a reason to change a medication this patient is already taking"* — no
+word of whether his drugs interact, and a drug called "a reason". The module's answers to a screen that related no pair
+— the screen note (Decision 162), one order (178), one substance (228) — each needed nothing else in the findings, and the
+screen note was not written beside a contraindication at all (Decision 87's stated residue).
+
+### The decision
+
+- **On a question asking more than whether her medications interact, with the interaction checks on, a contraindication
+  about one of her own medications relates no pair**: the screen note is written beside it, and
+  `composeFromAScreenThatRelatedNothing` answers what the screen found from the other findings, then states her conflicts
+  as a screen states contraindications (Decision 191's count): *"2 contraindications about medications this patient is
+  already taking, none with a severity rated:"*, each line, then *"Interactions the data does not rate, and anything
+  beyond drug interactions and contraindications, are not covered."*
+- **A question asking only about interactions keeps the model call and its prompt as they were.** Decision 190 would
+  leave her conflicts to chips a client draws behind one neutral line, while the model's answer to such a question
+  states them; the three cases pinning that (`LlmInferenceServiceAnswerFromFindingsContextTest.aScreenWhoseOnlyFindingIsNotAnInteractionStillAsksTheModel`,
+  `AllergyQuestionConflictingOrderContextTest.aMedicationQuestionKeepsTheFindingAsAChip`,
+  `.aDrugSafetyReadingKeepsTheFindingAChipWhereTheAnswerNamesHerOrder`) stand.
+- **With the interaction checks off no screen ran**, so neither the note nor this answer is written.
+- Where such a question is not one the module composes — *"Any drug interactions or allergy conflicts with his current
+  medications?"*, outside the screen grammar — the model now reads the note beside the conflicts as well.
+
+Pinned by `ScreenBesideHerOwnConflictsTest`.

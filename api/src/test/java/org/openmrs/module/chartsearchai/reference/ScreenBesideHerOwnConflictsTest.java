@@ -1,0 +1,109 @@
+/**
+ * This Source Code Form is subject to the terms of the Mozilla Public License,
+ * v. 2.0. If a copy of the MPL was not distributed with this file, You can
+ * obtain one at http://mozilla.org/MPL/2.0/. OpenMRS is also distributed under
+ * the terms of the Healthcare Disclaimer located at http://openmrs.org/license.
+ *
+ * Copyright (C) OpenMRS Inc. OpenMRS is a registered trademark and the OpenMRS
+ * graphic logo is a trademark of OpenMRS Inc.
+ */
+package org.openmrs.module.chartsearchai.reference;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.openmrs.api.context.Context;
+import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
+
+/**
+ * A screen that related no pair, beside her own records conflicting with her orders, is answered by the module (ADR
+ * Decision 236). On the 3.7.1 standalone Kevin Brown, on clarithromycin alone and recorded allergic to it, asked "Does
+ * he have any drug interactions?", was answered by the model "No — Clarithromycin should not be given": a drug he takes,
+ * refused as though proposed. Richard Jones, on dexamethasone and topical hydrocortisone and allergic to dexamethasone,
+ * got "Dexamethasone is related to a recorded allergy, a reason to change a medication this patient is already taking".
+ * Each screen's own answer needed no finding beyond the pair it did not find, so none was composed. A safety question
+ * is answered by the module now; one asking only about interactions keeps the model's answer, which states the conflict.
+ */
+public class ScreenBesideHerOwnConflictsTest extends BaseModuleContextSensitiveTest {
+
+	@BeforeEach
+	public void answerFromFindings() {
+		Context.getAdministrationService().setGlobalProperty(
+			ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS, "true");
+	}
+
+	@Test
+	public void aSafetyScreenStatesHerOwnConflictsAfterWhatTheScreenFound() {
+		String answer = screen("Are his medications safe to take together?", "dexamethasone",
+			DrugReferenceTestSupport.activeOrder("order-dex", "Dexamethasone", "Dexamethasone"),
+			DrugReferenceTestSupport.activeOrder("order-pred", "Prednisone", "Prednisone"));
+
+		assertNotNull(answer, "the module answers");
+		String[] lines = answer.split("\n");
+		assertEquals(5, lines.length, "was: " + answer);
+		assertEquals(true, lines[0].startsWith("No interactions were found among this patient's active medications. "),
+			"was: " + answer);
+		assertEquals("2 contraindications about medications this patient is already taking, none with a severity rated:",
+			lines[1], "was: " + answer);
+		assertEquals(true, lines[2].startsWith("The patient has a recorded allergy to Dexamethasone."), "was: " + answer);
+		assertEquals(true, lines[3].startsWith("Prednisone is in the same ATC class (H02AB) as the patient's allergy to "
+				+ "Dexamethasone — possible cross-reactivity."), "was: " + answer);
+		assertEquals(DrugReferenceInjector.SCREEN_SCOPE, lines[4], "was: " + answer);
+	}
+
+	/** A question asking only about interactions keeps the model call: Decision 190 would leave her conflicts to chips a
+	 *  client draws behind one neutral line, where the model's answer states them. */
+	@Test
+	public void aScreenAskingOnlyAboutInteractionsKeepsTheModelCall() {
+		assertNull(screen("Does he have any drug interactions?", "dexamethasone",
+			DrugReferenceTestSupport.activeOrder("order-dex", "Dexamethasone", "Dexamethasone"),
+			DrugReferenceTestSupport.activeOrder("order-pred", "Prednisone", "Prednisone")));
+	}
+
+	/** With the interaction checks off no screen ran, so the module states none. */
+	@Test
+	public void aScreenWithTheInteractionChecksOffKeepsTheModelCall() {
+		Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_DRUG_SAFETY_WARN_ON_INTERACTIONS,
+			"false");
+		assertNull(screen("Are his medications safe to take together?", "dexamethasone",
+			DrugReferenceTestSupport.activeOrder("order-dex", "Dexamethasone", "Dexamethasone"),
+			DrugReferenceTestSupport.activeOrder("order-pred", "Prednisone", "Prednisone")));
+	}
+
+	@Test
+	public void aScreenOfOneOrderHerRecordsConflictWithSaysSo() {
+		String answer = screen("Are his medications safe?", "clarithromycin",
+			DrugReferenceTestSupport.activeOrder("order-clari", "Clarithromycin 500mg", "Clarithromycin"));
+
+		assertNotNull(answer, "the module answers");
+		String[] lines = answer.split("\n");
+		assertEquals("This patient has one active medication order, Clarithromycin 500mg, so there is no other active "
+				+ "medication to check it against.", lines[0], "was: " + answer);
+		assertEquals("1 contraindication about a medication this patient is already taking, with no severity rated:", lines[1],
+			"was: " + answer);
+		assertEquals(true, lines[2].startsWith("The patient has a recorded allergy to Clarithromycin."), "was: " + answer);
+		assertEquals(DrugReferenceInjector.SCREEN_SCOPE, lines[lines.length - 1], "was: " + answer);
+	}
+
+	private static String screen(String question, String allergen, PatientClinicalContext.ActiveDrugOrder... orders) {
+		Set<String> names = new LinkedHashSet<String>();
+		for (PatientClinicalContext.ActiveDrugOrder order : orders) {
+			names.addAll(order.getNames());
+		}
+		List<PatientClinicalContext.ActiveDrugOrder> list = new ArrayList<PatientClinicalContext.ActiveDrugOrder>(
+				Arrays.asList(orders));
+		return DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.shippedServiceWithGroups()).injectRecords(
+			DrugReferenceTestSupport.oneRecordChart(), DrugReferenceTestSupport.ctx(70, null, names, null,
+				DrugReferenceTestSupport.set(allergen), null, list), question).getModuleAnswer();
+	}
+}

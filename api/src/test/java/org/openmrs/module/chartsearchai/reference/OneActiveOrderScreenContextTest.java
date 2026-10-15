@@ -80,6 +80,24 @@ public class OneActiveOrderScreenContextTest extends BaseModuleContextSensitiveT
 			"two orders are never told they are one: " + answer);
 	}
 
+	/**
+	 * Every order of his is one drug (ADR Decision 228). On the 3.7.1 standalone James Thompson, on two metronidazole
+	 * orders and nothing else, asked "Does he have any drug interactions?", was answered by the model "No — Metronidazole
+	 * should be changed: Metronidazole is in active orders Metronidazole (2 orders) — possible duplicate therapy, a reason
+	 * to change a medication this patient is already taking": no pair had been screened, and no screen note was written
+	 * for one substance, so no branch here answered.
+	 */
+	@Test
+	public void aScreenOfOneDrugInSeveralOrdersSaysThereIsNothingElseToCheckItAgainst() {
+		PatientChart chart = screen("Does he have any drug interactions?",
+			DrugReferenceTestSupport.activeOrder("order-mtz-1", "Metronidazole", "Metronidazole"),
+			DrugReferenceTestSupport.activeOrder("order-mtz-2", "Metronidazole", "Metronidazole"));
+
+		assertEquals("This patient's 2 active medication orders are all Metronidazole, so there is no other active "
+				+ "medication to check it against.\nMetronidazole is in active orders Metronidazole (2 orders) — possible "
+				+ "duplicate therapy. No severity is rated for this finding. [3]", chart.getModuleAnswer(), chart.getText());
+	}
+
 	@Test
 	public void aQuestionThatIsNotAScreenIsNotAnsweredSo() {
 		PatientChart chart = screen("What is her blood pressure?",

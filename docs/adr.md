@@ -16970,3 +16970,32 @@ was read as allergic to that drug too.
 
 Pinned by `FreeTextAllergenPlaceholderContextTest.thePlaceholderBehindAFreeTextAllergyIsNotReportedUnchecked`,
 `.theUncheckedLineNamesTheFreeTextAllergenAsTheChartRecordsIt` and `.aPlaceholderNamedLikeADrugRecordsNoAllergyToThatDrug`.
+
+## Decision 228: A screen of one drug in several orders says there is nothing else to check it against
+
+**Status: Accepted** (October 2026) — the owner's standing request of 2026-10-15 to fix what misleads a clinician. It
+extends [Decision 178](#decision-178-a-screen-of-one-active-order-says-there-is-nothing-to-check-it-against) to one
+SUBSTANCE in several orders.
+
+### Context
+
+On the 3.7.1 standalone James Thompson's only active orders are two of metronidazole. Asked *"Does he have any drug
+interactions?"*, the model answered *"No — Metronidazole should be changed: Metronidazole is in active orders Metronidazole
+(2 orders) — possible duplicate therapy, a reason to change a medication this patient is already taking"*: a "No" to
+whether he has interactions, then an instruction to change his drug, on a screen that had compared no pair. One substance
+writes no screen note, and the one-order answer needs one order, so nothing the module composes reached him. The public
+demo re-orders every drug at each visit, so a patient on one drug there has this shape too.
+
+### The decision
+
+- **A screen whose identified, started orders are all one substance, and whose only findings are that they share it, is
+  answered by the module** (`DrugReferenceInjector.composeFromAScreenThatRelatedNothing`): *"This patient's 2 active
+  medication orders are all Metronidazole, so there is no other active medication to check it against."*, then each such
+  finding as a line, as Decision 159 states it after a proposal. Any other finding — a contraindication among them — an
+  order the data does not identify, or one not yet started keeps the model call.
+- **The finding is still never counted as an interaction**, which is what #509 refused Decision 108's answer for: the
+  answer counts nothing. #509 pinned this screen to the model only because the module had no other answer for it then;
+  `OrdersSharingASubstanceModuleAnswerContextTest.aScreenWhoseOnlyInteractionFindingIsTwoOrdersSharingASubstanceCountsNoPair`
+  now pins the module's.
+
+Pinned by `OneActiveOrderScreenContextTest.aScreenOfOneDrugInSeveralOrdersSaysThereIsNothingElseToCheckItAgainst`.

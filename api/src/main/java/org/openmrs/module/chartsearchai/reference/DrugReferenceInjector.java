@@ -4291,8 +4291,10 @@ public class DrugReferenceInjector {
 	 * it whole keeps the floor and the class limit the model dropped when it quoted it. With no active drug in any
 	 * form and her orders read: <em>"This patient has no active medication orders, so there are none to check against
 	 * each other."</em> With ONE active order, read and raising no finding: <em>"This patient has one active medication
-	 * order, Aspirin 81mg, so there is no other active medication to check it against."</em> (ADR Decision 178). Anything
-	 * else — a contraindication finding, one substance in several orders — keeps the model call.
+	 * order, Aspirin 81mg, so there is no other active medication to check it against."</em> (ADR Decision 178). With ONE
+	 * substance in several orders, each identified and started: <em>"This patient's 2 active medication orders are all
+	 * Metronidazole, so there is no other active medication to check it against."</em>, then the finding that they share
+	 * it (ADR Decision 228). Anything else — a contraindication finding among them — keeps the model call.
 	 */
 	private static String composeFromAScreenThatRelatedNothing(Integer screenNoteIndex, int screened,
 			List<SafetyWarning> findings, List<Integer> findingNumbers, Map<String, Integer> orderRecordNumbers,
@@ -4322,6 +4324,17 @@ public class DrugReferenceInjector {
 					: "This patient has one medication order, " + name + " ("
 							+ PatientChartSerializer.scheduledToStart(order.getScheduledStart())
 							+ "), so there is no other active medication to check it against.";
+		}
+		// ONE substance in several orders, every order identified and started, has no pair to screen either, and the
+		// finding that the orders share it follows (ADR Decision 228).
+		if (screenNoteIndex == null && screened == 1 && unidentified == 0 && !findings.isEmpty()
+				&& onlyHerOwnOrdersSharingASubstance(findings) && context.activeDrugOrdersRead()
+				&& context.getActiveDrugOrders().size() > 1
+				&& !DrugSafetyValidator.anyHasNotStarted(context.getActiveDrugOrders())) {
+			return withHerOwnOrdersSharingASubstance("This patient's " + context.getActiveDrugOrders().size()
+					+ " active medication orders are all " + findings.get(0).getDrug()
+					+ ", so there is no other active medication to check it against.", findings, findingNumbers,
+					orderRecordNumbers, herOrderRecords);
 		}
 		return null;
 	}

@@ -11,7 +11,6 @@ package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -122,15 +121,20 @@ public class OrdersSharingASubstanceModuleAnswerContextTest extends BaseModuleCo
 	}
 
 	@Test
-	public void aScreenWhoseOnlyInteractionFindingIsTwoOrdersSharingASubstanceGoesToTheModel()
+	public void aScreenWhoseOnlyInteractionFindingIsTwoOrdersSharingASubstanceCountsNoPair()
 			throws IOException {
-		// Two orders of one drug: no pair to relate, and the duplicate is the only interaction finding.
+		// Two orders of one drug: no pair to relate, and the duplicate is the only interaction finding. It is never
+		// counted as an interaction; since ADR Decision 228 the module says there is nothing else to check the drug
+		// against and states the finding, where the model used to answer.
 		PatientChart chart = screen(DrugReferenceTestSupport.activeOrder("order-rif-1", "Rifampicin 150mg"),
 			DrugReferenceTestSupport.activeOrder("order-rif-2", "Rifampicin 150mg"));
 
 		assertTrue(chart.getText().contains("Rifampicin (rifampin) is in active orders Rifampicin 150mg (2 orders)"),
 			"precondition: the finding reached the prompt: " + chart.getText());
-		assertNull(chart.getModuleAnswer(), "no pair was related: " + chart.getModuleAnswer());
+		assertEquals("This patient's 2 active medication orders are all Rifampicin (rifampin), so there is no other "
+				+ "active medication to check it against.\nRifampicin (rifampin) is in active orders Rifampicin 150mg (2 "
+				+ "orders) — possible duplicate therapy. No severity is rated for this finding. [4]", chart.getModuleAnswer(),
+			"no pair was related: " + chart.getModuleAnswer());
 	}
 
 	@Test

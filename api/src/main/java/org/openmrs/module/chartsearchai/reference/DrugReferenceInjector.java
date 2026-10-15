@@ -4955,18 +4955,23 @@ public class DrugReferenceInjector {
 	private static String composeSwitch(String question, List<DrugReference> questionDrugs, Set<Object> herSubstances,
 			List<SafetyWarning> findings, List<Integer> numbers, Map<String, Integer> orderRecordNumbers,
 			Map<String, Integer> herOrderRecords, PairChipExtent pairs) {
-		if (questionDrugs.isEmpty()
-				|| !QueryScopeRouter.asksWhetherToSwitchADrug(wordsBesideItsNames(question, questionDrugs))) {
+		if (questionDrugs.isEmpty()) {
 			return null;
 		}
-		// Which drug the question names first is the one switched from.
+		List<String> words = wordsBesideItsNames(question, questionDrugs);
+		// Which drug the question names first is the one switched from — or, "instead of" the other, the one switched to
+		// (ADR Decision 230).
+		boolean fromFirst = QueryScopeRouter.asksWhetherToSwitchADrug(words);
+		if (!fromFirst && !QueryScopeRouter.asksWhetherToGiveADrugInsteadOfAnother(words)) {
+			return null;
+		}
 		Map<Object, DrugReference> rowOf = inQuestionOrder(question, questionDrugs);
 		if (rowOf.size() != 2) {
 			return null;
 		}
 		List<Object> byPosition = new ArrayList<Object>(rowOf.keySet());
-		Object from = byPosition.get(0);
-		Object to = byPosition.get(1);
+		Object from = byPosition.get(fromFirst ? 0 : 1);
+		Object to = byPosition.get(fromFirst ? 1 : 0);
 		if (!herSubstances.contains(from) || herSubstances.contains(to)) {
 			return null;
 		}

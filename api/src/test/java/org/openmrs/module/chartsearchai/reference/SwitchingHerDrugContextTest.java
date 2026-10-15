@@ -9,6 +9,7 @@
  */
 package org.openmrs.module.chartsearchai.reference;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -62,6 +63,29 @@ public class SwitchingHerDrugContextTest extends BaseModuleContextSensitiveTest 
 	public void aSwitchToADrugSheAlreadyTakesOrFromOneSheDoesNotIsLeftToTheModel() {
 		assertNull(ask("Can I switch his lamivudine to nevirapine?").getModuleAnswer(), "the new drug is already his");
 		assertNull(ask("Can I switch his rifampicin to efavirenz?").getModuleAnswer(), "the old drug is not his");
+	}
+
+	/**
+	 * A switch naming the drug switched TO first, "instead of" or "in place of" the one it replaces (ADR Decision 230).
+	 * On the 3.7.1 standalone Mogan Kamwara's "Can I give her efavirenz instead of nevirapine?" was answered by the model
+	 * "No — Efavirenz should not be given because it interacts with active order Nevirapine": the withholding reason was
+	 * the very order the switch stops, the defect Decision 219 fixed for the shapes naming the old drug first.
+	 */
+	@Test
+	public void aSwitchNamingTheNewDrugFirstIsAnsweredTheSameWay() {
+		String switched = ask("Can I switch his nevirapine to efavirenz?").getModuleAnswer();
+		assertNotNull(switched, "precondition: the module answers the switch naming the old drug first");
+		for (String question : Arrays.asList("Can I give him efavirenz instead of nevirapine?",
+			"Can he take efavirenz instead of his nevirapine?", "Can I use efavirenz in place of nevirapine?",
+			"Is it safe to give efavirenz instead of nevirapine?")) {
+			assertEquals(switched, ask(question).getModuleAnswer(), question);
+		}
+	}
+
+	@Test
+	public void aDrugGivenInsteadOfOneHeDoesNotTakeIsLeftToTheModel() {
+		assertNull(ask("Can I give him efavirenz instead of rifampicin?").getModuleAnswer(), "the old drug is not his");
+		assertNull(ask("Can I give him nevirapine instead of lamivudine?").getModuleAnswer(), "the new drug is already his");
 	}
 
 	private static PatientChart ask(String question) {

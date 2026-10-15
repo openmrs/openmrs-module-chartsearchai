@@ -17036,3 +17036,27 @@ An allergy recorded as the drug CLASS (CIEL's *"Penicillins"*, Decision 223's ca
 is still reported unchecked rather than matched to this group.
 
 Pinned by `PenicillinCrossReactivityGroupTest`, over the bundled file and a verbatim slice of the shipped knowledge base.
+
+## Decision 230: A drug given instead of one of hers is a switch
+
+**Status: Accepted** (October 2026) — the owner's standing request of 2026-10-15 to fix what misleads a clinician. It
+widens [Decision 219](#decision-219-a-question-whether-to-switch-one-of-her-drugs-to-another-is-answered-for-the-new-drug-against-her-other-medications)
+to the shapes naming the new drug first.
+
+### Context
+
+On the 3.7.1 standalone, asked of Mogan Kamwara, who takes nevirapine, *"Can I give her efavirenz instead of
+nevirapine?"* was answered by the model *"No — Efavirenz should not be given because it interacts with active order
+Nevirapine …"*: the withholding reason was the very order the switch stops, the defect Decision 219 fixed for questions
+naming the old drug first ("switch her nevirapine to efavirenz", "replace her nevirapine with efavirenz").
+
+### The decision
+
+- **"X instead of Y" and "X in place of Y" are switch shapes, the drug switched TO named first**
+  (`QueryScopeRouter.asksWhetherToGiveADrugInsteadOfAnother`): "Can I give her efavirenz instead of nevirapine?", "Can she
+  take efavirenz instead of her nevirapine?", "Can I use efavirenz in place of nevirapine?", "Is it safe to give efavirenz
+  instead of nevirapine?". `DrugReferenceInjector.composeSwitch` reads the two drugs the other way round for them and
+  answers exactly as Decision 219 does, with its fail-closed conditions: the drug replaced hers, the new one not.
+
+Pinned by `SwitchingHerDrugContextTest.aSwitchNamingTheNewDrugFirstIsAnsweredTheSameWay` and
+`.aDrugGivenInsteadOfOneHeDoesNotTakeIsLeftToTheModel`.

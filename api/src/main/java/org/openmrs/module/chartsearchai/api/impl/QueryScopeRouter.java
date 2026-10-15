@@ -637,6 +637,29 @@ public final class QueryScopeRouter {
 		return fitsAShape(wordsWithTheDrugsMarked, SWITCH_SHAPES);
 	}
 
+	/** The tail naming the drug a switch replaces: "instead of nevirapine", "in place of her nevirapine". */
+	private static final String INSTEAD_OF = " (?:instead of|in place of) (?:" + POSSESSIVE + " )?" + D + "(?: now| today)?";
+
+	/**
+	 * The question shapes asking whether to give one drug INSTEAD of another — the drug switched TO named first (ADR
+	 * Decision 230): "Can I give her efavirenz instead of nevirapine?", "Can she take efavirenz instead of her
+	 * nevirapine?", "Can I use efavirenz in place of nevirapine?", "Is it safe to give efavirenz instead of nevirapine?".
+	 */
+	private static final List<Pattern> SWITCH_TO_FIRST_SHAPES = shapes(
+			"(?:can|could|may|should) (?:i|we) (?:give|use|start|prescribe|try) (?:" + PATIENT + " )?(?:on )?" + D + INSTEAD_OF,
+			"(?:can|could|may|should) " + SUBJECT + " (?:take|have|use|receive|start|be on|be given|be started on) " + D
+					+ INSTEAD_OF,
+			"is it (?:safe|ok|okay|appropriate) to (?:give|use|start|prescribe) (?:" + PATIENT + " )?(?:on )?" + D + INSTEAD_OF);
+
+	/**
+	 * Whether a question asks whether to give one drug instead of another, and nothing else — one of {@link
+	 * #SWITCH_TO_FIRST_SHAPES}, the drug switched TO named first (ADR Decision 230): {@link #asksWhetherToSwitchADrug}'s
+	 * question with its two drugs the other way round. Fail-CLOSED as {@link #asksWhetherToGiveADrug} is.
+	 */
+	public static boolean asksWhetherToGiveADrugInsteadOfAnother(List<String> wordsWithTheDrugsMarked) {
+		return fitsAShape(wordsWithTheDrugsMarked, SWITCH_TO_FIRST_SHAPES);
+	}
+
 	/**
 	 * Whether a question asks whether TWO drugs interact, and nothing else (ADR Decision 218) — a yes-or-no question about
 	 * the pair, which a proposal's "No" lead answers backwards. Fail-CLOSED as {@link #asksWhetherToGiveADrug} is.

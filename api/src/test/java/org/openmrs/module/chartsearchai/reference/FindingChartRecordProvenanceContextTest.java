@@ -322,6 +322,11 @@ public class FindingChartRecordProvenanceContextTest extends BaseModuleContextSe
 	public void theRecordIsNamedThroughWhicheverOfItsTwoTokensTheFindingMatched() {
 		DrugReferenceTestSupport.nameTheConcept(OTHER_NON_CODED_CONCEPT, "Amoxicillin");
 		String allergyUuid = recordAllergyTo("Ibuprofen");
+		// A row carries two allergens only where its coded one is a REAL concept: the placeholder a free-text allergen is
+		// saved on names no allergen (ADR Decision 227), so the placeholder property is pointed at another concept,
+		// leaving "Amoxicillin" coded beside the free text.
+		Context.getAdministrationService().setGlobalProperty("allergy.concept.otherNonCoded",
+				Context.getConceptService().getConcept(5089).getUuid());
 
 		PatientChart injected = inject(DrugReferenceTestSupport.chartOf(
 				DrugReferenceTestSupport.allergyRecord(1, allergyUuid, "Allergy: Amoxicillin (drug)")),

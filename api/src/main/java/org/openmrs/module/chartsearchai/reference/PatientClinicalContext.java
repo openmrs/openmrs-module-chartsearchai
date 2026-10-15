@@ -220,6 +220,7 @@ public class PatientClinicalContext {
 		// Decision 223's non-drug set travels too, though its reader does not take the copy today.
 		copy.nonDrugAllergyTokens.addAll(nonDrugAllergyTokens);
 		copy.allergySeverities = allergySeverities;
+		copy.allergySpellings = allergySpellings;
 		return copy;
 	}
 
@@ -511,6 +512,31 @@ public class PatientClinicalContext {
 	/** Called by {@link PatientClinicalContextBuilder} alone, keyed on the raw tokens it added. */
 	void recordAllergySeverities(Map<String, Set<String>> rawSeverities) {
 		allergySeverities = lowerKeys(rawSeverities);
+	}
+
+	/**
+	 * Each allergen token as the chart spells it — "NSAID", where {@link #getAllergyTokens} holds "nsaid" — keyed as
+	 * {@link #allergyRecordsNaming} is, the first spelling of a key winning (ADR Decision 227). Written once, by
+	 * {@link PatientClinicalContextBuilder}; empty for a context built otherwise, whose tokens are then shown as they are.
+	 */
+	private Map<String, String> allergySpellings = Collections.emptyMap();
+
+	/** Called by {@link PatientClinicalContextBuilder} alone, with the raw tokens it added. */
+	void recordAllergySpellings(Set<String> rawTokens) {
+		Map<String, String> spellings = new LinkedHashMap<String, String>();
+		for (String raw : rawTokens) {
+			String normalized = DrugReference.normalizeName(raw);
+			if (normalized != null && !spellings.containsKey(normalized)) {
+				spellings.put(normalized, raw);
+			}
+		}
+		allergySpellings = Collections.unmodifiableMap(spellings);
+	}
+
+	/** @return {@code allergen} — one of {@link #getAllergyTokens} — as the chart spells it, else {@code allergen} itself. */
+	String allergySpelling(String allergen) {
+		String spelling = allergySpellings.get(allergen);
+		return spelling == null ? allergen : spelling;
 	}
 
 	/** @return the severity words recorded for {@code allergen}'s allergy records, never null — see {@link #allergySeverities}. */

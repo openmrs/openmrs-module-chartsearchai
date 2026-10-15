@@ -1151,7 +1151,11 @@ public class DrugReferenceInjector {
 		// And a recorded drug allergy the data does not identify was compared with nothing: said so, never left to read as
 		// checked (ADR Decision 223).
 		if (moduleAnswer != null && context != null) {
-			List<String> unchecked = DrugSafetyValidator.unresolvedDrugAllergens(drugReferenceService, context);
+			List<String> unchecked = new ArrayList<String>();
+			// Each as the chart spells it (ADR Decision 227).
+			for (String allergen : DrugSafetyValidator.unresolvedDrugAllergens(drugReferenceService, context)) {
+				unchecked.add(context.allergySpelling(allergen));
+			}
 			if (!unchecked.isEmpty()) {
 				moduleAnswer = moduleAnswer + "\n" + uncheckedAllergiesLine(unchecked, questionDrugs);
 			}

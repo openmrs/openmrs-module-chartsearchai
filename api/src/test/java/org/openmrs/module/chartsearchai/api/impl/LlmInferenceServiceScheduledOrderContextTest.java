@@ -25,6 +25,9 @@ import java.util.regex.Pattern;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.openmrs.Allergen;
+import org.openmrs.AllergenType;
+import org.openmrs.Allergy;
 import org.openmrs.Patient;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
@@ -133,18 +136,33 @@ public class LlmInferenceServiceScheduledOrderContextTest extends BaseModuleCont
 		// with — since Decision 173 as an item "- <display>: recorded allergy to this drug." per order. Her
 		// Rifampicin is prescribed and has not started, so the statement says when it starts rather than
 		// reading as a drug she is taking.
-		DrugReferenceTestSupport.recordFreeTextAllergy(patient, 88, "Rifampicin");
+		recordAspirinAndRifampicinAllergies();
 		String modelAnswer = "Yes — the patient has a recorded allergy to Rifampicin [1].";
 
 		ChartAnswer answer = serviceAnswering(modelAnswer).service.search(patient, "any allergies?");
 
-		// The placeholder concept the free-text allergen needs (88) is her aspirin's, so the answer states her
-		// aspirin order as well; this case is about the Rifampicin statement.
+		// Her aspirin allergy conflicts with her started aspirin order, so the answer states that order as well; this
+		// case is about the Rifampicin statement.
 		// Each order cites the record it is (ADR Decision 168) — the one reference carrying its uuid.
 		assertEquals(modelAnswer + "\n\nCurrent orders that directly conflict with the patient's records:\n- ASPIRIN ["
 				+ orderRecordOf(answer, "ASPIRIN") + "]: recorded allergy to this drug.\n- Rifampicin (" + STARTS + ") ["
 				+ orderRecordOf(answer, "Rifampicin") + "]: recorded allergy to this drug.", answer.getAnswer(),
 				"the order is stated with its start date");
+	}
+
+	/**
+	 * Her recorded allergies to aspirin, coded on its concept (88), and to rifampicin, as free text on another placeholder
+	 * concept (5089, WEIGHT, which no drug resolves from). The placeholder a free-text allergen is saved on names no
+	 * allergen (ADR Decision 227), so the aspirin allergy these cases state beside the rifampicin one is recorded as itself
+	 * — it used to come from the placeholder's own name, ASPIRIN.
+	 */
+	private void recordAspirinAndRifampicinAllergies() {
+		Context.getPatientService().saveAllergy(new Allergy(patient,
+				new Allergen(AllergenType.DRUG, Context.getConceptService().getConcept(88), null), null, null, null));
+		Context.flushSession();
+		Context.clearSession();
+		patient = Context.getPatientService().getPatient(7);
+		DrugReferenceTestSupport.recordFreeTextAllergy(patient, 5089, "Rifampicin");
 	}
 
 	/** The index of the one reference to the record of the order a chip names by {@code display}. */
@@ -174,7 +192,7 @@ public class LlmInferenceServiceScheduledOrderContextTest extends BaseModuleCont
 		// already taking." — said of the Rifampicin she has not started, one sentence after its chip says
 		// so. The started order's line beside it is the other value, and keeps the referent. Neither says "No severity is
 		// rated": a recorded allergy to the drug itself has none to rate (ADR Decision 192).
-		DrugReferenceTestSupport.recordFreeTextAllergy(patient, 88, "Rifampicin");
+		recordAspirinAndRifampicinAllergies();
 		Context.getAdministrationService()
 				.setGlobalProperty(ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS, "true");
 

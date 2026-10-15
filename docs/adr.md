@@ -16939,3 +16939,34 @@ allergy record alone.
 
 Pinned by `AllergyQuestionConflictingOrderContextTest.search_aCrossReactivityFindingNamesTheAllergysRecordedSeverity`,
 `.search_anIdentityFindingNamesTheAllergysRecordedSeverity` and `.search_aSeverityTheInstallDoesNotMapIsNotNamed`.
+
+## Decision 227: The placeholder a free-text allergy is saved on is no allergen, and an unchecked allergy is named as the chart spells it
+
+**Status: Accepted** (October 2026) — the owner's standing request of 2026-10-15 to fix what misleads a clinician.
+
+### Context
+
+A free-text allergy is saved on core's "other non-coded" concept — the one the `allergy.concept.otherNonCoded` global
+property names, CIEL's *"Other"* on the 3.7.1 standalone — with the clinician's words beside it. `PatientClinicalContextBuilder`
+read the coded allergen's name as an allergen whatever the concept was, so every such allergy also recorded one to
+"other". On the standalone every module-written answer for a patient with a free-text drug allergy closed *"Not checked: a
+recorded allergy the drug data does not identify — other."* (Melissa Wright's *"Vitamin A, B"*, Edward Robinson's
+*"Penicillin G"*, James Thompson's three), and George Anderson's read *"— other; nsaid"*: the placeholder, then his
+*"NSAID"* lowercased. Where the placeholder carries a drug's name — the standard test dataset's is ASPIRIN — the patient
+was read as allergic to that drug too.
+
+### The decision
+
+- **The placeholder's name is no allergen.** The builder skips the coded allergen's name where that concept is the one the
+  global property names, read as Decision 226 reads the severity properties — core's own `Allergen.isCoded()` compares
+  against a static the platform copies from that property once, at startup — and falls back to `isCoded()` where the
+  property is unset. The free text is the allergy.
+- **The unchecked line names each allergy as the chart spells it** — *"NSAID"*, *"Penicillins"* — through
+  `PatientClinicalContext.allergySpelling`, which the builder records and the context's copy carries. A context built
+  otherwise records no spelling and shows its normalized token, as before.
+- `FindingChartRecordProvenanceContextTest.theRecordIsNamedThroughWhicheverOfItsTwoTokensTheFindingMatched` arranged its
+  two-token row on the configured placeholder, so the coded token it matched was this defect. The property now names
+  another concept, leaving the row's coded allergen a real one; its assertion is unchanged.
+
+Pinned by `FreeTextAllergenPlaceholderContextTest.thePlaceholderBehindAFreeTextAllergyIsNotReportedUnchecked`,
+`.theUncheckedLineNamesTheFreeTextAllergenAsTheChartRecordsIt` and `.aPlaceholderNamedLikeADrugRecordsNoAllergyToThatDrug`.

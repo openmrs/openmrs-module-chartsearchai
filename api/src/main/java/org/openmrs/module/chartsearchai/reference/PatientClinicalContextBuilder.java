@@ -19,6 +19,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 
+import org.openmrs.Allergen;
 import org.openmrs.Allergy;
 import org.openmrs.Concept;
 import org.openmrs.ConceptMap;
@@ -168,11 +169,15 @@ final class PatientClinicalContextBuilder {
 		// Active allergies -> allergen tokens (for contraindication checks).
 		try {
 			Map<String, String> severityWords = allergySeverityWords();
+			String otherNonCoded = Context.getAdministrationService().getGlobalProperty(OTHER_NON_CODED_PROPERTY);
 			for (Allergy allergy : Context.getPatientService().getAllergies(patient)) {
 				if (allergy.getAllergen() != null) {
 					// One row can contribute BOTH tokens — the coded allergen's name and the clinician's
-					// free text — and each is attributed to the row, so a rule matching either names it.
-					String coded = addConceptName(allergyTokens, allergy.getAllergen().getCodedAllergen());
+					// free text — and each is attributed to the row, so a rule matching either names it. Except
+					// where the coded allergen is the placeholder a free-text allergen is saved on: its name
+					// ("Other") is no allergen (ADR Decision 227).
+					String coded = isOtherNonCodedPlaceholder(allergy.getAllergen(), otherNonCoded) ? null
+							: addConceptName(allergyTokens, allergy.getAllergen().getCodedAllergen());
 					String free = addRaw(allergyTokens, allergy.getAllergen().getNonCodedAllergen());
 					attribute(allergyRecords, allergy.getUuid(), coded);
 					attribute(allergyRecords, allergy.getUuid(), free);
@@ -224,7 +229,35 @@ final class PatientClinicalContextBuilder {
 				activeDrugOrderUnaccountedFor, allergyRecords, conditionRecords);
 		built.recordNonDrugAllergyTokens(nonDrugAllergyTokens);
 		built.recordAllergySeverities(allergySeverities);
+		// The tokens as the chart spells them, before the context normalizes them (ADR Decision 227).
+		built.recordAllergySpellings(allergyTokens);
 		return built;
+	}
+
+	/** The global property naming core's "other non-coded" allergen concept — the one {@code AllergyProperties} reads. */
+	private static final String OTHER_NON_CODED_PROPERTY = "allergy.concept.otherNonCoded";
+
+	/**
+	 * Whether {@code allergen}'s coded concept is the placeholder a free-text allergen is saved on (ADR Decision 227): the
+	 * concept {@code otherNonCodedUuid} names, read off the global property as the severities are — and where the
+	 * property is unset, the one core's own {@code Allergen.isCoded()} reports. That method compares against a static
+	 * the platform copies from the property once, at startup, so the property is the authority where it is set.
+	 */
+	private static boolean isOtherNonCodedPlaceholder(Allergen allergen, String otherNonCodedUuid) {
+		Concept coded = allergen.getCodedAllergen();
+		if (coded == null) {
+			return false;
+		}
+		try {
+			if (otherNonCodedUuid != null && !otherNonCodedUuid.trim().isEmpty()) {
+				return otherNonCodedUuid.trim().equals(coded.getUuid());
+			}
+			return !allergen.isCoded();
+		}
+		catch (RuntimeException e) {
+			log.debug("Could not compare an allergen with the other non-coded concept", e);
+			return false;
+		}
 	}
 
 	/**

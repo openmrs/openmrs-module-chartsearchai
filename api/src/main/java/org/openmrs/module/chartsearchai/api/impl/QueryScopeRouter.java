@@ -635,6 +635,17 @@ public final class QueryScopeRouter {
 			+ " (?:interact with|affect) " + HER_D + "|(?:do|will|would|can) " + HER_D + " and " + HER_D
 			+ " interact(?: with (?:each other|one another))?)";
 
+	/**
+	 * "Will fluconazole raise his warfarin levels?", "Does rifampicin reduce the effect of her nevirapine?", "Does
+	 * metronidazole increase the bleeding risk with his warfarin?" — a question whether one drug CHANGES a particular effect
+	 * of the other, which the data never states: it relates the pair, never the effect asked about (ADR Decision 249).
+	 */
+	private static final String DOES_ONE_CHANGE_THE_OTHER = "(?:does|do|will|would|can|could|might) " + HER_D
+			+ " (?:increase|raise|elevate|boost|decrease|lower|reduce|change|alter|potentiate) (?:(?:the |" + POSSESSIVE + " )?"
+			+ D + " (?:levels?|concentrations?|effects?|effectiveness|efficacy|toxicity|exposure)|(?:the )?(?:[a-z]+ )?(?:risk"
+			+ "|levels?|concentrations?|effects?|effectiveness|efficacy|toxicity|exposure)(?: of [a-z]+)? (?:of|with|from|on|for) "
+			+ HER_D + ")";
+
 	/** "Any interactions between ibuprofen and celecoxib?", "Is there an interaction between X and Y?" (ADR Decisions 203, 218). */
 	private static final String ANY_INTERACTION_BETWEEN = "(?:are there |is there )?(?:any |an )?(?:drug )?interactions? between "
 			+ HER_D + " and " + HER_D;
@@ -644,6 +655,7 @@ public final class QueryScopeRouter {
 			"is it (?:safe|ok|okay|appropriate) to (?:combine|give|take|use) " + HER_D + " (?:and|with) " + HER_D
 					+ "(?: together)?",
 			DOES_ONE_INTERACT_WITH_THE_OTHER,
+			DOES_ONE_CHANGE_THE_OTHER,
 			// "Is ibuprofen safe with celecoxib?", "Is simvastatin ok with clopidogrel?", "Is her ibuprofen safe with her
 			// celecoxib?"
 			"is " + HER_D + " (?:safe|ok|okay|compatible) (?:with|alongside) " + HER_D,
@@ -662,6 +674,17 @@ public final class QueryScopeRouter {
 	}
 
 	private static final List<Pattern> TWO_DRUGS_INTERACT_SHAPES = shapes(DOES_ONE_INTERACT_WITH_THE_OTHER, ANY_INTERACTION_BETWEEN);
+
+	private static final List<Pattern> ONE_DRUG_CHANGES_THE_OTHER_SHAPES = shapes(DOES_ONE_CHANGE_THE_OTHER);
+
+	/**
+	 * Whether a question asks whether one of two drugs changes a particular effect of the other, and nothing else — {@link
+	 * #DOES_ONE_CHANGE_THE_OTHER} (ADR Decision 249). Its answer states what relates the pair and neither "Yes" nor "No".
+	 * Fail-CLOSED as {@link #asksWhetherToGiveADrug} is.
+	 */
+	public static boolean asksWhetherOneDrugChangesTheOther(List<String> wordsWithTheDrugsMarked) {
+		return fitsAShape(wordsWithTheDrugsMarked, ONE_DRUG_CHANGES_THE_OTHER_SHAPES);
+	}
 
 	/**
 	 * The question shapes asking whether to SWITCH one drug to another, the drug switched FROM named first (ADR Decision

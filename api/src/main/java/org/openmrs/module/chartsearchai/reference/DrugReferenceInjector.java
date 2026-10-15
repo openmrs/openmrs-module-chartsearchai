@@ -4977,7 +4977,8 @@ public class DrugReferenceInjector {
 		}
 		List<String> words = wordsBesideItsNames(question, questionDrugs);
 		boolean interact = QueryScopeRouter.asksWhetherTwoDrugsInteract(words);
-		if (asked.size() != 2 || !QueryScopeRouter.asksWhetherToGiveDrugsTogether(words) && !interact) {
+		boolean changes = QueryScopeRouter.asksWhetherOneDrugChangesTheOther(words);
+		if (asked.size() != 2 || !QueryScopeRouter.asksWhetherToGiveDrugsTogether(words) && !interact && !changes) {
 			return null;
 		}
 		Object proposed = null;
@@ -5003,8 +5004,9 @@ public class DrugReferenceInjector {
 			}
 		}
 		// A question whether the two interact is answered "Yes" only where a finding relates them; otherwise the model
-		// answers it, as before (ADR Decision 218).
-		if (interact && !relatesThePair) {
+		// answers it, as before (ADR Decision 218). So is one whether either changes an effect of the other (ADR Decision
+		// 249), answered with what relates them and neither "Yes" nor "No".
+		if ((interact || changes) && !relatesThePair) {
 			return null;
 		}
 		for (SafetyWarning finding : ofIt) {
@@ -5340,9 +5342,11 @@ public class DrugReferenceInjector {
 			}
 		}
 		// Whether the two interact is a question about the pair, answered "Yes" (ADR Decision 218); the gate admitted it only
-		// where a finding relates them.
-		Lead lead = QueryScopeRouter.asksWhetherTwoDrugsInteract(wordsBesideItsNames(question, questionDrugs)) ? Lead.INTERACTS
-				: Lead.of(question, proposedRows);
+		// where a finding relates them. Whether one changes an effect of the other is answered with neither (ADR Decision
+		// 249): the data relates the pair, never the effect asked about.
+		List<String> words = wordsBesideItsNames(question, questionDrugs);
+		Lead lead = QueryScopeRouter.asksWhetherTwoDrugsInteract(words) ? Lead.INTERACTS
+				: QueryScopeRouter.asksWhetherOneDrugChangesTheOther(words) ? Lead.NOT_GIVE : Lead.of(question, proposedRows);
 		String composed = composeFromFindings(ofIt, ofItNumbers, orderRecordNumbers, herOrderRecords, true, pairs,
 				lead, SCREEN_SCOPE);
 		return composed == null ? null : hers + OWN_MEDICATION_LEAD + ".\n" + composed;

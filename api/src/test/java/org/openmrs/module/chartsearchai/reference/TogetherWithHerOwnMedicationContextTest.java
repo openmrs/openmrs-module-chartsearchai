@@ -134,6 +134,41 @@ public class TogetherWithHerOwnMedicationContextTest extends BaseModuleContextSe
 		}
 	}
 
+	/**
+	 * Whether one drug raises, lowers or otherwise changes a particular effect of the other — an effect the data does not
+	 * state — is answered with the finding and neither "Yes" nor "No" (ADR Decision 249). On the 3.7.1 standalone Donald
+	 * Thompson's "Does metronidazole increase the bleeding risk with his warfarin?" reached the model, which opened "No —
+	 * metronidazole should not be given: coadministration … may increase … the hypoprothrombinemic effect of warfarin".
+	 */
+	@Test
+	public void aQuestionWhetherADrugChangesAnEffectOfHerDrugIsAnsweredWithTheFindingAndNeitherYesNorNo() {
+		for (String question : Arrays.asList("Will rifampicin decrease her nevirapine levels?",
+			"Does rifampicin reduce the effect of her nevirapine?", "Can rifampicin lower nevirapine concentrations?",
+			"Does rifampicin increase the risk of toxicity with her nevirapine?")) {
+			String answer = askOverTheShippedData(question, "Nevirapine 200mg", "Nevirapine").getModuleAnswer();
+
+			assertTrue(answer != null && answer.startsWith("Nevirapine is one of this patient's active medications.\n"
+					+ DrugReferenceInjector.NEUTRAL_WITHHOLD_LEAD_OPENING + "Rifampicin (rifampin).\n"), question + " was: " + answer);
+			assertTrue(answer.contains("Rifampicin (rifampin) interacts with active order Nevirapine — Major."),
+				question + " states the pair: " + answer);
+			assertTrue(!answer.contains("No —") && !answer.contains("Yes —"), "neither Yes nor No: " + answer);
+		}
+	}
+
+	@Test
+	public void aQuestionWhetherOneOfHerDrugsChangesAnEffectOfAnotherOfHersStatesThemSideBySide() {
+		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
+			DrugReferenceTestSupport.activeOrder("order-nevirapine", "Nevirapine 200mg", "Nevirapine"),
+			DrugReferenceTestSupport.activeOrder("order-rifampicin", "Rifampicin 150mg", "Rifampicin"));
+		String answer = DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.shippedServiceWithGroups())
+				.injectRecords(DrugReferenceTestSupport.oneRecordChart(), DrugReferenceTestSupport.ctx(40, null,
+					new LinkedHashSet<String>(Arrays.asList("Nevirapine 200mg", "Nevirapine", "Rifampicin 150mg", "Rifampicin")),
+					null, null, null, orders), "Will her rifampicin reduce her nevirapine levels?").getModuleAnswer();
+
+		assertTrue(answer != null && answer.contains(DrugReferenceInjector.TWO_OF_HER_OWN_LEAD), "was: " + answer);
+		assertTrue(!answer.contains("No —") && !answer.contains("Yes —"), "neither Yes nor No: " + answer);
+	}
+
 	@Test
 	public void aQuestionWhetherHerDrugAndAnotherInteractIsLeftToTheModelWhereNoFindingRelatesThem() {
 		// Rifampicin relates to nothing of hers above the floor here, so neither "Yes" nor the proposal's "No" is the module's.

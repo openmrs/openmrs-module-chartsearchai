@@ -17513,3 +17513,31 @@ and hypoprothrombinemic effect of warfarin"*: a "No" to whether it would affect 
   answers it.
 
 Pinned by `TogetherWithHerOwnMedicationContextTest.aQuestionWhetherADrugAffectsHerDrugIsAnsweredYesWhereAFindingRelatesThem`.
+
+## Decision 249: Whether one drug changes an effect of the other is answered with the finding and neither "Yes" nor "No"
+
+**Status: Accepted** (October 2026) — the owner's standing request of 2026-10-15 to fix what misleads a clinician.
+
+### Context
+
+On the 3.7.1 standalone Donald Thompson's *"Does metronidazole increase the bleeding risk with his warfarin?"* reached
+the model, which opened *"No — metronidazole should not be given: coadministration with metronidazole may increase the
+plasma concentrations and hypoprothrombinemic effect of warfarin, a Major finding"*: a "No" to whether it increases the
+risk, over the finding saying it raises warfarin's effect. The data relates the pair; it never states the particular
+effect such a question asks about — a level, an effect, a risk — so neither "Yes" nor "No" is the module's to give.
+
+### The decision
+
+- **"Does/Will/Can X increase, raise, lower, reduce, change … her Y levels / the effect of her Y / the risk (of …) with
+  her Y?"** (`QueryScopeRouter.asksWhetherOneDrugChangesTheOther`) is a two-drug question:
+  - one of the two hers, the other related to it by a finding: [Decision 196](#decision-196-two-drugs-asked-about-together-one-of-them-hers-are-answered-for-the-other-and-her-drugs-other-findings-are-drawn-apart)'s
+    answer, its lead [Decision 181](#decision-181-a-question-whether-not-to-give-a-drug-or-whether-it-interacts-is-answered-without-an-inverted-no)'s
+    neutral one — *"This module's drug-safety check found a reason to withhold Metronidazole."* — and the pair's line
+    among its findings;
+  - both hers: [Decision 203](#decision-203-two-drugs-she-already-takes-asked-about-together-are-answered-with-what-relates-them--never-that-they-may-be-combined)'s
+    statement of what relates them;
+  - otherwise the model's, as before.
+- What was asked about the effect is left unanswered, and the finding's line says what the data does relate.
+
+Pinned by `TogetherWithHerOwnMedicationContextTest.aQuestionWhetherADrugChangesAnEffectOfHerDrugIsAnsweredWithTheFindingAndNeitherYesNorNo`
+and `.aQuestionWhetherOneOfHerDrugsChangesAnEffectOfAnotherOfHersStatesThemSideBySide`.

@@ -194,6 +194,20 @@ public class TogetherWithHerOwnMedicationContextTest extends BaseModuleContextSe
 		}
 	}
 
+	/** Whether a drug is dangerous, risky or a cause of problems beside her drug (ADR Decision 255): "No" would say it is not. */
+	@Test
+	public void whetherADrugIsDangerousBesideHerDrugIsAnsweredWithTheFindingAndNeitherYesNorNo() {
+		for (String question : Arrays.asList("Is rifampicin dangerous with her nevirapine?",
+			"Is it risky to combine rifampicin and her nevirapine?", "Could rifampicin cause problems with her nevirapine?",
+			"Would rifampicin be harmful with her nevirapine?", "Is the combination of rifampicin and her nevirapine dangerous?")) {
+			String answer = askOverTheShippedData(question, "Nevirapine 200mg", "Nevirapine").getModuleAnswer();
+
+			assertTrue(answer != null && answer.startsWith("Nevirapine is one of this patient's active medications.\n"
+					+ DrugReferenceInjector.NEUTRAL_WITHHOLD_LEAD_OPENING + "Rifampicin (rifampin).\n"), question + " was: " + answer);
+			assertTrue(!answer.contains("No —") && !answer.contains("Yes —"), "neither Yes nor No: " + answer);
+		}
+	}
+
 	@Test
 	public void aQuestionWhetherOneOfHerDrugsChangesAnEffectOfAnotherOfHersStatesThemSideBySide() {
 		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(

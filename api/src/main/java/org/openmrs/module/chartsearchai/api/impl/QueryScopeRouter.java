@@ -408,7 +408,15 @@ public final class QueryScopeRouter {
 					+ PATIENT + " )?(?:on )?" + D + "(?: (?:to|for) " + PATIENT + ")?",
 			// "Is it risky to give her ibuprofen?", "Is it wrong to give her ibuprofen?"
 			"is it (?:risky|dangerous|unsafe|wrong|harmful|a problem) to (?:give|start|prescribe|administer|add) (?:" + PATIENT
-					+ " )?(?:on )?" + D + "(?: (?:to|for) " + PATIENT + ")?(?: now| today)?");
+					+ " )?(?:on )?" + D + "(?: (?:to|for) " + PATIENT + ")?(?: now| today)?",
+			// "Is ibuprofen dangerous for her?", "Could ibuprofen cause problems?", "Will giving her ibuprofen cause problems?",
+			// "Is there any harm in giving her ibuprofen?", "Any reason to avoid ibuprofen?" (ADR Decision 255)
+			"is " + D + " (?:dangerous|risky|unsafe|harmful|a problem|problematic)(?: (?:for|in) " + PATIENT + ")?(?: now| today)?",
+			"(?:could|would|will|might|can) " + D + " cause (?:any )?(?:problems?|issues?|harm)(?: (?:for|in) " + PATIENT + ")?",
+			"(?:could|would|will|might) giving (?:" + PATIENT + " )?" + D + " cause (?:any )?(?:problems?|issues?|harm)",
+			"is there (?:any |a )?(?:harm|risk|danger|problem|issue|contraindication) (?:in|with|to) (?:giving|starting|prescribing"
+					+ "|adding) (?:" + PATIENT + " )?(?:on )?" + D + "(?: (?:to|for) " + PATIENT + ")?",
+			"(?:is there )?any reason to avoid " + D + "(?: (?:for|in) " + PATIENT + ")?");
 
 	/**
 	 * Whether a question asks whether NOT to give one drug, and nothing else — one of {@link #NEGATED_PROPOSAL_SHAPES}
@@ -681,6 +689,17 @@ public final class QueryScopeRouter {
 			+ "|what (?:is|are) the (?:risks?|dangers?) (?:of|in) (?:combining|giving|using|taking|adding) " + HER_D
 			+ " (?:and|with|to) " + HER_D + ")(?: together)?";
 
+	/** "Is clarithromycin dangerous with her simvastatin?", "Is it risky to combine X and Y?", "Could metronidazole cause
+	 *  problems with his warfarin?", "Is the combination of warfarin and amiodarone dangerous?" — whether the two are
+	 *  dangerous together, whose "No" would say they are not (ADR Decision 255). */
+	private static final String DANGEROUS_TOGETHER = "(?:is " + HER_D + " (?:dangerous|risky|unsafe|harmful|contraindicated"
+			+ "|a problem|problematic) (?:with|alongside|in combination with) " + HER_D + "|is it (?:dangerous|risky|unsafe|harmful"
+			+ "|a problem) to (?:combine|give|take|use) " + HER_D + " (?:and|with) " + HER_D + "(?: together)?|(?:could|would|will"
+			+ "|might|can) " + HER_D + " cause (?:any )?(?:problems?|issues?|harm) (?:with|for|alongside) " + HER_D + "|(?:would"
+			+ "|will|could) " + HER_D + " be (?:harmful|dangerous|risky|unsafe|a problem) (?:with|alongside) " + HER_D
+			+ "|(?:is|are) (?:the combination of )?" + HER_D + " (?:and|with) " + HER_D + " (?:a )?(?:dangerous|risky|unsafe"
+			+ "|harmful)(?: combination)?)";
+
 	/** "Do I need to stop her simvastatin before starting clarithromycin?", "Can she continue her simvastatin if I start
 	 *  clarithromycin?" — whether to stop or keep her drug for another (ADR Decision 252). */
 	private static final String STOP_OR_KEEP_ONE_FOR_THE_OTHER = "(?:(?:(?:do|will) (?:i|we) (?:need|have) to|should (?:i|we))"
@@ -709,7 +728,7 @@ public final class QueryScopeRouter {
 					+ "(?: together)?",
 			DOES_ONE_INTERACT_WITH_THE_OTHER,
 			DOES_ONE_CHANGE_THE_OTHER, AVOID_ONE_WITH_THE_OTHER, WHAT_COMBINING_THEM_DOES, DOSE_BECAUSE_OF_THE_OTHER,
-			STOP_OR_KEEP_ONE_FOR_THE_OTHER, MONITORING_ON_BOTH,
+			STOP_OR_KEEP_ONE_FOR_THE_OTHER, MONITORING_ON_BOTH, DANGEROUS_TOGETHER,
 			// "Is ibuprofen safe with celecoxib?", "Is simvastatin ok with clopidogrel?", "Is her ibuprofen safe with her
 			// celecoxib?"
 			"is " + HER_D + " (?:safe|ok|okay|compatible) (?:with|alongside) " + HER_D,
@@ -731,13 +750,14 @@ public final class QueryScopeRouter {
 
 	private static final List<Pattern> ONE_DRUG_CHANGES_THE_OTHER_SHAPES = shapes(DOES_ONE_CHANGE_THE_OTHER,
 			AVOID_ONE_WITH_THE_OTHER, WHAT_COMBINING_THEM_DOES, DOSE_BECAUSE_OF_THE_OTHER, STOP_OR_KEEP_ONE_FOR_THE_OTHER,
-			MONITORING_ON_BOTH);
+			MONITORING_ON_BOTH, DANGEROUS_TOGETHER);
 
 	/**
 	 * Whether a question asks whether one of two drugs changes a particular effect of the other — {@link
 	 * #DOES_ONE_CHANGE_THE_OTHER} (ADR Decision 249) — or what else it does beside it, whose "No" would read backwards
 	 * ({@link #AVOID_ONE_WITH_THE_OTHER}, {@link #WHAT_COMBINING_THEM_DOES}, {@link #DOSE_BECAUSE_OF_THE_OTHER}; ADR
-	 * Decision 251; {@link #STOP_OR_KEEP_ONE_FOR_THE_OTHER}, {@link #MONITORING_ON_BOTH}; ADR Decision 252), and nothing else. Its answer states what relates the pair and neither "Yes" nor "No". Fail-CLOSED as
+	 * Decision 251; {@link #STOP_OR_KEEP_ONE_FOR_THE_OTHER}, {@link #MONITORING_ON_BOTH}; ADR Decision 252; {@link
+	 * #DANGEROUS_TOGETHER}, ADR Decision 255), and nothing else. Its answer states what relates the pair and neither "Yes" nor "No". Fail-CLOSED as
 	 * {@link #asksWhetherToGiveADrug} is.
 	 */
 	public static boolean asksWhetherOneDrugChangesTheOther(List<String> wordsWithTheDrugsMarked) {

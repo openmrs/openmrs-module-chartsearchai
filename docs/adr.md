@@ -17674,3 +17674,33 @@ together."* beside two Major interactions among them.
   are screen shapes: the screen runs and the module answers with what it found, every pair among her orders.
 
 Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.whetherAGroupOfHerMedicationsIsSafeTogetherIsAScreen`.
+
+## Decision 255: Whether a drug is dangerous, harmful or a cause of problems is answered with neither "Yes" nor "No"
+
+**Status: Accepted** (October 2026) — the owner's standing request of 2026-10-15 to fix what misleads a clinician. It
+widens [Decision 181](#decision-181-a-question-whether-not-to-give-a-drug-or-whether-it-interacts-is-answered-without-an-inverted-no)'s
+grammar and [Decision 249](#decision-249-whether-one-drug-changes-an-effect-of-the-other-is-answered-with-the-finding-and-neither-yes-nor-no)'s
+two-drug question.
+
+### Context
+
+Asked on the 3.7.1 standalone, 12 of 16 questions whether a drug is dangerous, risky, harmful, contraindicated or a cause
+of problems — alone or beside one of her drugs — were answered by the model *"No — X should not be given"*: *"Is ibuprofen
+dangerous for her?"*, *"Is there any harm in giving her ibuprofen?"*, *"Will giving her clarithromycin cause
+problems?"*, *"Is there a contraindication to giving him azithromycin?"*, *"Is clarithromycin risky with her
+simvastatin?"*, *"Is it unsafe to combine clarithromycin and simvastatin?"*, *"Could metronidazole cause problems with
+his warfarin?"*, *"Is the combination of warfarin and amiodarone dangerous?"* among them, each over a Major finding. To
+a clinician reading the first word, each said the drug is safe.
+
+### The decision
+
+- **Of one drug, Decision 181's shapes** (`QueryScopeRouter.NEGATED_PROPOSAL_SHAPES`): *"Is X dangerous / risky / unsafe /
+  harmful / a problem (for her)?"*, *"Could X cause problems?"*, *"Will giving her X cause problems?"*, *"Is there any
+  harm / risk / contraindication in giving her X?"*, *"Any reason to avoid X?"* — answered with the finding and neither
+  "Yes" nor "No".
+- **Of two, Decision 249's question** (`QueryScopeRouter`'s `DANGEROUS_TOGETHER`): *"Is X dangerous / risky /
+  contraindicated with her Y?"*, *"Is it unsafe to combine X and Y?"*, *"Could X cause problems with his Y?"*, *"Would X be
+  harmful with her Y?"*, *"Is the combination of X and Y dangerous?"*, *"Are X and Y a dangerous combination?"*.
+
+Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.whetherADrugIsDangerousIsAnsweredWithoutAYesOrNo` and
+`TogetherWithHerOwnMedicationContextTest.whetherADrugIsDangerousBesideHerDrugIsAnsweredWithTheFindingAndNeitherYesNorNo`.

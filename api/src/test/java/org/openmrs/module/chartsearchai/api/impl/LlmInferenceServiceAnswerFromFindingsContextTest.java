@@ -519,6 +519,24 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	}
 
 	/**
+	 * Whether a drug is DANGEROUS, harmful or a cause of problems inverts "No" as whether it is contraindicated does (ADR
+	 * Decision 255): "No" would say it is not.
+	 */
+	@Test
+	public void whetherADrugIsDangerousIsAnsweredWithoutAYesOrNo() {
+		for (String question : new String[] { "Is ibuprofen dangerous for her?", "Is ibuprofen risky?",
+				"Could ibuprofen cause problems for her?", "Will giving her ibuprofen cause problems?",
+				"Is there any harm in giving her ibuprofen?", "Is there a contraindication to giving her ibuprofen?",
+				"Any reason to avoid ibuprofen in her?" }) {
+			RecordingProvider provider = new RecordingProvider();
+			ChartAnswer answer = serviceWith(provider).search(patient, question);
+			assertEquals(0, provider.calls, question + " — " + answer.getAnswer());
+			assertTrue(answer.getAnswer().startsWith(DrugReferenceInjector.NEUTRAL_WITHHOLD_LEAD_OPENING + "Ibuprofen.\n"),
+					question + " — " + answer.getAnswer());
+		}
+	}
+
+	/**
 	 * "As well", "too" and "also" propose the drug beside her medications, which is what every proposal is screened against
 	 * (ADR Decision 244). On the 3.7.1 standalone Carol Brown, on lisinopril among six orders, asked "Can I start her on
 	 * enalapril as well?", reached the model, and read "Enalapril can be started, with several cautions" — a second ACE

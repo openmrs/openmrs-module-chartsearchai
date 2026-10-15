@@ -17357,3 +17357,23 @@ was no screen request at all.
   about food, a dose or a patient factor.
 
 Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.askingWhichOfHerMedicationsIShouldStopIsAScreen`.
+
+## Decision 242: The apostrophe a phone's keyboard writes is read as the ASCII one when a drug name is matched
+
+**Status: Accepted** (October 2026) — the owner's standing request of 2026-10-15 to fix what misleads a clinician. A
+companion to [Decision 240](#decision-240-a-knowledge-base-name-is-also-matched-without-an-abbreviations-period-or-a-possessives-apostrophe).
+
+### Context
+
+A phone's or tablet's keyboard commonly turns the apostrophe a clinician types into U+2019 ("’"). The question grammar
+already reads it as the ASCII one (`QueryScopeRouter.words`), but drug names were matched on `DrugReference.foldedLower`,
+which did not, so *"Can I give him St John’s wort?"* named no drug the module knows — the miss Decision 240 closed for
+the ASCII spelling, open again for the same words typed on a phone.
+
+### The decision
+
+- **`DrugReference.foldedLower`, the form both sides of every name match are folded to, reads U+2019 as `'`.** It is a
+  character-for-character step, so a position in the folded text stays one; and where the text carries none it
+  allocates nothing.
+
+Pinned by `AbbreviatedDrugNameContextTest.aDrugNameWrittenWithATypographicApostropheResolves`.

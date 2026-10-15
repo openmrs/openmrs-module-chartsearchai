@@ -52,6 +52,14 @@ public class AbbreviatedDrugNameContextTest extends BaseModuleContextSensitiveTe
 		}
 	}
 
+	/** The apostrophe a phone's keyboard writes, U+2019, is read as the ASCII one (ADR Decision 242). */
+	@Test
+	public void aDrugNameWrittenWithATypographicApostropheResolves() {
+		for (String question : Arrays.asList("Can I give him St John\u2019s wort?", "Can I give him St. John\u2019s Wort?")) {
+			assertWithholdsStJohnsWortForHisNevirapine(ask(question), question);
+		}
+	}
+
 	private static void assertWithholdsStJohnsWortForHisNevirapine(String answer, String question) {
 		assertNotNull(answer, question + ": the module answers");
 		String[] lines = answer.split("\n");

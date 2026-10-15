@@ -2832,9 +2832,11 @@ public class DrugReference {
 	}
 
 	/**
-	 * @return {@code value} lowercased ({@link Locale#ROOT}) and then {@link #foldDiacritics}-folded —
-	 *         the form both operands of {@link #boundedTokenIndex} must be in, named once so that a
-	 *         caller preparing them itself cannot apply half of it or apply the two in the other order.
+	 * @return {@code value} lowercased ({@link Locale#ROOT}) and then {@link #foldDiacritics}-folded, with
+	 *         the typographic apostrophe a phone's keyboard writes (U+2019) read as the ASCII one (ADR Decision
+	 *         242) — the form both operands of {@link #boundedTokenIndex} must be in, named once so that a
+	 *         caller preparing them itself cannot apply half of it or apply the two in the other order. The
+	 *         apostrophe step is character for character, so a position in the folded text stays one.
 	 *
 	 *         <p><b>{@code toLowerCase} is idempotent, and that alone is what lets a caller holding an
 	 *         already-lowercased string pass it straight in</b> ({@code DrugSafetyValidator.attributedDoses}
@@ -2847,7 +2849,7 @@ public class DrugReference {
 	 *         at the one place a string USED to be folded twice, which issue #330 closed.
 	 */
 	static String foldedLower(String value) {
-		return foldDiacritics(value.toLowerCase(Locale.ROOT));
+		return foldDiacritics(value.toLowerCase(Locale.ROOT)).replace('\u2019', '\'');
 	}
 
 	/**

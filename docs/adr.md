@@ -18033,3 +18033,28 @@ and an order of polyvinyl alcohol eye drops would have been read as ethanol.
 
 Pinned by `AlcoholAskedAboutTest`, whose last case is a data guard: each term names a row of the shipped knowledge base and
 is none of its names.
+
+## Decision 269: A proposal stating a dose raises the findings the proposal does
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-15 to fix the errors the sweep left.
+
+### Context
+
+On the 3.7.1 standalone George, on acetaminophen, asked *"Is 1 g of paracetamol safe for him?"* and read *"The records do
+not address the safety of 1 g of paracetamol."* — while *"Is paracetamol safe for him?"* is told that acetaminophen is
+already in his active order. The dose kept the question from fitting any shape, so it was read as no proposal at all, and
+the finding that he already takes the drug was never raised. The shipped knowledge base carries no dosing
+(`DdiDrugReferenceSource`'s javadoc), so no dose was ever going to be checked; the defect is that the rest of the check did
+not run either.
+
+### The decision
+
+- **The question shapes read past a dose stated beside the drug** — an amount before it (*"1 g of paracetamol"*) or an
+  amount and a frequency after it (*"amoxicillin 500 mg three times a day"*, *"500mg tds"*), in
+  `QueryScopeRouter.fitsAsWritten` — so every grammar asks what the question asks of the drug, and the proposal's findings
+  (*"Acetaminophen is already in active order …"*) are raised and reach the model and the chips.
+- **The findings weigh no dose, so the model still answers such a question**, as
+  `LlmInferenceServiceAnswerFromFindingsContextTest.aQuestionTheModuleDidNotResolveAsASuitabilityQuestionStillAsksTheModel`
+  holds: a question stating a dose (`QueryScopeRouter.statesADose`) is never answered by the module.
+
+Pinned by `StatedDoseProposalTest`.

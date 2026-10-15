@@ -896,6 +896,35 @@ public final class QueryScopeRouter {
 	 * shape exactly, so the restored word adds only the word a shape already names: a word mistyped any other way —
 	 * "Ts", "Cna" — is not guessed at, and every grammar stays fail-closed.
 	 */
+	/** An amount, as {@link #words} split it: "500 mg", "500mg", "1 g", "1 5 g" (1.5 g), "10 mg kg" (10 mg/kg), "2 tablets". */
+	private static final String AMOUNT = "(?:\\d+ )*(?:\\d+ (?:mg|milligrams?|g|grams?|gm|mcg|micrograms?|ug|ml|mls|millilitres?|milliliters?"
+			+ "|iu|units?|tablets?|tabs?|capsules?|caps?|drops?|puffs?)|\\d+(?:mg|g|gm|mcg|ug|ml|mls|iu))(?: (?:per )?kg)?";
+
+	/** How often: "three times a day", "twice daily", "tds", "every 6 hours", "at night". */
+	private static final String FREQUENCY = "(?:(?:once|twice|thrice|(?:one|two|three|four|\\d+) times?) (?:a|per|each|every) day"
+			+ "|(?:once |twice )?daily|bd|bid|tds|tid|qds|qid|od|nocte|stat|prn|(?:every|each) (?:\\d+ )?(?:hours?|hrs?)"
+			+ "|\\d+ hourly|q\\d+h|at night|in the morning)";
+
+	/** A dose stated before the drug, "1 g of paracetamol", and after it, "amoxicillin 500 mg three times a day". */
+	private static final Pattern DOSE_BEFORE_THE_DRUG = Pattern.compile("(?<=^| )" + AMOUNT + " of (" + D + ")");
+
+	private static final Pattern DOSE_AFTER_THE_DRUG = Pattern.compile("(" + D + ") " + AMOUNT + "(?: " + FREQUENCY + ")?(?= |$)");
+
+	/** {@code joined} without the dose stated beside its drug, or {@code null} where it states none (ADR Decision 269). */
+	private static String withoutAStatedDose(String joined) {
+		String without = DOSE_AFTER_THE_DRUG.matcher(DOSE_BEFORE_THE_DRUG.matcher(joined).replaceAll("$1")).replaceAll("$1");
+		return without.equals(joined) ? null : without;
+	}
+
+	/**
+	 * Whether the question, its drug marked {@link #DRUG_NAME}, states a dose beside it — "1 g of paracetamol",
+	 * "amoxicillin 500 mg three times a day" (ADR Decision 269). The shapes read past it, so the findings the drug raises
+	 * are raised; the findings weigh no dose, so the model answers such a question.
+	 */
+	public static boolean statesADose(List<String> wordsWithTheDrugMarked) {
+		return wordsWithTheDrugMarked != null && withoutAStatedDose(String.join(" ", wordsWithTheDrugMarked)) != null;
+	}
+
 	private static boolean fitsAShape(List<String> words, List<Pattern> shapes) {
 		if (words == null || words.isEmpty()) {
 			return false;
@@ -918,8 +947,11 @@ public final class QueryScopeRouter {
 
 	private static boolean fitsAsWritten(List<String> words, List<Pattern> shapes) {
 		String joined = String.join(" ", words);
+		// A dose stated beside the drug is no part of the question's shape (ADR Decision 269): "Is 1 g of paracetamol safe
+		// for him?" asks what "Is paracetamol safe for him?" asks, of a dose — which the answer then says it did not check.
+		String withoutADose = withoutAStatedDose(joined);
 		for (Pattern shape : shapes) {
-			if (shape.matcher(joined).matches()) {
+			if (shape.matcher(joined).matches() || withoutADose != null && shape.matcher(withoutADose).matches()) {
 				return true;
 			}
 		}

@@ -1244,6 +1244,13 @@ public class DrugReferenceInjector {
 		if (purpose != null) {
 			moduleAnswer = moduleAnswer + "\n" + PURPOSE_NOT_WEIGHED_OPENING + purpose + ").";
 		}
+		// A dose the question states is no part of what the findings weigh, so the model answers such a question, as it
+		// always did — now with the findings its drug raises, which the dose used to keep from being raised at all (ADR
+		// Decision 269).
+		if (moduleAnswer != null && !questionDrugs.isEmpty()
+				&& QueryScopeRouter.statesADose(wordsBesideItsNames(question, questionDrugs))) {
+			moduleAnswer = null;
+		}
 		if (moduleAnswer != null) {
 			injected.markModuleAnswer(moduleAnswer);
 		}

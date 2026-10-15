@@ -628,6 +628,13 @@ public final class QueryScopeRouter {
 	 * medications?" is the model's to answer; the second's answer opens "Yes —", which does not answer "which". Its one
 	 * reader asks it of a drug her own orders carry.
 	 */
+	/** "Any interactions with her metronidazole?" — the interactions or problems of a drug the question names as hers (ADR
+	 *  Decision 237). */
+	private static final String ANY_INTERACTIONS_WITH_HER_D = "(?:(?:are|is) there )?any (?:drug )?(?:interactions?|problems?"
+			+ "|issues?|concerns?) with " + POSSESSIVE + " " + D;
+
+	private static final List<Pattern> ANY_INTERACTIONS_WITH_HER_D_SHAPES = shapes(ANY_INTERACTIONS_WITH_HER_D);
+
 	private static final List<Pattern> BESIDE_HER_MEDICATIONS_SHAPES = shapes(
 			// "Is lidocaine safe with her other medications?", "Is ibuprofen okay with her current meds?"
 			"is " + D + " (?:safe|ok|okay|appropriate) (?:with|alongside) (?:any of )?" + POSSESSIVE + " (?:other )?"
@@ -641,7 +648,19 @@ public final class QueryScopeRouter {
 			"does " + D + " cause (?:any )?(?:drug )?interactions? with (?:any of )?" + POSSESSIVE + " (?:other )?" + MEDICATIONS,
 			// "Any interactions with her metronidazole?", "Are there any problems with his lisinopril?" — her drug named as
 			// hers, the interactions or problems of it asked after (ADR Decision 237)
-			"(?:(?:are|is) there )?any (?:drug )?(?:interactions?|problems?|issues?|concerns?) with " + POSSESSIVE + " " + D);
+			ANY_INTERACTIONS_WITH_HER_D,
+			// "Should I hold her metformin?", "Do I need to stop her ibuprofen?" (ADR Decision 259)
+			"(?:should|must|do|can) (?:i|we) (?:need to )?(?:hold|stop|pause|suspend|discontinue|withhold) " + POSSESSIVE + " " + D
+					+ "(?: now| today| for now)?");
+
+	/**
+	 * Whether a question asks after the interactions or problems of a drug it names as hers — {@link
+	 * #ANY_INTERACTIONS_WITH_HER_D} (ADR Decisions 237, 260). Asked where the drug is NOT hers, so the answer can say she is
+	 * not on it before it answers. Fail-CLOSED as {@link #asksWhetherToGiveADrug} is.
+	 */
+	public static boolean asksAboutADrugNamedAsHers(List<String> wordsWithTheDrugMarked) {
+		return fitsAShape(wordsWithTheDrugMarked, ANY_INTERACTIONS_WITH_HER_D_SHAPES);
+	}
 
 	/**
 	 * Whether a question asks about ONE drug beside her other medications, and nothing else — one of {@link
@@ -718,6 +737,10 @@ public final class QueryScopeRouter {
 			+ " (?:any )?(?:[a-z]+ )?monitoring (?:(?:on|with|for|while on) " + HER_D + " and " + HER_D + "(?: together)?|(?:if|when)"
 			+ " (?:i|we) (?:add|give|start|prescribe) " + D + " (?:to|with) " + HER_D + ")";
 
+	/** "Is his warfarin dose safe with his amiodarone?" — whether her drug's dose is safe beside another (ADR Decision 258). */
+	private static final String DOSE_SAFE_WITH_THE_OTHER = "is " + POSSESSIVE + " " + D + " dose (?:still )?(?:safe|ok|okay"
+			+ "|appropriate|fine) (?:with|alongside|beside|given) (?:the |" + POSSESSIVE + " )?" + D;
+
 	private static final String DOSE_BECAUSE_OF_THE_OTHER = "should " + POSSESSIVE + " " + D + " dose be (?:reduced|lowered"
 			+ "|decreased|increased|raised|adjusted|changed)(?: (?:because of|due to|with|for) (?:the |" + POSSESSIVE + " )?" + D
 			+ "| if (?:i|we) (?:add|give|start|prescribe) " + D + ")";
@@ -732,7 +755,7 @@ public final class QueryScopeRouter {
 					+ "(?: together)?",
 			DOES_ONE_INTERACT_WITH_THE_OTHER,
 			DOES_ONE_CHANGE_THE_OTHER, AVOID_ONE_WITH_THE_OTHER, WHAT_COMBINING_THEM_DOES, DOSE_BECAUSE_OF_THE_OTHER,
-			STOP_OR_KEEP_ONE_FOR_THE_OTHER, MONITORING_ON_BOTH, DANGEROUS_TOGETHER,
+			STOP_OR_KEEP_ONE_FOR_THE_OTHER, MONITORING_ON_BOTH, DANGEROUS_TOGETHER, DOSE_SAFE_WITH_THE_OTHER,
 			// "Is ibuprofen safe with celecoxib?", "Is simvastatin ok with clopidogrel?", "Is her ibuprofen safe with her
 			// celecoxib?"
 			"is " + HER_D + " (?:safe|ok|okay|compatible) (?:with|alongside) " + HER_D,
@@ -754,14 +777,14 @@ public final class QueryScopeRouter {
 
 	private static final List<Pattern> ONE_DRUG_CHANGES_THE_OTHER_SHAPES = shapes(DOES_ONE_CHANGE_THE_OTHER,
 			AVOID_ONE_WITH_THE_OTHER, WHAT_COMBINING_THEM_DOES, DOSE_BECAUSE_OF_THE_OTHER, STOP_OR_KEEP_ONE_FOR_THE_OTHER,
-			MONITORING_ON_BOTH, DANGEROUS_TOGETHER);
+			MONITORING_ON_BOTH, DANGEROUS_TOGETHER, DOSE_SAFE_WITH_THE_OTHER);
 
 	/**
 	 * Whether a question asks whether one of two drugs changes a particular effect of the other — {@link
 	 * #DOES_ONE_CHANGE_THE_OTHER} (ADR Decision 249) — or what else it does beside it, whose "No" would read backwards
 	 * ({@link #AVOID_ONE_WITH_THE_OTHER}, {@link #WHAT_COMBINING_THEM_DOES}, {@link #DOSE_BECAUSE_OF_THE_OTHER}; ADR
 	 * Decision 251; {@link #STOP_OR_KEEP_ONE_FOR_THE_OTHER}, {@link #MONITORING_ON_BOTH}; ADR Decision 252; {@link
-	 * #DANGEROUS_TOGETHER}, ADR Decision 255), and nothing else. Its answer states what relates the pair and neither "Yes" nor "No". Fail-CLOSED as
+	 * #DANGEROUS_TOGETHER}, ADR Decision 255; {@link #DOSE_SAFE_WITH_THE_OTHER}, ADR Decision 258), and nothing else. Its answer states what relates the pair and neither "Yes" nor "No". Fail-CLOSED as
 	 * {@link #asksWhetherToGiveADrug} is.
 	 */
 	public static boolean asksWhetherOneDrugChangesTheOther(List<String> wordsWithTheDrugsMarked) {

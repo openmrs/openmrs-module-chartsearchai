@@ -65,9 +65,17 @@ final class UnrecognisedDrugName {
 
 	private final List<String> suggestions;
 
+	/** Whether the word stands in a switch's place (ADR Decision 261): no pair was the question, so no pair is named. */
+	private final boolean inASwitch;
+
 	private UnrecognisedDrugName(String word, List<String> suggestions) {
+		this(word, suggestions, false);
+	}
+
+	private UnrecognisedDrugName(String word, List<String> suggestions, boolean inASwitch) {
 		this.word = word;
 		this.suggestions = suggestions;
+		this.inASwitch = inASwitch;
 	}
 
 	/**
@@ -99,7 +107,11 @@ final class UnrecognisedDrugName {
 				List<String> marked = new ArrayList<String>(words.subList(0, i));
 				marked.add(QueryScopeRouter.DRUG_NAME);
 				marked.addAll(words.subList(i + length, words.size()));
-				if (!QueryScopeRouter.asksAboutTwoDrugsTogether(marked) && !QueryScopeRouter.asksWhetherTwoDrugsInteract(marked)
+				// A switch to or from it too (ADR Decision 261): "Can I replace her stavudine with tenofovir?".
+				boolean inASwitch = QueryScopeRouter.asksWhetherToSwitchADrug(marked)
+						|| QueryScopeRouter.asksWhetherToGiveADrugInsteadOfAnother(marked);
+				if (!inASwitch && !QueryScopeRouter.asksAboutTwoDrugsTogether(marked)
+						&& !QueryScopeRouter.asksWhetherTwoDrugsInteract(marked)
 						&& !QueryScopeRouter.asksWhetherOneDrugChangesTheOther(marked)) {
 					continue;
 				}
@@ -113,10 +125,16 @@ final class UnrecognisedDrugName {
 						|| namedAsHers(words, i)) {
 					return null;
 				}
-				return new UnrecognisedDrugName(asWritten(word, question), suggestionsFor(word, entries));
+				return new UnrecognisedDrugName(asWritten(word, question), suggestionsFor(word, entries), inASwitch);
 			}
 		}
 		return null;
+	}
+
+	/** {@link #statementBeside} — or, for a switch, {@link #statement}: the new drug is checked against her other
+	 *  medications, not against the one it replaces, so no pair is what went unchecked (ADR Decision 261). */
+	String statementFor(String namedDrug) {
+		return inASwitch ? statement() : statementBeside(namedDrug);
 	}
 
 	/** Whether the word at {@code i} of {@code words} is named as the patient's own — "her ARVs", never "give her X". */

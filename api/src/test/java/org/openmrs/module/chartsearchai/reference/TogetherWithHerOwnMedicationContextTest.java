@@ -265,6 +265,52 @@ public class TogetherWithHerOwnMedicationContextTest extends BaseModuleContextSe
 		}
 	}
 
+	/**
+	 * A question whose "No" would read backwards, about a drug whose reason to withhold is an interaction no rating makes
+	 * one — a drug group folded onto a Moderate rule — states what the check found, and neither "Yes", "No" nor that a reason
+	 * to withhold was found (ADR Decision 257). On the 3.7.1 standalone Carol Brown's "Is naproxen contraindicated with her
+	 * aspirin?" was answered by the model "No — Naproxen should not be given with Aspirin". A proposal of it alone stays
+	 * the model's, as issue #469 keeps it.
+	 */
+	@Test
+	public void aNeutralQuestionAboutADrugWithholdingWithoutARatingStatesWhatTheCheckFound() {
+		for (String question : Arrays.asList("Is naproxen contraindicated with her aspirin?", "Is naproxen contraindicated for her?")) {
+			String answer = askOverTheShippedData(question, "Aspirin 81mg", "Aspirin").getModuleAnswer();
+
+			assertTrue(answer != null && answer.contains(DrugReferenceInjector.FOUND_LEAD_OPENING + "Naproxen:\n"),
+				question + " was: " + answer);
+			assertTrue(answer.contains("Naproxen interacts with active order Acetylsalicylic acid (aspirin) — Moderate. Naproxen is in "
+					+ "the same cross-reactivity group (NSAID) as active order Acetylsalicylic acid (aspirin)"), question + " was: " + answer);
+			assertTrue(!answer.contains("No —") && !answer.contains("Yes —") && !answer.contains("reason to withhold"),
+				"neither a verdict nor a withholding claim: " + answer);
+		}
+		assertNull(askOverTheShippedData("Can I give her naproxen?", "Aspirin 81mg", "Aspirin").getModuleAnswer(),
+			"a proposal's No rests on a rated reason alone (issue #469)");
+	}
+
+	/**
+	 * Whether her drug's dose is safe beside another drug is answered with the finding and neither "Yes" nor "No" (ADR
+	 * Decision 258). On the 3.7.1 standalone Donald Thompson's "Is his warfarin dose safe with his amiodarone?" was
+	 * answered by the model "No — Warfarin should not be given with Amiodarone", of two drugs he already takes.
+	 */
+	@Test
+	public void whetherHerDrugsDoseIsSafeBesideAnotherIsAnsweredWithTheFindingAndNeitherYesNorNo() {
+		String answer = askOverTheShippedData("Is her nevirapine dose safe with rifampicin?", "Nevirapine 200mg", "Nevirapine")
+				.getModuleAnswer();
+		assertTrue(answer != null && answer.startsWith("Nevirapine is one of this patient's active medications.\n"
+				+ DrugReferenceInjector.NEUTRAL_WITHHOLD_LEAD_OPENING + "Rifampicin (rifampin).\n"), "was: " + answer);
+
+		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
+			DrugReferenceTestSupport.activeOrder("order-nevirapine", "Nevirapine 200mg", "Nevirapine"),
+			DrugReferenceTestSupport.activeOrder("order-rifampicin", "Rifampicin 150mg", "Rifampicin"));
+		String both = DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.shippedServiceWithGroups())
+				.injectRecords(DrugReferenceTestSupport.oneRecordChart(), DrugReferenceTestSupport.ctx(40, null,
+					new LinkedHashSet<String>(Arrays.asList("Nevirapine 200mg", "Nevirapine", "Rifampicin 150mg", "Rifampicin")),
+					null, null, null, orders), "Is her nevirapine dose safe with her rifampicin?").getModuleAnswer();
+		assertTrue(both != null && both.contains(DrugReferenceInjector.TWO_OF_HER_OWN_LEAD), "was: " + both);
+		assertTrue(!both.contains("No —") && !both.contains("Yes —"), "neither Yes nor No: " + both);
+	}
+
 	@Test
 	public void aQuestionWhetherHerDrugAndAnotherInteractIsLeftToTheModelWhereNoFindingRelatesThem() {
 		// Rifampicin relates to nothing of hers above the floor here, so neither "Yes" nor the proposal's "No" is the module's.

@@ -89,11 +89,13 @@ final class DrugClassTerms {
 	 * genuine spellings beside it. Insertion-ordered; where two terms of the same length are both
 	 * carried the order does decide, which is the residue {@link #namedIn} states.
 	 *
-	 * <p>Three classes. Two are the issue's — {@code oral contraceptive}, which no ATC subtree
+	 * <p>Six classes. Two are the issue's — {@code oral contraceptive}, which no ATC subtree
 	 * expresses, and {@code NSAID}, which the shipped curated group also names, deliberately both for
 	 * the reason the class javadoc gives. The third, {@code hormonal contraceptive}, is not the
 	 * issue's: it is here because reporting a hormonal question as the narrower oral class would state
-	 * something false about the question in a record the answer may cite.
+	 * something false about the question in a record the answer may cite. {@code statin}, {@code ACE
+	 * inhibitor} and {@code proton pump inhibitor} are ADR Decision 262's, classes a clinician names in
+	 * place of a drug ("Is it safe to give her a statin?").
 	 *
 	 * <p>Lower-cased at the source rather than at the scan: {@link DrugReference#containsWord} folds
 	 * and lower-cases both operands for itself, so these are written in the form a reader compares
@@ -115,6 +117,15 @@ final class DrugClassTerms {
 		terms.put("nsaids", "NSAID");
 		terms.put("non-steroidal anti-inflammatory", "NSAID");
 		terms.put("nonsteroidal anti-inflammatory", "NSAID");
+		// ADR Decision 262: "Is it safe to give her a statin?" was told only "The records do not address …".
+		terms.put("statin", "statin");
+		terms.put("statins", "statin");
+		terms.put("ace inhibitor", "ACE inhibitor");
+		terms.put("ace inhibitors", "ACE inhibitor");
+		terms.put("ppi", "proton pump inhibitor");
+		terms.put("ppis", "proton pump inhibitor");
+		terms.put("proton pump inhibitor", "proton pump inhibitor");
+		terms.put("proton pump inhibitors", "proton pump inhibitor");
 		TERMS = Collections.unmodifiableMap(terms);
 	}
 

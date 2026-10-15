@@ -592,6 +592,24 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		}
 	}
 
+	/**
+	 * A question naming as hers a drug she is not on says she is not on it, then answers it (ADR Decision 260). On the 3.7.1
+	 * standalone Mary Smith, on simvastatin alone, asked "Any interactions with her warfarin?" and the model answered
+	 * "Simvastatin can be given, with one caution: Simvastatin may slightly increase the anticoagulant response to
+	 * warfarin": her own drug read as proposed, and the premise left standing.
+	 */
+	@Test
+	public void aQuestionNamingAsHersADrugSheIsNotOnSaysSo() throws Exception {
+		executeDataSet(WARFARIN_ORDER);
+		for (String question : new String[] { "Any interactions with her ibuprofen?", "Are there any problems with her ibuprofen?" }) {
+			RecordingProvider provider = new RecordingProvider();
+			ChartAnswer answer = serviceWith(provider).search(patient, question);
+			assertEquals(0, provider.calls, question + " — " + answer.getAnswer());
+			assertTrue(answer.getAnswer().startsWith("Ibuprofen is not one of this patient's active medications.\n"
+					+ "Yes — Ibuprofen interacts with this patient's active medications."), question + " — " + answer.getAnswer());
+		}
+	}
+
 	/** A list question asking whether NOT to give its drug is never answered "No if the patient is on …", which would
 	 *  answer it backwards. */
 	@Test

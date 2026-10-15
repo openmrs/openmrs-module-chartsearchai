@@ -168,6 +168,19 @@ public class DrugClassQuestionNoteTest {
 	 * answer may cite. The value column of the term table exists for genuine SPELLINGS, not for
 	 * collapsing two classes into one name.
 	 */
+	/**
+	 * Statins, ACE inhibitors and proton pump inhibitors are classes (ADR Decision 262). On the 3.7.1 standalone Carol Brown,
+	 * on simvastatin and lisinopril, asked "Is it safe to give her a statin?" and "Can I give her an ACE inhibitor?", and
+	 * was told only "The records do not address …": no note said the question named a class to ask about by drug name.
+	 */
+	@Test
+	public void statinsAceInhibitorsAndProtonPumpInhibitorsAreClasses() {
+		assertEquals("statin", theClassNoteClass(ddinterService(), "Is it safe to give her a statin?"));
+		assertEquals("ACE inhibitor", theClassNoteClass(ddinterService(), "Can I give her an ACE inhibitor?"));
+		assertEquals("proton pump inhibitor", theClassNoteClass(ddinterService(), "Can I give her a PPI?"));
+		assertEquals("proton pump inhibitor", theClassNoteClass(ddinterService(), "Can I start a proton pump inhibitor?"));
+	}
+
 	@Test
 	public void theClassReportedIsTheClassTheQuestionNamedAndNotANeighbouringOne() {
 		DrugReferenceService service = ddinterService();

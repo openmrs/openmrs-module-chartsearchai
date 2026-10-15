@@ -77,6 +77,22 @@ public class SwitchingHerDrugContextTest extends BaseModuleContextSensitiveTest 
 		}
 	}
 
+	/**
+	 * A switch to a name the data does not recognise says no check ran (ADR Decision 261). On the 3.7.1 standalone Mogan
+	 * Kamwara's "Can I replace her stavudine with tenofovir?" was answered by the model "The records do not address
+	 * tenofovir.", where a proposal of it says so and names what the data carries.
+	 */
+	@Test
+	public void aSwitchToANameTheDataDoesNotRecogniseSaysNoCheckRan() {
+		for (String question : Arrays.asList("Can I replace his stavudine with tenofovir?", "Can I switch his stavudine to tenofovir?",
+			"Can I give him tenofovir instead of stavudine?")) {
+			String answer = ask(question).getModuleAnswer();
+			assertTrue(answer != null && answer.startsWith("No interaction check was run: \"tenofovir\" is not a drug name the "
+					+ "interaction data recognises."), question + " was: " + answer);
+			assertTrue(answer.contains("Tenofovir disoproxil"), question + " names what the data carries: " + answer);
+		}
+	}
+
 	@Test
 	public void aSwitchToADrugSheAlreadyTakesOrFromOneSheDoesNotIsLeftToTheModel() {
 		assertNull(ask("Can I switch his lamivudine to nevirapine?").getModuleAnswer(), "the new drug is already his");

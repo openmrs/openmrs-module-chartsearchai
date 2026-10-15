@@ -990,6 +990,12 @@ public class DrugReferenceInjector {
 					questionDrugs.isEmpty() ? duplicateTherapyLines(orderEntries, context,
 							orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers)
 							: Collections.<String> emptyList());
+			// The question named it as hers, and she is not on it — admitted here only so (ADR Decision 260).
+			if (moduleAnswer != null && !questionDrugs.isEmpty()
+					&& QueryScopeRouter.asksAboutADrugNamedAsHers(wordsBesideItsNames(question, questionDrugs))) {
+				moduleAnswer = inTheQuestionsOrder(question, questionDrugs).values().iterator().next().displayLabel()
+						+ NOT_HER_MEDICATION + "\n" + moduleAnswer;
+			}
 		} else if (!findings.isEmpty() && context != null
 				&& ChartSearchAiUtils.getBooleanGlobalProperty(
 						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
@@ -1170,7 +1176,7 @@ public class DrugReferenceInjector {
 			UnrecognisedDrugName beside = named.size() == 1
 					? UnrecognisedDrugName.besideANamedDrug(question, questionDrugs, drugReferenceService.getAll(), context) : null;
 			if (beside != null) {
-				moduleAnswer = beside.statementBeside(named.values().iterator().next().displayLabel());
+				moduleAnswer = beside.statementFor(named.values().iterator().next().displayLabel());
 			}
 		}
 		// An order the drug data does not identify no longer gives the question up (ADR Decision 161): the answer says
@@ -2871,6 +2877,13 @@ public class DrugReferenceInjector {
 	 */
 	public static final String NEUTRAL_WITHHOLD_LEAD_OPENING = "This module's drug-safety check found a reason to withhold ";
 
+	/** What follows a drug a question names as hers when she is not on it (ADR Decision 260). */
+	static final String NOT_HER_MEDICATION = " is not one of this patient's active medications.";
+
+	/** How the module opens an answer to a question whose "No" would read backwards, where no rating makes the reason to
+	 *  withhold one: what the check found, and no verdict (ADR Decision 257). */
+	public static final String FOUND_LEAD_OPENING = "What this module's drug-safety check found about ";
+
 	/** Which way a proposal's composed answer may open (ADR Decision 181). */
 	enum Lead {
 		/** "Can I give her X?" — "No" answers it. */
@@ -2886,7 +2899,8 @@ public class DrugReferenceInjector {
 			}
 			List<String> words = wordsBesideItsNames(question, questionDrugs);
 			return QueryScopeRouter.asksWhetherNotToGiveADrug(words) ? NOT_GIVE
-					: QueryScopeRouter.asksWhetherADrugInteractsWithHerMedications(words) ? INTERACTS : GIVE;
+					: QueryScopeRouter.asksWhetherADrugInteractsWithHerMedications(words)
+							|| QueryScopeRouter.asksAboutADrugNamedAsHers(words) ? INTERACTS : GIVE;
 		}
 	}
 
@@ -3842,8 +3856,11 @@ public class DrugReferenceInjector {
 		}
 		// One substance, or one combination product written as one name (ADR Decision 217); two drugs named apart keep
 		// the model call, each needing its own answer.
+		// A drug the question names as hers but she is not on is answered as whether it interacts with her medications,
+		// after saying she is not on it (ADR Decision 260).
 		if (asked.size() != 1 && !namesOneProduct(question, questionDrugs) || !Collections.disjoint(asked, herSubstances)
-				|| !questionProposes(question, questionDrugs) && !asksWhetherItInteracts(question, questionDrugs)) {
+				|| !questionProposes(question, questionDrugs) && !asksWhetherItInteracts(question, questionDrugs)
+						&& !QueryScopeRouter.asksAboutADrugNamedAsHers(wordsBesideItsNames(question, questionDrugs))) {
 			return false;
 		}
 		for (SafetyWarning finding : findings) {
@@ -3857,11 +3874,42 @@ public class DrugReferenceInjector {
 				return true;
 			}
 		}
+		// A question whose "No" would read backwards, about a drug an interaction withholds without a rating — a drug group
+		// folded onto a lower-rated rule — is answered with what the check found and no verdict (ADR Decision 257). A
+		// proposal's "No" stays the model's, resting on a rated reason alone, as above.
+		if (Lead.of(question, questionDrugs) == Lead.NOT_GIVE
+				&& withholdsWithoutARating(asked, notHerOwnOrdersSharingASubstance(findings))) {
+			return true;
+		}
 		// Or every finding is an interaction caution about the drug proposed (ADR Decision 140), answered with
 		// the cautions and never a clearance — see cautionsOnlyAbout. A finding that her own orders share a
 		// substance is about neither the drug nor a pair, so it is set aside here as it is where no finding was
 		// raised (ADR Decisions 159, 160), and stated after the cautions by composeFromFindings.
 		return cautionsOnlyAbout(asked, notHerOwnOrdersSharingASubstance(findings));
+	}
+
+	/**
+	 * Whether {@code findings} are interactions about the substance {@code asked} names, each stating {@link
+	 * #STRENGTH_WITHHOLD} or {@link #STRENGTH_CAUTION}, with at least one withholding though none {@link
+	 * #licensesTheModulesNo} — a reason to withhold no rating makes, such as a drug group folded onto a Moderate rule (ADR
+	 * Decision 257). Fail-closed as {@link #cautionsOnlyAbout} is: any other type, clause or drug keeps the model call.
+	 */
+	private static boolean withholdsWithoutARating(Set<Object> asked, List<SafetyWarning> findings) {
+		boolean withholds = false;
+		for (SafetyWarning finding : findings) {
+			String clause = strengthClause(finding);
+			if (!SafetyWarning.TYPE_INTERACTION.equals(finding.getType()) || licensesTheModulesNo(finding)
+					|| !STRENGTH_WITHHOLD.equals(clause) && !STRENGTH_CAUTION.equals(clause) || finding.subjectRows().isEmpty()) {
+				return false;
+			}
+			for (DrugReference row : finding.subjectRows()) {
+				if (!asked.contains(row.substanceGroupKey())) {
+					return false;
+				}
+			}
+			withholds |= STRENGTH_WITHHOLD.equals(clause);
+		}
+		return withholds;
 	}
 
 	/**
@@ -4245,6 +4293,9 @@ public class DrugReferenceInjector {
 			lines.add(0, "Yes — " + first.getDrug() + " interacts with this patient's active medications."
 					+ (STRENGTH_WITHHOLD.equals(clauses[leadIndex])
 							? " This module's drug-safety check found a reason to withhold it." : ""));
+		} else if (lead == Lead.NOT_GIVE && STRENGTH_WITHHOLD.equals(clauses[leadIndex]) && !licensesTheModulesNo(first)) {
+			// No rated reason to withhold, so no claim of one either: what the check found (ADR Decision 257).
+			lines.add(0, FOUND_LEAD_OPENING + first.getDrug() + ":");
 		} else if (STRENGTH_WITHHOLD.equals(clauses[leadIndex])) {
 			lines.add(0, (lead == Lead.NOT_GIVE ? NEUTRAL_WITHHOLD_LEAD_OPENING : WITHHOLD_LEAD_OPENING) + first.getDrug()
 					+ WITHHOLD_LEAD_CLOSING);
@@ -5025,6 +5076,11 @@ public class DrugReferenceInjector {
 			if (licensesTheModulesNo(finding)) {
 				return proposed;
 			}
+		}
+		// A question whose "No" would read backwards is answered with what the check found where no rating makes the reason
+		// to withhold one (ADR Decision 257).
+		if (changes && withholdsWithoutARating(Collections.singleton(proposed), notHerOwnOrdersSharingASubstance(ofIt))) {
+			return proposed;
 		}
 		return cautionsOnlyAbout(Collections.singleton(proposed), notHerOwnOrdersSharingASubstance(ofIt)) ? proposed : null;
 	}

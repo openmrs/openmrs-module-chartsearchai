@@ -17728,3 +17728,133 @@ interact with simvastatin?"* were the module's, answered "Yes".
 
 Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.whetherThereIsAnInteractionIfSheIsGivenADrugIsAnsweredYesWithTheFindings`
 and `TogetherWithHerOwnMedicationContextTest.whetherHerDrugAndAnotherClashIsAnsweredYesWhereAFindingRelatesThem`.
+
+## Decision 257: A question whose "No" would read backwards, about a drug withheld by no rating, states what the check found
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-15 to fix the errors the sweep left. It widens
+[Decision 181](#decision-181-a-question-whether-not-to-give-a-drug-or-whether-it-interacts-is-answered-without-an-inverted-no)
+and [Decision 249](#decision-249-whether-one-drug-changes-an-effect-of-the-other-is-answered-with-the-finding-and-neither-yes-nor-no)
+without touching issue #469's rule that the module's "No" rests on a rated reason.
+
+### Context
+
+On the 3.7.1 standalone Carol Brown, on aspirin, asked *"Is naproxen contraindicated with her aspirin?"* and the model
+answered *"No — Naproxen should not be given with Aspirin"*: a "No" to whether it is contraindicated. The module had
+declined the question: naproxen's finding is a Moderate rule with the NSAID drug group folded onto it, a reason to withhold
+by #283's fold and by no rating, and the module composes neither its "No" nor *"found a reason to withhold"* from such a
+finding (`DrugReferenceInjector`'s `licensesTheModulesNo`).
+
+### The decision
+
+- **A question Decision 181 or 249 answers with neither "Yes" nor "No", whose drug's interactions withhold it with no rating
+  making them a reason to — and are otherwise cautions about it alone** (`withholdsWithoutARating`), is answered by the
+  module with *"What this module's drug-safety check found about Naproxen:"* (`DrugReferenceInjector.FOUND_LEAD_OPENING`)
+  and each finding's line, the folded group sentence kept: what the check found, with no verdict and no withholding claim.
+- **A proposal of it — "Can I give her naproxen?" — stays the model's**, whose "No" reads the right way: the module's "No"
+  still rests on a rated reason alone.
+
+Pinned by `TogetherWithHerOwnMedicationContextTest.aNeutralQuestionAboutADrugWithholdingWithoutARatingStatesWhatTheCheckFound`.
+
+## Decision 258: Whether her drug's dose is safe beside another is answered with the finding and neither "Yes" nor "No"
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-15 to fix the errors the sweep left. It widens
+Decision 249's two-drug question.
+
+### Context
+
+On the 3.7.1 standalone Donald Thompson's *"Is his warfarin dose safe with his amiodarone?"* — two drugs he takes — was
+answered by the model *"No — Warfarin should not be given with Amiodarone"*, of an order he already has.
+
+### The decision
+
+- **"Is her Y dose (still) safe / OK / appropriate with (her) X?"** (`QueryScopeRouter`'s `DOSE_SAFE_WITH_THE_OTHER`) is
+  Decision 249's question: of two drugs she takes, [Decision 203](#decision-203-two-drugs-she-already-takes-asked-about-together-are-answered-with-what-relates-them--never-that-they-may-be-combined)'s
+  statement of what relates them; of hers and another, the other's findings under the neutral lead. Whether the dose
+  needs changing is left to the clinician the finding informs.
+
+Pinned by `TogetherWithHerOwnMedicationContextTest.whetherHerDrugsDoseIsSafeBesideAnotherIsAnsweredWithTheFindingAndNeitherYesNorNo`.
+
+## Decision 259: Whether to hold or stop her own drug is answered as her own medication
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-15 to fix the errors the sweep left. It widens
+[Decision 202](#decision-202-a-question-whether-she-is-on-her-own-drug-or-whether-it-is-safe-with-her-other-medications-is-answered-as-her-own-medication-and-the-answer-names-the-order)'s
+grammar.
+
+### Context
+
+On the 3.7.1 standalone Carol Brown's *"Should I hold her metformin?"* was answered by the model *"Metformin can be
+given, with two cautions"*: her own drug, read as a drug proposed.
+
+### The decision
+
+- **"Should I / Do I need to hold (stop, pause, suspend, discontinue, withhold) her X?"** is one of Decision 202's
+  shapes (`QueryScopeRouter.BESIDE_HER_MEDICATIONS_SHAPES`): about a drug she takes, the module says so and states what
+  relates it to her other medications, as Decision 193 answers her own drug; whether to hold it is the clinician's.
+  About a drug she does not take, the model answers as before.
+
+Pinned by `OwnMedicationSafetyContextTest.whetherToHoldOrStopHerOwnDrugIsAnsweredAsHers`.
+
+## Decision 260: A question naming as hers a drug she is not on says she is not on it
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-15 to fix the errors the sweep left. It completes
+[Decision 237](#decision-237-any-interactions-with-her-x-about-her-own-drug-is-answered-as-hers).
+
+### Context
+
+On the 3.7.1 standalone Mary Smith, on simvastatin alone, asked *"Any interactions with her warfarin?"*. The question
+fitted Decision 237's shape, which answers a drug she takes; about one she does not, the model answered: *"Simvastatin
+can be given, with one caution: Simvastatin may slightly increase the anticoagulant response to warfarin"* — her own drug
+read as proposed, and the premise that she takes warfarin left standing.
+
+### The decision
+
+- **"Any interactions / problems / issues / concerns with her X?", X not hers**, is asked as whether X interacts with
+  her medications (`QueryScopeRouter.asksAboutADrugNamedAsHers`): the module opens *"Warfarin is not one of this
+  patient's active medications."* (`DrugReferenceInjector.NOT_HER_MEDICATION`), then answers it as Decision 181 does —
+  "Yes" where the check relates it — or leaves it to the model where Decision 181 would.
+- The shape stays out of the interact grammar the unrecognised-name statement reads, so a word named as hers is never
+  said to be unrecognised ([Decision 250](#decision-250-a-two-drug-question-whose-one-drug-the-data-does-not-recognise-says-the-pair-was-not-checked)).
+
+Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aQuestionNamingAsHersADrugSheIsNotOnSaysSo`.
+
+## Decision 261: A switch to a name the data does not recognise says no check ran
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-15 to fix the errors the sweep left. It extends
+Decision 250 to the switch shapes.
+
+### Context
+
+On the 3.7.1 standalone Mogan Kamwara's *"Can I replace her stavudine with tenofovir?"* was answered by the model *"The
+records do not address tenofovir."* The knowledge base carries tenofovir only as Tenofovir disoproxil and Tenofovir
+alafenamide, which a proposal of it names ([Decision 183](#decision-183-a-drug-name-the-data-does-not-recognise-is-said-to-be-unrecognised-with-the-names-it-carries-and-never-guessed)).
+
+### The decision
+
+- **A switch shape ([Decision 219](#decision-219-a-question-whether-to-switch-one-of-her-drugs-to-another-is-answered-for-the-new-drug-against-her-other-medications),
+  [Decision 230](#decision-230-a-drug-given-instead-of-one-of-hers-is-a-switch)) whose recognised drug stands beside a word
+  the data does not recognise** is answered with Decision 183's statement — *"No interaction check was run: "tenofovir"
+  is not a drug name the interaction data recognises. Did you mean …?"* — and not Decision 250's pair form: the new drug
+  would be checked against her other medications, not against the one it replaces.
+
+Pinned by `SwitchingHerDrugContextTest.aSwitchToANameTheDataDoesNotRecogniseSaysNoCheckRan`.
+
+## Decision 262: Statins, ACE inhibitors and proton pump inhibitors are named classes
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-15 to fix the errors the sweep left. It widens
+[Decision 67](#decision-67-a-question-naming-a-drug-class-is-told-so-rather-than-resolved-to-members-the-classification-cannot-honestly-supply)'s
+vocabulary (`DrugClassTerms`).
+
+### Context
+
+On the 3.7.1 standalone Carol Brown, on simvastatin and lisinopril, asked *"Is it safe to give her a statin?"*, *"Can I
+give her an ACE inhibitor?"* and *"Can I give her a PPI?"*, and was told only *"The records do not address …"*: nothing
+said the question named a class, which the data cannot resolve, to ask about by drug name.
+
+### The decision
+
+- **"statin(s)", "ACE inhibitor(s)", "PPI(s)" and "proton pump inhibitor(s)" are class terms**, reported as "statin",
+  "ACE inhibitor" and "proton pump inhibitor": such a question gets [Decision 166](#decision-166-a-question-naming-a-drug-class-is-told-so-in-the-answer-itself)'s
+  note. Each passes the table's admission guards — it names no substance of the shipped knowledge base. The class is
+  never resolved to members, so the answer does not say which of her drugs belong to it.
+
+Pinned by `DrugClassQuestionNoteTest.statinsAceInhibitorsAndProtonPumpInhibitorsAreClasses`.

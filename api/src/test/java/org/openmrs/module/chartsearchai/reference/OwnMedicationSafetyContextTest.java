@@ -327,6 +327,21 @@ public class OwnMedicationSafetyContextTest extends BaseModuleContextSensitiveTe
 	}
 
 	@Test
+	public void whetherToHoldOrStopHerOwnDrugIsAnsweredAsHers() throws IOException {
+		// Carol Brown's "Should I hold her metformin?" was answered by the model "Metformin can be given, with two
+		// cautions": her own drug, read as one proposed (ADR Decision 259).
+		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
+			DrugReferenceTestSupport.activeOrder("order-ibuprofen", "Ibuprofen 400mg"),
+			DrugReferenceTestSupport.activeOrder("order-prednisone", "Prednisone 5mg"));
+		String expected = answer("Is ibuprofen safe with her other medications?", null, orders);
+		assertNotNull(expected, "precondition: the module answers the shape Decision 202 admits");
+		for (String question : Arrays.asList("Should I hold her ibuprofen?", "Should I stop her ibuprofen?",
+			"Do I need to stop her ibuprofen?")) {
+			assertEquals(expected, answer(question, null, orders), question);
+		}
+	}
+
+	@Test
 	public void herOwnDrugWithNoOtherMedicationToCheckItAgainstSaysSo() throws IOException {
 		// James Thompson holds two orders of metronidazole and nothing else: there is no other medication to relate it
 		// to, as Decision 178 says of one order on a screen (ADR Decision 206).

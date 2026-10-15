@@ -1127,6 +1127,19 @@ public class DrugReferenceInjector {
 					orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers,
 					pairExtent, mappings, matched, context, reading.states(), unidentified.size());
 		}
+		// A question whether her medications duplicate one another, where the screen found duplicates: what it found, each
+		// a line, and what the check does not cover (ADR Decision 232). Found none, the model answers, since drug classes
+		// beyond the groups the module carries are not compared.
+		if (moduleAnswer == null && context != null && questionDrugs.isEmpty()
+				&& ChartSearchAiUtils.getBooleanGlobalProperty(
+						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
+						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS)
+				&& context.chartReadForSafety() && QueryScopeRouter.asksAboutDuplicateTherapy(question)) {
+			moduleAnswer = composeDuplicateTherapy(findings, findingNumbers, orderRecordNumbers,
+					orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers,
+					duplicateTherapyLines(orderEntries, context,
+							orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers));
+		}
 		// A screen of her medications that related nothing is answered with what the screen established (ADR Decision
 		// 162): the screen note's own words, or, with no active orders at all, that there are none to check.
 		if (moduleAnswer == null && context != null
@@ -5271,6 +5284,34 @@ public class DrugReferenceInjector {
 		String composed = composeFromFindings(ofIt, ofItNumbers, orderRecordNumbers, herOrderRecords, true, pairs,
 				lead, SCREEN_SCOPE);
 		return composed == null ? null : hers + OWN_MEDICATION_LEAD + ".\n" + composed;
+	}
+
+	/**
+	 * The module's answer to a question whether her medications duplicate one another (ADR Decision 232), or {@code null}
+	 * where it found no duplicate: <em>"Yes — possible duplicate therapy among this patient's active medications:"</em>,
+	 * each drug group two or more of her substances share ({@code groupLines}, Decision 197's lines), then each substance
+	 * carried by several of her orders (issue #477's findings, as a screen states them), then what the check does not
+	 * compare. Never a "No": drug classes beyond the groups the module carries are not compared, so finding none is the
+	 * model's to answer, with the screen's findings.
+	 */
+	private String composeDuplicateTherapy(List<SafetyWarning> findings, List<Integer> numbers,
+			Map<String, Integer> orderRecordNumbers, Map<String, Integer> herOrderRecords, List<String> groupLines) {
+		List<String> lines = new ArrayList<String>(groupLines);
+		for (int i = 0; i < findings.size(); i++) {
+			if (findings.get(i).statesOrdersSharingASubstance()) {
+				lines.add(findingLine(findings.get(i), numbers.get(i), orderRecordNumbers, herOrderRecords, false));
+			}
+		}
+		if (lines.isEmpty()) {
+			return null;
+		}
+		List<String> groupNames = new ArrayList<String>();
+		for (CrossReactivityGroup group : drugReferenceService.getCrossReactivityGroups()) {
+			groupNames.add(group.getName());
+		}
+		return "Yes — possible duplicate therapy among this patient's active medications:\n" + String.join("\n", lines)
+				+ "\nThis check compares the substances in her orders and the drug groups this module carries ("
+				+ joinedAsAList(groupNames) + "); other drug classes are not covered.";
 	}
 
 	/**

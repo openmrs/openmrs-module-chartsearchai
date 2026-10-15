@@ -17093,3 +17093,31 @@ from the allergen's name to it. The curated groups are that group — Decision 2
   "Cephalosporins" and "ACE inhibitors", which no curated group carries, and assert what they asserted.
 
 Pinned by `ClassNamedAllergyTest`, over the bundled groups file and verbatim slices of the shipped knowledge base.
+
+## Decision 232: A question whether her medications duplicate one another is a screen, answered with the duplicates it found
+
+**Status: Accepted** (October 2026) — the owner's standing request of 2026-10-15 to fix what misleads a clinician.
+
+### Context
+
+On the 3.7.1 standalone Sarah Taylor, on Advil, Diclofenac and Celebrex, asked *"Is she on any duplicate NSAIDs?"*, was
+answered by the model *"No duplicate NSAIDs are recorded."* — three NSAIDs at once, denied. No word of the question was
+a screening cue, so no screen ran: the finding that the three share a drug group
+([Decision 197](#decision-197-a-screen-says-once-which-of-her-medications-share-a-drug-group-and-a-group-may-name-members-for-that-alone))
+and her pairs' interaction findings were never made, and the prompt carried only the drug-class note.
+
+### The decision
+
+- **A duplication word beside a word saying the duplicates are drugs screens her medications**
+  (`QueryScopeRouter.asksAboutDuplicateTherapy`): "duplicate", "duplication", "same class", "double up", beside a
+  medication word, "therapy", a drug-class noun ("NSAIDs", "steroids", "ARVs") or "is she on". The second word keeps a
+  duplicate RECORD — "a duplicate encounter" — from screening her drugs.
+- **The module answers it with the duplicates the screen found** (`DrugReferenceInjector.composeDuplicateTherapy`):
+  *"Yes — possible duplicate therapy among this patient's active medications:"*, each drug group two or more of her
+  substances share (Decision 197's line), each substance in several of her orders (#477's finding), then *"This check
+  compares the substances in her orders and the drug groups this module carries (NSAID and Penicillins); other drug
+  classes are not covered."*
+- **Never a "No"**: drug classes beyond the groups the module carries are not compared, so a screen that found no
+  duplicate is the model's to answer, now with the screen's findings in its prompt.
+
+Pinned by `DuplicateTherapyQuestionTest`, over the bundled groups file and a verbatim slice of the shipped knowledge base.

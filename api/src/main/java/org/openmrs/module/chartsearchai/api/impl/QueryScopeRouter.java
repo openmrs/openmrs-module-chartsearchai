@@ -233,7 +233,33 @@ public final class QueryScopeRouter {
 				|| INTERACTION_NOUN_CUES.matcher(question).find() && !SOCIAL_CUES.matcher(question).find()
 				// Two groups of her own medications, named by words the MEDICATIONS cues need not know — "her TB treatment",
 				// "her ARVs" — and asked whether they interact: the grammar says what the cues cannot (ADR Decision 221).
-				|| fitsAShape(words(question), MEDICATION_GROUPS_SHAPES));
+				|| fitsAShape(words(question), MEDICATION_GROUPS_SHAPES)
+				|| asksAboutDuplicateTherapy(question));
+	}
+
+	/**
+	 * A question asking whether her medications DUPLICATE one another (ADR Decision 232): a duplication word, beside a
+	 * word saying the duplicates are drugs — a medication word, "therapy", a drug-class noun, or "is she on". On the 3.7.1
+	 * standalone Sarah Taylor, on ibuprofen, diclofenac and celecoxib, asked "Is she on any duplicate NSAIDs?", was
+	 * answered "No duplicate NSAIDs are recorded.": no screen ran, so its finding that the three share a drug group never
+	 * reached the prompt. The second word keeps a duplicate RECORD — "a duplicate encounter" — from screening her drugs.
+	 */
+	private static final Pattern DUPLICATION_CUES = cues("duplicat(?:e|es|ed|ion|ions)", "same (?:drug )?class(?:es)?",
+			"doubled? up");
+
+	/** What says the duplicates a {@link #DUPLICATION_CUES} word asks after are drugs, beyond the MEDICATIONS cues. */
+	private static final Pattern DUPLICATED_DRUG_CUES = cues("therap(?:y|ies)", "treatments?",
+			"(?:is|are) (?:she|he|they|the patient|this patient) (?:currently )?(?:on|taking)", "nsaids?",
+			"(?:cortico)?steroids?", "opioids?", "statins?", "anticoagulants?", "antiplatelets?", "antibiotics?", "arvs?",
+			"antiretrovirals?", "antihypertensives?", "antidepressants?", "antipsychotics?", "benzodiazepines?",
+			"painkillers?", "analgesics?", "diuretics?", "antihistamines?", "antiepileptics?", "anticonvulsants?",
+			"penicillins?", "ppis?");
+
+	/** Whether {@code question} asks whether her medications duplicate one another — {@link #DUPLICATION_CUES}. A screen,
+	 *  and one {@code DrugReferenceInjector} answers with the duplicates it found (ADR Decision 232). */
+	public static boolean asksAboutDuplicateTherapy(String question) {
+		return question != null && DUPLICATION_CUES.matcher(question).find() && (matchedIntents(question).contains(Intent.MEDICATIONS)
+				|| DUPLICATED_DRUG_CUES.matcher(question).find());
 	}
 
 	/**

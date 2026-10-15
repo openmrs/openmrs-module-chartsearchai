@@ -68,17 +68,20 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * checkable by hash.
  *
  * <p><b>The release it came from, and the hash to check it against.</b> Commit
- * {@code c70fca0b96a33f57a0b41cbf26a2fbfb2aff7105} of {@code dkayiwa/openmrs-ddi-knowledge-base} branch {@code clinical-abbreviations} —
+ * {@code 064e92699ac558edfe4764ca9c908bda01acad0e} of {@code dkayiwa/openmrs-ddi-knowledge-base} branch {@code cotrimoxazole} —
  * pull requests #9 (international names, schema 1.4) and #10 (clinical abbreviations, schema 1.5) of
  * {@code pbiondich/openmrs-ddi-knowledge-base}, bundled before upstream merged them on the owner's decision
- * (ADR Decision 183) — file {@code out/ddi_knowledge_base.json}: 34,992,419 bytes, sha256
- * {@code a96d18e76169fcb200027fa0f2665c771a953af117f6a5669018f6c3519f01a8}. Until then it was commit {@code 66489ff3207bcb809968c3de81cfba94d05692ae} of the
- * upstream repository (schema 1.3). In the source and not only
+ * (ADR Decision 183), and one commit on top of them mapping Sulfamethoxazole to its own RxCUI and naming
+ * co-trimoxazole and co-amoxiclav under their ingredients (ADR Decision 266) — file {@code out/ddi_knowledge_base.json}:
+ * 34,992,770 bytes, sha256 {@code 788bfbb7959dc96e54a8122a54669b912f241b2d8df7eaff92faf2f4a81ccaef}. Before that it was
+ * commit {@code c70fca0b96a33f57a0b41cbf26a2fbfb2aff7105} of branch {@code clinical-abbreviations} (sha256
+ * {@code a96d18e76169fcb200027fa0f2665c771a953af117f6a5669018f6c3519f01a8}), and until ADR Decision 183 commit
+ * {@code 66489ff3207bcb809968c3de81cfba94d05692ae} of the upstream repository (schema 1.3). In the source and not only
  * in the pull request that copied it in, because this repository squash-merges — a hash recorded in a
  * commit message that is later superseded is not in the permanent record, and the file's own
  * {@code metadata} block carries a {@code schema_version} and no source ref, so nothing in-tree said
  * which release this is. Checkable without fetching 34 MB again: git's own blob id for this resource is
- * {@code b897b4b20cf262100be4e6d526ba136e9277a943} ({@code git hash-object}), which is the id that
+ * {@code 1b13f330356d3499aa4dbeeafde58d25f2e71600} ({@code git hash-object}), which is the id that
  * release's {@code out} tree entry carries — that identity is what was verified when this paragraph was
  * written, rather than the claim being taken on trust. A refresh moves every figure in this paragraph
  * and the packed size below, and whoever copies the file in restates them.
@@ -86,7 +89,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * <p>It used to be a 16-drug excerpt with the full file left to the operator to download,
  * which meant an install that enabled the feature and configured nothing got four curated drugs. Measured
  * through this parser on the shipped file: 0.6 s to parse cold, ~30 MB retained, 2.1 MB of packed jar for
- * the schema 1.0 file. The schema 1.3 refresh packs to 4,031,048 bytes, and the schema 1.5 one to 4,033,159 (each
+ * the schema 1.0 file. The schema 1.3 refresh packs to 4,031,048 bytes, the schema 1.5 one to 4,033,159, and ADR Decision 266's to 4,033,250 (each
  * read off the built api jar's entry for it with {@code unzip -v}); all but about 40 KB of the 1.3 of the increase is three tables the schema 1.0 file
  * did not have, {@code disease_notes}, {@code disease_interactions} and {@code derived_interactions}
  * (issue #391). Of those, only {@code derived_interactions} is read, and only its rows whose rated side is

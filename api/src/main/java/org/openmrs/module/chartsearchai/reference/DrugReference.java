@@ -3269,7 +3269,7 @@ public class DrugReference {
 		/**
 		 * The name a response PRINTS for this rule's partner in place of its {@link #getToken()} — set by the load's
 		 * validity check where the token is a synonym that check reports as another substance's for the very row the rule
-		 * names (ADR Decision 234: the shipped knowledge base files Sulfamethoxazole under "sulfamethazine"), else
+		 * names (ADR Decision 234: the knowledge base shipped until ADR Decision 266 filed Sulfamethoxazole under "sulfamethazine"), else
 		 * {@code null}. Matching keeps the token, as Decision 216 keeps the row's names.
 		 */
 		public String printedName() {

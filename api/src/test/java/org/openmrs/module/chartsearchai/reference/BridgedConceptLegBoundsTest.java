@@ -205,7 +205,11 @@ public class BridgedConceptLegBoundsTest {
 		// Still 244 after the schema 1.5 refresh (ADR Decision 183). Its first build listed scopolamine's international
 		// name as bare "Hyoscine", and this walk read 245: "Hyoscine butylbromide / Paracetamol" reached Scopolamine,
 		// though hyoscine butylbromide is a different drug. The knowledge base now lists "Hyoscine hydrobromide".
-		assertEquals(244, intersectionNarrows,
+		// 241 since ADR Decision 266, which maps the Sulfamethoxazole row to its own RxCUI: measured by diffing this walk
+		// over the two files, "Sulfamethoxazole / trimethoprim", "Phenazopyridine / sulfamethoxazole" and "Phenazopyridine
+		// / sulfamethoxazole / trimethoprim" reached that row by name while the bridge filed them elsewhere, and the
+		// bridge files them on it now.
+		assertEquals(241, intersectionNarrows,
 			"concepts where the ranked resolution of the bridge's name reaches an entry it does not file"
 					+ " there");
 		assertEquals(1, resolvesNothing, "concepts the two bounds together leave resolving nothing");
@@ -226,14 +230,14 @@ public class BridgedConceptLegBoundsTest {
 	 * <p>Each figure with what it is a count OF, over the shipped knowledge base's distinct bridged
 	 * concepts:
 	 * <ul>
-	 *   <li>{@code 1112} answer with more than one {@code substanceGroupKey} — the leg's residue, and
+	 *   <li>{@code 1113} (1112 before ADR Decision 266) answer with more than one {@code substanceGroupKey} — the leg's residue, and
 	 *       what round 1's guard refused whole;</li>
-	 *   <li>{@code 121} (122 before the schema 1.5 refresh) of those have a recorded name that does not NAME every substance they answer
-	 *       with — what the guard refuses now. The other 991 are its complement, so that is what they
+	 *   <li>{@code 107} (122 before the schema 1.5 refresh, 121 before ADR Decision 266) of those have a recorded name that does not NAME every substance they answer
+	 *       with — what the guard refuses now. The other 1006 are its complement, so that is what they
 	 *       are a count OF and not a count of combinations: naming every substance a concept resolves
 	 *       is satisfied by a combination name and by a salt, ester or derivative name alike
 	 *       ({@code Mometasone furoate}, {@code Hydrocortisone butyrate});</li>
-	 *   <li>{@code 165} (166 before the schema 1.5 refresh) of the {@code 5826} (concept, substance) attributions the leg can state are
+	 *   <li>{@code 134} (166 before the schema 1.5 refresh, 165 before ADR Decision 266) of the {@code 5828} (5826 before it) (concept, substance) attributions the leg can state are
 	 *       refused. That is the unit the clause is actually printed in, and it is not the concept
 	 *       count: one concept can have one substance refused and another admitted;</li>
 	 *   <li>{@code 0} concepts answering with exactly ONE substance are named by nothing.</li>
@@ -297,17 +301,28 @@ public class BridgedConceptLegBoundsTest {
 			}
 		}
 
-		assertEquals(1112, severalSubstances,
+		// 1113 since ADR Decision 266, up from 1112: measured by diffing this walk over the two files, "Sulfamethoxazole /
+		// trimethoprim" and "Phenazopyridine / sulfamethoxazole" now answer with the Sulfamethoxazole row as well, and
+		// "Sulfadiazine / sulfamerazine / sulfamethazine" no longer does — sulfamethazine's concepts have left it.
+		assertEquals(1113, severalSubstances,
 			"bridged concepts answering with more than one substance — the leg's residue, unfiltered");
 		// 121 since the schema 1.5 refresh (ADR Decision 183), down from 122: measured by diffing this walk over the two
 		// files, "Aceclofenac / chlorzoxazone / paracetamol" is now named whole, "paracetamol" being acetaminophen's
-		// international name.
-		assertEquals(121, severalAndNotAllNamed,
+		// international name. 107 since ADR Decision 266, down from 121: a name the dataset files under each ingredient of
+		// one combination names each of them (DrugReferenceService.namesACombinationContaining), and fourteen bridged
+		// concepts are named whole by it — combination vaccines ("Diphtheria toxoid / pertussis, acellular / tetanus
+		// toxoid"), "Normal saline + KCL 40 mmol/L", "Folate / vitamin B 12", "Sultamicillin tosylate" among them, each a
+		// product containing every substance it answers with.
+		assertEquals(107, severalAndNotAllNamed,
 			"of those, the ones whose recorded name does not name every substance they answer with");
-		assertEquals(5826, attributions,
+		// 5828 since ADR Decision 266, up from 5826: four attributions to the Sulfamethoxazole row joined (the three
+		// concepts above and "Sulfamethoxazole"), two left ("Sulfamethazine" and "Sulfadiazine / sulfamerazine /
+		// sulfamethazine").
+		assertEquals(5828, attributions,
 			"(concept, substance) attributions the leg can state at all");
 		// 165 since the schema 1.5 refresh, down from 166: the same concept, its acetaminophen attribution now admitted.
-		assertEquals(165, attributionsRefused,
+		// 134 since ADR Decision 266: the fourteen concepts above, their 31 refused attributions now admitted.
+		assertEquals(134, attributionsRefused,
 			"of those, the ones the clause refuses");
 		assertEquals(0, oneSubstanceNamedByNothing,
 			"a concept answering with one substance is named by its own recorded name — the premise"

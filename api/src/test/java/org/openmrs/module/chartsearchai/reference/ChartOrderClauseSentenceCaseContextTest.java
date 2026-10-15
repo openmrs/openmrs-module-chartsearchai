@@ -28,7 +28,9 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  * chip's partner name, which can be the knowledge base's lower-case token: on the 3.7.1 standalone, <em>"Can I start
  * her on rifampicin?"</em> beside a {@code Cotrimoxazole 960mg} order was answered <em>"… — Moderate. This module
  * resolved the substances named here from this patient's own active orders. trimethoprim from Cotrimoxazole
- * 960mg."</em> The clause opens with a capital, as every other sentence the module writes does.
+ * 960mg."</em> The clause opens with a capital, as every other sentence the module writes does. The data has named
+ * co-trimoxazole since ADR Decision 266, so that order's display now names its substances and states no clause; the case
+ * names the prescription by a brand the data does not carry.
  */
 public class ChartOrderClauseSentenceCaseContextTest extends BaseModuleContextSensitiveTest {
 
@@ -41,9 +43,9 @@ public class ChartOrderClauseSentenceCaseContextTest extends BaseModuleContextSe
 	@Test
 	public void theOrderClauseOpensItsSentenceWithACapital() {
 		PatientClinicalContext.ActiveDrugOrder cotrimoxazole = DrugReferenceTestSupport.activeOrder("order-ctx",
-			"Cotrimoxazole 960mg",
-			DrugReferenceTestSupport.set("Cotrimoxazole 960mg", "Septrin", "Sulfamethoxazole / trimethoprim", "Bactrim",
-				"Septra", "Cotrimoxazole", "Sulfatrim", "SMX-TMP", "CTX", "Cotrim", "Co-trimoxazole"),
+			"Septrin 960mg",
+			DrugReferenceTestSupport.set("Septrin 960mg", "Septrin", "Sulfamethoxazole / trimethoprim", "Septra", "SMX-TMP",
+				"CTX", "Cotrim"),
 			DrugReferenceTestSupport.set("J01EE01"));
 		PatientClinicalContext context = DrugReferenceTestSupport.ctx(40, null, cotrimoxazole.getNames(),
 				cotrimoxazole.getAtcCodes(), null, null, Arrays.asList(cotrimoxazole));

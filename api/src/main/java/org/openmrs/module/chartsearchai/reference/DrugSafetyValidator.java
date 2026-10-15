@@ -5444,8 +5444,8 @@ public class DrugSafetyValidator {
 	 * combination where there is none costs a wording, while missing one states a false duplication.
 	 * {@code Tylenol with Codeine #3} establishes codeine alone, "Tylenol" naming no substance, yet carries
 	 * acetaminophen. Every recorded name and not the display alone, because this states what the ORDER
-	 * carries rather than what the printed name says: a {@code Bactrim DS} display resolves to the
-	 * trimethoprim row alone in the shipped knowledge base, so only a recorded name such as its concept's
+	 * carries rather than what the printed name says: a {@code Septrin 960mg} display names nothing the
+	 * shipped knowledge base carries, so only a recorded name such as its concept's
 	 * {@code Sulfamethoxazole / trimethoprim} shows it to be a combination. Where no recorded name does, the
 	 * order is taken for the drug, and the consequence names the order.
 	 */

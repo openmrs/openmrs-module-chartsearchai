@@ -161,10 +161,9 @@ public class OrdersSharingASubstanceTest {
 		// Last, after every arm the question raised. The drug-in-play arm's own findings state the
 		// current-medication referent for a drug in play her orders resolve to, and the proposal for one
 		// they do not (issue #402, ADR Decision 123) — so the drugs the question LISTS as current that are
-		// hers state it too (#513 item 1). Trimethoprim and sulfamethoxazole stay proposals: her
-		// Cotrimoxazole 960mg order does not resolve to either, a residue the decision records — the
-		// resolution is issue #353's, and issue #476 is why the second prints as "(sulfamethazine)" over these
-		// raw-parse entries; the module's own load prints it without (ADR Decision 216).
+		// hers state it too (#513 item 1). Trimethoprim and sulfamethoxazole are hers since ADR Decision 266:
+		// the knowledge base files the name of her Cotrimoxazole 960mg order under both, where it used to
+		// resolve to neither and to print the second as "(sulfamethazine)".
 		DrugReferenceService service = DrugReferenceTestSupport.serviceWithGroups(
 				DrugReferenceTestSupport.shippedEntries());
 		PatientClinicalContext context = DrugReferenceTestSupport.contextNaming(service, 40, 60.0,
@@ -191,12 +190,12 @@ public class OrdersSharingASubstanceTest {
 			assertTrue(finding.isAboutACurrentMedication(), "both orders are her own prescriptions");
 			assertSame(finding, warnings.get(warnings.size() - 1),
 					"after every other finding: " + DrugReferenceTestSupport.details(warnings));
-			Set<String> current = new LinkedHashSet<String>(Arrays.asList("Lamivudine", "Zidovudine", "Efavirenz"));
+			Set<String> current = new LinkedHashSet<String>(Arrays.asList("Lamivudine", "Zidovudine", "Efavirenz",
+					"Sulfamethoxazole", "Trimethoprim"));
 			if ("Rifampicin".equals(drug)) {
 				current.add("Rifampicin (rifampin)");
 			}
-			Set<String> proposed = new LinkedHashSet<String>(Arrays.asList("Sulfamethoxazole (sulfamethazine)",
-					"Trimethoprim"));
+			Set<String> proposed = new LinkedHashSet<String>();
 			if ("Metformin".equals(drug)) {
 				proposed.add("Metformin");
 			}

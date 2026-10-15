@@ -2881,11 +2881,12 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 
 	/** The unrecognised name is quoted as the question wrote it, hyphen and all (ADR Decision 245): on the 3.7.1 standalone
 	 *  "Can I give him co-trimoxazole?" was told that "co trimoxazole" is not a name the data recognises — a spelling the
-	 *  clinician never wrote, which reads as the module having misread the question. */
+	 *  clinician never wrote, which reads as the module having misread the question. The data has recognised
+	 *  co-trimoxazole since ADR Decision 266, so the case asks about a hyphenated name it does not carry. */
 	@Test
 	public void anUnrecognisedNameIsQuotedAsTheQuestionWroteItHyphenIncluded() {
-		ChartAnswer answer = serviceWith(new RecordingProvider(), shipped()).search(patient, "Can I give her co-trimoxazole?");
-		assertTrue(answer.getAnswer().startsWith("No interaction check was run: \"co-trimoxazole\" is not a drug name the "
+		ChartAnswer answer = serviceWith(new RecordingProvider(), shipped()).search(patient, "Can I give her co-zorblatine?");
+		assertTrue(answer.getAnswer().startsWith("No interaction check was run: \"co-zorblatine\" is not a drug name the "
 				+ "interaction data recognises."), answer.getAnswer());
 	}
 

@@ -931,11 +931,11 @@ public class DrugReferenceService {
 	 * false NEGATIVE in a safety net. But its equal-claimant leg admits a row on a rank TIE, and a tie
 	 * is satisfied by two quite different things — a combination the KB spells without a separator
 	 * ({@code amoxicillin and clavulanic acid}, that leg's own reason for existing) and two substances
-	 * sharing one name that is neither's display name. The second is a row the recorded name does not
-	 * name, and a chip saying "The patient has a recorded allergy to X." about it states something the
-	 * chart does not.
+	 * sharing one name that is neither's display name. Where the dataset filed the two rows under one
+	 * ingredient, the second is a row the recorded name does not name, and a chip saying "The patient has
+	 * a recorded allergy to X." about it states something the chart does not.
 	 *
-	 * <p><b>Three ways a name names a row</b>, and no leg is exempt AS a leg:
+	 * <p><b>Four ways a name names a row</b>, and no leg is exempt AS a leg:
 	 * <ul>
 	 *   <li>it is the <b>unique strongest NAME claimant</b> — the recorded name IS one of its names
 	 *       ({@link DrugReference#NAME_IS_ANOTHER_NAME} or better) and every other implied substance
@@ -969,12 +969,15 @@ public class DrugReferenceService {
 	 *       construction, whichever row ends up representing it. The moiety rank stays
 	 *       {@link DrugReference#NAME_IS_THE_DISPLAY_NAME}: that leg's javadoc records why it is
 	 *       stricter than the constituent gate, and relaxing it here would license printing the name of
-	 *       exactly the rows it refuses.</li>
+	 *       exactly the rows it refuses;</li>
+	 *   <li>a name spelling none of them is a name the dataset files under each ingredient of one
+	 *       COMBINATION ({@link #namesACombinationContaining}, ADR Decision 266) — {@code Bactrim DS},
+	 *       {@code Cotrimoxazole 960mg} — and not under two rows of one ingredient.</li>
 	 * </ul>
 	 *
 	 * <p><b>What it gives up, measured like everything else here.</b> Over the shipped KB,
-	 * <b>169 of 6888</b> (recorded name, row) pairs take the relationship sentence rather than the
-	 * identity one. Most are corrections — a shared alias, or a row the recorded string reaches
+	 * <b>169 of 6888</b> (recorded name, row) pairs took the relationship sentence rather than the
+	 * identity one before ADR Decision 266, whose combination clause names some of them. Most are corrections — a shared alias, or a row the recorded string reaches
 	 * through one ({@code acetic acid / hydrocortisone} → {@code Hydrocortisone butyrate},
 	 * {@code amoxicillin / clarithromycin / esomeprazole combination kit} → {@code Omeprazole}). The
 	 * cost is the rest: a recorded name spelling out several ingredients whose ingredient this KB files
@@ -1037,9 +1040,17 @@ public class DrugReferenceService {
 	 */
 	List<DrugReference> findNamedSubstances(String drugName, List<DrugReference> implied) {
 		Set<Object> derived = null;
+		Boolean spelled = null;
 		List<DrugReference> named = new ArrayList<DrugReference>(implied.size());
 		for (DrugReference row : implied) {
 			if (row.labelNameOccursIn(drugName) || uniqueStrongestClaimant(drugName, row, implied)) {
+				named.add(row);
+				continue;
+			}
+			if (spelled == null) {
+				spelled = spellsAnyOf(drugName, implied);
+			}
+			if (!spelled && namesACombinationContaining(drugName, row, implied)) {
 				named.add(row);
 				continue;
 			}
@@ -1057,6 +1068,72 @@ public class DrugReferenceService {
 			}
 		}
 		return named;
+	}
+
+	/** Whether a name a label of one of {@code implied} is built from occurs in {@code drugName} — a name that SPELLS
+	 *  substances, which {@link #namesACombinationContaining} leaves to the clauses reading what it spells. */
+	private static boolean spellsAnyOf(String drugName, List<DrugReference> implied) {
+		for (DrugReference row : implied) {
+			if (row.labelNameOccursIn(drugName)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Whether {@code drugName}, spelling none of {@code implied}, names {@code row} as one ingredient of a COMBINATION
+	 * (ADR Decision 266): it carries a name of {@code row}'s that another implied substance of a DIFFERENT published
+	 * substance name also carries, no implied row sharing {@code row}'s substance name carries it, and no implied row
+	 * claims {@code drugName} more strongly than {@code row} does.
+	 *
+	 * <p><b>Why the substance name tells the two ties apart.</b> The knowledge base files a name under the RxNorm
+	 * ingredient it is fetched for (brand names, schema 1.3) or curated under (international names): a combination's
+	 * brands and its own name under every ingredient it contains — {@code Bactrim} and {@code Co-trimoxazole} under
+	 * sulfamethoxazole AND trimethoprim, {@code Augmentin} under amoxicillin AND clavulanate — so rows of different
+	 * published substances sharing a name are that product's ingredients, all of them in it. Rows sharing one published
+	 * substance name are rows the dataset filed under ONE ingredient, and a name of that ingredient cannot say which of
+	 * them a record means: {@code Nexium} reaches Esomeprazole and the Omeprazole row the dataset filed under
+	 * esomeprazole, which is why a shared name used to name no row at all (issue #392). Asked per name, so a kit naming
+	 * both those rows and a third substance names the third alone.
+	 *
+	 * <p><b>Not for a spelled name</b>, whose own words say which substances it holds — {@code labelNameOccursIn}
+	 * names those — and whose shared names can belong to a family the bridge filed apart: the CIEL biosimilar name
+	 * {@code trastuzumab-anns} is filed on the two trastuzumab conjugates as well, and spells {@code Trastuzumab}.
+	 * <b>The residue</b>: such a family's shared name that spells none of its rows would still be read as a
+	 * combination of them.
+	 */
+	private static boolean namesACombinationContaining(String drugName, DrugReference row, List<DrugReference> implied) {
+		String substance = DrugReference.normalizeName(row.getSubstanceName());
+		if (substance == null) {
+			return false;
+		}
+		DrugReference.FoldedName folded = DrugReference.fold(drugName);
+		int claim = row.nameMatchStrength(folded);
+		for (DrugReference other : implied) {
+			if (other != row && other.nameMatchStrength(folded) > claim) {
+				return false;
+			}
+		}
+		for (String alias : row.aliasesNaming(folded)) {
+			boolean anotherSubstance = false;
+			boolean thisSubstance = false;
+			for (DrugReference other : implied) {
+				if (other == row || !other.isNamed(alias)) {
+					continue;
+				}
+				String theirs = DrugReference.normalizeName(other.getSubstanceName());
+				if (theirs == null || theirs.equals(substance)) {
+					thisSubstance = true;
+				} else {
+					anotherSubstance = true;
+				}
+			}
+			if (anotherSubstance && !thisSubstance) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/** @return whether {@code row} claims the whole of {@code drugName} as a NAME

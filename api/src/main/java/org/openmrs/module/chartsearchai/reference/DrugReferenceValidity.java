@@ -1318,7 +1318,9 @@ public final class DrugReferenceValidity {
 	 * synonym (glucarate and saccharate name one anion), so the rule is not a certificate that every row
 	 * it names is wrong; {@code Omeprazole} and {@code Hyoscyamine} are also among
 	 * {@link #reportAliasesNamingAnotherSubstance}'s findings, because their substance name is another
-	 * row's display name. Re-measure before relying on the figures.
+	 * row's display name. Re-measure before relying on the figures. Since ADR Decision 266 the shipped knowledge base
+	 * maps {@code Sulfamethoxazole} to its own RxCUI, so that row is no longer among them;
+	 * {@code ddi-substance-name-contradicted-by-the-bridge.json} keeps its earlier shape.
 	 */
 	private void reportSubstanceNamesContradictedByTheBridge(List<DrugReference> entries) {
 		Map<String, Set<String>> conceptsNaming = new HashMap<String, Set<String>>();

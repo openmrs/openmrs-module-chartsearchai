@@ -17932,3 +17932,50 @@ name the interaction data recognises."* — of an order the module had checked t
   answers do not take as one drug.
 
 Pinned by `HerOrdersNamedByTheirOwnNamesTest`.
+
+## Decision 266: Co-trimoxazole is checked as both of its ingredients, by every name a clinician writes it with
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-15 to fix the errors the sweep left; the knowledge-base
+half bundled before upstream review, as [Decision 183](#decision-183-a-drug-name-the-data-does-not-recognise-is-said-to-be-unrecognised-with-the-names-it-carries-and-never-guessed)'s
+was.
+
+### Context
+
+On the 3.7.1 standalone Donald Thompson, on warfarin, asked *"Can I give him Bactrim?"* and read *"2 interaction cautions
+for Trimethoprim"*: the Major interaction between sulfamethoxazole and warfarin was never checked. *"Can I give him
+co-trimoxazole?"* read *"No interaction check was run"*, so neither interaction nor allergy was checked. Both had one
+cause in the knowledge base: its `Sulfamethoxazole` row (`DDInter1724`, DrugBank `DB01015`) had been matched to
+sulfamethazine's RxCUI (10178), so it carried sulfamethazine's ATC code and CIEL concepts, and RxNorm's brands of
+co-trimoxazole, fetched per ingredient RxCUI, were filed under trimethoprim alone. The name co-trimoxazole itself was left
+out of the curated international names, which listed single substances only. (Issue #476 and
+[Decision 216](#decision-216-a-drugs-label-does-not-print-a-synonym-the-loads-check-reports-as-another-substances)/[Decision 234](#decision-234-a-partner-a-rule-names-by-another-substances-name-is-printed-by-its-own) had already met the row, as the `sulfamethazine` label.)
+
+### The decision
+
+- **The knowledge base maps the row to sulfamethoxazole and names the combinations under their ingredients** —
+  `dkayiwa/openmrs-ddi-knowledge-base` commit `064e926` (branch `cotrimoxazole`, on top of pull requests #9 and #10): a
+  `mismatch` curation override (RxCUI 10180, ATC `J01EC01`, brands `Bactrim`, `Sulfatrim`, CIEL `Sulfamethoxazole /
+  trimethoprim`), and a combination's own name listed under every ingredient it contains, as its brands are:
+  `Co-trimoxazole`/`Cotrimoxazole` under sulfamethoxazole and trimethoprim, `Co-amoxiclav` under amoxicillin and
+  clavulanate (a penicillin allergy was not checked for "co-amoxiclav" either). `DdiDrugReferenceSource`'s javadoc carries
+  the commit, size and hashes.
+- **A name the data files under each ingredient of one combination names each of them**
+  (`DrugReferenceService.namesACombinationContaining`, a fourth clause of `findNamedSubstances`). With Bactrim filed under
+  both ingredients, a `Bactrim DS` order named neither — a shared name had meant "one of these, the module cannot say
+  which" since issue #392 — so *"Can I give her trimethoprim?"* lost *"Trimethoprim is already in active order Bactrim DS"*.
+  The two ties are told apart by the published substance name: the knowledge base files a brand or curated name under the
+  RxNorm ingredient it belongs to, so rows of different substance names sharing a name are one product's ingredients,
+  while rows sharing one substance name (Nexium on the Esomeprazole row and the Omeprazole row filed under esomeprazole)
+  stay ambiguous. Not for a name that spells any of them, nor against a row claiming the name more strongly. Measured by
+  diffing `BridgedConceptLegBoundsTest`'s walk over the bundles and the code: fourteen bridged concepts are named whole by
+  it — combination vaccines, `Normal saline + KCL 40 mmol/L`, `Folate / vitamin B 12`, `Sultamicillin tosylate` among
+  them — each a product containing every substance it answers with. The residue is in the method's javadoc.
+- **What the change moved, read rather than absorbed.** `OrdersSharingASubstanceTest`'s recorded residue is closed: her
+  `Cotrimoxazole 960mg` order resolves to both ingredients, which are now her medications. The two slices cut from the
+  earlier release around the mis-filed row (`ddi-substance-name-contradicted-by-the-bridge.json`,
+  `ddi-combination-allergen.json`) keep its shape, say so in their notes, and are no longer held to the shipped file.
+  `ChartOrderClauseSentenceCaseContextTest` names its prescription `Septrin 960mg`, a brand the data does not carry,
+  since `Cotrimoxazole 960mg` is now named by its display; Decision 245's quoting case asks about `co-zorblatine`.
+
+Pinned by `CotrimoxazoleByEveryNameTest`, `ProposedDrugAlreadyInHerOrdersTest.aCombinationOrderIsSaidToCarryTheProposedDrugAndNotToBeDuplicatedByIt`
+(its `Cotrimoxazole 960mg` and `Augmentin 625mg` cells), and `BridgedConceptLegBoundsTest`.

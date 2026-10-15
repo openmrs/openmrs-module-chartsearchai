@@ -309,15 +309,17 @@ public class ProposedDrugAlreadyInHerOrdersTest {
 		// finding is raised, but adding one constituent doubles that constituent and is not a second prescription of
 		// the combination. So the sentence, and the stamp the clause after the question is written from, say
 		// which: the drug that order carries. Each cell: {question, her order's display, another name the chart
-		// records for it or null, the finding's subject label}. The shipped knowledge base resolves a Bactrim DS
-		// display to the trimethoprim row alone, so there it is the concept's recorded name that shows the
-		// combination.
+		// records for it or null, the finding's subject label}. A display naming the combination by a name the
+		// knowledge base files under each of its ingredients — a brand (Bactrim DS, Augmentin) or the
+		// combination's own name (Cotrimoxazole) — establishes each of them (ADR Decision 266).
 		String[][] cells = {
 			{ "Can I give her hydrochlorothiazide?", "Lisinopril/hydrochlorothiazide 20/12.5", null,
 				"Hydrochlorothiazide" },
 			{ "Can I give her acetaminophen?", "Acetaminophen and codeine 300/30", null, "Acetaminophen" },
 			{ "Can I give her codeine?", "Tylenol with Codeine #3", null, "Codeine" },
-			{ "Can I give her trimethoprim?", "Bactrim DS", "Sulfamethoxazole / trimethoprim", "Trimethoprim" } };
+			{ "Can I give her trimethoprim?", "Bactrim DS", "Sulfamethoxazole / trimethoprim", "Trimethoprim" },
+			{ "Can I give her trimethoprim?", "Cotrimoxazole 960mg", null, "Trimethoprim" },
+			{ "Can I give her amoxicillin?", "Augmentin 625mg", null, "Amoxicillin" } };
 		for (String[] cell : cells) {
 			String question = cell[0];
 			String order = cell[1];

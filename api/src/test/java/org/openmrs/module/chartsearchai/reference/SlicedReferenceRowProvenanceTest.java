@@ -111,7 +111,6 @@ public class SlicedReferenceRowProvenanceTest {
 			"chartsearchai-test/ddi-allergen-name-claim.json",
 			"chartsearchai-test/ddi-canonical-subject-label.json",
 			"chartsearchai-test/ddi-class-partner-canonical-row.json",
-			"chartsearchai-test/ddi-combination-allergen.json",
 			"chartsearchai-test/ddi-combination-two-rules-one-note.json",
 			"chartsearchai-test/ddi-contraindication-subject-label.json",
 			"chartsearchai-test/ddi-crossarm-canonical-duplicate.json",
@@ -128,7 +127,6 @@ public class SlicedReferenceRowProvenanceTest {
 			"chartsearchai-test/ddi-residual-atc-bucket.json",
 			"chartsearchai-test/ddi-self-interaction.json",
 			"chartsearchai-test/ddi-substance-in-several-orders.json",
-			"chartsearchai-test/ddi-substance-name-contradicted-by-the-bridge.json",
 			"chartsearchai-test/ddi-substance-name-row.json",
 			"chartsearchai-test/ddi-substance-rule-asymmetry.json");
 

@@ -1,7 +1,7 @@
 # Drug-interaction questions tested on 2026-10-15
 
-Every question asked of the RefApp 3.7.1 standalone during the drug-interaction sweep of 2026-10-15, which
-produced [ADR Decisions 227 to 256](adr.md#decision-227-the-placeholder-a-free-text-allergy-is-saved-on-is-no-allergen-and-an-unchecked-allergy-is-named-as-the-chart-spells-it).
+Every question asked of the RefApp 3.7.1 standalone during the drug-interaction sweep of 2026-10-15 and the follow-up
+that fixed the errors it left, which produced [ADR Decisions 227 to 271](adr.md#decision-227-the-placeholder-a-free-text-allergy-is-saved-on-is-no-allergen-and-an-unchecked-allergy-is-named-as-the-chart-spells-it).
 Each question is written exactly as it was asked, misspellings and phone-keyboard apostrophes included, under the
 patient it was asked about. Each patient's active medication orders and recorded drug allergies are as the chart held
 them at the end of the sweep, so that "her" and "his" in a question can be read.
@@ -30,6 +30,8 @@ Drug allergies: none.
 - Is warfarin safe with her cotrimoxazole?
 - Can I give her phenytoin?
 - Can I add fluconazole to her cotrimoxazole?
+- Can I give her trimethoprim?
+- Does her cotrimoxazole interact with her lopinavir?
 
 ## Barbara Miller
 
@@ -223,6 +225,13 @@ Drug allergies: none.
 - Is there any reason not to give him fluconazole?
 - Can I give him co-trimoxazole with his warfarin?
 - Does alcohol interact with his warfarin?
+- Can I give him Bactrim?
+- Can I give him cotrimoxazole?
+- Can I give him trimethoprim-sulfamethoxazole?
+- Can I give him sulfamethoxazole?
+- Can I give him sulfamethoxazole and trimethoprim?
+- Can he drink alcohol?
+- Can I give him diazepam for alcohol withdrawal?
 
 ## Donna Roberts
 
@@ -292,6 +301,8 @@ Drug allergies: Penicillin G.
 - Can I give him St John's wort?
 - Is St. John's Wort safe with his nevirapine?
 - Can I give him St John’s wort?
+- Can I give him co-amoxiclav?
+- Can I give him Augmentin?
 
 ## George Anderson
 
@@ -309,6 +320,7 @@ Drug allergies: Pantoprazole, Ibuprofen, NSAID.
 - Is paracetamol safe for him given his NSAID allergy?
 - Can I give him ibuprofen?
 - Is 1 g of paracetamol safe for him?
+- Is paracetamol safe for him?
 
 ## Helen Roberts
 
@@ -361,6 +373,7 @@ Drug allergies: Aspirin.
 - Can I give him trimethoprim?
 - Can I give him ibuprofen 400 mg?
 - Can I give him amoxicillin 500 mg three times a day?
+- Can I give him amoxicillin?
 
 ## Karen Sanchez
 
@@ -373,6 +386,7 @@ Drug allergies: none.
 - Can I give her Flagyl?
 - Any problems with her metronidazole?
 - Can I give her disulfiram?
+- Is alcohol safe with her metronidazole?
 
 ## Karen Thompson
 
@@ -500,6 +514,7 @@ Drug allergies: Enalaprilat.
 - Can I give him amlodipine?
 - Can I give him atorvastatin?
 - Is Zolvimix safe with Klarizom?
+- Can I give him Zolvimix?
 
 ## Michelle Lewis
 
@@ -575,6 +590,7 @@ Drug allergies: Dexibuprofen, Penicillins.
 - Can I give him amoxicillin?
 - Is ceftriaxone safe for him?
 - Can I give her Augmentin?
+- Can I give her co-amoxiclav?
 
 ## Rhoda Ritonavirb
 

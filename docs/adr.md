@@ -17444,3 +17444,72 @@ allowed only whitespace between the two words the question grammar had split it 
   trimethoprim"* and *"Bactrim"*, never by that name, which only a name the data carries can change.
 
 Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.anUnrecognisedNameIsQuotedAsTheQuestionWroteItHyphenIncluded`.
+
+## Decision 246: A together question may name her drug as hers
+
+**Status: Accepted** (October 2026) — the owner's standing request of 2026-10-15 to fix what misleads a clinician. It
+widens [Decision 169](#decision-169-a-question-whether-two-drugs-can-be-given-together-states-their-findings-against-her-own-orders)'s
+grammar as [Decision 233](#decision-233-two-drugs-named-as-hers-reach-the-two-drug-answers) widened the two-drug one.
+
+### Context
+
+On the 3.7.1 standalone Donald Thompson, on warfarin among six orders, asked *"Is fluconazole safe with his warfarin?"*.
+The together grammar (`QueryScopeRouter.TOGETHER_SHAPES`) took no "his", so the question fitted no shape, and the model
+answered *"The records do not address the safety of Fluconazole with his current regimen."* beside a Major finding
+relating fluconazole to his warfarin. *"Does fluconazole interact with his warfarin?"*, a two-drug shape since Decision
+233, was answered by the module.
+
+### The decision
+
+- **Every drug slot of the together shapes may carry "her/his/their/the patient's"** (the same `HER_D` slot the
+  two-drug shapes use), so *"Is fluconazole safe with his warfarin?"*, *"Can I give her rifampicin with her nevirapine?"*
+  and *"Can rifampicin be given with her nevirapine?"* reach
+  [Decision 196](#decision-196-two-drugs-asked-about-together-one-of-them-hers-are-answered-for-the-other-and-her-drugs-other-findings-are-drawn-apart)'s
+  answer: her drug said to be hers, then the other drug's own proposal answer.
+
+Pinned by `TogetherWithHerOwnMedicationContextTest.aTogetherQuestionNamingHerDrugAsHersIsAnsweredForTheOther`.
+
+## Decision 247: "Should I avoid X?" is answered as "Is there any reason not to give X?" is, with neither "Yes" nor "No"
+
+**Status: Accepted** (October 2026) — the owner's standing request of 2026-10-15 to fix what misleads a clinician. It
+widens [Decision 181](#decision-181-a-question-whether-not-to-give-a-drug-or-whether-it-interacts-is-answered-without-an-inverted-no)'s
+grammar.
+
+### Context
+
+On the 3.7.1 standalone Carol Brown's *"Should I avoid clarithromycin for her?"* and *"Should clarithromycin be
+avoided?"*, and Donald Thompson's *"Do I need to avoid ibuprofen in him?"*, reached the model, which opened *"No,
+Clarithromycin should be avoided due to a Major interaction with Simvastatin"* and *"No — Ibuprofen should be avoided due
+to a Major interaction with Warfarin"*: a "No" to whether to avoid it, contradicted by the sentence it opens.
+
+### The decision
+
+- **"Should/Must I avoid (giving) X?", "Should X be avoided?" and "Do I need/have to avoid X?"**, each optionally "for"
+  or "in" the patient, are Decision 181's shapes (`QueryScopeRouter.NEGATED_PROPOSAL_SHAPES`): the module answers with
+  the finding and neither "Yes" nor "No".
+
+Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aQuestionWhetherToAvoidADrugIsAnsweredWithoutAYesOrNo`.
+
+## Decision 248: "Will X affect her Y?" asks whether the two interact
+
+**Status: Accepted** (October 2026) — the owner's standing request of 2026-10-15 to fix what misleads a clinician. It
+widens the question whether two drugs interact
+([Decision 218](#decision-218-whether-her-drug-and-another-interact-is-answered-yes-where-a-finding-relates-them)).
+
+### Context
+
+On the 3.7.1 standalone Donald Thompson's *"Will fluconazole affect his warfarin?"* reached the model, which opened *"No —
+Fluconazole should not be given: coadministration with fluconazole may significantly increase the plasma concentrations
+and hypoprothrombinemic effect of warfarin"*: a "No" to whether it would affect it, over the Major finding saying it does.
+
+### The decision
+
+- **"Does/Will/Would/Can X affect (her) Y?"** is the interact shape (`QueryScopeRouter`'s
+  `DOES_ONE_INTERACT_WITH_THE_OTHER`), so it reaches the answers that question has: "Yes" where a finding relates the
+  two, the model's answer where none does, and two of her own drugs stated side by side.
+- A narrower effect — *"Does metronidazole increase the bleeding risk with his warfarin?"* — is not this question: the
+  data relates the pair, never the particular effect asked about, so a "Yes" would assert what it does not state.
+  [Decision 249](#decision-249-whether-one-drug-changes-an-effect-of-the-other-is-answered-with-the-finding-and-neither-yes-nor-no)
+  answers it.
+
+Pinned by `TogetherWithHerOwnMedicationContextTest.aQuestionWhetherADrugAffectsHerDrugIsAnsweredYesWhereAFindingRelatesThem`.

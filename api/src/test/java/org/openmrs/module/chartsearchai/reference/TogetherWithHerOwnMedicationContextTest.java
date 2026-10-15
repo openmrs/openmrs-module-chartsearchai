@@ -96,6 +96,44 @@ public class TogetherWithHerOwnMedicationContextTest extends BaseModuleContextSe
 		}
 	}
 
+	/**
+	 * Her drug named as hers in a together question (ADR Decision 246). On the 3.7.1 standalone Donald Thompson's "Is
+	 * fluconazole safe with his warfarin?" fitted no shape — the together grammar took no "his" — and the model answered
+	 * "The records do not address the safety of Fluconazole with his current regimen" beside a Major finding relating the
+	 * two.
+	 */
+	@Test
+	public void aTogetherQuestionNamingHerDrugAsHersIsAnsweredForTheOther() {
+		for (String question : Arrays.asList("Is rifampicin safe with her nevirapine?",
+			"Can I give her rifampicin with her nevirapine?", "Can rifampicin be given with her nevirapine?",
+			"Is it safe to give her rifampicin with her nevirapine?")) {
+			String answer = askOverTheShippedData(question, "Nevirapine 200mg", "Nevirapine").getModuleAnswer();
+
+			assertTrue(answer != null && answer.startsWith("Nevirapine is one of this patient's active medications.\n"
+					+ "No — this module's drug-safety check found a reason to withhold Rifampicin (rifampin)."),
+				question + " was: " + answer);
+			assertTrue(answer.contains("Rifampicin (rifampin) interacts with active order Nevirapine — Major."),
+				question + " states the pair: " + answer);
+		}
+	}
+
+	/**
+	 * Whether one drug AFFECTS the other asks whether they interact (ADR Decision 248). On the 3.7.1 standalone Donald
+	 * Thompson's "Will fluconazole affect his warfarin?" reached the model, which opened "No — Fluconazole should not be
+	 * given: coadministration with fluconazole may significantly increase … warfarin": a "No" to whether it would affect it.
+	 */
+	@Test
+	public void aQuestionWhetherADrugAffectsHerDrugIsAnsweredYesWhereAFindingRelatesThem() {
+		for (String question : Arrays.asList("Will rifampicin affect her nevirapine?", "Does rifampicin affect her nevirapine?",
+			"Would rifampicin affect nevirapine?")) {
+			String answer = askOverTheShippedData(question, "Nevirapine 200mg", "Nevirapine").getModuleAnswer();
+
+			assertTrue(answer != null && answer.startsWith("Nevirapine is one of this patient's active medications.\n"
+					+ "Yes — Rifampicin (rifampin) interacts with this patient's active medications."), question + " was: " + answer);
+			assertTrue(!answer.contains("No —"), "never the proposal's polarity: " + answer);
+		}
+	}
+
 	@Test
 	public void aQuestionWhetherHerDrugAndAnotherInteractIsLeftToTheModelWhereNoFindingRelatesThem() {
 		// Rifampicin relates to nothing of hers above the floor here, so neither "Yes" nor the proposal's "No" is the module's.

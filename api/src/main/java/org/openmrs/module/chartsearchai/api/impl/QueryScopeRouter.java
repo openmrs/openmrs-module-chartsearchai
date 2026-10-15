@@ -389,6 +389,11 @@ public final class QueryScopeRouter {
 			"is " + D + " contraindicated(?: (?:for|in) " + PATIENT + ")?(?: now| today)?",
 			// "Would ibuprofen be contraindicated for her?" (ADR Decision 243)
 			"(?:would|will) " + D + " be contraindicated(?: (?:for|in) " + PATIENT + ")?(?: now| today)?",
+			// "Should I avoid ibuprofen?", "Should ibuprofen be avoided?", "Do I need to avoid ibuprofen in her?" (ADR Decision
+			// 247)
+			"(?:should|must) (?:i|we) avoid (?:giving )?(?:" + PATIENT + " )?" + D + "(?: (?:for|in) " + PATIENT + ")?",
+			"(?:should|must) " + D + " be avoided(?: (?:for|in) " + PATIENT + ")?",
+			"do (?:i|we) (?:need|have) to avoid (?:giving )?(?:" + PATIENT + " )?" + D + "(?: (?:for|in) " + PATIENT + ")?",
 			// "Any problem giving her ibuprofen?", "Are there any concerns with starting ibuprofen?"
 			"(?:(?:is|are) there )?any (?:problems?|issues?|concerns?) (?:with )?(?:giving|starting|prescribing|adding) (?:"
 					+ PATIENT + " )?(?:on )?" + D + "(?: (?:to|for) " + PATIENT + ")?",
@@ -426,6 +431,11 @@ public final class QueryScopeRouter {
 		return fitsAShape(wordsWithTheDrugMarked, INTERACTS_WITH_HER_MEDICATIONS_SHAPES);
 	}
 
+	/** A drug slot of the two-drug shapes below, which may name the drug as hers — "her methotrexate" (ADR Decision 233):
+	 *  a "her" fitted none of them, and the model answered "No — Methotrexate and Salicylic acid interact". The together
+	 *  shapes' slots too (ADR Decision 246): "Is fluconazole safe with his warfarin?" fitted none of them. */
+	private static final String HER_D = "(?:" + POSSESSIVE + " )?" + D;
+
 	/**
 	 * The question shapes asking whether TWO drugs may be given together, over {@link #words} with each drug's name
 	 * marked {@link #DRUG_NAME} — ADR Decision 169. A grammar for the reason {@link #PROPOSAL_SHAPES} is, and kept apart
@@ -435,26 +445,26 @@ public final class QueryScopeRouter {
 	 */
 	private static final List<Pattern> TOGETHER_SHAPES = shapes(
 			// "Can warfarin and ibuprofen be given together?", "Can warfarin be given with ibuprofen to her?"
-			"(?:can|could|may|should) " + D + " (?:and|with) " + D
+			"(?:can|could|may|should) " + HER_D + " (?:and|with) " + HER_D
 					+ " be (?:safely )?(?:given|started|prescribed|administered|taken|used)(?: together)?(?: (?:to|for) "
 					+ PATIENT + ")?(?: now| today)?",
-			"(?:can|could|may|should) " + D + " be (?:safely )?(?:given|started|prescribed|administered|taken|used) (?:with|alongside) "
-					+ D + "(?: (?:to|for) " + PATIENT + ")?(?: now| today)?",
+			"(?:can|could|may|should) " + HER_D + " be (?:safely )?(?:given|started|prescribed|administered|taken|used) (?:with|alongside) "
+					+ HER_D + "(?: (?:to|for) " + PATIENT + ")?(?: now| today)?",
 			// "Can I give her warfarin with ibuprofen?", "Can I give her warfarin and ibuprofen together?"
 			"(?:can|could|may|should) (?:i|we) (?:safely )?(?:give|start|prescribe|administer) (?:" + PATIENT
-					+ " )?(?:on )?" + D + " (?:and|with|alongside) " + D + "(?: together)?(?: to " + PATIENT
+					+ " )?(?:on )?" + HER_D + " (?:and|with|alongside) " + HER_D + "(?: together)?(?: to " + PATIENT
 					+ ")?(?: now| today)?",
 			// "Can she take warfarin and ibuprofen together?"
-			"(?:can|could|may|should) (?:she|he|they|the patient|this patient) (?:safely )?(?:take|be given) " + D
-					+ " (?:and|with|alongside) " + D + "(?: together)?(?: now| today)?",
+			"(?:can|could|may|should) (?:she|he|they|the patient|this patient) (?:safely )?(?:take|be given) " + HER_D
+					+ " (?:and|with|alongside) " + HER_D + "(?: together)?(?: now| today)?",
 			// "Is it safe to give her warfarin and ibuprofen together?", "Is it safe to take warfarin with ibuprofen?"
 			"is it (?:safe|ok|okay|appropriate) (?:for " + PATIENT + " )?to (?:(?:give|start|prescribe|administer) (?:"
-					+ PATIENT + " )?(?:on )?|take )" + D + " (?:and|with|alongside) " + D + "(?: together)?(?: for "
+					+ PATIENT + " )?(?:on )?|take )" + HER_D + " (?:and|with|alongside) " + HER_D + "(?: together)?(?: for "
 					+ PATIENT + ")?(?: now| today)?",
 			// "Are warfarin and ibuprofen safe together?", "Is warfarin safe with ibuprofen?"
-			"are " + D + " and " + D + " (?:safe|ok|okay|appropriate)(?: to (?:give|take|use))?(?: together)?(?: for "
+			"are " + HER_D + " and " + HER_D + " (?:safe|ok|okay|appropriate)(?: to (?:give|take|use))?(?: together)?(?: for "
 					+ PATIENT + ")?",
-			"is " + D + " (?:safe|ok|okay|appropriate) (?:with|alongside) " + D + "(?: for " + PATIENT + ")?");
+			"is " + HER_D + " (?:safe|ok|okay|appropriate) (?:with|alongside) " + HER_D + "(?: for " + PATIENT + ")?");
 
 	/**
 	 * Whether a question asks whether two drugs may be given together and nothing else — one of
@@ -618,14 +628,11 @@ public final class QueryScopeRouter {
 	 * Decision 203). Kept apart from {@link #TOGETHER_SHAPES} for that grammar's reason: its readers answer for drugs
 	 * proposed, and this one's single reader asks it of two drugs her own orders BOTH carry.
 	 */
-	/** A drug slot of the two-drug shapes below, which may name the drug as hers — "her methotrexate" (ADR Decision 233):
-	 *  a "her" fitted none of them, and the model answered "No — Methotrexate and Salicylic acid interact". */
-	private static final String HER_D = "(?:" + POSSESSIVE + " )?" + D;
-
 	/** "Does ibuprofen interact with celecoxib?", "Do her ibuprofen and celecoxib interact?" — a question whether two drugs
-	 *  INTERACT (ADR Decisions 203, 218, 233). */
-	private static final String DOES_ONE_INTERACT_WITH_THE_OTHER = "(?:(?:does|do|will|would|can) " + HER_D + " interact with "
-			+ HER_D + "|(?:do|will|would|can) " + HER_D + " and " + HER_D
+	 *  INTERACT (ADR Decisions 203, 218, 233); and "Will fluconazole affect her warfarin?", which asks the same (ADR
+	 *  Decision 248). */
+	private static final String DOES_ONE_INTERACT_WITH_THE_OTHER = "(?:(?:does|do|will|would|can) " + HER_D
+			+ " (?:interact with|affect) " + HER_D + "|(?:do|will|would|can) " + HER_D + " and " + HER_D
 			+ " interact(?: with (?:each other|one another))?)";
 
 	/** "Any interactions between ibuprofen and celecoxib?", "Is there an interaction between X and Y?" (ADR Decisions 203, 218). */

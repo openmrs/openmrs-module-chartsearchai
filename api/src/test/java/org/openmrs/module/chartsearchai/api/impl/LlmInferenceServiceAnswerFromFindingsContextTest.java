@@ -481,6 +481,25 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	}
 
 	/**
+	 * Whether to AVOID a drug inverts "No" as whether NOT to give it does (ADR Decision 247). On the 3.7.1 standalone Carol
+	 * Brown's "Should I avoid clarithromycin for her?" and Donald Thompson's "Do I need to avoid ibuprofen in him?" reached
+	 * the model, which opened "No, Clarithromycin should be avoided" and "No — Ibuprofen should be avoided due to a Major
+	 * interaction with Warfarin": a "No" to whether to avoid it.
+	 */
+	@Test
+	public void aQuestionWhetherToAvoidADrugIsAnsweredWithoutAYesOrNo() {
+		for (String question : new String[] { "Should I avoid ibuprofen?", "Should I avoid ibuprofen for her?",
+				"Should ibuprofen be avoided?", "Should ibuprofen be avoided in this patient?", "Do I need to avoid ibuprofen?",
+				"Do we need to avoid ibuprofen in her?" }) {
+			RecordingProvider provider = new RecordingProvider();
+			ChartAnswer answer = serviceWith(provider).search(patient, question);
+			assertEquals(0, provider.calls, question + " — " + answer.getAnswer());
+			assertTrue(answer.getAnswer().startsWith(DrugReferenceInjector.NEUTRAL_WITHHOLD_LEAD_OPENING + "Ibuprofen.\n"),
+					question + " — " + answer.getAnswer());
+		}
+	}
+
+	/**
 	 * "As well", "too" and "also" propose the drug beside her medications, which is what every proposal is screened against
 	 * (ADR Decision 244). On the 3.7.1 standalone Carol Brown, on lisinopril among six orders, asked "Can I start her on
 	 * enalapril as well?", reached the model, and read "Enalapril can be started, with several cautions" — a second ACE

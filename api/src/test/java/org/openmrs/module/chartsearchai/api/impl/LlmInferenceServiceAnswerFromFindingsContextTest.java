@@ -1020,6 +1020,16 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		}
 	}
 
+	/** The purpose as the question wrote it (ADR Decision 235): "her UTI" was echoed back as "her uti" on the standalone. */
+	@Test
+	public void thePurposeIsEchoedAsTheQuestionWroteIt() {
+		answerFromFindings(true);
+		ChartAnswer answer = serviceWith(new RecordingProvider()).search(patient, "Can I give her ibuprofen for her Knee Pain?");
+
+		assertTrue(answer.getAnswer().endsWith("\nThis check did not weigh what the drug is for (her Knee Pain)."),
+			"was: " + answer.getAnswer());
+	}
+
 	/** What a purpose may not carry: a second question, a factor the findings do not weigh, or a question of its own. */
 	@Test
 	public void aPurposeCarryingSomethingTheFindingsDoNotAnswerStillAsksTheModel() throws Exception {

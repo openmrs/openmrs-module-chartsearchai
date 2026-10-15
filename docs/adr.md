@@ -17172,3 +17172,23 @@ with sulfamethazine"*: a drug none of them takes.
 
 Pinned by `ContradictedPartnerTokenContextTest.aCoTrimoxazoleOrderIsNamedSulfamethoxazoleAndNeverSulfamethazine`, over
 the real load of the #476 slice.
+
+## Decision 235: A purpose is echoed as the question wrote it
+
+**Status: Accepted** (October 2026) — the owner's standing request of 2026-10-15. It amends what
+[Decision 213](#decision-213-a-proposal-that-says-what-the-drug-is-for-is-answered-as-the-proposal-and-the-answer-says-the-purpose-was-not-weighed)'s
+closing line quotes.
+
+### Context
+
+On the 3.7.1 standalone *"Can I prescribe trimethoprim-sulfamethoxazole for her UTI?"* closed *"This check did not weigh
+what the drug is for (her uti)."*: the purpose was rebuilt from the question grammar's lower-cased words, so an
+abbreviation a clinician wrote came back as a word none of them uses.
+
+### The decision
+
+- **The line quotes the purpose's words off the question's own text** (`QueryScopeRouter.statedPurposeAsWritten`): the
+  same closing words the grammar set aside, in the question's casing — *"(her UTI)"*. Where the two cannot be lined up,
+  the grammar's reading stands.
+
+Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.thePurposeIsEchoedAsTheQuestionWroteIt`.

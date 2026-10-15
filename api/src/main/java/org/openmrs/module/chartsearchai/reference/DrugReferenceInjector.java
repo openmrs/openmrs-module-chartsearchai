@@ -1190,7 +1190,7 @@ public class DrugReferenceInjector {
 		// A proposal that said what the drug is for: the check weighed none of it, and the answer says so rather than read
 		// as a word on that use (ADR Decision 213).
 		String purpose = moduleAnswer == null || questionDrugs.isEmpty() ? null
-				: QueryScopeRouter.statedPurpose(wordsBesideItsNames(question, questionDrugs));
+				: QueryScopeRouter.statedPurposeAsWritten(question, wordsBesideItsNames(question, questionDrugs));
 		if (purpose != null) {
 			moduleAnswer = moduleAnswer + "\n" + PURPOSE_NOT_WEIGHED_OPENING + purpose + ").";
 		}

@@ -800,6 +800,29 @@ public final class QueryScopeRouter {
 		return String.join(" ", wordsWithTheDrugMarked.subList(proposal.size() + 1, wordsWithTheDrugMarked.size()));
 	}
 
+	/**
+	 * {@link #statedPurpose} as {@code question} wrote it — "her UTI", where the shapes read "her uti" (ADR Decision 235):
+	 * the same closing words, taken off the question's own text. Where those words cannot be lined up with the question,
+	 * the purpose as the shapes read it.
+	 */
+	public static String statedPurposeAsWritten(String question, List<String> wordsWithTheDrugMarked) {
+		String purpose = statedPurpose(wordsWithTheDrugMarked);
+		if (purpose == null || question == null) {
+			return purpose;
+		}
+		List<String> written = new ArrayList<String>();
+		Matcher matcher = WORD.matcher(question);
+		while (matcher.find()) {
+			written.add(matcher.group().replace('\u2019', '\''));
+		}
+		int k = purpose.split(" ").length;
+		if (written.size() < k) {
+			return purpose;
+		}
+		String asWritten = String.join(" ", written.subList(written.size() - k, written.size()));
+		return asWritten.toLowerCase(Locale.ROOT).equals(purpose) ? asWritten : purpose;
+	}
+
 	/** Words a closing purpose may not carry: a second question joined to it, or a question of its own. */
 	private static final Set<String> NOT_A_PURPOSE = new HashSet<String>(Arrays.asList("and", "or", "but", "also", "plus",
 		"with", "while", "during", "if", "how", "what", "which", "when", "why", "who", "whether", "long", "much", "many"));

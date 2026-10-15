@@ -464,6 +464,41 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	}
 
 	/**
+	 * The same question asked of what WOULD follow (ADR Decision 243). On the 3.7.1 standalone Mogan Kamwara's "Would
+	 * rifampicin be contraindicated for her?" reached the model, which opened "No — Rifampicin should not be given": a "No"
+	 * to whether it would be contraindicated, over a Major interaction with her nevirapine.
+	 */
+	@Test
+	public void aQuestionWhetherADrugWouldBeContraindicatedIsAnsweredWithoutAYesOrNo() {
+		for (String question : new String[] { "Would ibuprofen be contraindicated?", "Would ibuprofen be contraindicated for her?",
+				"Will ibuprofen be contraindicated for this patient?" }) {
+			RecordingProvider provider = new RecordingProvider();
+			ChartAnswer answer = serviceWith(provider).search(patient, question);
+			assertEquals(0, provider.calls, question + " — " + answer.getAnswer());
+			assertTrue(answer.getAnswer().startsWith(DrugReferenceInjector.NEUTRAL_WITHHOLD_LEAD_OPENING + "Ibuprofen.\n"),
+					question + " — " + answer.getAnswer());
+		}
+	}
+
+	/**
+	 * "As well", "too" and "also" propose the drug beside her medications, which is what every proposal is screened against
+	 * (ADR Decision 244). On the 3.7.1 standalone Carol Brown, on lisinopril among six orders, asked "Can I start her on
+	 * enalapril as well?", reached the model, and read "Enalapril can be started, with several cautions" — a second ACE
+	 * inhibitor, whose same-class finding the module states as "possible duplicate therapy" when it answers.
+	 */
+	@Test
+	public void aProposalOfTheDrugAsWellAsHerMedicationsIsAProposal() {
+		for (String question : new String[] { "Can I give her ibuprofen as well?", "Can I start her on ibuprofen too?",
+				"Can I also give her ibuprofen?", "Can she take ibuprofen as well?", "Is it safe to give her ibuprofen too?" }) {
+			RecordingProvider provider = new RecordingProvider();
+			ChartAnswer answer = serviceWith(provider).search(patient, question);
+			assertEquals(0, provider.calls, question + " — " + answer.getAnswer());
+			assertTrue(answer.getAnswer().startsWith(DrugReferenceInjector.WITHHOLD_LEAD_OPENING), question + " — "
+					+ answer.getAnswer());
+		}
+	}
+
+	/**
 	 * "Does X interact with her medications?" asks whether there is an interaction, and the model answered it <em>"No —
 	 * X should not be given: it interacts with …"</em> (ADR Decision 181). Where the check relates it, the module answers
 	 * "Yes", with the findings.

@@ -336,16 +336,16 @@ public final class QueryScopeRouter {
 	 * question built from admitted words. A shape states word ORDER, so a question carrying anything
 	 * a shape does not name is not admitted.
 	 */
-	private static final List<Pattern> PROPOSAL_SHAPES = shapes(
+	private static final List<Pattern> PROPOSAL_SHAPES = besideHerMedications(
 			// "Can I give her ibuprofen?", "Should I start her on clarithromycin?", "Can I give
 			// ibuprofen to her?"
-			"(?:can|could|may|should) (?:i|we) (?:safely )?(?:give|start|prescribe|administer|add) (?:"
+			"(?:can|could|may|should) (?:i|we) (?:also )?(?:safely )?(?:give|start|prescribe|administer|add) (?:"
 					+ PATIENT + " )?(?:on )?" + D + "(?: (?:to|for) " + PATIENT + ")?(?: now| today)?",
 			// "Can I add ibuprofen to her medications?" (ADR Decision 180)
-			"(?:can|could|may|should) (?:i|we) (?:safely )?add " + D + " to " + POSSESSIVE + " " + MEDICATIONS
+			"(?:can|could|may|should) (?:i|we) (?:also )?(?:safely )?add " + D + " to " + POSSESSIVE + " " + MEDICATIONS
 					+ "(?: now| today)?",
 			// "Can this patient take warfarin?", "Can she take ibuprofen?"
-			"(?:can|could|may|should) (?:she|he|they|the patient|this patient) (?:safely )?(?:take|start|be given|be started on"
+			"(?:can|could|may|should) (?:she|he|they|the patient|this patient) (?:also )?(?:safely )?(?:take|start|be given|be started on"
 					+ "|have|use) " + D + "(?: now| today)?",
 			// "Would it be safe to start ibuprofen?", "OK to give ibuprofen?", "Is it safe to add ibuprofen to her regimen?"
 			// (ADR Decision 180)
@@ -387,6 +387,8 @@ public final class QueryScopeRouter {
 					+ "(?: (?:to|for) " + PATIENT + ")?",
 			// "Is ibuprofen contraindicated?", "Is ibuprofen contraindicated for her?"
 			"is " + D + " contraindicated(?: (?:for|in) " + PATIENT + ")?(?: now| today)?",
+			// "Would ibuprofen be contraindicated for her?" (ADR Decision 243)
+			"(?:would|will) " + D + " be contraindicated(?: (?:for|in) " + PATIENT + ")?(?: now| today)?",
 			// "Any problem giving her ibuprofen?", "Are there any concerns with starting ibuprofen?"
 			"(?:(?:is|are) there )?any (?:problems?|issues?|concerns?) (?:with )?(?:giving|starting|prescribing|adding) (?:"
 					+ PATIENT + " )?(?:on )?" + D + "(?: (?:to|for) " + PATIENT + ")?",
@@ -704,6 +706,18 @@ public final class QueryScopeRouter {
 	 */
 	public static boolean asksWhetherTwoDrugsInteract(List<String> wordsWithTheDrugsMarked) {
 		return fitsAShape(wordsWithTheDrugsMarked, TWO_DRUGS_INTERACT_SHAPES);
+	}
+
+	/**
+	 * {@link #shapes}, each also admitting the drug proposed "as well" or "too" — beside her medications, which is what
+	 * every proposal is screened against (ADR Decision 244). "Also" before the verb is in the shapes themselves.
+	 */
+	private static List<Pattern> besideHerMedications(String... shapes) {
+		String[] besides = new String[shapes.length];
+		for (int i = 0; i < shapes.length; i++) {
+			besides[i] = "(?:" + shapes[i] + ")(?: as well| too)?";
+		}
+		return shapes(besides);
 	}
 
 	private static List<Pattern> shapes(String... shapes) {

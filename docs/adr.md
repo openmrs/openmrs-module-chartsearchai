@@ -17377,3 +17377,48 @@ the ASCII spelling, open again for the same words typed on a phone.
   allocates nothing.
 
 Pinned by `AbbreviatedDrugNameContextTest.aDrugNameWrittenWithATypographicApostropheResolves`.
+
+## Decision 243: "Would X be contraindicated?" is answered as "Is X contraindicated?" is, with neither "Yes" nor "No"
+
+**Status: Accepted** (October 2026) — the owner's standing request of 2026-10-15 to fix what misleads a clinician. It
+widens [Decision 181](#decision-181-a-question-whether-not-to-give-a-drug-or-whether-it-interacts-is-answered-without-an-inverted-no)'s
+grammar.
+
+### Context
+
+On the 3.7.1 standalone Mogan Kamwara, on nevirapine, asked *"Would rifampicin be contraindicated for her?"*. The
+question was no shape of the grammar, so the model answered it, and opened *"No — Rifampicin should not be given"*: a
+"No" to whether it would be contraindicated, over a Major interaction with her nevirapine. *"Is rifampicin
+contraindicated for her?"* is one of Decision 181's shapes and was answered *"This module's drug-safety check found a
+reason to withhold Rifampicin (rifampin)."*
+
+### The decision
+
+- **"Would/Will X be contraindicated (for her)?"** is one of Decision 181's shapes
+  (`QueryScopeRouter.NEGATED_PROPOSAL_SHAPES`): the module answers it with the finding and neither "Yes" nor "No".
+
+Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aQuestionWhetherADrugWouldBeContraindicatedIsAnsweredWithoutAYesOrNo`.
+
+## Decision 244: A drug proposed "as well", "too" or "also" is a proposal
+
+**Status: Accepted** (October 2026) — the owner's standing request of 2026-10-15 to fix what misleads a clinician. It
+widens the proposal grammar (`QueryScopeRouter.PROPOSAL_SHAPES`).
+
+### Context
+
+On the 3.7.1 standalone Carol Brown, on lisinopril among six orders, asked *"Can I start her on enalapril as well?"*. The
+trailing words made it no shape of the grammar, so the model answered: *"Enalapril can be started, with several cautions
+to note"* — a second ACE inhibitor, whose same-class relationship with her lisinopril it rendered as *"it is in the same
+ATC class as Lisinopril, a caution to note"*. Asked *"Can I start her on enalapril?"*, the module answered *"5
+interaction cautions for Enalapril:"*, its last line *"Enalapril is in the same ATC class (C09AA) as active order
+Lisinopril — possible duplicate therapy."* — no claim the drug can be started, and the duplication named.
+[Decision 86](#decision-86-a-relationship-resting-on-shared-classification-alone-is-a-caution-not-a-reason-to-withhold)
+keeps that finding a caution and is not reopened here.
+
+### The decision
+
+- **A proposal shape may close with "as well" or "too", and its "Can I …" and "Can she …" shapes may carry "also"
+  before the verb** — each says the drug is proposed beside her medications, which is what every proposal is screened
+  against. A second drug after "as well as" is still no shape.
+
+Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aProposalOfTheDrugAsWellAsHerMedicationsIsAProposal`.

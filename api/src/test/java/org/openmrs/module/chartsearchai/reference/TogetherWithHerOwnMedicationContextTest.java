@@ -252,6 +252,19 @@ public class TogetherWithHerOwnMedicationContextTest extends BaseModuleContextSe
 		assertTrue(answer == null || !answer.contains("No interaction check was run"), "was: " + answer);
 	}
 
+	/** Whether two drugs CLASH asks whether they interact (ADR Decision 256): Carol Brown's "Do clarithromycin and
+	 *  simvastatin clash?" was answered by the model "No — clarithromycin and simvastatin clash". */
+	@Test
+	public void whetherHerDrugAndAnotherClashIsAnsweredYesWhereAFindingRelatesThem() {
+		for (String question : Arrays.asList("Do rifampicin and nevirapine clash?", "Does rifampicin clash with her nevirapine?")) {
+			String answer = askOverTheShippedData(question, "Nevirapine 200mg", "Nevirapine").getModuleAnswer();
+
+			assertTrue(answer != null && answer.startsWith("Nevirapine is one of this patient's active medications.\n"
+					+ "Yes — Rifampicin (rifampin) interacts with this patient's active medications."), question + " was: " + answer);
+			assertTrue(!answer.contains("No —"), "never the proposal's polarity: " + answer);
+		}
+	}
+
 	@Test
 	public void aQuestionWhetherHerDrugAndAnotherInteractIsLeftToTheModelWhereNoFindingRelatesThem() {
 		// Rifampicin relates to nothing of hers above the floor here, so neither "Yes" nor the proposal's "No" is the module's.

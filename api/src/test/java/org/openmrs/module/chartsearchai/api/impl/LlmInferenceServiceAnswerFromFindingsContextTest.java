@@ -575,6 +575,23 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		}
 	}
 
+	/**
+	 * "Is there an interaction if I give her X?" asks whether there is one (ADR Decision 256). On the 3.7.1 standalone Carol
+	 * Brown's "Is there an interaction if I give her clarithromycin?" reached the model, which opened "No — Clarithromycin
+	 * should not be given: it interacts with active order Simvastatin": a "No" to whether there is an interaction.
+	 */
+	@Test
+	public void whetherThereIsAnInteractionIfSheIsGivenADrugIsAnsweredYesWithTheFindings() {
+		for (String question : new String[] { "Is there an interaction if I give her ibuprofen?",
+				"Is there any interaction if I start her on ibuprofen?" }) {
+			RecordingProvider provider = new RecordingProvider();
+			ChartAnswer answer = serviceWith(provider).search(patient, question);
+			assertEquals(0, provider.calls, question + " — " + answer.getAnswer());
+			assertTrue(answer.getAnswer().startsWith("Yes — Ibuprofen interacts with this patient's active medications."),
+					question + " — " + answer.getAnswer());
+		}
+	}
+
 	/** A list question asking whether NOT to give its drug is never answered "No if the patient is on …", which would
 	 *  answer it backwards. */
 	@Test

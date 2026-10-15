@@ -17704,3 +17704,27 @@ a clinician reading the first word, each said the drug is safe.
 
 Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.whetherADrugIsDangerousIsAnsweredWithoutAYesOrNo` and
 `TogetherWithHerOwnMedicationContextTest.whetherADrugIsDangerousBesideHerDrugIsAnsweredWithTheFindingAndNeitherYesNorNo`.
+
+## Decision 256: "Is there an interaction if I give her X?" and "Do X and Y clash?" ask whether they interact
+
+**Status: Accepted** (October 2026) — the owner's standing request of 2026-10-15 to fix what misleads a clinician. It
+widens [Decision 181](#decision-181-a-question-whether-not-to-give-a-drug-or-whether-it-interacts-is-answered-without-an-inverted-no)'s
+interact question and [Decision 218](#decision-218-whether-her-drug-and-another-interact-is-answered-yes-where-a-finding-relates-them)'s.
+
+### Context
+
+On the 3.7.1 standalone Carol Brown's *"Is there an interaction if I give her clarithromycin?"* was answered by the model
+*"No — Clarithromycin should not be given: it interacts with active order Simvastatin"* and *"Do clarithromycin and
+simvastatin clash?"* *"No — clarithromycin and simvastatin clash"*: a "No" to whether there is an interaction, each
+contradicted by the sentence it opens. *"Any interactions if I give her clarithromycin?"* and *"Does clarithromycin
+interact with simvastatin?"* were the module's, answered "Yes".
+
+### The decision
+
+- **"Is there an/any interaction if I give/start/add her X?"** is Decision 181's interact shape
+  (`QueryScopeRouter.INTERACTS_WITH_HER_MEDICATIONS_SHAPES`), answered "Yes" with the findings where the check relates it.
+- **"Do X and Y clash?"** and **"Does X clash with her Y?"** are Decision 218's interact shape
+  (`DOES_ONE_INTERACT_WITH_THE_OTHER`), answered "Yes" where a finding relates them and left to the model where none does.
+
+Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.whetherThereIsAnInteractionIfSheIsGivenADrugIsAnsweredYesWithTheFindings`
+and `TogetherWithHerOwnMedicationContextTest.whetherHerDrugAndAnotherClashIsAnsweredYesWhereAFindingRelatesThem`.

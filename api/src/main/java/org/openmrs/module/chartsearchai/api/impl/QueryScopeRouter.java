@@ -438,6 +438,10 @@ public final class QueryScopeRouter {
 			// "Any interactions if I give her ibuprofen?", "Are there any interactions if I start her on ibuprofen?" — the
 			// model answered it "No — X should not be given: it interacts with …" (ADR Decision 181)
 			"(?:are there )?any (?:drug )?interactions if (?:i|we) (?:give|start|prescribe|add) (?:" + PATIENT + " )?(?:on )?"
+					+ D + "(?: to " + PATIENT + ")?",
+			// "Is there an interaction if I give her ibuprofen?" — answered "No — X should not be given: it interacts with …"
+			// (ADR Decision 256)
+			"is there (?:an |any )?(?:drug )?interactions? if (?:i|we) (?:give|start|prescribe|add) (?:" + PATIENT + " )?(?:on )?"
 					+ D + "(?: to " + PATIENT + ")?");
 
 	/**
@@ -655,10 +659,10 @@ public final class QueryScopeRouter {
 	 */
 	/** "Does ibuprofen interact with celecoxib?", "Do her ibuprofen and celecoxib interact?" — a question whether two drugs
 	 *  INTERACT (ADR Decisions 203, 218, 233); and "Will fluconazole affect her warfarin?", which asks the same (ADR
-	 *  Decision 248). */
+	 *  Decision 248), as does "Do clarithromycin and simvastatin clash?" (ADR Decision 256). */
 	private static final String DOES_ONE_INTERACT_WITH_THE_OTHER = "(?:(?:does|do|will|would|can) " + HER_D
-			+ " (?:interact with|affect) " + HER_D + "|(?:do|will|would|can) " + HER_D + " and " + HER_D
-			+ " interact(?: with (?:each other|one another))?)";
+			+ " (?:interact with|affect|clash with) " + HER_D + "|(?:do|will|would|can) " + HER_D + " and " + HER_D
+			+ " (?:interact|clash)(?: with (?:each other|one another))?)";
 
 	/** What a drug may change of another: its levels, its effect, its absorption (ADR Decisions 249, 251). */
 	private static final String MEASURE = "(?:levels?|concentrations?|effects?|effectiveness|efficacy|toxicity|exposure"

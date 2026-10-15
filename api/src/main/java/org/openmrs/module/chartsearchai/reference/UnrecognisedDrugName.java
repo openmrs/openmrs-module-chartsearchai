@@ -100,10 +100,11 @@ final class UnrecognisedDrugName {
 		return null;
 	}
 
-	/** {@code word} as the question spells it — "TDF", not the tokenizer's "tdf" — where it can be found there. */
+	/** {@code word} as the question spells it — "TDF", not the tokenizer's "tdf"; "co-trimoxazole", not its "co trimoxazole"
+	 *  (ADR Decision 245) — where it can be found there. */
 	private static String asWritten(String word, String question) {
 		Matcher m = Pattern.compile("(?i)(?<![\\p{L}\\p{N}])"
-				+ Pattern.quote(word).replace(" ", "\\E\\s+\\Q") + "(?![\\p{L}\\p{N}])").matcher(question);
+				+ Pattern.quote(word).replace(" ", "\\E[\\s-]+\\Q") + "(?![\\p{L}\\p{N}])").matcher(question);
 		return m.find() ? m.group() : word;
 	}
 

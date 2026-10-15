@@ -17422,3 +17422,25 @@ keeps that finding a caution and is not reopened here.
   against. A second drug after "as well as" is still no shape.
 
 Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aProposalOfTheDrugAsWellAsHerMedicationsIsAProposal`.
+
+## Decision 245: An unrecognised drug name is quoted as the question wrote it, hyphen included
+
+**Status: Accepted** (October 2026) — the owner's standing request of 2026-10-15 to fix what misleads a clinician. A
+correction to [Decision 183](#decision-183-a-drug-name-the-data-does-not-recognise-is-said-to-be-unrecognised-with-the-names-it-carries-and-never-guessed)'s
+statement.
+
+### Context
+
+On the 3.7.1 standalone Donald Thompson's *"Can I give him co-trimoxazole?"* was answered *"No interaction check was run:
+"co trimoxazole" is not a drug name the interaction data recognises."* — a spelling the clinician never wrote, which reads
+as the module having misread the question. The statement finds the word in the question again to quote it as written, and
+allowed only whitespace between the two words the question grammar had split it into.
+
+### The decision
+
+- **The quoted span may join its words with whitespace or hyphens** (`UnrecognisedDrugName`'s `asWritten`), so the
+  statement quotes *"co-trimoxazole"*. What the statement says is unchanged.
+- The name itself is still unrecognised: the shipped knowledge base carries co-trimoxazole as *"Sulfamethoxazole /
+  trimethoprim"* and *"Bactrim"*, never by that name, which only a name the data carries can change.
+
+Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.anUnrecognisedNameIsQuotedAsTheQuestionWroteItHyphenIncluded`.

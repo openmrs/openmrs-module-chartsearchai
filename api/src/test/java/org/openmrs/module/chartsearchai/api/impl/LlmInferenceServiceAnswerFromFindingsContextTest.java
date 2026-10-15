@@ -2741,6 +2741,16 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		assertTrue(both.getAnswer().contains("Tenofovir alafenamide"), "every substance the word begins: " + both.getAnswer());
 	}
 
+	/** The unrecognised name is quoted as the question wrote it, hyphen and all (ADR Decision 245): on the 3.7.1 standalone
+	 *  "Can I give him co-trimoxazole?" was told that "co trimoxazole" is not a name the data recognises — a spelling the
+	 *  clinician never wrote, which reads as the module having misread the question. */
+	@Test
+	public void anUnrecognisedNameIsQuotedAsTheQuestionWroteItHyphenIncluded() {
+		ChartAnswer answer = serviceWith(new RecordingProvider(), shipped()).search(patient, "Can I give her co-trimoxazole?");
+		assertTrue(answer.getAnswer().startsWith("No interaction check was run: \"co-trimoxazole\" is not a drug name the "
+				+ "interaction data recognises."), answer.getAnswer());
+	}
+
 	/** An unrecognised name in an interaction question raises no screen of her own orders beside "no check was run": on the
 	 *  3.7.1 standalone "Does metformn interact with her medications?" carried a Major chip about two of her own orders. */
 	@Test

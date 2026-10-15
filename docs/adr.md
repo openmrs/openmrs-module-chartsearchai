@@ -17901,3 +17901,34 @@ a question asking what.
   model answers.
 
 Pinned by `TogetherWithHerOwnMedicationContextTest.theMechanismOfAnInteractionIsAnsweredWithTheFindingWhole`.
+
+## Decision 265: A question naming her orders by their own names is about those orders
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-15 to fix the errors the sweep left.
+
+### Context
+
+On the 3.7.1 standalone Michael Turner is on "Zolvimix" — resolved through its ATC codes to simvastatin and
+clarithromycin — and "Klarizom" — clarithromycin. *"Does he have any drug interactions?"* finds the Major interaction
+between them (*"Simvastatin from Zolvimix; Clarithromycin from Klarizom"*), but *"Is Zolvimix safe with Klarizom?"* read
+*"The records do not address the safety of Zolvimix with Klarizom."*: the question named no drug the reference data
+carries, so no check ran. And *"Can I give him Zolvimix?"* read *"No interaction check was run: "Zolvimix" is not a drug
+name the interaction data recognises."* — of an order the module had checked through its codes.
+
+### The decision
+
+- **A name of one of her started orders — its display or a concept name, up to its first word with a digit — that the
+  reference data does not carry names that order** (`DrugReferenceInjector.herOrdersNamedIn`).
+- **Two of her orders so named, in a two-drug shape** (together, interact, or what one does beside the other), run the
+  screen of her orders (`DrugSafetyValidator`'s screening gate) and are answered by the module: *"Zolvimix and Klarizom
+  are both among this patient's active medications. What the interaction check relates between them:"*, each screen
+  finding relating a substance of the one to a substance of the other — and that a substance is in both — then what the
+  check does not cover. Never a verdict; with no finding relating them the model answers.
+- **A word naming one of her orders is never said to be unrecognised**
+  ([Decision 183](#decision-183-a-drug-name-the-data-does-not-recognise-is-said-to-be-unrecognised-with-the-names-it-carries-and-never-guessed)'s
+  statement stands down), as [Decision 250](#decision-250-a-two-drug-question-whose-one-drug-the-data-does-not-recognise-says-the-pair-was-not-checked)
+  already does for a pair.
+- One order named so, alone, is otherwise unchanged: it resolves to the substances of its codes, which the existing
+  answers do not take as one drug.
+
+Pinned by `HerOrdersNamedByTheirOwnNamesTest`.

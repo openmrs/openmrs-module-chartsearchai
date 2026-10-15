@@ -746,6 +746,10 @@ public class DrugReferenceInjector {
 				&& ChartSearchAiUtils.getBooleanGlobalProperty(ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
 						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS)
 								? UnrecognisedDrugName.in(question, drugReferenceService.getAll()) : null;
+		// A word naming one of her orders is her drug, checked through the order (ADR Decision 265).
+		if (unrecognised != null && unrecognised.namesOneOfHerOrders(context)) {
+			unrecognised = null;
+		}
 		if (nothingResolved && unrepresented.isEmpty() && !screenRelatedNothing && !screenOfNoMedications
 				&& !screenOfOneOrder && listed.stated().isEmpty() && unrecognised == null) {
 			// The record each of her orders is, though nothing here resolved: it is a fact about her chart, and the
@@ -955,6 +959,7 @@ public class DrugReferenceInjector {
 		String switchAnswer;
 		String pairAnswer;
 		String aboutThePair;
+		String twoOrdersByName;
 		String twoProposalsAnswer;
 		// Her active orders the drug data does not identify — once, for every composition below (ADR Decision 161).
 		List<PatientClinicalContext.ActiveDrugOrder> unidentified = context == null
@@ -1056,6 +1061,16 @@ public class DrugReferenceInjector {
 					twoOfHerOwnAskedTogether(question, questionDrugs, screenedSubstances, findings), orderRecordNumbers,
 					orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers,
 					orderEntries, context);
+		} else if (!findings.isEmpty() && context != null && questionDrugs.isEmpty()
+				&& ChartSearchAiUtils.getBooleanGlobalProperty(
+						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
+						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS)
+				&& context.chartReadForSafety()
+				&& (twoOrdersByName = composeTwoOfHerOrdersByName(question, findings, findingNumbers, orderRecordNumbers,
+						orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers,
+						orderEntries, context)) != null) {
+			// Two of her orders named by their own names: what the check relates between them (ADR Decision 265).
+			moduleAnswer = twoOrdersByName;
 		} else if (!findings.isEmpty() && context != null
 				&& ChartSearchAiUtils.getBooleanGlobalProperty(
 						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
@@ -5440,6 +5455,173 @@ public class DrugReferenceInjector {
 		String composed = composeFromFindings(ofIt, ofItNumbers, orderRecordNumbers, herOrderRecords, true, pairs,
 				lead, SCREEN_SCOPE);
 		return composed == null ? null : hers + ".\n" + composed;
+	}
+
+	/**
+	 * Her active orders a question names by their OWN names — a display or concept name the reference data does not carry,
+	 * such as a local brand — in the question's order, each with the name it was named by (ADR Decision 265). A name the
+	 * data carries is the existing resolution's, so it is never one of these. A name is matched as written up to its first
+	 * word with a digit, so "Cotrimoxazole 960mg" is named by "cotrimoxazole".
+	 */
+	static Map<PatientClinicalContext.ActiveDrugOrder, String> herOrdersNamedIn(String question,
+			PatientClinicalContext context, DrugReferenceService service) {
+		final Map<PatientClinicalContext.ActiveDrugOrder, Integer> at = new HashMap<PatientClinicalContext.ActiveDrugOrder, Integer>();
+		Map<PatientClinicalContext.ActiveDrugOrder, String> named = new HashMap<PatientClinicalContext.ActiveDrugOrder, String>();
+		if (question == null || context == null || service == null) {
+			return named;
+		}
+		String folded = DrugReference.foldedLower(question);
+		for (PatientClinicalContext.ActiveDrugOrder order : context.getActiveDrugOrders()) {
+			if (!order.hasStarted()) {
+				continue;
+			}
+			Set<String> names = new LinkedHashSet<String>(order.getNames());
+			if (order.hasKnownName() && order.getDisplay() != null) {
+				names.add(order.getDisplay());
+			}
+			for (String name : names) {
+				String stem = nameBeforeItsStrength(name);
+				if (stem.length() < 3 || !service.findImpliedByQuery(stem).isEmpty()) {
+					continue;
+				}
+				int index = DrugReference.wordIndex(folded, DrugReference.foldedLower(stem), 0);
+				if (index >= 0 && (!at.containsKey(order) || index < at.get(order))) {
+					at.put(order, index);
+					named.put(order, stem);
+				}
+			}
+		}
+		List<PatientClinicalContext.ActiveDrugOrder> ordered = new ArrayList<PatientClinicalContext.ActiveDrugOrder>(named.keySet());
+		Collections.sort(ordered, Comparator.comparingInt(at::get));
+		Map<PatientClinicalContext.ActiveDrugOrder, String> inOrder =
+				new LinkedHashMap<PatientClinicalContext.ActiveDrugOrder, String>();
+		for (PatientClinicalContext.ActiveDrugOrder order : ordered) {
+			inOrder.put(order, named.get(order));
+		}
+		return inOrder;
+	}
+
+	/** {@code name} up to its first word carrying a digit — "Cotrimoxazole 960mg" is "Cotrimoxazole" — trimmed. */
+	private static String nameBeforeItsStrength(String name) {
+		if (name == null) {
+			return "";
+		}
+		StringBuilder stem = new StringBuilder();
+		for (String word : name.trim().split("\\s+")) {
+			if (word.matches(".*\\d.*")) {
+				break;
+			}
+			stem.append(stem.length() == 0 ? "" : " ").append(word);
+		}
+		return stem.toString().trim();
+	}
+
+	/** The substances {@code finding} is ABOUT: its subject rows', or — the screen states none — those of the order entries
+	 *  its label is (ADR Decision 265). */
+	private static Set<Object> subjectSubstances(SafetyWarning finding, List<DrugReference> orderEntries) {
+		Set<Object> subject = new LinkedHashSet<Object>();
+		for (DrugReference row : finding.subjectRows()) {
+			subject.add(row.substanceGroupKey());
+		}
+		if (subject.isEmpty() && finding.getDrug() != null) {
+			for (DrugReference entry : orderEntries) {
+				if (finding.getDrug().equals(entry.displayLabel())) {
+					subject.add(entry.substanceGroupKey());
+				}
+			}
+		}
+		return subject;
+	}
+
+	/**
+	 * Whether {@code question} names two of her orders by their own names ({@link #herOrdersNamedIn}) in a two-drug shape —
+	 * whether they may be given together, interact, or what one does beside the other — and nothing else (ADR Decision 265).
+	 */
+	static boolean asksAboutTwoOfHerOrdersByName(String question, PatientClinicalContext context,
+			DrugReferenceService service) {
+		Map<PatientClinicalContext.ActiveDrugOrder, String> named = herOrdersNamedIn(question, context, service);
+		if (named.size() != 2) {
+			return false;
+		}
+		String folded = DrugReference.foldedLower(question);
+		boolean[] marked = new boolean[folded.length()];
+		for (String stem : named.values()) {
+			String word = DrugReference.foldedLower(stem);
+			for (int index = DrugReference.wordIndex(folded, word, 0); index >= 0;
+					index = DrugReference.wordIndex(folded, word, index + 1)) {
+				for (int k = index; k < index + word.length() && k < marked.length; k++) {
+					marked[k] = true;
+				}
+			}
+		}
+		List<String> words = markedWordsFrom(folded, marked, 0);
+		return QueryScopeRouter.asksAboutTwoDrugsTogether(words) || QueryScopeRouter.asksWhetherTwoDrugsInteract(words)
+				|| QueryScopeRouter.asksWhetherOneDrugChangesTheOther(words);
+	}
+
+	/**
+	 * The module's answer to a question naming two of her orders by their own names (ADR Decision 265), or {@code null}
+	 * where the model answers: <em>"Zolvimix and Klarizom are both among this patient's active medications. What the
+	 * interaction check relates between them:"</em>, each finding of the screen relating a substance of the one to a
+	 * substance of the other — and that a substance is in both — then {@link #BELOW_FLOOR_SCOPE}. Never a verdict.
+	 * Fail-closed: the two named orders, and a finding relating them.
+	 */
+	private String composeTwoOfHerOrdersByName(String question, List<SafetyWarning> findings, List<Integer> numbers,
+			Map<String, Integer> orderRecordNumbers, Map<String, Integer> herOrderRecords, List<DrugReference> orderEntries,
+			PatientClinicalContext context) {
+		if (!asksAboutTwoOfHerOrdersByName(question, context, drugReferenceService) || orderEntries == null) {
+			return null;
+		}
+		List<PatientClinicalContext.ActiveDrugOrder> orders = new ArrayList<PatientClinicalContext.ActiveDrugOrder>(
+				herOrdersNamedIn(question, context, drugReferenceService).keySet());
+		List<Set<Object>> substances = new ArrayList<Set<Object>>();
+		for (PatientClinicalContext.ActiveDrugOrder order : orders) {
+			Set<Object> ofIt = new LinkedHashSet<Object>();
+			for (DrugReference entry : orderEntries) {
+				if (DrugSafetyValidator.ordersOfSubstance(drugReferenceService, entry, orderEntries, context).contains(order)) {
+					ofIt.add(entry.substanceGroupKey());
+				}
+			}
+			substances.add(ofIt);
+		}
+		List<String> lines = new ArrayList<String>();
+		for (int i = 0; i < findings.size(); i++) {
+			SafetyWarning finding = findings.get(i);
+			if (!SafetyWarning.TYPE_INTERACTION.equals(finding.getType())) {
+				continue;
+			}
+			// The screen states no subject rows (CautionLeadOverWithholdingCheck says which findings do): its subject is the
+			// order entry its label is, and its partners are its partner rows.
+			Set<Object> subject = subjectSubstances(finding, orderEntries);
+			Set<Object> partners = new LinkedHashSet<Object>();
+			for (List<DrugReference> rows : finding.partnerRows().values()) {
+				for (DrugReference row : rows) {
+					partners.add(row.substanceGroupKey());
+				}
+			}
+			boolean relates = false;
+			if (finding.statesOrdersSharingASubstance()) {
+				for (Object substance : subject) {
+					relates |= substances.get(0).contains(substance) && substances.get(1).contains(substance);
+				}
+			} else {
+				for (Object a : substances.get(0)) {
+					for (Object b : substances.get(1)) {
+						relates |= !a.equals(b) && (subject.contains(a) && partners.contains(b)
+								|| subject.contains(b) && partners.contains(a));
+					}
+				}
+			}
+			if (relates) {
+				lines.add(findingLine(finding, numbers.get(i), orderRecordNumbers, herOrderRecords, true));
+			}
+		}
+		if (lines.isEmpty()) {
+			return null;
+		}
+		lines.add(0, orders.get(0).getDisplay() + " and " + orders.get(1).getDisplay() + TWO_OF_HER_OWN_LEAD);
+		lines.add(BELOW_FLOOR_SCOPE);
+		return String.join("\n", lines);
 	}
 
 	/**

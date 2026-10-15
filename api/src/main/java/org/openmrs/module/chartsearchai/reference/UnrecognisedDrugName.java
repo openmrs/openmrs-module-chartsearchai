@@ -131,6 +131,12 @@ final class UnrecognisedDrugName {
 		return null;
 	}
 
+	/** Whether the unrecognised word names one of her active orders — her drug, checked through the order whatever the data
+	 *  calls it, so never said to be unrecognised (ADR Decisions 250, 265). */
+	boolean namesOneOfHerOrders(PatientClinicalContext context) {
+		return namesOneOfHerOrders(context, word);
+	}
+
 	/** {@link #statementBeside} — or, for a switch, {@link #statement}: the new drug is checked against her other
 	 *  medications, not against the one it replaces, so no pair is what went unchecked (ADR Decision 261). */
 	String statementFor(String namedDrug) {

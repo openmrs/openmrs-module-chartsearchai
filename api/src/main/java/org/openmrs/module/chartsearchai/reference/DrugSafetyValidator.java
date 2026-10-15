@@ -1177,8 +1177,11 @@ public class DrugSafetyValidator {
 		// Not where the question stands an unrecognised name in a drug's place: it asks about that drug, which the module
 		// says no check ran for, so a screen of her own orders would put chips no one asked for beside that statement
 		// (ADR Decision 183).
+		// And where the question names two of her orders by their own names, which the reference data does not carry: it is
+		// about those two, and the screen is what relates them (ADR Decision 265).
 		if (warnInteractions && questionDrugs.isEmpty()
-				&& QueryScopeRouter.isInteractionScreening(question)
+				&& (QueryScopeRouter.isInteractionScreening(question)
+						|| DrugReferenceInjector.asksAboutTwoOfHerOrdersByName(question, context, drugReferenceService))
 				&& !UnrecognisedDrugName.namesAWordInADrugsPlace(question)) {
 			int screenedFrom = warnings.size();
 			pairExtent = addActiveOrderPairInteractions(warnings, subjects, context, severityFloor,

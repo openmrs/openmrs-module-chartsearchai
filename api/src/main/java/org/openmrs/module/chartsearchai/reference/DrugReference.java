@@ -3112,7 +3112,7 @@ public class DrugReference {
 	/** @return {@link #containsWord}'s rule as a POSITION — {@link #boundedTokenIndex} with the prose
 	 *          allowance bound once, so the boolean and the index cannot come to disagree about which of
 	 *          the two boundary rules prose gets. Operands in {@link #foldedLower} form. */
-	private static int wordIndex(String foldedLowerText, String foldedLowerWord, int from) {
+	static int wordIndex(String foldedLowerText, String foldedLowerWord, int from) {
 		return boundedTokenIndex(foldedLowerText, foldedLowerWord, PROSE_TRAILING_LETTERS, from);
 	}
 

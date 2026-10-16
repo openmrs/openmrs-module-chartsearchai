@@ -1,7 +1,7 @@
 # Drug-interaction questions tested on 2026-10-15 and 2026-10-16
 
 Every question asked of the RefApp 3.7.1 standalone during the drug-interaction sweep of 2026-10-15 and the follow-ups
-that fixed the errors it left, which produced [ADR Decisions 227 to 289](adr.md#decision-227-the-placeholder-a-free-text-allergy-is-saved-on-is-no-allergen-and-an-unchecked-allergy-is-named-as-the-chart-spells-it).
+that fixed the errors it left, which produced [ADR Decisions 227 to 292](adr.md#decision-227-the-placeholder-a-free-text-allergy-is-saved-on-is-no-allergen-and-an-unchecked-allergy-is-named-as-the-chart-spells-it).
 Each question is written exactly as it was asked, misspellings and phone-keyboard apostrophes included, under the
 patient it was asked about. Each patient's active medication orders and recorded drug allergies are as the chart held
 them at the end of the sweep, so that "her" and "his" in a question can be read.
@@ -169,6 +169,7 @@ Drug allergies: none.
 - Can I give her naproxen?
 - Is she on clopidogrel?
 - Is she on aspirin?
+- Does her ibuprofen interact with her other medications?
 
 ## David Williams
 
@@ -540,6 +541,7 @@ Drug allergies: none.
 - Can I give her levothyroxine?
 - Can I give her rifampicin instead of rifapentine?
 - Can I give her dolutegravir?
+- Is she on isoniazid?
 
 ## Mogan Kamwara
 
@@ -628,6 +630,8 @@ Drug allergies: none.
 - Should I separate the doses of ciprofloxacin and her didanosine?
 - Will her lopinavir increase the levels of her nevirapine?
 - Is it safe to continue all her ARVs together?
+- Is she on zidovudine?
+- Does her lopinavir interact with her other medications?
 
 ## Richard Brown
 

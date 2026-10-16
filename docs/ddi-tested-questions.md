@@ -1,7 +1,7 @@
-# Drug-interaction questions tested on 2026-10-15
+# Drug-interaction questions tested on 2026-10-15 and 2026-10-16
 
 Every question asked of the RefApp 3.7.1 standalone during the drug-interaction sweep of 2026-10-15 and the follow-ups
-that fixed the errors it left, which produced [ADR Decisions 227 to 278](adr.md#decision-227-the-placeholder-a-free-text-allergy-is-saved-on-is-no-allergen-and-an-unchecked-allergy-is-named-as-the-chart-spells-it).
+that fixed the errors it left, which produced [ADR Decisions 227 to 289](adr.md#decision-227-the-placeholder-a-free-text-allergy-is-saved-on-is-no-allergen-and-an-unchecked-allergy-is-named-as-the-chart-spells-it).
 Each question is written exactly as it was asked, misspellings and phone-keyboard apostrophes included, under the
 patient it was asked about. Each patient's active medication orders and recorded drug allergies are as the chart held
 them at the end of the sweep, so that "her" and "his" in a question can be read.
@@ -34,6 +34,9 @@ Drug allergies: none.
 - Does her cotrimoxazole interact with her lopinavir?
 - Can I give her Tylenol?
 - Can I give her lithium?
+- Will ibuprofen raise her lithium levels?
+- What was her last lithium level?
+- Is she on lithium?
 
 ## Barbara Miller
 
@@ -163,6 +166,9 @@ Drug allergies: none.
 - Can I also give her ibuprofen?
 - Can I give her clopidogrel?
 - Is it safe to give her a statin 20 mg?
+- Can I give her naproxen?
+- Is she on clopidogrel?
+- Is she on aspirin?
 
 ## David Williams
 
@@ -566,6 +572,13 @@ Drug allergies: none.
 - Is it OK to stop her nevirapine?
 - Is fluconazole OK with her nevirapine?
 - Is rifampicin contraindicated for her?
+- Can I give her insulin?
+- Is the patient on tenofovir?
+- Is the patient on zidovudine?
+- Is she on efavirenz?
+- Is she taking tenofovir?
+- Is she on stavudine?
+- Is zidovudine one of her medications?
 
 ## Priya Severity
 
@@ -669,6 +682,16 @@ Drug allergies: none.
 - Which of her drugs is the problem with warfarin?
 - Are there any contraindications for her current medications?
 - Any interaction between her lopinavir and cotrimoxazole?
+- Can I give her tenofovir?
+- Does her tenofovir interact with rifampicin?
+- Is she on rifampicin?
+- Does her didanosine interact with her lopinavir?
+- What is the interaction between rifampicin and her lopinavir?
+- Does fluconazole interact with rifampicin?
+- Can I replace her didanosine with tenofovir?
+- Can I switch her lopinavir to atazanavir?
+- Does her lopinavir interact with her other medications?
+- Is she on lopinavir?
 
 ## Sarah Taylor
 

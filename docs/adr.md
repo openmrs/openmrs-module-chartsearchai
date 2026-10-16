@@ -6379,7 +6379,7 @@ The two runs disagree with each other about the answer, and this decision does n
 
 ## Decision 83: How many screened findings the prompt carried, and how many the answer cited, is stated on the response
 
-**Issue [#395](https://github.com/openmrs/openmrs-module-chartsearchai/issues/395).** Four keys already report what an answer did with a safety finding it CITED — [Decision 61](#decision-61-an-answer-that-reproduces-a-cited-reference-record-and-then-states-different-words-is-reported)'s `unfaithfullyRenderedCitations`, [Decision 76](#decision-76-a-chart-citation-that-cannot-be-the-active-order-a-sentence-names-is-stated-on-the-response)'s `misattributedOrderCitations`, [Decision 78](#decision-78-a-safety-findings-rating-has-to-survive-into-the-answer-that-states-it)'s `unstatedFindingSeverities` and [Decision 81](#decision-81-an-answer-that-names-the-patients-active-orders-and-cites-none-of-them-says-so)'s `activeOrderClaims`. None of them can see a finding the answer cited nowhere, and the residue was already named in the module's own javadoc: Decision 78's check quotes Decision 61's *"a hazard dropped by stopping early"* and calls itself *"the half of that residue a rating makes deterministic."* This is the other half.
+**Issue [#395](https://github.com/openmrs/openmrs-module-chartsearchai/issues/395).** Four keys already report what an answer did with a safety finding it CITED — [Decision 61](#decision-61-prose-the-answer-reproduces-from-a-cited-reference-record-must-be-reproduced-faithfully)'s `unfaithfullyRenderedCitations`, [Decision 76](#decision-76-a-chart-citation-that-cannot-be-the-active-order-a-sentence-names-is-stated-on-the-response)'s `misattributedOrderCitations`, [Decision 78](#decision-78-a-safety-findings-rating-has-to-survive-into-the-answer-that-states-it)'s `unstatedFindingSeverities` and [Decision 81](#decision-81-an-answer-that-names-the-patients-active-orders-and-cites-none-of-them-says-so)'s `activeOrderClaims`. None of them can see a finding the answer cited nowhere, and the residue was already named in the module's own javadoc: Decision 78's check quotes Decision 61's *"a hazard dropped by stopping early"* and calls itself *"the half of that residue a rating makes deterministic."* This is the other half.
 
 **The measurement.** RefApp 3.7.1 standalone on `:8081`, drug-reference layer enabled, `chartMode=fullChart`, patient `dc8560c9-…` on eight active orders, question *"should i give Amlodipine?"*, two runs byte-identical (`questionId` 10669 and 10670, 2026-09-09). Read off the `POST /chartsearchai/search` response body, not derived: the answer opened *"No — Amlodipine should not be given"* and named six active orders, each with its own citation and its own rating. `safetyWarnings` carried seventeen chips, seven of them `interaction`; the seventh interaction — Amlodipine against her active `Advil 400mg`, Moderate, with a `chartOrderBridges` entry naming that order — appears in no sentence of the answer. Read off the `chartsearchai_audit_log` row for each `questionId`: `reference_slice_records` 8 (the seven findings and the Amlodipine monograph) against `reference_count` 6.
 
@@ -6845,7 +6845,7 @@ neighbouring half of it.
 
 - **Giving the screening arm a class leg.** It would answer the reproduction better — the pair really
   is duplicate-class therapy — but it moves what `PairChipExtent` counts, which
-  [Decisions 60](#decision-60-how-bounded-a-reported-interaction-list-is-is-stated-on-the-response), 65,
+  [Decisions 60](#decision-60-a-bounded-pairwise-interaction-list-states-its-own-bounds-on-the-response), 65,
   69 and 71 all rest on ("neither pairwise arm has a class leg"), and it would raise a class chip for
   every same-class pair on a polypharmacy chart — an unmeasured chip-volume change on the arm whose cap
   exists because it is quadratic. It is the larger option and it is not refused, only unbuilt: whoever
@@ -6894,7 +6894,7 @@ reverted, for three reasons that compound:
   contraindication sites is explicit: *"FALSE at both, and not because the drug cannot also be a
   current medication — it often is. The question or the answer PROPOSED it, so what this finding
   licenses is a decision about that proposal (issue #348)."* That is
-  [Decision 72](#decision-72-a-screening-answer-states-a-call-about-the-medications-she-is-on-instead-of-refusing-one-of-them)'s
+  [Decision 72](#decision-72-a-finding-about-a-medication-the-patient-is-already-taking-states-a-call-about-that-medication)'s
   reading, and a live answer is new evidence about the SYMPTOM without being new evidence about that
   reading.
 - **The lead did not move anyway.** The response's opening call is decided by its strongest finding,
@@ -18594,7 +18594,9 @@ finding under the order replaced, as if it no longer applied; named, it stays am
 
 **What it leaves.** Whether her order carries more than one substance is not on the finding, so a one-substance order a
 line names by a display carrying its salt and strength is named too — *"… active order Levothyroxine sodium 75 mcg —
-Moderate. The interacting substance is Levothyroxine."*: said twice, never wrongly.
+Moderate. The interacting substance is Levothyroxine."*: said twice, never wrongly. The finding does carry it, in its
+matched names: [Decision 290](#decision-290-a-line-names-the-substance-of-the-order-it-names-only-where-that-order-carries-several)
+reads it there.
 
 Pinned by `CombinationOrderLineContextTest`, over the shipped knowledge base with the orders carrying the standalone's ATC
 codes and concepts: an order carrying its display name alone has each finding name its own substance as the partner, so
@@ -18619,3 +18621,84 @@ named as hers or not: what relates the two, each finding whole, and neither "Yes
 
 Pinned by `TogetherWithHerOwnMedicationContextTest.whatTheInteractionBetweenTwoDrugsIsIsAnsweredWithTheFindingWhole` and
 `CombinationOrderLineContextTest.whatTheInteractionWithADrugSheTakesInACombinationIsStatesEachSubstanceOfThatOrder`.
+
+## Decision 290: A line names the substance of the order it names only where that order carries several
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-16 to fix what Decisions 283–289 left. It closes the
+residue [Decision 288](#decision-288-each-line-about-her-combination-order-names-the-substance-it-is-about-and-what-the-interaction-with-one-of-its-drugs-is-takes-the-whole-order)
+recorded.
+
+### Context
+
+Decision 288 names the substance a line is about wherever the line names her order by anything other than one of that
+substance's own names. A one-substance order displayed with its salt and strength met that too: Brian Lopez's *"Will
+omeprazole lower his levothyroxine absorption?"* read *"Omeprazole interacts with active order Levothyroxine sodium 75 mcg
+— Moderate. The interacting substance is Levothyroxine."*
+
+### The decision
+
+A line standing alone names the substance only where the order's display names another of the substances the module
+resolved the chip's orders to — one of its `SafetyWarning.matchedOrderNames`, matched as `DrugReference.matchesOrderName`
+matches a token in an order's name. *"Lopinavir / ritonavir 200mg/50mg"* names lopinavir beside the ritonavir a line is
+about; *"Levothyroxine sodium 75 mcg"* names nothing but levothyroxine. Resolving the display itself
+(`DrugReferenceService.findImpliedSubstances`) was tried as the test and refused: it reads *"Lopinavir / ritonavir
+200mg/50mg"* as lopinavir alone and *"Lamivudine / zidovudine 150mg/300mg"* as lamivudine alone, the strengths stopping
+it splitting the combination.
+
+Pinned by `CombinationOrderLineContextTest.aLineNamingAOneSubstanceOrderByItsDisplaySaysNothingMore`.
+
+## Decision 291: A finding the data states alike of two forms of the drug asked about is stated once
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-16 to fix what Decisions 283–289 left.
+
+### Context
+
+Since [Decision 284](#decision-284-lithium-and-tenofovir-named-by-their-moiety-are-checked-as-the-forms-the-data-carries)
+*tenofovir* is both of its forms, and each finding was stated once per form: *"Tenofovir disoproxil interacts with active
+order Rifampicin (rifampin) — Major."*, then the same of tenofovir alafenamide, the knowledge base filing one note under
+both rows.
+
+### The decision
+
+Where a finding's whole text — its mechanism with it — its type and its rating are another's but for which form of the
+drug asked about by one name it names, the earlier line states both: *"Tenofovir disoproxil interacts with active order
+Rifampicin (rifampin) — Major. The same holds of Tenofovir alafenamide."*, each finding's marker after it
+(`DrugReferenceInjector.withEachFormStatedOnce`). A form whose rating or hazard differs keeps a line of its own, as
+[Decision 175](#decision-175-a-composed-line-about-one-substance-of-a-combination-order-names-that-substance) keeps the
+substances of one order apart. In a proposal's answer, a switch's, the answer to two drugs neither hers, and the answer to
+what an interaction is.
+
+Pinned by `MoietyAskedAboutTest.tenofovirProposedIsCheckedAsBothFormsTheDataCarriesApart`, which asked for the two lines
+until this decision, `.twoDrugsOneOfThemTenofovirStateEachFindingOfBothFormsOnce` and
+`SwitchingHerDrugContextTest.aSwitchToTenofovirIsAnsweredForTenofovir`.
+
+## Decision 292: A question about her own drug, taken only in a combination, is answered for that combination
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-16 to fix what Decisions 283–289 left. It carries
+[Decision 285](#decision-285-what-relates-two-of-her-drugs-is-what-relates-the-orders-she-takes-them-in-each-pair-from-one-side)'s
+reading to her own drug asked about alone.
+
+### Context
+
+Ruth's *"Is she on lopinavir?"* listed lopinavir's two findings and none of the ritonavir's, the substance in her
+lopinavir/ritonavir order that carries most of what it interacts with: only the drug the question named was in play.
+*"Does her lopinavir interact with her other medications?"* went to the model, its *"her"* before the drug fitting no
+interaction shape.
+
+### The decision
+
+Where a question asks about one drug as the medication she takes — whether she is on it, whether it interacts with her
+medications, or about it beside them — the substances every started order she takes it in carries with it are in play
+too, and the answer states their findings under a lead that says so: *"Lopinavir is one of this patient's active
+medications (Lopinavir / ritonavir 200mg/50mg [3]), taken with Ritonavir in the same order."*
+(`DrugReferenceInjector.companionsOfHerOwn`, one answer for the drug-in-play arm and the composed answer). A drug she also
+takes alone is that drug: her ibuprofen beside an ibuprofen/celecoxib order brings no celecoxib. Whether to give it is
+not such a question but one about adding it, answered for the drug alone: put in play there, the other substances
+changed the chips of every proposal of a constituent the suite pins. The interaction shape
+takes *"her"* before the drug, and where the drug is not hers the answer says so first, as
+[Decision 260](#decision-260-a-question-naming-as-hers-a-drug-she-is-not-on-says-she-is-not-on-it)'s does.
+
+Pinned by `CombinationOrderLineContextTest.whetherSheIsOnADrugSheTakesInACombinationIsAnsweredForTheWholeOrder` and
+`LlmInferenceServiceAnswerFromFindingsContextTest.aQuestionNamingAsHersADrugSheIsNotOnSaysSo`, whose third question it
+adds; `OwnMedicationSafetyContextTest.theFindingThatHerOrdersCarryTheDrugTwiceIsNeitherAnInteractionNorAnUnratedOne` pins
+the drug she also takes alone.

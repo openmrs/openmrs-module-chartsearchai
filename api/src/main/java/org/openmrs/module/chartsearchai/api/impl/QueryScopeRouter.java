@@ -433,8 +433,10 @@ public final class QueryScopeRouter {
 	 * <em>"No — X should not be given: it interacts with …"</em> on the 3.7.1 standalone.
 	 */
 	private static final List<Pattern> INTERACTS_WITH_HER_MEDICATIONS_SHAPES = shapes(
-			// "Does ibuprofen interact with her medications?", "Will ibuprofen interact with any of her current meds?"
-			"(?:does|will|would|could|can) " + D + " interact with (?:any of )?" + POSSESSIVE + " (?:other )?" + MEDICATIONS,
+			// "Does ibuprofen interact with her medications?", "Will ibuprofen interact with any of her current meds?", and the
+			// drug named as hers: "Does her lopinavir interact with her other medications?" (ADR Decision 292)
+			"(?:does|will|would|could|can) (?:" + POSSESSIVE + " )?" + D + " interact with (?:any of )?" + POSSESSIVE
+					+ " (?:other )?" + MEDICATIONS,
 			// "Any interactions if I give her ibuprofen?", "Are there any interactions if I start her on ibuprofen?" — the
 			// model answered it "No — X should not be given: it interacts with …" (ADR Decision 181)
 			"(?:are there )?any (?:drug )?interactions if (?:i|we) (?:give|start|prescribe|add) (?:" + PATIENT + " )?(?:on )?"

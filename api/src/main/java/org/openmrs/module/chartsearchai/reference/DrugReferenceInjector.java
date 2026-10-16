@@ -997,11 +997,14 @@ public class DrugReferenceInjector {
 					questionDrugs.isEmpty() ? duplicateTherapyLines(orderEntries, context,
 							orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers)
 							: Collections.<String> emptyList(), combinationAskedAbout(question, questionDrugs, context));
-			// The question named it as hers, and she is not on it — admitted here only so (ADR Decision 260); or asked
+			// The question named it as hers, and she is not on it — admitted here only so (ADR Decision 260), or named it so in a
+			// shape admitted anyway, "Does her ibuprofen interact with her other medications?" (ADR Decision 292); or asked
 			// whether she is on it, and she is not (ADR Decision 287).
 			if (moduleAnswer != null && !questionDrugs.isEmpty()
 					&& (QueryScopeRouter.asksAboutADrugNamedAsHers(wordsBesideItsNames(question, questionDrugs))
-							|| asksWhetherSheIsOnIt(question, questionDrugs))) {
+							|| asksWhetherSheIsOnIt(question, questionDrugs)
+							|| QueryScopeRouter.asksWhetherADrugInteractsWithHerMedications(wordsBesideItsNames(question,
+								questionDrugs)) && namedAsHers(question, askedDrugs(question, questionDrugs, context, false).get(0)))) {
 				moduleAnswer = askedDrugs(question, questionDrugs, context, false).get(0).label
 						+ NOT_HER_MEDICATION + "\n" + moduleAnswer;
 			}
@@ -1011,16 +1014,28 @@ public class DrugReferenceInjector {
 						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS)
 				&& context.chartReadForSafety()
 				&& !aboutHerOwnMedication(question, questionDrugs, screenedSubstances, findings,
-						itsOwnOrderDisplays(questionDrugs, orderEntries, context)).isEmpty()) {
-			// A safety question about a drug she already takes: its findings, counted and stated (ADR Decision 193).
+						itsOwnOrderDisplays(questionDrugs, orderEntries, context),
+						companionsOfHerOwn(drugReferenceService, question, questionDrugs, orderEntries, context)).isEmpty()) {
+			// A safety question about a drug she already takes: its findings, counted and stated (ADR Decision 193), and those of
+			// the other substances of the combination order she takes it in (ADR Decision 292).
 			Set<String> itsOwnOrders = itsOwnOrderDisplays(questionDrugs, orderEntries, context);
-			List<Integer> about = aboutHerOwnMedication(question, questionDrugs, screenedSubstances, findings, itsOwnOrders);
+			List<DrugReference> companions = companionsOfHerOwn(drugReferenceService, question, questionDrugs, orderEntries,
+				context);
+			List<Integer> about = aboutHerOwnMedication(question, questionDrugs, screenedSubstances, findings, itsOwnOrders,
+				companions);
 			Map<String, Integer> herRecords = orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context)
 					: orderRecordNumbers;
 			String herOrders = herStartedOrdersOf(questionDrugs.get(0), orderEntries, context, herRecords);
+			List<String> companionLabels = new ArrayList<String>();
+			for (DrugReference companion : companions) {
+				companionLabels.add(DrugSafetyValidator.interactionSubject(Collections.singletonList(companion), context)
+						.displayLabel());
+			}
 			moduleAnswer = composeAboutHerOwnMedication(findings, findingNumbers, about, orderRecordNumbers, herRecords,
 					itsOwnOrders, herOrders,
-					herOrders.isEmpty() ? herScheduledOrdersOf(questionDrugs.get(0), orderEntries, context, herRecords) : "");
+					herOrders.isEmpty() ? herScheduledOrdersOf(questionDrugs.get(0), orderEntries, context, herRecords) : "",
+					companions.isEmpty() ? null : DrugSafetyValidator.interactionSubject(questionDrugs, context).displayLabel(),
+					companionLabels);
 		} else if (context != null
 				&& ChartSearchAiUtils.getBooleanGlobalProperty(
 						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
@@ -2982,6 +2997,61 @@ public class DrugReferenceInjector {
 				|| QueryScopeRouter.asksWhetherADrugChangesHerMedications(words);
 	}
 
+	/** How the lead of an answer about her own drug names the other substances of the combination order she takes it in
+	 *  (ADR Decision 292). */
+	static final String TAKEN_WITH_OPENING = ", taken with ";
+
+	/** Whether {@code question} asks about its one drug as the medication she takes — whether she is on it, whether it
+	 *  interacts with her medications, or about it beside them (ADR Decisions 202, 292) — and not whether to give it, which
+	 *  is a question about adding it. Of the words alone: her orders decide whether it is hers. */
+	static boolean asksAboutOneDrugAsHerOwn(String question, List<DrugReference> questionDrugs) {
+		return asksWhetherItInteracts(question, questionDrugs) || asksWhetherSheIsOnIt(question, questionDrugs)
+				|| asksAboutItBesideHerMedications(question, questionDrugs);
+	}
+
+	/**
+	 * The other substances EVERY one of her started orders that carry the one substance {@code questionDrugs} resolve to
+	 * carries with it, one entry each from {@code orderEntries}, where the question asks about it as her own medication
+	 * ({@link #asksAboutOneDrugAsHerOwn}); empty otherwise. "Her lopinavir" is her lopinavir/ritonavir order, whose ritonavir
+	 * carries most of what that order interacts with, and she takes no lopinavir without it (ADR Decision 292); a drug she
+	 * also takes alone is that drug. One answer for both readers: the drug-in-play arm puts them in play, and {@link
+	 * #aboutHerOwnMedication} states their findings.
+	 */
+	static List<DrugReference> companionsOfHerOwn(DrugReferenceService service, String question,
+			List<DrugReference> questionDrugs, List<DrugReference> orderEntries, PatientClinicalContext context) {
+		if (service == null || context == null || orderEntries == null || questionDrugs.isEmpty()) {
+			return Collections.emptyList();
+		}
+		Set<Object> asked = new HashSet<Object>();
+		for (DrugReference entry : questionDrugs) {
+			asked.add(entry.substanceGroupKey());
+		}
+		if (asked.size() != 1 || !asksAboutOneDrugAsHerOwn(question, questionDrugs)) {
+			return Collections.emptyList();
+		}
+		Set<PatientClinicalContext.ActiveDrugOrder> orders = new HashSet<PatientClinicalContext.ActiveDrugOrder>();
+		for (DrugReference row : questionDrugs) {
+			for (PatientClinicalContext.ActiveDrugOrder order : DrugSafetyValidator.ordersOfSubstance(service, row, orderEntries,
+					context)) {
+				if (order.hasStarted()) {
+					orders.add(order);
+				}
+			}
+		}
+		Map<Object, DrugReference> companions = new LinkedHashMap<Object, DrugReference>();
+		if (orders.isEmpty()) {
+			return Collections.emptyList();
+		}
+		for (DrugReference entry : orderEntries) {
+			Object substance = entry.substanceGroupKey();
+			if (!asked.contains(substance) && !companions.containsKey(substance)
+					&& DrugSafetyValidator.ordersOfSubstance(service, entry, orderEntries, context).containsAll(orders)) {
+				companions.put(substance, entry);
+			}
+		}
+		return new ArrayList<DrugReference>(companions.values());
+	}
+
 	/** Whether {@code question} asks whether she is on its one drug now (ADR Decision 202). */
 	static boolean asksWhetherSheIsOnIt(String question, List<DrugReference> questionDrugs) {
 		return !questionDrugs.isEmpty()
@@ -4565,6 +4635,10 @@ public class DrugReferenceInjector {
 					: findingLine(findings.get(i), numbers.get(i), orderRecordNumbers, herOrderRecords, true,
 							substances.get(findings.get(i)), saidOnce));
 		}
+		// A finding the data states alike of the forms of a drug asked about by one name is stated once (ADR Decision 291).
+		if (proposal && askedLabel != null && merged.isEmpty()) {
+			lines = withEachFormStatedOnce(findings, numbers, order, lines, formsOfFindings(findings));
+		}
 		SafetyWarning first = findings.get(leadIndex);
 		// The drug the lead is about: the combination the question asked about by one name, whose lines name each
 		// ingredient (ADR Decision 282), else the finding's own.
@@ -4860,6 +4934,122 @@ public class DrugReferenceInjector {
 	 *  #interactingSubstancesOfSharedOrders}. */
 	static final String INTERACTING_SUBSTANCE_OPENING = " The interacting substance is ";
 
+	/** How a composed line states that its finding holds alike of another form of the drug asked about — see {@link
+	 *  #withEachFormStatedOnce}. */
+	static final String SAME_OF_FORMS_OPENING = " The same holds of ";
+
+	/** A line's trailing markers, apart from what it says. */
+	private static final Pattern LINE_MARKERS = Pattern.compile("^(.*?)((?: \\[\\d+\\])+)$");
+
+	/**
+	 * {@code lines}, the lines of the findings at {@code indexes} of {@code findings} in that order, with each finding that
+	 * an earlier one's states word for word but for which of {@code forms} it names — the rows of one drug the question
+	 * named by one name, such as the two forms of tenofovir — stated by that earlier line: <em>"… The same holds of
+	 * Tenofovir alafenamide."</em>, its finding's marker after the earlier one's and its records' among theirs (ADR Decision
+	 * 291). Word for word means the whole finding, its mechanism with it, so a form whose rating or hazard differs keeps a
+	 * line of its own, as ADR Decision 175 keeps the substances of one order apart.
+	 */
+	private static List<String> withEachFormStatedOnce(List<SafetyWarning> findings, List<Integer> numbers,
+			List<Integer> indexes, List<String> lines, Collection<String> forms) {
+		if (forms.size() < 2 || lines.size() < 2) {
+			return lines;
+		}
+		Map<String, Integer> firstOf = new LinkedHashMap<String, Integer>();
+		List<String> bodies = new ArrayList<String>();
+		List<String> originals = new ArrayList<String>();
+		List<String> named = new ArrayList<String>();
+		List<List<String>> alike = new ArrayList<List<String>>();
+		List<List<Integer>> findingNumbers = new ArrayList<List<Integer>>();
+		List<Set<Integer>> records = new ArrayList<Set<Integer>>();
+		for (int k = 0; k < lines.size(); k++) {
+			SafetyWarning finding = findings.get(indexes.get(k));
+			Matcher markers = LINE_MARKERS.matcher(lines.get(k));
+			String form = null;
+			for (String candidate : forms) {
+				if (lines.get(k).contains(candidate) && (form == null || candidate.length() > form.length())) {
+					form = candidate;
+				}
+			}
+			String body = markers.matches() ? markers.group(1) : lines.get(k);
+			Integer number = numbers.get(indexes.get(k));
+			Set<Integer> itsRecords = new TreeSet<Integer>(markers.matches() ? ChartSearchAiUtils.citedIndexes(markers.group(2))
+					: Collections.<Integer> emptySet());
+			itsRecords.remove(number);
+			String key = null;
+			if (form != null && finding.getDetail() != null) {
+				key = body.replace(form, "\u0001") + "\u0002" + finding.getDetail().replace(form, "\u0001") + "\u0002"
+						+ finding.getType() + "\u0002" + finding.getSeverity();
+			}
+			Integer earlier = key == null ? null : firstOf.get(key);
+			if (earlier != null && !named.get(earlier).equals(form) && !alike.get(earlier).contains(form)) {
+				alike.get(earlier).add(form);
+				findingNumbers.get(earlier).add(number);
+				records.get(earlier).addAll(itsRecords);
+				continue;
+			}
+			if (key != null && earlier == null) {
+				firstOf.put(key, bodies.size());
+			}
+			bodies.add(body);
+			originals.add(lines.get(k));
+			named.add(form);
+			alike.add(new ArrayList<String>());
+			findingNumbers.add(new ArrayList<Integer>(Collections.singletonList(number)));
+			records.add(itsRecords);
+		}
+		if (bodies.size() == lines.size()) {
+			return lines;
+		}
+		List<String> out = new ArrayList<String>(bodies.size());
+		for (int k = 0; k < bodies.size(); k++) {
+			if (alike.get(k).isEmpty()) {
+				out.add(originals.get(k));
+				continue;
+			}
+			StringBuilder line = new StringBuilder(bodies.get(k)).append(SAME_OF_FORMS_OPENING)
+					.append(DrugSafetyValidator.joinPartners(alike.get(k))).append('.');
+			for (Integer number : findingNumbers.get(k)) {
+				line.append(" [").append(number).append(']');
+			}
+			for (Integer record : records.get(k)) {
+				line.append(" [").append(record).append(']');
+			}
+			out.add(line.toString());
+		}
+		return out;
+	}
+
+	/** The names the drugs a question asks about by one name for several substances go by in a line — each of their rows'
+	 *  (ADR Decision 291); none for a drug of one substance. */
+	private static Set<String> formsOf(Collection<AskedDrug> drugs) {
+		Set<String> forms = new LinkedHashSet<String>();
+		for (AskedDrug drug : drugs) {
+			if (drug.substances.size() > 1) {
+				for (DrugReference row : drug.rows) {
+					if (row.displayLabel() != null) {
+						forms.add(row.displayLabel());
+					}
+					if (row.getName() != null) {
+						forms.add(row.getName());
+					}
+				}
+			}
+		}
+		return forms;
+	}
+
+	/** The drugs {@code findings} are about, by the name each states it under, but her own orders sharing a substance — the
+	 *  forms of a drug asked about by one name, where each finding is about one of them (ADR Decision 291). */
+	private static Set<String> formsOfFindings(List<SafetyWarning> findings) {
+		Set<String> forms = new LinkedHashSet<String>();
+		for (SafetyWarning finding : findings) {
+			if (!finding.statesOrdersSharingASubstance() && finding.getDrug() != null) {
+				forms.add(finding.getDrug());
+			}
+		}
+		return forms;
+	}
+
 	/**
 	 * The lines of the findings at positions {@code stated} of {@code findings}, in that order, brief where {@code proposal}
 	 * is — each naming the substance of her combination order it is about where {@link
@@ -4896,10 +5086,15 @@ public class DrugReferenceInjector {
 	 * clearance.
 	 */
 	private static List<Integer> aboutHerOwnMedication(String question, List<DrugReference> questionDrugs,
-			Set<Object> herSubstances, List<SafetyWarning> findings, Set<String> itsOwnOrders) {
+			Set<Object> herSubstances, List<SafetyWarning> findings, Set<String> itsOwnOrders, List<DrugReference> companions) {
 		Set<Object> asked = new LinkedHashSet<Object>();
 		for (DrugReference entry : questionDrugs) {
 			asked.add(entry.substanceGroupKey());
+		}
+		// And the other substances of the combination order she takes it in (ADR Decision 292).
+		Set<Object> ofItsOrder = new HashSet<Object>(asked);
+		for (DrugReference companion : companions) {
+			ofItsOrder.add(companion.substanceGroupKey());
 		}
 		List<Integer> about = new ArrayList<Integer>();
 		if (asked.size() != 1 || !herSubstances.containsAll(asked)
@@ -4917,7 +5112,7 @@ public class DrugReferenceInjector {
 			}
 			boolean ofIt = true;
 			for (DrugReference row : finding.subjectRows()) {
-				ofIt &= asked.contains(row.substanceGroupKey());
+				ofIt &= ofItsOrder.contains(row.substanceGroupKey());
 			}
 			if (!ofIt) {
 				continue;
@@ -4951,7 +5146,8 @@ public class DrugReferenceInjector {
 	 */
 	private static String composeAboutHerOwnMedication(List<SafetyWarning> findings, List<Integer> numbers,
 			List<Integer> about, Map<String, Integer> orderRecordNumbers, Map<String, Integer> herOrderRecords,
-			Set<String> itsOwnOrders, String herOrders, String herScheduledOrders) {
+			Set<String> itsOwnOrders, String herOrders, String herScheduledOrders, String askedLabel,
+			List<String> companionLabels) {
 		String drug = null;
 		String orders = "";
 		List<Integer> stated = new ArrayList<Integer>();
@@ -5025,9 +5221,14 @@ public class DrugReferenceInjector {
 		// Only a proposal raises the finding that names her orders of it; any other question names them from her orders
 		// (ADR Decision 202), so the lead says which prescription the drug is — and where none of them has started, that
 		// it is not yet one of her active medications, and when it starts.
+		// Named as asked where the order she takes it in carries other substances, whose findings come with it, and the lead
+		// says which (ADR Decision 292).
+		String named = askedLabel != null ? askedLabel : drug;
 		String lead = herOrders.isEmpty() && !herScheduledOrders.isEmpty()
-				? drug + NOT_YET_STARTED_LEAD + herScheduledOrders
-				: drug + OWN_MEDICATION_LEAD + (orders.isEmpty() ? herOrders : orders);
+				? named + NOT_YET_STARTED_LEAD + herScheduledOrders
+				: named + OWN_MEDICATION_LEAD + (orders.isEmpty() ? herOrders : orders)
+						+ (companionLabels.isEmpty() ? ""
+								: TAKEN_WITH_OPENING + DrugSafetyValidator.joinPartners(companionLabels) + " in the same order");
 		lines.add(lead + ". " + String.join(", and ", counts) + ":");
 		// Two findings about one combination order say which of its substances each is about, as a proposal's lines do:
 		// bare, "rifampicin interacts with active order Isoniazid / pyrazinamide / rifampin" twice read as the drug
@@ -5497,8 +5698,9 @@ public class DrugReferenceInjector {
 				}
 			}
 		}
-		List<String> replacedLines = findingLines(findings, numbers, aboutTheReplaced, orderRecordNumbers, herOrderRecords,
-				true);
+		List<String> replacedLines = withEachFormStatedOnce(findings, numbers, aboutTheReplaced,
+				findingLines(findings, numbers, aboutTheReplaced, orderRecordNumbers, herOrderRecords, true),
+				formsOf(Collections.singletonList(to)));
 		String newDrug = to.label;
 		String forTheNewDrug;
 		if (kept.isEmpty()) {
@@ -5576,8 +5778,10 @@ public class DrugReferenceInjector {
 		if (pair.isEmpty()) {
 			return null;
 		}
-		List<String> pairLines = findingLines(findings, numbers, pair, orderRecordNumbers, herOrderRecords, true);
-		List<String> herLines = findingLines(findings, numbers, hers, orderRecordNumbers, herOrderRecords, true);
+		List<String> pairLines = withEachFormStatedOnce(findings, numbers, pair,
+				findingLines(findings, numbers, pair, orderRecordNumbers, herOrderRecords, true), formsOf(rows));
+		List<String> herLines = withEachFormStatedOnce(findings, numbers, hers,
+				findingLines(findings, numbers, hers, orderRecordNumbers, herOrderRecords, true), formsOf(rows));
 		List<String> lines = new ArrayList<String>();
 		lines.add(interact ? "Yes — " + rows.get(0).label + " and " + rows.get(1).label
 				+ " interact; neither is one of this patient's active medications."
@@ -6185,7 +6389,8 @@ public class DrugReferenceInjector {
 		if (relating.isEmpty()) {
 			return null;
 		}
-		List<String> lines = findingLines(findings, numbers, relating, orderRecordNumbers, herOrderRecords, false);
+		List<String> lines = withEachFormStatedOnce(findings, numbers, relating,
+				findingLines(findings, numbers, relating, orderRecordNumbers, herOrderRecords, false), formsOf(pair));
 		String first = pair.get(0).label;
 		String second = pair.get(1).label;
 		List<String> hers = new ArrayList<String>();
@@ -6547,8 +6752,20 @@ public class DrugReferenceInjector {
 					itsNames.add(DrugReference.foldedLower(name.trim()));
 				}
 			}
-			if (row.getName() != null && !itsNames.contains(DrugReference.foldedLower(partner.trim()))) {
-				substances.put(finding, row.getName());
+			if (row.getName() == null || itsNames.contains(DrugReference.foldedLower(partner.trim()))) {
+				continue;
+			}
+			// And only where the display names another substance the module resolved the chip's orders to — one of its
+			// matched names (SafetyWarning.matchedOrderNames) — so an order of one substance, named by its salt and its
+			// strength, is not: "Levothyroxine sodium 75 mcg" is levothyroxine's alone.
+			for (String matched : finding.matchedOrderNames()) {
+				String another = matched == null ? "" : matched.split(" \\(", 2)[0].trim();
+				if (!another.isEmpty() && !itsNames.contains(DrugReference.foldedLower(another))
+						&& !DrugReference.foldedLower(matched.trim()).equals(DrugReference.foldedLower(partner.trim()))
+						&& DrugReference.matchesOrderName(partner, another)) {
+					substances.put(finding, row.getName());
+					break;
+				}
 			}
 		}
 		return substances;

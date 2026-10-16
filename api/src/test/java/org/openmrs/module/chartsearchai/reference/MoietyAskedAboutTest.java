@@ -45,13 +45,27 @@ public class MoietyAskedAboutTest extends BaseModuleContextSensitiveTest {
 		assertTrue(answer.contains("\nLithium carbonate interacts with active order Ibuprofen — Major."), "was: " + answer);
 	}
 
+	/** Both forms are checked, and a finding the data states alike of the two is stated once (ADR Decision 291): the answer
+	 *  printed "Tenofovir disoproxil interacts with active order Rifampicin (rifampin) — Major." and the same line of
+	 *  Tenofovir alafenamide, under one mechanism. */
 	@Test
 	public void tenofovirProposedIsCheckedAsBothFormsTheDataCarriesApart() {
 		String answer = answer("Can I give her tenofovir?", "Rifampicin 300mg");
 		assertTrue(answer.startsWith("No — this module's drug-safety check found a reason to withhold Tenofovir.\n"),
 			"was: " + answer);
-		assertTrue(answer.contains("\nTenofovir disoproxil interacts with active order Rifampicin (rifampin) — Major."), "was: " + answer);
-		assertTrue(answer.contains("\nTenofovir alafenamide interacts with active order Rifampicin (rifampin) — Major."), "was: " + answer);
+		assertTrue(answer.contains("\nTenofovir disoproxil interacts with active order Rifampicin (rifampin) — Major."
+				+ DrugReferenceInjector.SAME_OF_FORMS_OPENING + "Tenofovir alafenamide. ["), "was: " + answer);
+		assertFalse(answer.contains("\nTenofovir alafenamide interacts with active order"), "stated once: " + answer);
+	}
+
+	/** And where the two forms are what the question pairs with a drug she is not on either (ADR Decision 291). */
+	@Test
+	public void twoDrugsOneOfThemTenofovirStateEachFindingOfBothFormsOnce() {
+		String answer = answer("Does tenofovir interact with rifampicin?", "Didanosine 400mg");
+		assertTrue(answer.contains("\nRifampicin (rifampin) interacts with Tenofovir disoproxil, also named in the question — "
+				+ "Major." + DrugReferenceInjector.SAME_OF_FORMS_OPENING + "Tenofovir alafenamide. ["), "was: " + answer);
+		assertTrue(answer.contains("\nTenofovir disoproxil interacts with active order Didanosine — Major."), "was: " + answer);
+		assertFalse(answer.contains("\nTenofovir alafenamide interacts with active order Didanosine"), "stated once: " + answer);
 	}
 
 	/** Her tenofovir is the form she is on. */

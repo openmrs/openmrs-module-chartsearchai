@@ -601,7 +601,9 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	@Test
 	public void aQuestionNamingAsHersADrugSheIsNotOnSaysSo() throws Exception {
 		executeDataSet(WARFARIN_ORDER);
-		for (String question : new String[] { "Any interactions with her ibuprofen?", "Are there any problems with her ibuprofen?" }) {
+		// "Does her ibuprofen interact with her other medications?" since ADR Decision 292, its "her" read as the others'.
+		for (String question : new String[] { "Any interactions with her ibuprofen?", "Are there any problems with her ibuprofen?",
+			"Does her ibuprofen interact with her other medications?" }) {
 			RecordingProvider provider = new RecordingProvider();
 			ChartAnswer answer = serviceWith(provider).search(patient, question);
 			assertEquals(0, provider.calls, question + " — " + answer.getAnswer());

@@ -824,6 +824,10 @@ public class DrugSafetyValidator {
 		Set<DrugReference> questionDrugs = new LinkedHashSet<DrugReference>(
 				drugReferenceService.findImpliedByQuestion(question, orderEntries));
 		Set<DrugReference> inPlay = new LinkedHashSet<DrugReference>(questionDrugs);
+		// A question about her own drug, taken in a combination order, is about that order: its other substances are in play
+		// too, the answer stating their findings (ADR Decision 292).
+		inPlay.addAll(DrugReferenceInjector.companionsOfHerOwn(drugReferenceService, question,
+			new ArrayList<DrugReference>(questionDrugs), orderEntries, context));
 		// Built lazily and at most once, for two consumers now: the echo test below, and the subject
 		// matter the order-driven contraindication arm is scoped to. The laziness is therefore no
 		// longer "the answer names no drug beyond the question's" alone — the arm needs the corpus

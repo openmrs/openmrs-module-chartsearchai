@@ -155,6 +155,42 @@ public class CombinationOrderLineContextTest extends BaseModuleContextSensitiveT
 		}
 	}
 
+	/**
+	 * Nor does a line naming a one-substance order by its display, its salt and its strength: on the 3.7.1 standalone
+	 * Brian Lopez's "Will omeprazole lower his levothyroxine absorption?" read "Omeprazole interacts with active order
+	 * Levothyroxine sodium 75 mcg — Moderate. The interacting substance is Levothyroxine." The order's display names no
+	 * other substance the module resolved it to.
+	 */
+	@Test
+	public void aLineNamingAOneSubstanceOrderByItsDisplaySaysNothingMore() {
+		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
+			order("order-omeprazole", "Omeprazole Co 20mg", null, "df3f7c1f-dac8-429b-ba38-90d770c1253c", "Omeprazole"),
+			order("order-levothyroxine", "Levothyroxine sodium 75 mcg", "H03AA01", "78809AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+				"Levothyroxine sodium", "Eltroxin", "Euthyroid"));
+		String answer = askOver("Will omeprazole lower his levothyroxine absorption?", orders);
+		String line = lineStarting(answer, "Omeprazole interacts with active order Levothyroxine sodium 75 mcg — Moderate.");
+		assertTrue(line != null, "precondition: was: " + answer);
+		assertTrue(!line.contains(NAMED), "was: " + answer);
+	}
+
+	/**
+	 * A question about her lopinavir, which she takes as lopinavir/ritonavir, is answered for that order: its ritonavir's
+	 * findings too, the lead saying so (ADR Decision 292). On the 3.7.1 standalone "Is she on lopinavir?" of Ruth listed
+	 * lopinavir's two findings and none of the ritonavir's, which carries most of what that order interacts with.
+	 */
+	@Test
+	public void whetherSheIsOnADrugSheTakesInACombinationIsAnsweredForTheWholeOrder() {
+		for (String question : new String[] { "Is she on lopinavir?", "Does her lopinavir interact with her other medications?" }) {
+			String answer = ask(question);
+			assertTrue(answer.startsWith("Lopinavir is one of this patient's active medications (Lopinavir / ritonavir 200mg/50mg ["),
+				question + " was: " + answer);
+			assertTrue(answer.split("\n")[0].contains(DrugReferenceInjector.TAKEN_WITH_OPENING + "Ritonavir in the same order."),
+				question + " was: " + answer);
+			assertTrue(answer.contains("\nLopinavir interacts with active order Didanosine — Moderate."), question + " was: " + answer);
+			assertTrue(answer.contains("\nRitonavir interacts with active order Didanosine — Minor."), question + " was: " + answer);
+		}
+	}
+
 	/** The module's answer to {@code question} over {@link #RUTH}, every line of it printed once. */
 	private static String ask(String question) {
 		return askOver(question, RUTH);

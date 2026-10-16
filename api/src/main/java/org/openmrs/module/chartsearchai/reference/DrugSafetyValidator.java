@@ -11150,7 +11150,7 @@ public class DrugSafetyValidator {
 						SafetyWarning.recordedAllergenContraindication(subject.displayLabel(),
 								subject.displayLabel() + " is in the drug group (" + recorded.group().getName()
 										+ ") the patient has a recorded " + recorded.severityWord() + "allergy to.",
-								subjectIsACurrentMedication, recorded.chartRecords(), SafetyWarning.AllergyToItsDrug.CROSS_REACTIVE),
+								subjectIsACurrentMedication, recorded.chartRecords(), SafetyWarning.AllergyToItsDrug.TO_ITS_GROUP),
 						false);
 			}
 		}

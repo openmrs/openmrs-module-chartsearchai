@@ -737,6 +737,15 @@ public class DrugReferenceInjector {
 		// 162) — so it does not return early with the chart unstamped.
 		boolean screenOfNoMedications = questionDrugs.isEmpty() && QueryScopeRouter.asksOnlyToScreenHerMedications(question)
 				&& hasNoActiveDrug(context);
+		// Nor does a question whether she is allergic to any of her medications, answered where nothing was found too (ADR
+		// Decision 295).
+		boolean allergyToHerMedications = questionDrugs.isEmpty()
+				&& QueryScopeRouter.asksWhetherAllergicToHerMedications(question) && context != null
+				&& context.chartReadForSafety();
+		// Nor does a duplicate-therapy question, answered where nothing was found too — one order with no finding raises
+		// nothing else (ADR Decision 294).
+		boolean duplicateQuestion = questionDrugs.isEmpty() && QueryScopeRouter.asksAboutDuplicateTherapy(question)
+				&& context != null && context.chartReadForSafety();
 		// Nor does a screen of ONE order, which has nothing to pair it with (ADR Decision 178).
 		boolean screenOfOneOrder = questionDrugs.isEmpty() && findings.isEmpty()
 				&& QueryScopeRouter.asksOnlyToScreenHerMedications(question) && hasOneActiveOrder(context, screenedSubstances);
@@ -751,7 +760,7 @@ public class DrugReferenceInjector {
 			unrecognised = null;
 		}
 		if (nothingResolved && unrepresented.isEmpty() && !screenRelatedNothing && !screenOfNoMedications
-				&& !screenOfOneOrder && listed.stated().isEmpty() && unrecognised == null) {
+				&& !screenOfOneOrder && !allergyToHerMedications && !duplicateQuestion && listed.stated().isEmpty() && unrecognised == null) {
 			// The record each of her orders is, though nothing here resolved: it is a fact about her chart, and the
 			// statement after a model's answer naming an order her records directly conflict with cites it (ADR
 			// Decision 210). Every order has its own record here, so the chart's own index is the one to number off.
@@ -1196,9 +1205,8 @@ public class DrugReferenceInjector {
 					orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers,
 					pairExtent, mappings, matched, context, reading.states(), unidentified.size());
 		}
-		// A question whether her medications duplicate one another, where the screen found duplicates: what it found, each
-		// a line, and what the check does not cover (ADR Decision 232). Found none, the model answers, since drug classes
-		// beyond the groups the module carries are not compared.
+		// A question whether her medications duplicate one another: what the screen found, each a line, and what the check
+		// does not cover (ADR Decision 232); found none, what it compared, and never "No" (ADR Decision 294).
 		if (moduleAnswer == null && context != null && questionDrugs.isEmpty()
 				&& ChartSearchAiUtils.getBooleanGlobalProperty(
 						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
@@ -1207,7 +1215,17 @@ public class DrugReferenceInjector {
 			moduleAnswer = composeDuplicateTherapy(findings, findingNumbers, orderRecordNumbers,
 					orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers,
 					duplicateTherapyLines(orderEntries, context,
-							orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers));
+							orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers),
+					context, screenedSubstances.size(), unidentified.size());
+		}
+		// Whether she is allergic to any of her medications: what her allergy findings say of them (ADR Decision 295).
+		if (moduleAnswer == null && allergyToHerMedications
+				&& ChartSearchAiUtils.getBooleanGlobalProperty(
+						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
+						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS)) {
+			moduleAnswer = composeAllergyToHerMedications(findings, findingNumbers, orderRecordNumbers,
+					orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers, context,
+					unidentified.size());
 		}
 		// A screen of her medications that related nothing is answered with what the screen established (ADR Decision
 		// 162): the screen note's own words, or, with no active orders at all, that there are none to check.
@@ -6421,31 +6439,128 @@ public class DrugReferenceInjector {
 	}
 
 	/**
-	 * The module's answer to a question whether her medications duplicate one another (ADR Decision 232), or {@code null}
-	 * where it found no duplicate: <em>"Yes — possible duplicate therapy among this patient's active medications:"</em>,
-	 * each drug group two or more of her substances share ({@code groupLines}, Decision 197's lines), then each substance
-	 * carried by several of her orders (issue #477's findings, as a screen states them), then what the check does not
-	 * compare. Never a "No": drug classes beyond the groups the module carries are not compared, so finding none is the
-	 * model's to answer, with the screen's findings.
+	 * The module's answer to a question whether her medications duplicate one another (ADR Decision 232): <em>"Yes —
+	 * possible duplicate therapy among this patient's active medications:"</em>, each drug group two or more of her
+	 * substances share ({@code groupLines}, Decision 197's lines), then each substance carried by several of her orders
+	 * (issue #477's findings, as a screen states them), then what the check does not compare. Finding none, what it
+	 * compared and that other classes were not ({@link #noDuplicateFound}, ADR Decision 294) — never a "No".
 	 */
 	private String composeDuplicateTherapy(List<SafetyWarning> findings, List<Integer> numbers,
-			Map<String, Integer> orderRecordNumbers, Map<String, Integer> herOrderRecords, List<String> groupLines) {
+			Map<String, Integer> orderRecordNumbers, Map<String, Integer> herOrderRecords, List<String> groupLines,
+			PatientClinicalContext context, int screened, int unidentified) {
 		List<String> lines = new ArrayList<String>(groupLines);
 		for (int i = 0; i < findings.size(); i++) {
 			if (findings.get(i).statesOrdersSharingASubstance()) {
 				lines.add(findingLine(findings.get(i), numbers.get(i), orderRecordNumbers, herOrderRecords, false));
 			}
 		}
-		if (lines.isEmpty()) {
-			return null;
-		}
 		List<String> groupNames = new ArrayList<String>();
 		for (CrossReactivityGroup group : drugReferenceService.getCrossReactivityGroups()) {
 			groupNames.add(group.getName());
 		}
+		if (lines.isEmpty()) {
+			return noDuplicateFound(context, screened, unidentified, groupNames);
+		}
 		return "Yes — possible duplicate therapy among this patient's active medications:\n" + String.join("\n", lines)
 				+ "\nThis check compares the substances in her orders and the drug groups this module carries ("
 				+ joinedAsAList(groupNames) + "); other drug classes are not covered.";
+	}
+
+	/**
+	 * The module's answer to whether she is allergic to any of her medications (ADR Decision 295), from the allergy arm's
+	 * findings about the orders she takes: <em>"Yes — …"</em> where a recorded allergy names one of them, each such finding
+	 * a line, then the drugs only in the group or class of a recorded allergy, apart, since an allergy to another drug of
+	 * a class is not an allergy to this one; where none names one, that none does, and the cross-reactivity after it. A
+	 * recorded allergy the data does not identify is named after the answer as not checked (ADR Decision 223), so
+	 * "None" is said only of the ones it identifies. {@code null} — the model answers — where she has an order the data
+	 * does not identify, or a contraindication about her medications of another kind than these two, either of which the
+	 * "None" would be false of.
+	 */
+	private String composeAllergyToHerMedications(List<SafetyWarning> findings, List<Integer> numbers,
+			Map<String, Integer> orderRecordNumbers, Map<String, Integer> herOrderRecords, PatientClinicalContext context,
+			int unidentified) {
+		if (unidentified > 0 || !context.contraindicationRecordsRead() || !context.activeDrugOrdersRead()) {
+			return null;
+		}
+		List<String> named = new ArrayList<String>();
+		List<String> crossReactive = new ArrayList<String>();
+		Set<String> namedDrugs = new LinkedHashSet<String>();
+		for (int i = 0; i < findings.size(); i++) {
+			SafetyWarning finding = findings.get(i);
+			if (!SafetyWarning.TYPE_CONTRAINDICATION.equals(finding.getType()) || !finding.isAboutACurrentMedication()) {
+				continue;
+			}
+			String line = findingLine(finding, numbers.get(i), orderRecordNumbers, herOrderRecords, false, null, true);
+			if (finding.isARecordedAllergyToItsSubstance()) {
+				named.add(line);
+				namedDrugs.add(finding.getDrug());
+			} else if (finding.isACrossReactivityFinding()) {
+				crossReactive.add(line);
+			} else {
+				return null;
+			}
+		}
+		if (context.getActiveDrugOrders().isEmpty()) {
+			return "This patient has no active medication orders.";
+		}
+		boolean anyDrugAllergy = false;
+		for (String token : context.getAllergyTokens()) {
+			anyDrugAllergy |= !context.getNonDrugAllergyTokens().contains(token);
+		}
+		if (!anyDrugAllergy) {
+			return "No drug allergies are recorded for this patient.";
+		}
+		List<String> lines = new ArrayList<String>();
+		if (!named.isEmpty()) {
+			lines.add("Yes — this patient has a recorded allergy to " + (namedDrugs.size() == 1 ? "one" : namedDrugs.size())
+					+ " of the medications this patient is taking:");
+			lines.addAll(named);
+			if (!crossReactive.isEmpty()) {
+				lines.add(POSSIBLE_CROSS_REACTIVITY_LEAD);
+			}
+		} else {
+			lines.add(NO_ALLERGY_TO_HER_MEDICATIONS + (crossReactive.isEmpty()
+					? ", or to a drug in the same group or class as one of them." : ". " + POSSIBLE_CROSS_REACTIVITY_LEAD));
+		}
+		lines.addAll(crossReactive);
+		return String.join("\n", lines);
+	}
+
+	private static final String NO_ALLERGY_TO_HER_MEDICATIONS = "None of this patient's recorded drug allergies that the"
+			+ " drug data identifies is to one of the medications this patient is taking";
+
+	private static final String POSSIBLE_CROSS_REACTIVITY_LEAD = "Possible cross-reactivity with a recorded allergy:";
+
+	/**
+	 * A duplicate-therapy question's answer where the screen found no duplicate (ADR Decision 294), or {@code null} where
+	 * the model answers: with no active medication, or one, that there is nothing to compare; with two or more, at least
+	 * one the data identifies, that none shares a substance or one of the drug groups this module carries, and that other
+	 * classes were not compared. Never "No": two drugs of one class the groups do not carry — two local anaesthetics —
+	 * are not compared, which the answer says. Her orders the data does not identify are named after it, as a screen's are.
+	 */
+	private static String noDuplicateFound(PatientClinicalContext context, int screened, int unidentified,
+			List<String> groupNames) {
+		if (context == null || !context.activeDrugOrdersRead()) {
+			return null;
+		}
+		List<PatientClinicalContext.ActiveDrugOrder> orders = context.getActiveDrugOrders();
+		if (hasNoActiveDrug(context)) {
+			return "This patient has no active medication orders, so there are none to compare.";
+		}
+		if (orders.size() == 1) {
+			PatientClinicalContext.ActiveDrugOrder order = orders.get(0);
+			String display = order.getDisplay();
+			String name = order.hasKnownName() && display != null && !display.trim().isEmpty() ? display.trim()
+					: "recorded only by its codes";
+			return "This patient has one active medication order, " + name
+					+ ", so there is no other active medication to compare it with.";
+		}
+		if (screened == 0 || orders.size() - unidentified < 1) {
+			return null;
+		}
+		return "None of this patient's active medications carries a substance another of them carries, and no two of them"
+				+ " are in one of the drug groups this module carries (" + joinedAsAList(groupNames) + "). Other drug"
+				+ " classes are not compared, so this is not a statement that no duplicate therapy exists.";
 	}
 
 	/**

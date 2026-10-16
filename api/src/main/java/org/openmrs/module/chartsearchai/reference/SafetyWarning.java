@@ -195,9 +195,12 @@ public class SafetyWarning {
 	enum AllergyToItsDrug {
 		/** Not the allergen arm's: a rule finding, or any other chip. */
 		NONE,
-		/** An allergy to ANOTHER drug of its class or cross-reactivity group — "possible cross-reactivity" — or to the
-		 *  group itself, recorded by its name (ADR Decision 231). */
+		/** An allergy to ANOTHER drug of its class or cross-reactivity group — "possible cross-reactivity". */
 		CROSS_REACTIVE,
+		/** An allergy to the drug group itself, recorded by its name — an allergy to each member (ADR Decision 231). Read
+		 *  as {@link #CROSS_REACTIVE} by {@link #isACrossReactivityFinding()}, and apart from it where the question is
+		 *  whether she is allergic to her drug (ADR Decision 295). */
+		TO_ITS_GROUP,
 		/** The recorded name names its drug: "The patient has a recorded allergy to X." */
 		NAMED,
 		/** Its substance, under a recorded name that does not name it: "X is contraindicated by a recorded allergy to "y"." */
@@ -1484,7 +1487,18 @@ public class SafetyWarning {
 	 * than states (ADR Decision 188). Package-private and unpublished.
 	 */
 	boolean isACrossReactivityFinding() {
-		return allergyToItsDrug == AllergyToItsDrug.CROSS_REACTIVE;
+		return allergyToItsDrug == AllergyToItsDrug.CROSS_REACTIVE || allergyToItsDrug == AllergyToItsDrug.TO_ITS_GROUP;
+	}
+
+	/**
+	 * Whether this chip says the chart records an allergy to its drug's SUBSTANCE — by a name naming it, by one that does
+	 * not, or by the name of a drug group it is a member of (ADR Decision 231) — rather than to another drug of its class.
+	 * Package-private and unpublished: what {@code DrugReferenceInjector} answers "Yes" on when asked whether she is
+	 * allergic to any of her medications (ADR Decision 295).
+	 */
+	boolean isARecordedAllergyToItsSubstance() {
+		return allergyToItsDrug == AllergyToItsDrug.NAMED || allergyToItsDrug == AllergyToItsDrug.UNNAMED
+				|| allergyToItsDrug == AllergyToItsDrug.TO_ITS_GROUP;
 	}
 
 	/** This warning, stated as one the answer states in its own words — see {@link #isStatedInTheAnswer()}.

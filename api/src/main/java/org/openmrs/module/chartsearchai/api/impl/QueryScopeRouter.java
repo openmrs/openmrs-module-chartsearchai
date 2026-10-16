@@ -1175,6 +1175,29 @@ public final class QueryScopeRouter {
 		return asWritten(question, String.join(" ", words.subList(choice.size() + 1, words.size())));
 	}
 
+	/**
+	 * Whether a question asks whether she is allergic to any of the medications she takes, and nothing else — <em>"Is she
+	 * allergic to any of her medications?"</em>, <em>"Is she on anything she is allergic to?"</em> (ADR Decision 295). Not
+	 * <em>"Does she have any allergies?"</em>, which asks for her allergies. A closed grammar, fail-CLOSED.
+	 */
+	public static boolean asksWhetherAllergicToHerMedications(String question) {
+		return question != null && question.indexOf('?') == question.lastIndexOf('?')
+				&& fitsAShape(words(question), ALLERGIC_TO_HER_MEDICATIONS_SHAPES);
+	}
+
+	private static final String ALLERGIC = "(?:allergic|(?:she|he|they)'s allergic|(?:she|he|they) (?:is|are) allergic)";
+
+	private static final List<Pattern> ALLERGIC_TO_HER_MEDICATIONS_SHAPES = shapes(
+			// "Is she allergic to any of her medications?", "Is she allergic to any of her current meds?"
+			"(?:is|are) " + SUBJECT + " allergic to any of " + POSSESSIVE + " " + MEDICATIONS,
+			// "Does she have an allergy to any of her medications?"
+			"(?:does|do) " + SUBJECT + " have (?:an |any )?allerg(?:y|ies) to any of " + POSSESSIVE + " " + MEDICATIONS,
+			// "Is she on anything she is allergic to?", "Is she taking any medication she's allergic to?"
+			"(?:is|are) " + SUBJECT + " (?:on|taking|receiving) (?:anything|any (?:medications?|meds|medicines?|drugs?))"
+					+ " (?:that )?" + ALLERGIC + " to",
+			// "Are any of her medications ones she is allergic to?"
+			"(?:are|is) any of " + POSSESSIVE + " " + MEDICATIONS + " (?:ones? |something )?(?:that )?" + ALLERGIC + " to");
+
 	/** A noun naming what is chosen as a drug: a medication word, or a class of drugs a clinician asks a choice of. */
 	private static final String DRUG_NOUN = "(?:medications?|meds?|medicines?|drugs?|prescriptions?|painkillers?|pain killers?"
 			+ "|pain relievers?|pain relief|analgesics?|antibiotics?|antibacterials?|antifungals?|antivirals?|nsaids?"

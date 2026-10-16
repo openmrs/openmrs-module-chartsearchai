@@ -386,15 +386,18 @@ public class AllergyQuestionConflictingOrderContextTest extends BaseModuleContex
 		assertFalse(chip.isStatedInTheAnswer(), "and says the answer does not state it");
 	}
 
+	/** Whether she is allergic to any of her medications is the module's to answer, from the finding itself (ADR
+	 *  Decision 295): the model read it as "does she have drug allergies". */
 	@Test
-	public void anAllergyQuestionThatAlsoAsksAboutHerMedicationsKeepsTheFindingAsAChip() throws IOException {
+	public void anAllergyQuestionThatAlsoAsksAboutHerMedicationsIsAnsweredFromTheFinding() throws IOException {
 		String question = "Is she allergic to any of her medications?";
 		ChartAnswer answer = serviceAnswering(MODEL_ANSWER).search(patient, question);
 
-		SafetyWarning chip = theAspirinChip(answer);
-		assertEquals(MODEL_ANSWER, answer.getAnswer(),
-				"asking whether her medications conflict with her allergies IS the drug-safety question");
-		assertFalse(chip.isStatedInTheAnswer(), "so the chip stays the carrier");
+		theAspirinChip(answer);
+		assertTrue(answer.isAnsweredByTheModule(), "the module answers: " + answer.getAnswer());
+		assertTrue(answer.getAnswer().startsWith(
+				"Yes — this patient has a recorded allergy to one of the medications this patient is taking:\n"),
+				"was: " + answer.getAnswer());
 	}
 
 	@Test
@@ -409,10 +412,12 @@ public class AllergyQuestionConflictingOrderContextTest extends BaseModuleContex
 	}
 
 	/**
-	 * Sarah Taylor's question on the 3.7.1 standalone: it asks about her medications, neither about her allergies nor
-	 * for a drug-safety reading.
+	 * A question about her medications, neither about her allergies nor for a drug-safety reading, whose answer the model
+	 * writes. Sarah Taylor's "Is she on more than one drug from the same class?" on the 3.7.1 standalone was this case's
+	 * question until the module came to answer a duplicate-therapy question itself (ADR Decision 294); a listing of her
+	 * medications is still the model's, and is the shape Decision 188 measured gaining the same statement.
 	 */
-	private static final String MEDICATION_QUESTION = "Is she on more than one drug from the same class?";
+	private static final String MEDICATION_QUESTION = "What medications is she on?";
 
 	/**
 	 * The record her aspirin order IS on this chart over {@code slice}, read off the allergy question's statement,
@@ -600,16 +605,17 @@ public class AllergyQuestionConflictingOrderContextTest extends BaseModuleContex
 	}
 
 	/**
-	 * Decision 124's own boundary holds where the answer names her order too: asking whether her medications conflict
-	 * with her allergies is the drug-safety question, and the chip stays its carrier (ADR Decision 210).
+	 * Decision 124's own boundary holds where the answer names her order too: an allergy question asking for the
+	 * drug-safety reading keeps the chip its carrier (ADR Decision 210). Asked until ADR Decision 295 as "Is she allergic
+	 * to any of her medications?", which the module now answers itself.
 	 */
 	@Test
-	public void anAllergyQuestionThatAlsoAsksAboutHerMedicationsKeepsTheFindingAChipWhereTheAnswerNamesHerOrder()
+	public void anAllergyQuestionAskingForASafetyReadingKeepsTheFindingAChipWhereTheAnswerNamesHerOrder()
 			throws IOException {
 		int number = theAspirinOrderRecordNumber(SLICE);
 		String modelAnswer = "Yes — she takes aspirin [" + number + "], and is recorded allergic to it [1].";
 
-		ChartAnswer answer = serviceAnswering(modelAnswer).search(patient, "Is she allergic to any of her medications?");
+		ChartAnswer answer = serviceAnswering(modelAnswer).search(patient, "Are any of her allergies a safety concern?");
 
 		assertEquals(number, theOrderRecord(answer, Context.getOrderService().getOrder(111).getUuid()).getIndex(),
 				"precondition: the same chart numbers the order alike");

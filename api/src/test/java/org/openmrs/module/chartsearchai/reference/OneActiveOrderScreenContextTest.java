@@ -98,6 +98,17 @@ public class OneActiveOrderScreenContextTest extends BaseModuleContextSensitiveT
 				+ "duplicate therapy. No severity is rated for this finding. [3]", chart.getModuleAnswer(), chart.getText());
 	}
 
+	/** A duplicate-therapy question of one order raising nothing is the module's too (ADR Decision 294): on the 3.7.1
+	 *  standalone George Anderson's acetaminophen and Melissa Wright's spironolactone were left to the model. */
+	@Test
+	public void aDuplicateQuestionOfOneOrderSaysThereIsNothingToCompareItWith() {
+		PatientChart chart = screen("Any duplicate therapy?",
+			DrugReferenceTestSupport.activeOrder("order-apap", "Acetaminophen", "Acetaminophen"));
+
+		assertEquals("This patient has one active medication order, Acetaminophen, so there is no other active medication "
+				+ "to compare it with.", chart.getModuleAnswer(), chart.getText());
+	}
+
 	@Test
 	public void aQuestionThatIsNotAScreenIsNotAnsweredSo() {
 		PatientChart chart = screen("What is her blood pressure?",

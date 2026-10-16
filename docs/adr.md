@@ -16467,7 +16467,7 @@ Pinned by `AllergyQuestionConflictingOrderContextTest`: `.search_anAnswerNamingA
 `.search_anAnswerNamingAnOrderDrawsItsCrossReactivityFindingApartBesideTheStatement`,
 `.search_anAllergyAnswersCrossReactivityFindingKeepsDecision188sLine`,
 `.search_anAnswerNamingAnOrderOnlyACrossReactivityFindingIsAboutStatesNothing`,
-`.anAllergyQuestionThatAlsoAsksAboutHerMedicationsKeepsTheFindingAChipWhereTheAnswerNamesHerOrder` and
+`.anAllergyQuestionAskingForASafetyReadingKeepsTheFindingAChipWhereTheAnswerNamesHerOrder` (renamed by Decision 295) and
 `.aDrugSafetyReadingKeepsTheFindingAChipWhereTheAnswerNamesHerOrder`; the wire key by
 `ChartSearchAiSafetyWarningSeverityWireTest.everyPublicZeroArgumentAccessorOfAWarningNamesAKeyOnTheWire`. The allergy leg,
 the drug-safety-reading leg, the anchor, the cross-reactivity key, the wire key and each numbering path redden their own
@@ -18738,3 +18738,75 @@ out the ten findings about her corticosteroids that *"Which pain medication is s
 
 Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.askingWhichDrugIsSafeForHerIsAnsweredWithTheScreenAndNoChoice`
 and `ScreenBesideHerOwnConflictsTest.aChoiceOfDrugStatesHisOwnConflictsWhateverWordNamesTheDrugs`.
+
+## Decision 294: A duplicate-therapy question that found none is answered with what was compared, never "No"
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-16 to keep fixing what the tested questions get
+wrong. It supersedes the last point of
+[Decision 232](#decision-232-a-question-whether-her-medications-duplicate-one-another-is-a-screen-answered-with-the-duplicates-it-found),
+which left a screen that found no duplicate to the model.
+
+### Context
+
+*"Any duplicate therapy?"* was asked of fourteen patients on the 3.7.1 standalone, each having no duplicate the module
+compares. The model answered Susan Young *"Yes — there are drug interactions"*, Betty Williams *"No — Bupivacaine should
+not be given with Lidocaine"*, Helen Roberts with her salicylic acid–methotrexate interaction, two patients by quoting
+the interaction screen's note as though it were about duplicates, and most of the rest *"No duplicate therapy is
+recorded"*, which the module cannot know: two drugs of one class its groups do not carry, such as Betty's two local
+anaesthetics, are never compared.
+
+### The decision
+
+The module answers it with what it compared (`DrugReferenceInjector.noDuplicateFound`): *"None of this patient's
+active medications carries a substance another of them carries, and no two of them are in one of the drug groups this
+module carries (NSAID and Penicillins). Other drug classes are not compared, so this is not a statement that no
+duplicate therapy exists."* With one active order, that there is no other to compare it with; with none, that there
+are none. Decision 232's "never a No" stands: nothing here says she has no duplicate. Orders the data does not identify
+are named after the answer as not checked, as a screen's are; where it identifies none of them, the model answers.
+
+Pinned by `DuplicateTherapyQuestionTest.aDuplicateQuestionThatFoundNoneSaysWhatWasComparedAndNoMore`, which replaces
+the case pinning Decision 232's hand-off, and `OneActiveOrderScreenContextTest.aDuplicateQuestionOfOneOrderSaysThereIsNothingToCompareItWith`
+over a chart carrying the order's own record: one order raising no finding resolved nothing, and the injection
+returned before composing until the question was exempted from that return, as a screen of one order is.
+
+## Decision 295: Whether she is allergic to any of her medications is answered from her allergy findings
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-16 to keep fixing what the tested questions get
+wrong.
+
+### Context
+
+*"Is she allergic to any of her medications?"*, asked of fourteen patients on the 3.7.1 standalone, was read by the
+model as *"does she have drug allergies"*. George Anderson, on acetaminophen and allergic to NSAIDs, ibuprofen and
+pantoprazole, was told *"Yes — the patient has drug allergies: NSAID, Ibuprofen, and Pantoprazole"*; Melissa Wright
+(spironolactone; esomeprazole) and Mark Smith (chloroquine and Benadryl; ciprofloxacin) were told *"Yes"* as well, and
+Betty Williams, allergic to the lidocaine she takes, *"No — Lidocaine should not be given"*.
+
+### The decision
+
+The question (`QueryScopeRouter.asksWhetherAllergicToHerMedications`, a closed grammar that leaves *"Does she have any
+allergies?"* alone) is answered by the module from the allergy arm's findings about the orders she takes
+(`DrugReferenceInjector.composeAllergyToHerMedications`):
+
+- a recorded allergy to one of them is *"Yes — this patient has a recorded allergy to one of the medications this
+  patient is taking:"*, each such finding a line — an allergy recorded by the drug's name, by another name of its
+  substance, or by the name of a drug group it is a member of, which
+  [Decision 231](#decision-231-an-allergy-recorded-by-a-drug-groups-name-is-an-allergy-to-the-groups-members) makes an
+  allergy to each member (`SafetyWarning.isARecordedAllergyToItsSubstance`; Agnes Adams's aspirin under her recorded
+  *"NSAIDs"* was first answered as cross-reactivity alone);
+- a drug only in the same group or class as a recorded allergy is stated apart, under *"Possible cross-reactivity with a
+  recorded allergy:"* — an allergy to another drug of a class is not an allergy to this one;
+- where neither, *"None of this patient's recorded drug allergies that the drug data identifies is to one of the
+  medications this patient is taking, or to a drug in the same group or class as one of them."*; an allergy the data
+  does not identify is named after it as not checked
+  ([Decision 223](#decision-223-a-recorded-drug-allergy-the-data-does-not-identify-is-said-to-be-unchecked)).
+
+An order the data does not identify, or a contraindication about her medications of another kind, keeps the model:
+the "None" would be false of it.
+
+Pinned by `AllergyToHerMedicationsQuestionTest` and
+`AllergyQuestionConflictingOrderContextTest.anAllergyQuestionThatAlsoAsksAboutHerMedicationsIsAnsweredFromTheFinding`.
+That class's cases pinning the statement after a model's answer to a medication question asked Decision 294's
+duplicate-therapy question, which the module now answers; they ask *"What medications is she on?"* instead, and its
+case pinning Decision 124's boundary where the answer names her order asks *"Are any of her allergies a safety
+concern?"*.

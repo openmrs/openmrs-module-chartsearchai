@@ -18389,3 +18389,233 @@ its finding is about.
 Pinned by `CombinationNamedAsOneDrugTest.aCombinationProposedByOneNameIsTheDrugTheLeadNames` and
 `.aCombinationProposedBesideHerDrugIsAnsweredAsOneProposal`; `CotrimoxazoleByEveryNameTest`, which pinned the
 ingredient's name in that lead beside its subject, both ingredients checked, now pins the asked name.
+
+## Decision 283: A folded class relationship withholds only where it says what the two drugs are
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-15 to fix what Decisions 272–282 left, among them
+dual antiplatelet therapy refused as duplicate therapy. Grades the fold that
+[Decision 109](#decision-109-a-moderate-interaction-is-a-caution-because-ddinter-reserves-avoid-for-major) left to its
+own evidence.
+
+### Context
+
+On the 3.7.1 standalone *"Can I give her clopidogrel?"*, of a patient on aspirin, read *"No — Clopidogrel should not be
+given: it interacts with active order Acetylsalicylic acid (aspirin) — Moderate, and Clopidogrel is in the same ATC class
+(B01AC) as active order Acetylsalicylic acid (aspirin) — possible duplicate therapy"* — two drugs given together on
+purpose. DDInter rates the pair Moderate, a caution by its own definition (Decision 109); the shared class, folded onto
+the rule, withholds (`SafetyWarning.carriesUnratedRelationship`, issue #283).
+
+A first draft graded every fold by its rule's rating alone, since the class relationship alone is a caution
+([Decision 86](#decision-86-a-relationship-resting-on-shared-classification-alone-is-a-caution-not-a-reason-to-withhold)).
+Re-run over the 466-question corpus it turned true duplicates DDInter also rates Moderate into cautions, and the model then
+answered *"Can I add naproxen to her ibuprofen?"* with *"Naproxen can be added to Ibuprofen, with one caution"*. It was not
+kept.
+
+### The decision
+
+A class relationship folded onto a rated rule is a reason to withhold where the two drugs share something saying what
+they ARE — an ATC subgroup naming a structure or a target, whichever subgroup the sentence names, or a curated
+cross-reactivity group — and adds nothing to the rating where all they share names only what they are FOR
+(`DrugReference.isPurposeOnlyAtcCode`, issue #183's reading): `SafetyWarning.FoldedRelationship`, decided where the fold
+is made. B01AC joins the purpose-only subgroups by that same
+reading: *platelet aggregation inhibitors* names an effect that members acting on at least five different targets share
+(aspirin, clopidogrel, dipyridamole, the glycoprotein IIb/IIIa inhibitors, the prostacyclin analogues), not a structure or
+a target. So dual antiplatelet therapy is the caution its Moderate rating is, while two NSAIDs (M01AE), two NNRTIs
+(J05AG), zidovudine with stavudine (J05AF) or two statins (C10AA) still withhold. The reclassification reaches the
+cross-reactivity arm too, which purpose-only subgroups never license: an aspirin allergy is no longer a cross-reactivity
+claim on clopidogrel, which is what such a patient is commonly given instead.
+
+**Not the subgroup the sentence names alone.** The duplicate-therapy arm names a subgroup by its own preference
+(`DrugSafetyValidator.sharedClass`), and graded by that subgroup alone the second draft turned ibuprofen with diclofenac —
+NSAIDs of two chemical families, sharing only M02AA, anti-inflammatory preparations for topical use — into a caution; the
+466-question corpus re-run then had the model answer *"Can I continue her Advil?"*, of a patient also on diclofenac, with
+*"Ibuprofen can be continued, with several cautions"*. Their curated group, NSAIDs, says what they are.
+
+Pinned by `FoldedFindingStrengthTest.aRatedPairSharingOnlyAPurposeSubgroupIsTheCautionItsRatingIs`,
+`.aRatedPairSharingAStructuralSubgroupStillWithholds`, `.aRatedPairSharingOnlyAPurposeSubgroupButACuratedGroupStillWithholds` and
+`AtcCrossReactivityLicensingTest.anAspirinAllergyIsNoCrossReactivityClaimOnClopidogrel`.
+`AllergyQuestionConflictingOrderContextTest`'s slice, which stood for a cross-reactive allergy on aspirin and clopidogrel,
+is aspirin and diflunisal (N02BA, salicylic acid and derivatives).
+
+## Decision 284: Lithium and tenofovir, named by their moiety, are checked as the forms the data carries
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-15 to fix what Decisions 272–282 left, among them
+the "Did you mean" reply for *tenofovir* and *lithium* that
+[Decision 183](#decision-183-a-drug-name-the-data-does-not-recognise-is-said-to-be-unrecognised-with-the-names-it-carries-and-never-guessed)
+gives.
+
+### Context
+
+*"Can I give her lithium?"* and *"Can I give her tenofovir?"* read *"No interaction check was run: … Did you mean Lithium
+carbonate?"* and *"… Tenofovir disoproxil or Tenofovir alafenamide?"*. The knowledge base files lithium only as Lithium
+carbonate and keeps *lithium* out of that row's names, by its own curation rule, because it is also a laboratory test's
+name — names are matched against every order, record and answer. It carries tenofovir's two prodrugs apart and names each
+in full. Decision 183 never guesses, because resolving a word to the names that begin with it would read *milk* as milk
+thistle; that rule stands.
+
+### The decision
+
+`QuestionSubstanceTerms`, the question-only names of
+[Decision 268](#decision-268-alcohol-a-clinician-asks-about-is-checked-as-the-knowledge-bases-ethanol), names
+*lithium* as Lithium carbonate and *tenofovir* as both of its forms — never in an order, a record or an answer, and not
+where the next word names the form (*tenofovir disoproxil*). A term naming several rows names, in
+`DrugReferenceService.findImpliedByQuestion`, those of them her active orders resolve to where they resolve any: *"her
+tenofovir"* is the form she is on. Otherwise both forms are checked and each line names its own; a proposal's lead names
+the drug as asked, *"No — this module's drug-safety check found a reason to withhold Tenofovir."*, as
+[Decision 282](#decision-282-a-combination-proposed-by-one-name-is-the-drug-the-answers-lead-names) names a combination,
+and so does a switch to it.
+Every other word the data does not carry keeps Decision 183's reply — *insulin*, which it carries only as its several
+forms, among them.
+
+Pinned by `MoietyAskedAboutTest` and `AlcoholAskedAboutTest.everyTermNamesARowOfTheShippedKnowledgeBaseAndIsNoneOfItsNames`;
+`LlmInferenceServiceAnswerFromFindingsContextTest.aDrugNameTheDataDoesNotRecogniseIsSaidToBeUnrecognisedWithItsNearestNames`
+and `SwitchingHerDrugContextTest.aSwitchToANameTheDataDoesNotRecogniseSaysNoCheckRan`, which asked it of tenofovir, ask
+it of insulin and a misspelt zidovudine; `SwitchingHerDrugContextTest.aSwitchToTenofovirIsAnsweredForTenofovir` pins the
+switch.
+
+## Decision 285: What relates two of her drugs is what relates the orders she takes them in, each pair from one side
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-15 to fix what Decisions 272–282 left.
+
+### Context
+
+Ruth, on lopinavir with ritonavir and on co-trimoxazole, asked *"Any interaction between her lopinavir and
+cotrimoxazole?"* and read, under *"Lopinavir (Lopinavir / ritonavir 200mg/50mg [2]) and Cotrimoxazole (Cotrimoxazole 960mg
+[3]) are both among this patient's active medications. What the interaction check relates between them:"*, one Minor line
+— while the chips beside it carried two Moderate findings between her co-trimoxazole's ingredients and the ritonavir in
+that same order. [Decision 203](#decision-203-two-drugs-she-already-takes-asked-about-together-are-answered-with-what-relates-them--never-that-they-may-be-combined)'s
+answer stated the findings about the substances the question named, and from ONE side — the drug named first, where any
+finding was stated from it — so a pair stated only from the other side was left out once the first had any.
+
+### The decision
+
+Each of the two is the substances of her started orders that carry it, its own among them — *"her lopinavir"* is her
+lopinavir/ritonavir order, as the lead already names it — unless the two share an order, where that would relate an order
+to itself. Each pair of substances is stated from one side, the drug the question names first where a finding states that
+pair from there, else the other, so no pair is stated twice and none is left out.
+
+Pinned by `CombinationNamedAsOneDrugTest.twoOfHerDrugsOneNamedByACombinationsNameAreAnsweredAsTwo`.
+
+## Decision 286: Whether one drug changes the other's effect, neither of them hers, is answered with what relates them
+
+**Status: Accepted** (October 2026) — found while verifying Decisions 283–285 on the 3.7.1 standalone.
+
+### Context
+
+[Decision 249](#decision-249-whether-one-drug-changes-an-effect-of-the-other-is-answered-with-the-finding-and-neither-yes-nor-no)
+answers whether one drug changes an effect of another where one or both are hers, and leaves the rest to the model. Amina,
+on neither, asked *"Will ibuprofen raise her lithium levels?"* — answerable since
+[Decision 284](#decision-284-lithium-and-tenofovir-named-by-their-moiety-are-checked-as-the-forms-the-data-carries) — and
+the model answered *"No — ibuprofen should not be given: coadministration with nonsteroidal anti-inflammatory drugs
+(NSAIDs) may increase serum lithium levels"*: a "No" to whether it raises them.
+
+### The decision
+
+The answer [Decision 220](#decision-220-whether-two-drugs-neither-hers-interact-is-answered-yes-where-the-data-relates-them)
+gives to whether two drugs, neither hers, interact — the finding relating them, then each one's findings against her
+medications — answers the effect question too, where a finding relates the pair, under a lead that says neither "Yes" nor
+"No": *"Neither Ibuprofen nor Lithium carbonate is one of this patient's active medications. What the interaction check
+relates between them:"*.
+
+Pinned by `TogetherWithHerOwnMedicationContextTest.whetherOneDrugChangesAnEffectOfAnotherNeitherHersIsAnsweredWithWhatRelatesThem`.
+
+## Decision 287: Whether she is on a drug none of her orders carries is answered that she is not, then with what the check found
+
+**Status: Accepted** (October 2026) — found while verifying
+[Decision 284](#decision-284-lithium-and-tenofovir-named-by-their-moiety-are-checked-as-the-forms-the-data-carries) on the
+3.7.1 standalone. It amends
+[Decision 202](#decision-202-a-question-whether-she-is-on-her-own-drug-or-whether-it-is-safe-with-her-other-medications-is-answered-as-her-own-medication-and-the-answer-names-the-order),
+which left such a question to the model.
+
+### Context
+
+Mogan Kamwara, on lamivudine, nevirapine and stavudine, was asked about two drugs she is not on. The model answered *"Is
+she on efavirenz?"* with *"The drug can be given, with two cautions"* and *"Is she taking tenofovir?"* — a drug the data
+recognises since Decision 284, where it had answered *"Did you mean …?"* — with *"Tenofovir can be given, with several
+cautions"*: a clearance, to a question it did not answer. *"Is the patient on zidovudine?"* it answered *"No, the patient
+is not currently on zidovudine"*. The drug-in-play arm states each finding about a drug she is not on as a proposal's,
+and the model read the proposal.
+
+### The decision
+
+The module answers it as it answers a question naming as hers a drug she is not on
+([Decision 260](#decision-260-a-question-naming-as-hers-a-drug-she-is-not-on-says-she-is-not-on-it)): *"Efavirenz is not
+one of this patient's active medications."*, then what the check found about the drug under a lead that says neither "Yes"
+nor "No" — the lead of a question whose "No" would read backwards
+([Decision 257](#decision-257-a-question-whose-no-would-read-backwards-about-a-drug-withheld-by-no-rating-states-what-the-check-found)),
+since the line before it has answered the question. Its findings admit it as they admit Decision 257's questions: a rated
+reason to withhold, an unrated one among interactions alone, or cautions alone; anything else stays with the model. The
+statement rests on her orders as
+Decision 202's does, and an order the drug data does not identify is named after it, as not established to be the drug
+asked about (Decision 161). A drug her orders carry, started or scheduled, is still Decision 202's.
+
+Pinned by `OwnMedicationSafetyContextTest.aQuestionWhetherSheIsOnADrugNoneOfHerOrdersCarriesIsNotAnsweredAsHers`, which
+pinned the model call until this decision, `.aQuestionWhetherSheIsOnADrugSheIsNotOnSaysSoBeforeWhatTheCheckFound` and
+`LlmInferenceServiceAnswerFromFindingsContextTest.whetherSheTakesADrugSheDoesNotIsAnsweredThatSheDoesNotThenWithTheFindings`.
+Two questions of that shape left `.aQuestionTheModuleDidNotResolveAsASuitabilityQuestionStillAsksTheModel` for it, and
+`.aDoseTheQuestionStatesIsSaidNotToHaveBeenCheckedAfterTheModelsAnswer` asks its question without a dose of one the model
+still answers.
+
+## Decision 288: Each line about her combination order names the substance it is about, and what the interaction with one of its drugs is takes the whole order
+
+**Status: Accepted** (October 2026) — found while verifying Decisions 283–287 on the 3.7.1 standalone. It carries
+[Decision 285](#decision-285-what-relates-two-of-her-drugs-is-what-relates-the-orders-she-takes-them-in-each-pair-from-one-side)'s
+reading to one more answer, and stops it short of a switch.
+
+### Context
+
+Ruth's lopinavir/ritonavir order is coded as the combination, so a finding about either substance names the order by its
+display, and the knowledge base relates a drug to each substance in a row of its own. *"Does fluconazole interact with
+rifampicin?"* read *"Rifampicin (rifampin) interacts with active order Lopinavir / ritonavir 200mg/50mg — Major."* twice,
+and *"Does her didanosine interact with her lopinavir?"* — which since Decision 285 states the ritonavir's findings too —
+read that order once rated Moderate and once Minor. `interactingSubstancesOfSharedOrders` names the substance in such a
+pair of lines, but only a screen's and a proposal's answer applied it, and never to a line standing alone: *"Any
+interaction between her lopinavir and cotrimoxazole?"*, answered since Decision 285 with the two Moderate findings about
+the ritonavir in that order, named them by the order's display alone, below the lopinavir's own Minor line — to a reader a
+second rating of one pair. And *"Can I switch her lopinavir to atazanavir?"* printed one line twice: once among
+atazanavir's cautions, the ritonavir's, and once under *"About the order the switch replaces:"*, the lopinavir's.
+
+### The decision
+
+Every composed list of findings names, through `interactingSubstancesOfSharedOrders`, the substance a line is about —
+the answers that stated their lines one at a time now through `DrugReferenceInjector.findingLines` — wherever two of its
+lines share their drug and their order, and wherever a line names the order by anything other than one of that
+substance's own names, as a combination's display does, which
+[Decision 175](#decision-175-a-composed-line-about-one-substance-of-a-combination-order-names-that-substance) left
+unnamed for a line standing alone: *"… — Major. The interacting substance is Lopinavir."* A name of the substance itself
+says nothing more: the first form of this rule also read *"Efavirenz interacts with active order Rifampin — Moderate. The
+interacting substance is Rifampicin."*, DDInter's name for the drug beside the data's. A question what the interaction
+between a drug and one she takes is takes the order she takes it in, every substance of it, as Decision 285 reads *"her
+lopinavir"* ([Decision 264](#decision-264-what-the-interaction-between-two-drugs-is-is-answered-with-the-findings-relating-them-whole)).
+A switch away from it does not: it replaces the drug named, and the order's other substances may stay — a ritonavir
+boosting the drug switched to, an isoniazid beside the rifampicin replacing a rifapentine. Taken whole, the 466-question
+corpus re-run filed *"Can I give her rifampicin instead of rifapentine?"*'s rifampicin-with-isoniazid hepatotoxicity
+finding under the order replaced, as if it no longer applied; named, it stays among the new drug's cautions.
+
+**What it leaves.** Whether her order carries more than one substance is not on the finding, so a one-substance order a
+line names by a display carrying its salt and strength is named too — *"… active order Levothyroxine sodium 75 mcg —
+Moderate. The interacting substance is Levothyroxine."*: said twice, never wrongly.
+
+Pinned by `CombinationOrderLineContextTest`, over the shipped knowledge base with the orders carrying the standalone's ATC
+codes and concepts: an order carrying its display name alone has each finding name its own substance as the partner, so
+the two lines never read alike there.
+
+## Decision 289: What the interaction between two drugs is, asked without the word mechanism, is answered as its mechanism is
+
+**Status: Accepted** (October 2026) — found while verifying Decisions 283–288 on the 3.7.1 standalone.
+
+### Context
+
+Ruth asked *"What is the interaction between rifampicin and her lopinavir?"* and the model opened *"No — Rifampicin should
+not be given"*: a verdict to a question asking what something is.
+[Decision 264](#decision-264-what-the-interaction-between-two-drugs-is-is-answered-with-the-findings-relating-them-whole)
+answers what the interaction is only where the question asks for its *mechanism*, *cause*, *reason* or *basis*.
+
+### The decision
+
+`QueryScopeRouter.asksAboutThePairsInteraction` also admits *"What is the interaction between X and Y?"*, *"What
+interactions are there between X and Y?"*, *"How do X and Y interact?"* and *"How does X interact with Y?"*, each drug
+named as hers or not: what relates the two, each finding whole, and neither "Yes" nor "No".
+
+Pinned by `TogetherWithHerOwnMedicationContextTest.whatTheInteractionBetweenTwoDrugsIsIsAnsweredWithTheFindingWhole` and
+`CombinationOrderLineContextTest.whatTheInteractionWithADrugSheTakesInACombinationIsStatesEachSubstanceOfThatOrder`.

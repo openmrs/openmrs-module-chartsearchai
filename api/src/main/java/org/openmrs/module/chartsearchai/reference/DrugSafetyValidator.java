@@ -822,7 +822,7 @@ public class DrugSafetyValidator {
 		// where the answer has to be a substance.
 		// The question's own words too, which no entry carries as a name: "alcohol" (ADR Decision 268).
 		Set<DrugReference> questionDrugs = new LinkedHashSet<DrugReference>(
-				drugReferenceService.findImpliedByQuestion(question));
+				drugReferenceService.findImpliedByQuestion(question, orderEntries));
 		Set<DrugReference> inPlay = new LinkedHashSet<DrugReference>(questionDrugs);
 		// Built lazily and at most once, for two consumers now: the echo test below, and the subject
 		// matter the order-driven contraindication arm is scoped to. The laziness is therefore no
@@ -1532,6 +1532,9 @@ public class DrugSafetyValidator {
 	 * relationship read as a caution while that relationship alone licenses withholding: the fold
 	 * silently lowered a claim, and it also changed behaviour beyond what #283 set out to change, since
 	 * every finding refused before it. Taking the stronger of the two leaves those pairs where they were.
+	 * Since ADR Decision 283 that holds of a relationship saying what the two drugs ARE — a structure, a
+	 * target, a curated group; a shared subgroup naming only what they are FOR adds nothing to the rating,
+	 * so dual antiplatelet therapy's B01AC is the caution its Moderate rating is.
 	 *
 	 * <p>Measured over the shipped knowledge base through the production predicates (the real
 	 * {@link DdiDrugReferenceSource#parse}, {@link DrugReference#atcSubgroups()},
@@ -1581,7 +1584,9 @@ public class DrugSafetyValidator {
 		if (finding.restsOnTheProposalAlone()) {
 			return false;
 		}
-		return ratingLicensesWithholding(finding.getSeverity()) || finding.carriesUnratedRelationship();
+		// A class relationship folded onto the rule withholds where it says what the two drugs ARE; one naming only what
+		// they are FOR adds nothing to the rating, being a caution alone (ADR Decision 283).
+		return ratingLicensesWithholding(finding.getSeverity()) || finding.foldedRelationshipSaysWhatTheDrugsAre();
 	}
 
 	/** @return the floor rank for the GP value, falling back to the default floor when the
@@ -4998,7 +5003,8 @@ public class DrugSafetyValidator {
 						reconciled != null ? reconciled.chipName : printedPartnerLabel(rule.rule),
 						reconciled != null ? reconciled.noteName : null,
 						hit.getValue().sentence(ref, reconciled != null ? reconciled.chipName
-								: classPartnerName(hit.getKey(), subjects), partnerStart), partnerStart));
+								: classPartnerName(hit.getKey(), subjects), partnerStart), partnerStart,
+						hit.getValue().saysWhatTheDrugsAre));
 			}
 			// else: a SECOND co-medication that the same rule is about. The relationship is already
 			// stated on that chip; emitting it again, standalone or appended, would put one pair's
@@ -5067,7 +5073,7 @@ public class DrugSafetyValidator {
 							null, bridges, herOrder, subjectStart, partnerStart);
 			} else {
 				chip = interactionWarning(ref, rule.rule, fold.partnerName, fold.partnerNoteName,
-					fold.sentence, bridges, herOrder, subjectStart, partnerStart);
+					fold.sentence, fold.saysWhatTheDrugsAre, bridges, herOrder, subjectStart, partnerStart);
 			}
 			// The displays of the orders that walk matched, on the chip before anything else reads it —
 			// names of the finding for InteractionClaimPairFidelityCheck, printed nowhere (#514). And the
@@ -5273,7 +5279,7 @@ public class DrugSafetyValidator {
 			// travels structurally and nothing downstream recovers it by parsing the string this just
 			// wrote it into (the two-resolutions-that-agree shape issue #151 forbids).
 			// No member names a not-started order (collapseKey), so the merged chip names active orders only.
-			out.add(interactionWarning(ref, group.get(0).rule, joinPartners(partners), null, null,
+			out.add(interactionWarning(ref, group.get(0).rule, joinPartners(partners), null, null, false,
 				bridges, herOrder, partners, subjectStart, null).withMatchedOrderNames(matchedNames).withPartnerRows(partnerRows));
 		}
 		return out;
@@ -8461,8 +8467,18 @@ public class DrugSafetyValidator {
 			String partnerName, String partnerNoteName, String alsoSameClass,
 			List<SafetyWarning.ChartOrderBridge> chartOrderBridges,
 			boolean aboutACurrentMedication, Date subjectStart, Date partnerStart) {
-		return interactionWarning(ref, i, partnerName, partnerNoteName, alsoSameClass, chartOrderBridges,
+		return interactionWarning(ref, i, partnerName, partnerNoteName, alsoSameClass, false, chartOrderBridges,
 			aboutACurrentMedication, null, subjectStart, partnerStart);
+	}
+
+	/** As above, for a chip folding {@code alsoSameClass}, which says what the two drugs are where
+	 *  {@code classSaysWhatTheDrugsAre} (ADR Decision 283). */
+	private static SafetyWarning interactionWarning(DrugReference ref, DrugReference.Interaction i,
+			String partnerName, String partnerNoteName, String alsoSameClass, boolean classSaysWhatTheDrugsAre,
+			List<SafetyWarning.ChartOrderBridge> chartOrderBridges,
+			boolean aboutACurrentMedication, Date subjectStart, Date partnerStart) {
+		return interactionWarning(ref, i, partnerName, partnerNoteName, alsoSameClass, classSaysWhatTheDrugsAre,
+			chartOrderBridges, aboutACurrentMedication, null, subjectStart, partnerStart);
 	}
 
 	/**
@@ -8478,7 +8494,7 @@ public class DrugSafetyValidator {
 	 *        never with {@link #ACTIVE_ORDER_INTERACTION_PHRASE} (issue #553)
 	 */
 	private static SafetyWarning interactionWarning(DrugReference ref, DrugReference.Interaction i,
-			String partnerName, String partnerNoteName, String alsoSameClass,
+			String partnerName, String partnerNoteName, String alsoSameClass, boolean classSaysWhatTheDrugsAre,
 			List<SafetyWarning.ChartOrderBridge> chartOrderBridges,
 			boolean aboutACurrentMedication, List<String> namedPartners, Date subjectStart, Date partnerStart) {
 		// partnerName is partnerLabel(i) only where reconciledPartnerName did not answer — it is the
@@ -8521,7 +8537,10 @@ public class DrugSafetyValidator {
 		// is a chip whose partner the ladder did not reach or whose displacement the gate refused,
 		// rather than a chip no class sentence folded onto.
 		return SafetyWarning.interaction(ref.displayLabel(), detail, i.getSeverity(),
-				alsoSameClass != null, partnerNoteName != null ? i : null, partnerNoteName,
+				alsoSameClass == null ? SafetyWarning.FoldedRelationship.NONE
+						: classSaysWhatTheDrugsAre ? SafetyWarning.FoldedRelationship.WHAT_THE_DRUGS_ARE
+								: SafetyWarning.FoldedRelationship.PURPOSE,
+				partnerNoteName != null ? i : null, partnerNoteName,
 				chartOrderBridges, aboutACurrentMedication,
 				namedPartners == null ? Collections.singletonList(partnerName) : namedPartners)
 				.withPartnerScheduledStarts(partnerStart == null ? null
@@ -12075,16 +12094,21 @@ public class DrugSafetyValidator {
 				// one over-skip is deliberate.
 				continue;
 			}
-			String shared = sharedTherapyClass(refClasses, DrugReference.atcSubgroups(partner.codes));
+			Set<String> partnerSubgroups = DrugReference.atcSubgroups(partner.codes);
+			String shared = sharedTherapyClass(refClasses, partnerSubgroups);
 			if (shared != null) {
+				// Whether the two share anything saying what they ARE — the subgroup named or another, or a curated
+				// cross-reactivity group — and not the subgroup named alone: two NSAIDs of different families share only
+				// M02AA, which names a purpose (ADR Decision 283).
 				out.put(partner, new ClassRelationship("ATC class (" + shared + ")",
-						"possible duplicate therapy"));
+						"possible duplicate therapy", sharedClass(refClasses, partnerSubgroups, true) != null
+								|| CrossReactivityGroup.sharedGroupForCodes(refGroups, partner.codes) != null));
 				continue;
 			}
 			CrossReactivityGroup group = CrossReactivityGroup.sharedGroupForCodes(refGroups, partner.codes);
 			if (group != null) {
 				out.put(partner, new ClassRelationship("cross-reactivity group (" + group.getName() + ")",
-						"possible additive or duplicate-class therapy"));
+						"possible additive or duplicate-class therapy", true));
 			}
 		}
 		return out;
@@ -12115,9 +12139,15 @@ public class DrugSafetyValidator {
 		/** What sharing it may mean — the clause after the dash. */
 		private final String consequence;
 
-		ClassRelationship(String shared, String consequence) {
+		/** Whether what the two share says what they ARE — a curated cross-reactivity group, or an ATC subgroup naming a
+		 *  structure or a target — and not only what they are FOR ({@link DrugReference#isPurposeOnlyAtcCode}): the fold
+		 *  of such a relationship onto a rated rule is a reason to withhold (ADR Decision 283). */
+		private final boolean saysWhatTheDrugsAre;
+
+		ClassRelationship(String shared, String consequence, boolean saysWhatTheDrugsAre) {
 			this.shared = shared;
 			this.consequence = consequence;
+			this.saysWhatTheDrugsAre = saysWhatTheDrugsAre;
 		}
 
 		/** @param partnerName what this chip calls the active order — {@link #classPartnerName} for a
@@ -12165,11 +12195,16 @@ public class DrugSafetyValidator {
 		 *  decided once for both halves of the chip (issue #553). */
 		private final Date partnerStart;
 
-		FoldedClassSentence(String partnerName, String partnerNoteName, String sentence, Date partnerStart) {
+		/** {@link ClassRelationship#saysWhatTheDrugsAre} of the relationship folded on (ADR Decision 283). */
+		private final boolean saysWhatTheDrugsAre;
+
+		FoldedClassSentence(String partnerName, String partnerNoteName, String sentence, Date partnerStart,
+				boolean saysWhatTheDrugsAre) {
 			this.partnerName = partnerName;
 			this.partnerNoteName = partnerNoteName;
 			this.sentence = sentence;
 			this.partnerStart = partnerStart;
+			this.saysWhatTheDrugsAre = saysWhatTheDrugsAre;
 		}
 	}
 

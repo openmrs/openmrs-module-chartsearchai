@@ -78,9 +78,11 @@ public class AlcoholAskedAboutTest extends BaseModuleContextSensitiveTest {
 	@Test
 	public void everyTermNamesARowOfTheShippedKnowledgeBaseAndIsNoneOfItsNames() {
 		DrugReferenceService service = DrugReferenceTestSupport.shippedServiceWithGroups();
-		for (java.util.Map.Entry<String, String> term : QuestionSubstanceTerms.terms().entrySet()) {
-			assertTrue(service.getAll().stream().anyMatch(e -> e.getName().equals(term.getValue())),
-				term + ": the knowledge base carries a row of that name");
+		for (java.util.Map.Entry<String, List<String>> term : QuestionSubstanceTerms.terms().entrySet()) {
+			for (String row : term.getValue()) {
+				assertTrue(service.getAll().stream().anyMatch(e -> e.getName().equals(row)),
+					term + ": the knowledge base carries a row named " + row);
+			}
 			assertTrue(service.findImpliedByQuery("Can I give her " + term.getKey() + "?").isEmpty(),
 				term + " is a name the knowledge base already carries");
 		}

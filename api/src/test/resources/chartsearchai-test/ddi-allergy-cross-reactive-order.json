@@ -1,10 +1,10 @@
 {
  "metadata": {
-  "note": "Verbatim DDInter 2.0 slice for ADR Decision 167, taken unedited from the shipped KB in the shipped file's own order: the rows for Acetylsalicylic acid and Clopidogrel (shipped indices 1112 and 1633), every shipped interaction row falling wholly inside them, and the mechanism entries those rows reference. Both share ATC subgroup B01AC, so a recorded clopidogrel allergy raises a same-class contraindication chip about patient 7's standing aspirin order: a recorded allergy, but not to the drug she is prescribed."
+  "note": "Verbatim DDInter 2.0 slice for ADR Decision 167, taken unedited from the shipped KB in the shipped file's own order: the rows for Acetylsalicylic acid and Diflunisal (shipped indices 1112 and 1786), every shipped interaction row falling wholly inside them, and the mechanism entries those rows reference. Both share ATC subgroup N02BA, salicylic acid and derivatives, so a recorded diflunisal allergy raises a same-class contraindication chip about patient 7's standing aspirin order: a recorded allergy, but not to the drug she is prescribed. Until ADR Decision 283 this slice was aspirin and clopidogrel, whose B01AC names a purpose and no chemistry, so licenses no cross-reactivity."
  },
  "mechanisms": {
-  "2810": {
-   "text": "Clopidogrel has been shown to potentiate the inhibition of platelet aggregation due to aspirin. The safety of chronic administration of aspirin or other salicylates with clopidogrel has not been established.",
+  "2200": {
+   "text": "The combined use of low-dose or high-dose aspirin with other nonsteroidal anti-inflammatory drugs (NSAIDs) may increase the potential for serious gastrointestinal (GI) toxicity, including inflammation, bleeding, ulceration, and perforation. Aspirin at anti-inflammatory dosages or higher may also decrease the plasma concentrations of many NSAIDs. The decreases have ranged from none or small (piroxicam, meloxicam, naproxen, tolmetin) to substantial (flurbiprofen, ibuprofen). However, the therapeutic response does not appear to be affected.",
    "categories": [
     "synergistic_effect"
    ]
@@ -59,6 +59,8 @@
     "Vazalore",
     "Yosprala"
    ],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "103170",
@@ -373,27 +375,24 @@
    ]
   },
   {
-   "id": "DDInter413",
-   "name": "Clopidogrel",
-   "rxcui": "32968",
-   "rxnorm_name": "clopidogrel",
-   "drugbank_id": "DB00758",
+   "id": "DDInter551",
+   "name": "Diflunisal",
+   "rxcui": "3393",
+   "rxnorm_name": "diflunisal",
+   "drugbank_id": "DB00861",
    "atc": [
-    "B01AC04"
+    "N02BA11"
    ],
    "brand_names": [
-    "Plavix"
+    "Dolobid"
    ],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
-     "code": "169229",
-     "uuid": "1304b943-339f-403f-aca9-c47b7779c9c7",
-     "name": "Aspirin / clopidogrel"
-    },
-    {
-     "code": "73602",
-     "uuid": "73602AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-     "name": "Clopidogrel"
+     "code": "74845",
+     "uuid": "74845AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Diflunisal"
     }
    ]
   }
@@ -401,9 +400,9 @@
  "interactions": [
   [
    "DDInter20",
-   "DDInter413",
+   "DDInter551",
    "Moderate",
-   "2810"
+   "2200"
   ]
  ]
 }

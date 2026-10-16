@@ -14,7 +14,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -36,19 +35,36 @@ import java.util.Set;
  * (<em>alcohol withdrawal</em>, <em>alcohol use disorder</em>, <em>alcohol swabs</em>): <em>"Can I give her diazepam for
  * alcohol withdrawal?"</em> asks about diazepam. <b>The residue</b>: such a phrase the lists below do not carry is read as
  * ethanol, and a drink named any other way (<em>beer</em>, <em>wine</em>) is not.
+ *
+ * <p><b>And a drug named by its moiety</b> (ADR Decision 284): <em>lithium</em>, which the knowledge base files only as
+ * Lithium carbonate and keeps out of that row's names because it is also a laboratory test's name, and <em>tenofovir</em>,
+ * whose two forms it carries apart. A term naming several rows names every one of them, and where her orders hold some of
+ * them, those alone ({@code DrugReferenceService.findImpliedByQuestion}).
  */
 final class QuestionSubstanceTerms {
 
-	/** Each term, folded lower, and the display name of the row it names. */
-	private static final Map<String, String> TERMS;
+	/**
+	 * What a term names: the display names of the rows — one, or the forms the knowledge base carries apart, every one of
+	 * which the term names — and the words before or after it that make the phrase another name.
+	 */
+	private static final class Term {
 
-	static {
-		Map<String, String> terms = new LinkedHashMap<String, String>();
-		for (String term : Arrays.asList("alcohol", "alcoholic drink", "alcoholic drinks", "alcoholic beverage",
-			"alcoholic beverages")) {
-			terms.put(term, "Ethanol");
+		final List<String> rowNames;
+
+		final Set<String> namingAnotherBefore;
+
+		final Set<String> namingSomethingElseAfter;
+
+		/** Whether "&lt;term&gt; use disorder" is a condition, where "&lt;term&gt; use" alone is the substance. */
+		final boolean useDisorderIsACondition;
+
+		Term(List<String> rowNames, Set<String> namingAnotherBefore, Set<String> namingSomethingElseAfter,
+				boolean useDisorderIsACondition) {
+			this.rowNames = Collections.unmodifiableList(rowNames);
+			this.namingAnotherBefore = namingAnotherBefore;
+			this.namingSomethingElseAfter = namingSomethingElseAfter;
+			this.useDisorderIsACondition = useDisorderIsACondition;
 		}
-		TERMS = Collections.unmodifiableMap(terms);
 	}
 
 	/** Words before "alcohol" that make the phrase another substance's name. */
@@ -61,37 +77,64 @@ final class QuestionSubstanceTerms {
 		"dependence", "dependency", "abuse", "misuse", "intoxication", "poisoning", "swab", "swabs", "wipe", "wipes", "rub",
 		"rubs", "gel", "gels", "hand", "based", "septal", "induced", "related"));
 
+	/** Each term, folded lower, and what it names. */
+	private static final Map<String, Term> TERMS;
+
+	static {
+		Map<String, Term> terms = new LinkedHashMap<String, Term>();
+		Term ethanol = new Term(Arrays.asList("Ethanol"), NAMING_ANOTHER_SUBSTANCE_BEFORE, NAMING_SOMETHING_ELSE_AFTER, true);
+		for (String term : Arrays.asList("alcohol", "alcoholic drink", "alcoholic drinks", "alcoholic beverage",
+			"alcoholic beverages")) {
+			terms.put(term, ethanol);
+		}
+		// The drug a clinician names by the moiety the knowledge base files only under its salt or its prodrugs (ADR
+		// Decision 284): "lithium", whose one row is Lithium carbonate and which the knowledge base's own curation keeps
+		// out of its names because it is also a laboratory test's; and "tenofovir", whose two forms it carries apart and
+		// names in full — so "tenofovir disoproxil" is that form's own name and not this term.
+		terms.put("lithium", new Term(Arrays.asList("Lithium carbonate"), Collections.<String> emptySet(),
+			Collections.<String> emptySet(), false));
+		terms.put("tenofovir", new Term(Arrays.asList("Tenofovir disoproxil", "Tenofovir alafenamide"),
+			Collections.<String> emptySet(), new HashSet<String>(Arrays.asList("disoproxil", "alafenamide")), false));
+		TERMS = Collections.unmodifiableMap(terms);
+	}
+
 	private QuestionSubstanceTerms() {
 	}
 
-	/** The display names of the rows {@code foldedQuestion} names by a term, where it names the substance. */
-	static Set<String> rowNamesIn(String foldedQuestion) {
-		Set<String> names = new LinkedHashSet<String>();
-		for (Map.Entry<String, String> term : TERMS.entrySet()) {
-			if (!spansOf(foldedQuestion, term.getKey()).isEmpty()) {
-				names.add(term.getValue());
+	/** The display names of the rows {@code foldedQuestion} names by a term, where it names them: one group per term, the
+	 *  rows that one term names. */
+	static List<List<String>> rowNameGroupsIn(String foldedQuestion) {
+		List<List<String>> groups = new ArrayList<List<String>>();
+		for (Map.Entry<String, Term> term : TERMS.entrySet()) {
+			if (!spansOf(foldedQuestion, term.getKey(), term.getValue()).isEmpty() && !groups.contains(term.getValue().rowNames)) {
+				groups.add(term.getValue().rowNames);
 			}
 		}
-		return names;
+		return groups;
 	}
 
 	/** Where {@code foldedQuestion} names the row displayed as {@code rowName} by a term, as {start, end} spans. */
 	static List<int[]> spansNaming(String foldedQuestion, String rowName) {
 		List<int[]> spans = new ArrayList<int[]>();
-		for (Map.Entry<String, String> term : TERMS.entrySet()) {
-			if (term.getValue().equals(rowName)) {
-				spans.addAll(spansOf(foldedQuestion, term.getKey()));
+		for (Map.Entry<String, Term> term : TERMS.entrySet()) {
+			if (term.getValue().rowNames.contains(rowName)) {
+				spans.addAll(spansOf(foldedQuestion, term.getKey(), term.getValue()));
 			}
 		}
 		return spans;
 	}
 
-	/** The terms each spelled exactly as here — for a data guard over the shipped knowledge base. */
-	static Map<String, String> terms() {
-		return TERMS;
+	/** The terms each spelled exactly as here, and the rows each names — for a data guard over the shipped knowledge
+	 *  base. */
+	static Map<String, List<String>> terms() {
+		Map<String, List<String>> terms = new LinkedHashMap<String, List<String>>();
+		for (Map.Entry<String, Term> term : TERMS.entrySet()) {
+			terms.put(term.getKey(), term.getValue().rowNames);
+		}
+		return terms;
 	}
 
-	private static List<int[]> spansOf(String folded, String term) {
+	private static List<int[]> spansOf(String folded, String term, Term naming) {
 		if (folded == null) {
 			return Collections.emptyList();
 		}
@@ -100,10 +143,10 @@ final class QuestionSubstanceTerms {
 			int end = at + term.length();
 			String next = wordAfter(folded, end);
 			// "alcohol use disorder" is a condition, where "alcohol use" alone is the drinking.
-			boolean useDisorder = "use".equals(next)
+			boolean useDisorder = naming.useDisorderIsACondition && "use".equals(next)
 					&& wordAfter(folded, folded.indexOf(next, end) + next.length()).startsWith("disorder");
-			if (!NAMING_ANOTHER_SUBSTANCE_BEFORE.contains(wordBefore(folded, at))
-					&& !NAMING_SOMETHING_ELSE_AFTER.contains(next) && !useDisorder) {
+			if (!naming.namingAnotherBefore.contains(wordBefore(folded, at))
+					&& !naming.namingSomethingElseAfter.contains(next) && !useDisorder) {
 				spans.add(new int[] { at, end });
 			}
 		}

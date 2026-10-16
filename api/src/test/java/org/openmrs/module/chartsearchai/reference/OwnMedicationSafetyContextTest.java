@@ -129,10 +129,48 @@ public class OwnMedicationSafetyContextTest extends BaseModuleContextSensitiveTe
 
 	@Test
 	public void aQuestionWhetherSheIsOnADrugNoneOfHerOrdersCarriesIsNotAnsweredAsHers() throws IOException {
-		// The statement rests on her orders: a drug none of them carries is not called hers, nor answered "no" by the module.
-		assertEquals(null, answer("Is she on celecoxib?", null,
+		// The statement rests on her orders: a drug none of them carries is not called hers. It is said not to be, then
+		// what the check found about it, and no verdict (ADR Decision 287): left to the model, "Is she on efavirenz?" was
+		// answered "The drug can be given, with two cautions".
+		String answer = answer("Is she on celecoxib?", null,
 			Arrays.asList(DrugReferenceTestSupport.activeOrder("order-ibuprofen", "Ibuprofen 400mg"),
-				DrugReferenceTestSupport.activeOrder("order-prednisone", "Prednisone 5mg"))));
+				DrugReferenceTestSupport.activeOrder("order-prednisone", "Prednisone 5mg")));
+
+		assertNotNull(answer, "the module answers");
+		String[] lines = answer.split("\n");
+		assertEquals("Celecoxib is not one of this patient's active medications.", lines[0], "was: " + answer);
+		assertEquals("2 interaction cautions for Celecoxib:", lines[1], "was: " + answer);
+		assertTrue(!answer.contains("can be given") && !answer.contains("No —") && !answer.contains("Yes —"),
+			"no verdict: " + answer);
+	}
+
+	/**
+	 * Over the shipped knowledge base, the two drugs the 3.7.1 standalone's Mogan Kamwara — on lamivudine, nevirapine and
+	 * stavudine — was asked about and is not on: the model answered "Is she on efavirenz?" with "The drug can be given,
+	 * with two cautions" and "Is she taking tenofovir?" with "Tenofovir can be given, with several cautions" (ADR Decision
+	 * 287).
+	 */
+	@Test
+	public void aQuestionWhetherSheIsOnADrugSheIsNotOnSaysSoBeforeWhatTheCheckFound() {
+		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
+			DrugReferenceTestSupport.activeOrder("order-lamivudine", "Lamivudine 150mg"),
+			DrugReferenceTestSupport.activeOrder("order-nevirapine", "Nevirapine 200mg"),
+			DrugReferenceTestSupport.activeOrder("order-stavudine", "Stavudine 30mg"));
+
+		// Efavirenz and nevirapine share J05AG, the non-nucleoside reverse transcriptase inhibitors, folded onto a Moderate
+		// rule: a reason to withhold no rating makes, so the lead states what the check found (ADR Decisions 257, 283).
+		String efavirenz = answerOverTheShippedData("Is she on efavirenz?", orders);
+		assertNotNull(efavirenz, "the module answers");
+		assertTrue(efavirenz.startsWith("Efavirenz is not one of this patient's active medications.\n"
+				+ DrugReferenceInjector.FOUND_LEAD_OPENING + "Efavirenz:\n"
+				+ "Efavirenz interacts with active order Nevirapine — Moderate. Efavirenz is in the same ATC class (J05AG) as "
+				+ "active order Nevirapine — possible duplicate therapy. ["), "was: " + efavirenz);
+
+		String tenofovir = answerOverTheShippedData("Is she taking tenofovir?", orders);
+		assertNotNull(tenofovir, "the module answers");
+		assertTrue(tenofovir.startsWith("Tenofovir is not one of this patient's active medications.\n"
+				+ "4 interaction cautions for Tenofovir:\n"), "was: " + tenofovir);
+		assertTrue(!efavirenz.contains("can be given") && !tenofovir.contains("can be given"), "no clearance");
 	}
 
 	@Test
@@ -466,6 +504,18 @@ public class OwnMedicationSafetyContextTest extends BaseModuleContextSensitiveTe
 		PatientClinicalContext context = DrugReferenceTestSupport.ctx(40, null, new LinkedHashSet<String>(names), null,
 			null, null, orders);
 		return DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.ddiFixtureService(fixture))
+				.injectRecords(DrugReferenceTestSupport.oneRecordChart(), context, question).getModuleAnswer();
+	}
+
+	/** As {@link #answerOver}, over the knowledge base the module ships. */
+	private static String answerOverTheShippedData(String question, List<PatientClinicalContext.ActiveDrugOrder> orders) {
+		List<String> names = new ArrayList<String>();
+		for (PatientClinicalContext.ActiveDrugOrder order : orders) {
+			names.addAll(order.getNames());
+		}
+		PatientClinicalContext context = DrugReferenceTestSupport.ctx(40, null, new LinkedHashSet<String>(names), null,
+			null, null, orders);
+		return DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.shippedServiceWithGroups())
 				.injectRecords(DrugReferenceTestSupport.oneRecordChart(), context, question).getModuleAnswer();
 	}
 

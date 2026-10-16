@@ -332,16 +332,43 @@ public class DrugReferenceService {
 	 * @return {@link #findImpliedByQuery}'s entries, then each row a term names that they do not already hold
 	 */
 	public List<DrugReference> findImpliedByQuestion(String question) {
+		return findImpliedByQuestion(question, null);
+	}
+
+	/**
+	 * As {@link #findImpliedByQuestion(String)}, a term naming several rows — <em>tenofovir</em>, two forms the knowledge
+	 * base carries apart — naming those of them {@code herOrderEntries} (the rows her active orders resolve to) holds,
+	 * where it holds any: "her tenofovir" is the form she is on (ADR Decision 284). {@code null} narrows nothing.
+	 */
+	public List<DrugReference> findImpliedByQuestion(String question, List<DrugReference> herOrderEntries) {
 		List<DrugReference> implied = findImpliedByQuery(question);
-		Set<String> named = question == null ? Collections.<String> emptySet()
-				: QuestionSubstanceTerms.rowNamesIn(DrugReference.foldedLower(question));
-		if (named.isEmpty()) {
+		List<List<String>> groups = question == null ? Collections.<List<String>> emptyList()
+				: QuestionSubstanceTerms.rowNameGroupsIn(DrugReference.foldedLower(question));
+		if (groups.isEmpty()) {
 			return implied;
 		}
+		Set<Object> hers = new HashSet<Object>();
+		if (herOrderEntries != null) {
+			for (DrugReference entry : herOrderEntries) {
+				hers.add(entry.substanceGroupKey());
+			}
+		}
 		List<DrugReference> withTerms = new ArrayList<DrugReference>(implied);
-		for (DrugReference entry : getAll()) {
-			if (named.contains(entry.getName()) && !withTerms.contains(entry)) {
-				withTerms.add(entry);
+		for (List<String> names : groups) {
+			List<DrugReference> rows = new ArrayList<DrugReference>();
+			List<DrugReference> ofHers = new ArrayList<DrugReference>();
+			for (DrugReference entry : getAll()) {
+				if (names.contains(entry.getName())) {
+					rows.add(entry);
+					if (hers.contains(entry.substanceGroupKey())) {
+						ofHers.add(entry);
+					}
+				}
+			}
+			for (DrugReference entry : ofHers.isEmpty() ? rows : ofHers) {
+				if (!withTerms.contains(entry)) {
+					withTerms.add(entry);
+				}
 			}
 		}
 		return withTerms;

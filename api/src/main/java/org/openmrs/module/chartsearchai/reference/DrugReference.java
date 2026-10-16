@@ -2034,7 +2034,9 @@ public class DrugReference {
 	 * than from the three subgroups issue #183 names is the point: issue #161's list was hand-picked
 	 * and its hardening found it incomplete in a way that reproduced the defect it was fixing.
 	 * {@code S01AA}, {@code A07AA} and {@code S02AA} are here because the criterion reaches them, not
-	 * because they were reported.
+	 * because they were reported. {@code B01AC} joined under ADR Decision 283, re-read by the same
+	 * criterion: "platelet aggregation inhibitors" names an effect members acting on at least five
+	 * different targets share.
 	 *
 	 * <p><b>Why this is a per-ARM rule and not another veto.</b> The alternative put to this work was
 	 * that ATC classifies purpose and route rather than chemistry, so it should license duplicate
@@ -2056,7 +2058,7 @@ public class DrugReference {
 			.unmodifiableList(Arrays.asList(
 					"A01AB", "A02BX", "A03AX", "A03CC", "A03DC", "A03EA", "A03ED", "A04AD", "A05AB",
 					"A05AX", "A06AB", "A06AG", "A06AX", "A07AA", "A07DA", "A07EB", "A07XA", "A10XX",
-					"A11HA", "B01AX", "B02BX", "B03XA", "B05BA", "B05BB", "B05BC", "B05CA", "B05CB",
+					"A11HA", "B01AC", "B01AX", "B02BX", "B03XA", "B05BA", "B05BB", "B05BC", "B05CA", "B05CB",
 					"B05XA", "B06AC", "C01EB", "C02KN", "C02KX", "C02LX", "C05AB", "C05AE", "C05XX",
 					"C09XX", "D01AA", "D01BA", "D05BX", "D06BB", "D09AA", "D10AB", "D10AF", "D11AA",
 					"D11AH", "G01AA", "G01BA", "G01BD", "G03AD", "G03XX", "G04BD", "G04BE", "G04CX",
@@ -2072,8 +2074,10 @@ public class DrugReference {
 	 * @return whether {@code code} — a full ATC code or any prefix of one, normalized as
 	 *         {@link #isUnclassifyingAtcCode} normalizes its argument — asserts no chemistry: either it
 	 *         asserts nothing at all, or it sits in one of the {@link #PURPOSE_ONLY_ATC_GROUPS} and so
-	 *         asserts only a purpose. This is the question the CROSS-REACTIVITY arm asks; the
-	 *         duplicate-therapy arm asks {@link #isUnclassifyingAtcCode}, which is strictly weaker.
+	 *         asserts only a purpose. This is the question the CROSS-REACTIVITY arm asks, and since ADR
+	 *         Decision 283 the one a duplicate-therapy relationship folded onto a rated rule is graded
+	 *         by; which subgroups that arm may name at all is {@link #isUnclassifyingAtcCode}'s question,
+	 *         which is strictly weaker.
 	 *         <p>Subsuming its sibling is a contract and not a convenience: a group that asserts
 	 *         nothing cannot assert a purpose either, so refusing it for duplicate therapy while
 	 *         admitting it for cross-reactivity would have the two arms disagree about which claim is

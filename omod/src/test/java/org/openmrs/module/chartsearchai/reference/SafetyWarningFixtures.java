@@ -104,7 +104,7 @@ public final class SafetyWarningFixtures {
 	 */
 	public static SafetyWarning ruleInteraction(String drug, String detail, String severity, String partner,
 			List<SafetyWarning.ChartOrderBridge> bridges, boolean aboutACurrentMedication) {
-		return SafetyWarning.interaction(drug, detail, severity, false, null, null, bridges,
+		return SafetyWarning.interaction(drug, detail, severity, SafetyWarning.FoldedRelationship.NONE, null, null, bridges,
 			aboutACurrentMedication, Collections.singletonList(partner));
 	}
 

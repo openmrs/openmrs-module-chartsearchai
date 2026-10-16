@@ -2421,12 +2421,11 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 			// a dose: the injected reference record addresses it, the findings do not
 			"Can I give her ibuprofen 400mg?",
 			"What dose of ibuprofen can I give her?",
-			// current use, not a proposal
-			"Does she take ibuprofen?",
+			// current use, not a proposal — of a drug she does not take, answered by the module since ADR Decision 287
+			// (whetherSheTakesADrugSheDoesNotIsAnsweredThatSheDoesNotThenWithTheFindings)
 			// two drugs: each would need its own answer — which, neither of them hers, the module now gives each
 			// (twoDrugsProposedTogetherAreEachAnsweredAsTheirOwnProposal, ADR Decision 222)
 			// no proposal at all, in words a proposal is made of
-			"Is she on ibuprofen?",
 			"Give her ibuprofen?",
 			// a proposal cue beside a concern or a negation: "No" would answer it backwards
 			"Can I give her ibuprofen, or is it risky?",
@@ -2457,6 +2456,25 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 			ChartAnswer answer = serviceWith(provider).search(patient, question);
 			assertEquals(1, provider.calls, "the model must be asked: " + question);
 			assertFalse(answer.isAnsweredByTheModule(), question);
+		}
+	}
+
+	/**
+	 * Whether she takes a drug she does not take is answered by the module: that she does not, then what the check found
+	 * under a lead that is neither "Yes" nor "No" (ADR Decision 287). Left to the model, "Is she on efavirenz?" was
+	 * answered "The drug can be given, with two cautions" on the 3.7.1 standalone.
+	 */
+	@Test
+	public void whetherSheTakesADrugSheDoesNotIsAnsweredThatSheDoesNotThenWithTheFindings() {
+		answerFromFindings(true);
+		for (String question : new String[] { "Does she take ibuprofen?", "Is she on ibuprofen?" }) {
+			RecordingProvider provider = new RecordingProvider();
+			ChartAnswer answer = serviceWith(provider).search(patient, question);
+			assertEquals(0, provider.calls, question);
+			assertTrue(answer.isAnsweredByTheModule(), question);
+			assertTrue(answer.getAnswer().startsWith("Ibuprofen is not one of this patient's active medications.\n"
+					+ DrugReferenceInjector.NEUTRAL_WITHHOLD_LEAD_OPENING + "Ibuprofen" + DrugReferenceInjector.WITHHOLD_LEAD_CLOSING
+					+ "\n"), question + " — " + answer.getAnswer());
 		}
 	}
 
@@ -2830,7 +2848,9 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	public void aDrugNameTheDataDoesNotRecogniseIsSaidToBeUnrecognisedWithItsNearestNames() {
 		String[][] cases = {
 			{ "Can I give her rifampcin?", "\"rifampcin\"", "Did you mean Rifampicin" },
-			{ "Can I give her tenofovir?", "\"tenofovir\"", "Tenofovir disoproxil" },
+			// The insulins the data carries apart, none named "insulin" (tenofovir and lithium are named since ADR
+			// Decision 284)
+			{ "Can I give her insulin?", "\"insulin\"", "Did you mean Insulin" },
 			{ "Does zorblatine interact with any of her medications?", "\"zorblatine\"", null },
 			// "ddI", as the clinician writes it: the knowledge base leaves didanosine's abbreviation out on purpose
 			{ "Can I give her ddI?", "\"ddI\"", null } };
@@ -2847,8 +2867,10 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 			}
 			assertTrue(answer.getSafetyWarnings().isEmpty(), "no check ran, so no chip: " + answer.getSafetyWarnings());
 		}
-		ChartAnswer both = serviceWith(new RecordingProvider(), shipped()).search(patient, "Can I give her tenofovir?");
-		assertTrue(both.getAnswer().contains("Tenofovir alafenamide"), "every substance the word begins: " + both.getAnswer());
+		ChartAnswer several = serviceWith(new RecordingProvider(), shipped()).search(patient, "Can I give her insulin?");
+		assertTrue(several.getAnswer().contains("Did you mean Insulin aspart")
+				&& several.getAnswer().contains(", Insulin degludec, Insulin detemir or Insulin glargine? Ask again with the name "
+						+ "it carries."), "every substance the word begins, up to four: " + several.getAnswer());
 	}
 
 	/**
@@ -2905,7 +2927,7 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 				+ "no dosing."), answer.getAnswer());
 
 		RecordingProvider noDose = new RecordingProvider();
-		ChartAnswer without = serviceWith(noDose).search(patient, "Does she take ibuprofen?");
+		ChartAnswer without = serviceWith(noDose).search(patient, "Is ibuprofen safe for her kidneys?");
 		assertEquals(1, noDose.calls, "precondition: the model answers it too");
 		assertFalse(without.getAnswer().contains(DoseStatement.NOT_CHECKED), "no dose, no sentence: " + without.getAnswer());
 	}

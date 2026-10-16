@@ -56,6 +56,11 @@ public class CombinationNamedAsOneDrugTest extends BaseModuleContextSensitiveTes
 				+ java.util.regex.Pattern.quote(DrugReferenceInjector.TWO_OF_HER_OWN_LEAD)), "was: " + answer);
 		assertTrue(answer.contains(" — Minor."), "the pair's rating is stated: " + answer);
 		assertTrue(!answer.contains("No —") && !answer.contains("Yes —"), "never a verdict: " + answer);
+		// Her lopinavir is her lopinavir/ritonavir order, and what relates the two orders is stated whichever side states
+		// it (ADR Decision 285): on the 3.7.1 standalone the answer left out the two Moderate findings about its ritonavir,
+		// which the chips beside it showed.
+		assertTrue(answer.contains("\nSulfamethoxazole interacts with active order Ritonavir — Moderate."), "was: " + answer);
+		assertTrue(answer.contains("\nTrimethoprim interacts with active order Ritonavir — Moderate."), "was: " + answer);
 	}
 
 	@Test

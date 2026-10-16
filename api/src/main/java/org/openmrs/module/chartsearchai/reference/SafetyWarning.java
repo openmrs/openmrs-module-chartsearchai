@@ -100,7 +100,23 @@ public class SafetyWarning {
 
 	private final String severity;
 
-	private final boolean unratedRelationship;
+	private final FoldedRelationship unratedRelationship;
+
+	/**
+	 * What a class relationship folded onto a rated rule says of the two drugs (ADR Decision 283) — {@link
+	 * #carriesUnratedRelationship()} is whether one is folded on at all.
+	 */
+	enum FoldedRelationship {
+		/** Nothing is folded on. */
+		NONE,
+		/** Shared ATC subgroups every one of which names only what the two are FOR ({@code
+		 *  DrugReference.isPurposeOnlyAtcCode}), and no shared curated group: it adds no strength to the rule's rating, as it
+		 *  is a caution alone (ADR Decision 86). */
+		PURPOSE,
+		/** A curated cross-reactivity group, or a shared ATC subgroup naming a structure or a target: what the two ARE, a
+		 *  reason to withhold beside any rating. */
+		WHAT_THE_DRUGS_ARE
+	}
 
 	private final boolean uncorroboratedChartMatch;
 
@@ -221,7 +237,7 @@ public class SafetyWarning {
 	 * makes of {@link #isAboutACurrentMedication()}.
 	 */
 	public SafetyWarning(String type, String drug, String detail, String severity) {
-		this(type, drug, detail, severity, false, false, null, null,
+		this(type, drug, detail, severity, FoldedRelationship.NONE, false, null, null,
 				Collections.<ChartOrderBridge> emptyList(), false);
 	}
 
@@ -251,7 +267,7 @@ public class SafetyWarning {
 	 */
 	public SafetyWarning(String type, String drug, String detail, String severity,
 			List<ChartOrderBridge> chartOrderBridges) {
-		this(type, drug, detail, severity, false, false, null, null, chartOrderBridges, false);
+		this(type, drug, detail, severity, FoldedRelationship.NONE, false, null, null, chartOrderBridges, false);
 	}
 
 	/**
@@ -284,7 +300,7 @@ public class SafetyWarning {
 	static SafetyWarning contraindication(String drug, String detail,
 			boolean uncorroboratedChartMatch, boolean aboutACurrentMedication,
 			Collection<String> chartRecords) {
-		return new SafetyWarning(TYPE_CONTRAINDICATION, drug, detail, null, false,
+		return new SafetyWarning(TYPE_CONTRAINDICATION, drug, detail, null, FoldedRelationship.NONE,
 				uncorroboratedChartMatch, null, null, Collections.<ChartOrderBridge> emptyList(),
 				aboutACurrentMedication, chartRecords);
 	}
@@ -317,7 +333,7 @@ public class SafetyWarning {
 	 */
 	static SafetyWarning recordedAllergenContraindication(String drug, String detail,
 			boolean aboutACurrentMedication, Collection<String> chartRecords, AllergyToItsDrug allergyToItsDrug) {
-		return new SafetyWarning(TYPE_CONTRAINDICATION, drug, detail, null, false, false, null, null,
+		return new SafetyWarning(TYPE_CONTRAINDICATION, drug, detail, null, FoldedRelationship.NONE, false, null, null,
 				Collections.<ChartOrderBridge> emptyList(), aboutACurrentMedication, chartRecords, false, null, false,
 				null, null, false, null, null, null, null, false, null, null, null, null, false, false, null,
 				allergyToItsDrug, false);
@@ -334,7 +350,7 @@ public class SafetyWarning {
 	 */
 	static SafetyWarning conditionMediated(String drug, String detail, List<ChartOrderBridge> bridges,
 			List<String> namedPartners, boolean aboutACurrentMedication) {
-		return new SafetyWarning(TYPE_CONDITION_MEDIATED, drug, detail, null, false, false, null, null,
+		return new SafetyWarning(TYPE_CONDITION_MEDIATED, drug, detail, null, FoldedRelationship.NONE, false, null, null,
 				bridges, aboutACurrentMedication, null, false, namedPartners);
 	}
 
@@ -356,7 +372,7 @@ public class SafetyWarning {
 	 *        {@link #isAboutACurrentMedication()} (issue #402)
 	 */
 	static SafetyWarning classOnlyInteraction(String drug, String detail, boolean aboutACurrentMedication) {
-		return new SafetyWarning(TYPE_INTERACTION, drug, detail, null, false, false, null, null,
+		return new SafetyWarning(TYPE_INTERACTION, drug, detail, null, FoldedRelationship.NONE, false, null, null,
 				Collections.<ChartOrderBridge> emptyList(), aboutACurrentMedication, null, true);
 	}
 
@@ -384,7 +400,7 @@ public class SafetyWarning {
 	 */
 	static SafetyWarning substanceInSeveralActiveOrders(String drug, String detail, List<String> orders,
 			boolean aboutACurrentMedication, PatientChartSerializer.AlreadyOrderedDrug alreadyOrdered) {
-		return new SafetyWarning(TYPE_INTERACTION, drug, detail, null, false, false, null, null,
+		return new SafetyWarning(TYPE_INTERACTION, drug, detail, null, FoldedRelationship.NONE, false, null, null,
 				Collections.<ChartOrderBridge> emptyList(), aboutACurrentMedication, null, false, orders, false,
 				null, null, false, null, null, null, null, false, null, null, null, alreadyOrdered, false, false, null,
 				AllergyToItsDrug.NONE, false);
@@ -405,7 +421,7 @@ public class SafetyWarning {
 	 * @param orders the displays of the orders the detail names — {@link #namedPartners()}
 	 */
 	static SafetyWarning ordersSharingASubstance(String drug, String detail, List<String> orders) {
-		return new SafetyWarning(TYPE_INTERACTION, drug, detail, null, false, false, null, null,
+		return new SafetyWarning(TYPE_INTERACTION, drug, detail, null, FoldedRelationship.NONE, false, null, null,
 				Collections.<ChartOrderBridge> emptyList(), true, null, false, orders, false, null, null, true,
 				null, null);
 	}
@@ -422,12 +438,12 @@ public class SafetyWarning {
 	 *        referent for the drug in play
 	 */
 	static SafetyWarning overdose(String drug, String detail, boolean aboutACurrentMedication) {
-		return new SafetyWarning(TYPE_OVERDOSE, drug, detail, null, false, false, null, null,
+		return new SafetyWarning(TYPE_OVERDOSE, drug, detail, null, FoldedRelationship.NONE, false, null, null,
 				Collections.<ChartOrderBridge> emptyList(), aboutACurrentMedication);
 	}
 
 	private SafetyWarning(String type, String drug, String detail, String severity,
-			boolean unratedRelationship, boolean uncorroboratedChartMatch,
+			FoldedRelationship unratedRelationship, boolean uncorroboratedChartMatch,
 			DrugReference.Interaction reconciledRule, String reconciledNoteName,
 			List<ChartOrderBridge> chartOrderBridges, boolean aboutACurrentMedication) {
 		this(type, drug, detail, severity, unratedRelationship, uncorroboratedChartMatch, reconciledRule,
@@ -435,7 +451,7 @@ public class SafetyWarning {
 	}
 
 	private SafetyWarning(String type, String drug, String detail, String severity,
-			boolean unratedRelationship, boolean uncorroboratedChartMatch,
+			FoldedRelationship unratedRelationship, boolean uncorroboratedChartMatch,
 			DrugReference.Interaction reconciledRule, String reconciledNoteName,
 			List<ChartOrderBridge> chartOrderBridges, boolean aboutACurrentMedication,
 			Collection<String> chartRecords) {
@@ -444,7 +460,7 @@ public class SafetyWarning {
 	}
 
 	private SafetyWarning(String type, String drug, String detail, String severity,
-			boolean unratedRelationship, boolean uncorroboratedChartMatch,
+			FoldedRelationship unratedRelationship, boolean uncorroboratedChartMatch,
 			DrugReference.Interaction reconciledRule, String reconciledNoteName,
 			List<ChartOrderBridge> chartOrderBridges, boolean aboutACurrentMedication,
 			Collection<String> chartRecords, boolean restsOnSharedClassificationAlone) {
@@ -454,7 +470,7 @@ public class SafetyWarning {
 	}
 
 	private SafetyWarning(String type, String drug, String detail, String severity,
-			boolean unratedRelationship, boolean uncorroboratedChartMatch,
+			FoldedRelationship unratedRelationship, boolean uncorroboratedChartMatch,
 			DrugReference.Interaction reconciledRule, String reconciledNoteName,
 			List<ChartOrderBridge> chartOrderBridges, boolean aboutACurrentMedication,
 			Collection<String> chartRecords, boolean restsOnSharedClassificationAlone,
@@ -465,7 +481,7 @@ public class SafetyWarning {
 	}
 
 	private SafetyWarning(String type, String drug, String detail, String severity,
-			boolean unratedRelationship, boolean uncorroboratedChartMatch,
+			FoldedRelationship unratedRelationship, boolean uncorroboratedChartMatch,
 			DrugReference.Interaction reconciledRule, String reconciledNoteName,
 			List<ChartOrderBridge> chartOrderBridges, boolean aboutACurrentMedication,
 			Collection<String> chartRecords, boolean restsOnSharedClassificationAlone,
@@ -479,7 +495,7 @@ public class SafetyWarning {
 	}
 
 	private SafetyWarning(String type, String drug, String detail, String severity,
-			boolean unratedRelationship, boolean uncorroboratedChartMatch,
+			FoldedRelationship unratedRelationship, boolean uncorroboratedChartMatch,
 			DrugReference.Interaction reconciledRule, String reconciledNoteName,
 			List<ChartOrderBridge> chartOrderBridges, boolean aboutACurrentMedication,
 			Collection<String> chartRecords, boolean restsOnSharedClassificationAlone,
@@ -616,7 +632,7 @@ public class SafetyWarning {
 	// them since — issue #349's bridge, issue #348's referent. Read the @param list rather than any
 	// count in the prose; a count here has already gone stale once.
 	static SafetyWarning interaction(String drug, String detail, String severity,
-			boolean unratedRelationship, DrugReference.Interaction reconciledRule,
+			FoldedRelationship unratedRelationship, DrugReference.Interaction reconciledRule,
 			String reconciledNoteName, List<ChartOrderBridge> chartOrderBridges,
 			boolean aboutACurrentMedication) {
 		return interaction(drug, detail, severity, unratedRelationship, reconciledRule,
@@ -630,7 +646,7 @@ public class SafetyWarning {
 	 * kind": see {@link #namedPartners()}.
 	 */
 	static SafetyWarning interaction(String drug, String detail, String severity,
-			boolean unratedRelationship, DrugReference.Interaction reconciledRule,
+			FoldedRelationship unratedRelationship, DrugReference.Interaction reconciledRule,
 			String reconciledNoteName, List<ChartOrderBridge> chartOrderBridges,
 			boolean aboutACurrentMedication, List<String> namedPartners) {
 		return new SafetyWarning(TYPE_INTERACTION, drug, detail, severity, unratedRelationship, false,
@@ -865,7 +881,13 @@ public class SafetyWarning {
 	 * <p>Not serialized; the wire shape is unchanged.
 	 */
 	boolean carriesUnratedRelationship() {
-		return unratedRelationship;
+		return unratedRelationship != FoldedRelationship.NONE;
+	}
+
+	/** Whether the class relationship folded onto this chip says what the two drugs ARE — {@link
+	 *  FoldedRelationship#WHAT_THE_DRUGS_ARE}, the fold that is a reason to withhold (ADR Decision 283). */
+	boolean foldedRelationshipSaysWhatTheDrugsAre() {
+		return unratedRelationship == FoldedRelationship.WHAT_THE_DRUGS_ARE;
 	}
 
 	/**

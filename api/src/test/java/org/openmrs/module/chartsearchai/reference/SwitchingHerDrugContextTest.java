@@ -80,17 +80,32 @@ public class SwitchingHerDrugContextTest extends BaseModuleContextSensitiveTest 
 	/**
 	 * A switch to a name the data does not recognise says no check ran (ADR Decision 261). On the 3.7.1 standalone Mogan
 	 * Kamwara's "Can I replace her stavudine with tenofovir?" was answered by the model "The records do not address
-	 * tenofovir.", where a proposal of it says so and names what the data carries.
+	 * tenofovir.", where a proposal of it says so and names what the data carries. Tenofovir is a name the module reads
+	 * since ADR Decision 284; a misspelt zidovudine is still none.
 	 */
 	@Test
 	public void aSwitchToANameTheDataDoesNotRecogniseSaysNoCheckRan() {
-		for (String question : Arrays.asList("Can I replace his stavudine with tenofovir?", "Can I switch his stavudine to tenofovir?",
-			"Can I give him tenofovir instead of stavudine?")) {
+		for (String question : Arrays.asList("Can I replace his stavudine with zidovudin?", "Can I switch his stavudine to zidovudin?",
+			"Can I give him zidovudin instead of stavudine?")) {
 			String answer = ask(question).getModuleAnswer();
-			assertTrue(answer != null && answer.startsWith("No interaction check was run: \"tenofovir\" is not a drug name the "
+			assertTrue(answer != null && answer.startsWith("No interaction check was run: \"zidovudin\" is not a drug name the "
 					+ "interaction data recognises."), question + " was: " + answer);
-			assertTrue(answer.contains("Tenofovir disoproxil"), question + " names what the data carries: " + answer);
+			assertTrue(answer.contains("Did you mean Zidovudine"), question + " names what the data carries: " + answer);
 		}
+	}
+
+	/**
+	 * A switch to tenofovir, a name for both of its forms since ADR Decision 284, is answered for "Tenofovir" as the
+	 * question names it (ADR Decision 282's lead): on the 3.7.1 standalone "Can I replace her stavudine with tenofovir?" read
+	 * "4 interaction cautions for Tenofovir disoproxil:" over lines about both forms.
+	 */
+	@Test
+	public void aSwitchToTenofovirIsAnsweredForTenofovir() {
+		String answer = ask("Can I replace his stavudine with tenofovir?").getModuleAnswer();
+		assertTrue(answer != null && answer.startsWith("Stavudine is one of this patient's active medications, and this switch "
+				+ "replaces it.\n4 interaction cautions for Tenofovir:\n"), "was: " + answer);
+		assertTrue(answer.contains("\nTenofovir alafenamide is in the same ATC class (J05AF) as active order Lamivudine"),
+			"both forms are checked: " + answer);
 	}
 
 	@Test

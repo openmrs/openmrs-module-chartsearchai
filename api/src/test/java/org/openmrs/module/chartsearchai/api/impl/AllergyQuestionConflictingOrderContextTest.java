@@ -57,7 +57,8 @@ public class AllergyQuestionConflictingOrderContextTest extends BaseModuleContex
 
 	private static final String SLICE = "chartsearchai-test/ddi-listed-medications-proposal.json";
 
-	/** Aspirin and clopidogrel, which share ATC subgroup B01AC — see the slice's own note. */
+	/** Aspirin and diflunisal, which share ATC subgroup N02BA, salicylic acid and derivatives — see the slice's own note
+	 *  (it was aspirin and clopidogrel until ADR Decision 283 read their B01AC as naming a purpose). */
 	private static final String CROSS_REACTIVE_SLICE = "chartsearchai-test/ddi-allergy-cross-reactive-order.json";
 
 	/** WEIGHT, a concept no drug resolves from, standing in for "other non-coded" for a second free-text allergy. */
@@ -285,13 +286,13 @@ public class AllergyQuestionConflictingOrderContextTest extends BaseModuleContex
 	 */
 	@Test
 	public void search_aCrossReactivityFindingNamesTheAllergysRecordedSeverity() throws IOException {
-		recordInsteadOfAspirin("Clopidogrel", "allergy.concept.severity.severe");
+		recordInsteadOfAspirin("Diflunisal", "allergy.concept.severity.severe");
 
-		ChartAnswer answer = serviceAnswering("Yes — the patient has a recorded allergy to Clopidogrel [1].",
+		ChartAnswer answer = serviceAnswering("Yes — the patient has a recorded allergy to Diflunisal [1].",
 				CROSS_REACTIVE_SLICE).search(patient, ALLERGY_QUESTION);
 
 		SafetyWarning chip = theAspirinChip(answer);
-		assertEquals("Acetylsalicylic acid (aspirin) is in the same ATC class (B01AC) as the patient's severe allergy to Clopidogrel"
+		assertEquals("Acetylsalicylic acid (aspirin) is in the same ATC class (N02BA) as the patient's severe allergy to Diflunisal"
 				+ " — possible cross-reactivity", chip.getDetail());
 	}
 
@@ -318,17 +319,17 @@ public class AllergyQuestionConflictingOrderContextTest extends BaseModuleContex
 	@Test
 	public void search_aCrossReactiveAllergyAloneIsLeftToItsChip() throws IOException {
 		Context.getPatientService().voidAllergy(Context.getPatientService().getAllergyByUuid(aspirinAllergyUuid),
-				"this case's only allergy is clopidogrel");
+				"this case's only allergy is diflunisal");
 		Context.flushSession();
 		Context.clearSession();
 		patient = Context.getPatientService().getPatient(7);
-		DrugReferenceTestSupport.recordFreeTextAllergy(patient, SECOND_PLACEHOLDER_CONCEPT, "Clopidogrel");
-		String modelAnswer = "Yes — the patient has a recorded allergy to Clopidogrel [1].";
+		DrugReferenceTestSupport.recordFreeTextAllergy(patient, SECOND_PLACEHOLDER_CONCEPT, "Diflunisal");
+		String modelAnswer = "Yes — the patient has a recorded allergy to Diflunisal [1].";
 
 		ChartAnswer answer = serviceAnswering(modelAnswer, CROSS_REACTIVE_SLICE).search(patient, ALLERGY_QUESTION);
 
 		SafetyWarning chip = theAspirinChip(answer);
-		assertTrue(chip.getDetail().contains("same ATC class") && chip.getDetail().contains("Clopidogrel"),
+		assertTrue(chip.getDetail().contains("same ATC class") && chip.getDetail().contains("Diflunisal"),
 				"precondition: the chip is the cross-reactivity finding, was: " + chip.getDetail());
 		assertEquals(modelAnswer, answer.getAnswer(), "nothing is appended to the allergy list");
 		assertFalse(chip.isStatedInTheAnswer(), "the finding stays a chip the clinician has not read in the answer");
@@ -345,7 +346,7 @@ public class AllergyQuestionConflictingOrderContextTest extends BaseModuleContex
 	 */
 	@Test
 	public void search_anOrderWithACrossReactiveFindingBesideItsOwnAllergyStatesOnlyTheOwnAllergy() throws IOException {
-		DrugReferenceTestSupport.recordFreeTextAllergy(patient, SECOND_PLACEHOLDER_CONCEPT, "Clopidogrel");
+		DrugReferenceTestSupport.recordFreeTextAllergy(patient, SECOND_PLACEHOLDER_CONCEPT, "Diflunisal");
 
 		ChartAnswer answer = serviceAnswering(MODEL_ANSWER, CROSS_REACTIVE_SLICE).search(patient, ALLERGY_QUESTION);
 
@@ -358,7 +359,7 @@ public class AllergyQuestionConflictingOrderContextTest extends BaseModuleContex
 				own = chip;
 			}
 		}
-		assertEquals(2, answer.getSafetyWarnings().size(), "precondition: her own aspirin allergy and the clopidogrel "
+		assertEquals(2, answer.getSafetyWarnings().size(), "precondition: her own aspirin allergy and the diflunisal "
 				+ "cross-reactivity both raise a chip, chips were: " + answer.getSafetyWarnings());
 		assertNotNull(own, "precondition: one chip is her allergy to aspirin itself");
 		assertNotNull(crossReactive, "precondition: one chip is the cross-reactivity");
@@ -519,7 +520,7 @@ public class AllergyQuestionConflictingOrderContextTest extends BaseModuleContex
 	 */
 	@Test
 	public void search_anAnswerNamingAnOrderDrawsItsCrossReactivityFindingApartBesideTheStatement() throws IOException {
-		DrugReferenceTestSupport.recordFreeTextAllergy(patient, SECOND_PLACEHOLDER_CONCEPT, "Clopidogrel");
+		DrugReferenceTestSupport.recordFreeTextAllergy(patient, SECOND_PLACEHOLDER_CONCEPT, "Diflunisal");
 		int number = theAspirinOrderRecordNumber(CROSS_REACTIVE_SLICE);
 		String modelAnswer = "No — her one antiplatelet is aspirin [" + number + "].";
 
@@ -534,7 +535,7 @@ public class AllergyQuestionConflictingOrderContextTest extends BaseModuleContex
 				own = chip;
 			}
 		}
-		assertEquals(2, answer.getSafetyWarnings().size(), "precondition: her own aspirin allergy and the clopidogrel "
+		assertEquals(2, answer.getSafetyWarnings().size(), "precondition: her own aspirin allergy and the diflunisal "
 				+ "cross-reactivity both raise a chip, chips were: " + answer.getSafetyWarnings());
 		assertNotNull(own, "precondition: one chip is her allergy to aspirin itself");
 		assertNotNull(crossReactive, "precondition: one chip is the cross-reactivity");
@@ -556,17 +557,17 @@ public class AllergyQuestionConflictingOrderContextTest extends BaseModuleContex
 	public void search_anAnswerNamingAnOrderOnlyACrossReactivityFindingIsAboutStatesNothing() throws IOException {
 		int number = theAspirinOrderRecordNumber(CROSS_REACTIVE_SLICE);
 		Context.getPatientService().voidAllergy(Context.getPatientService().getAllergyByUuid(aspirinAllergyUuid),
-				"this case's only allergy is clopidogrel");
+				"this case's only allergy is diflunisal");
 		Context.flushSession();
 		Context.clearSession();
 		patient = Context.getPatientService().getPatient(7);
-		DrugReferenceTestSupport.recordFreeTextAllergy(patient, SECOND_PLACEHOLDER_CONCEPT, "Clopidogrel");
+		DrugReferenceTestSupport.recordFreeTextAllergy(patient, SECOND_PLACEHOLDER_CONCEPT, "Diflunisal");
 		String modelAnswer = "No — her one antiplatelet is aspirin [" + number + "].";
 
 		ChartAnswer answer = serviceAnswering(modelAnswer, CROSS_REACTIVE_SLICE).search(patient, MEDICATION_QUESTION);
 
 		SafetyWarning chip = theAspirinChip(answer);
-		assertTrue(chip.getDetail().contains("same ATC class") && chip.getDetail().contains("Clopidogrel"),
+		assertTrue(chip.getDetail().contains("same ATC class") && chip.getDetail().contains("Diflunisal"),
 				"precondition: the chip is the cross-reactivity finding, was: " + chip.getDetail());
 		assertEquals(number, theOrderRecord(answer, Context.getOrderService().getOrder(111).getUuid()).getIndex(),
 				"precondition: the same chart numbers the order alike");
@@ -582,7 +583,7 @@ public class AllergyQuestionConflictingOrderContextTest extends BaseModuleContex
 	 */
 	@Test
 	public void search_anAllergyAnswersCrossReactivityFindingKeepsDecision188sLine() throws IOException {
-		DrugReferenceTestSupport.recordFreeTextAllergy(patient, SECOND_PLACEHOLDER_CONCEPT, "Clopidogrel");
+		DrugReferenceTestSupport.recordFreeTextAllergy(patient, SECOND_PLACEHOLDER_CONCEPT, "Diflunisal");
 
 		ChartAnswer answer = serviceAnswering(MODEL_ANSWER, CROSS_REACTIVE_SLICE).search(patient, ALLERGY_QUESTION);
 
@@ -592,7 +593,7 @@ public class AllergyQuestionConflictingOrderContextTest extends BaseModuleContex
 				crossReactive = chip;
 			}
 		}
-		assertNotNull(crossReactive, "precondition: the clopidogrel allergy raises a cross-reactivity chip, chips were: "
+		assertNotNull(crossReactive, "precondition: the diflunisal allergy raises a cross-reactivity chip, chips were: "
 				+ answer.getSafetyWarnings());
 		assertTrue(crossReactive.isAboutAnotherOfHerMedications(), "drawn apart as Decision 188 draws it");
 		assertFalse(crossReactive.isCrossReactivityBesideHerStatedConflicts(), "and not under the medication answer's key");

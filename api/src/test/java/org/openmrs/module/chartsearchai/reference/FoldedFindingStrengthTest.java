@@ -14,6 +14,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.LinkedHashSet;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
@@ -158,6 +160,76 @@ public class FoldedFindingStrengthTest {
 						+ finding);
 		assertFalse(finding.contains(CAUTION),
 				"and it must not read as a mere caution: " + finding);
+	}
+
+	/**
+	 * A fold whose class relationship names only what the two drugs are FOR is the caution its rating is (ADR Decision
+	 * 283), over the shipped knowledge base: on the 3.7.1 standalone "Can I give her clopidogrel?" of a patient on aspirin
+	 * read "No — Clopidogrel should not be given: it interacts with active order Acetylsalicylic acid (aspirin) — Moderate,
+	 * and Clopidogrel is in the same ATC class (B01AC) …" — dual antiplatelet therapy, given together on purpose, refused on
+	 * a rating DDInter defines as a caution and a subgroup, platelet aggregation inhibitors, that names an effect members
+	 * acting on at least five different targets share.
+	 */
+	@Test
+	public void aRatedPairSharingOnlyAPurposeSubgroupIsTheCautionItsRatingIs() {
+		String folded = foldedOverTheShippedData("Can I give her clopidogrel?", "Aspirin", "B01AC06", "same ATC class (B01AC)");
+		assertTrue(folded.contains("— Moderate."), "precondition: the rule is rated Moderate: " + folded);
+		assertTrue(folded.contains(CAUTION), "was: " + folded);
+		assertFalse(folded.contains(WITHHOLD), "was: " + folded);
+	}
+
+	/**
+	 * And one whose class relationship names what the two drugs ARE still withholds beside a Moderate rating, over the same
+	 * data: two NSAIDs of one chemical family. Grading every fold by its rating alone was tried in ADR Decision 283's first
+	 * draft, and the model then answered "Can I add naproxen to her ibuprofen?" with "Naproxen can be added to Ibuprofen,
+	 * with one caution".
+	 */
+	@Test
+	public void aRatedPairSharingAStructuralSubgroupStillWithholds() {
+		String folded = foldedOverTheShippedData("Can I give her naproxen?", "Ibuprofen", "M01AE01", "same ATC class (M01AE)");
+		assertTrue(folded.contains("— Moderate."), "precondition: the rule is rated Moderate: " + folded);
+		assertTrue(folded.contains(WITHHOLD), "was: " + folded);
+	}
+
+	/**
+	 * And where the one subgroup a pair shares names only what they are FOR while a curated cross-reactivity group says what
+	 * they ARE, the fold still withholds (ADR Decision 283), over the same data: ibuprofen and diclofenac, two NSAIDs of
+	 * different chemical families, share only M02AA, anti-inflammatory preparations for topical use. Graded by that
+	 * subgroup alone the fold was a caution, and on the 3.7.1 standalone the model answered "Can I continue her Advil?", of a
+	 * patient also on diclofenac, with "Ibuprofen can be continued, with several cautions". Her orders carry no ATC code
+	 * there, as here, so the codes the pair is compared on are the knowledge base's.
+	 */
+	@Test
+	public void aRatedPairSharingOnlyAPurposeSubgroupButACuratedGroupStillWithholds() {
+		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
+			DrugReferenceTestSupport.activeOrder("order-ibuprofen", "Ibuprofen 400mg"));
+		String folded = foldedIn(DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.shippedServiceWithGroups())
+				.injectRecords(DrugReferenceTestSupport.oneRecordChart(), DrugReferenceTestSupport.ctx(60, null,
+					new LinkedHashSet<String>(orders.get(0).getNames()), null, null, null, orders), "Can I give her diclofenac?"),
+			"same ATC class (M02AA)");
+		assertTrue(folded.contains("— Moderate."), "precondition: the rule is rated Moderate: " + folded);
+		assertTrue(folded.contains(WITHHOLD), "was: " + folded);
+	}
+
+	/** The injected finding over the shipped knowledge base that folds {@code classSentence}, for a patient on one order
+	 *  named {@code order} and coded {@code code}. */
+	private static String foldedOverTheShippedData(String question, String order, String code, String classSentence) {
+		return foldedIn(DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.shippedServiceWithGroups())
+				.injectRecords(DrugReferenceTestSupport.oneRecordChart(), DrugReferenceTestSupport.ctx(60, null,
+					DrugReferenceTestSupport.set(order), DrugReferenceTestSupport.set(code), null, null), question),
+			classSentence);
+	}
+
+	/** The injected finding of {@code chart} that folds {@code classSentence}. */
+	private static String foldedIn(PatientChart chart, String classSentence) {
+		String folded = null;
+		for (RecordMapping finding : DrugReferenceTestSupport.injectedFindings(chart)) {
+			if (finding.getText().contains(classSentence)) {
+				folded = finding.getText();
+			}
+		}
+		assertTrue(folded != null, "precondition: the class relationship is folded onto the rated rule: " + chart.getText());
+		return folded;
 	}
 
 	/**

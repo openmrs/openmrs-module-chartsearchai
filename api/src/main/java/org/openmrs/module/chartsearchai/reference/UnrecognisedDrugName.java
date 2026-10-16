@@ -41,7 +41,8 @@ import org.openmrs.module.chartsearchai.api.impl.QueryScopeRouter;
  * are not names ("this drug", "it") are refused.
  *
  * <p><b>Which suggestions.</b> Of the names the data carries — every entry's name and aliases, folded — those the word
- * is the first word of (<em>tenofovir</em> → both tenofovir rows), else single-word names within one edit of it (two
+ * is the first word of (<em>insulin</em> → its forms; <em>tenofovir</em> is a question's name for its two since ADR
+ * Decision 284, and never reaches here), else single-word names within one edit of it (two
  * for a word of eight letters or more; <em>rifampcin</em> → Rifampicin), one per substance, by the row that names it.
  */
 final class UnrecognisedDrugName {

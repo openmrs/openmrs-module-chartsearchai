@@ -289,6 +289,25 @@ public class TogetherWithHerOwnMedicationContextTest extends BaseModuleContextSe
 	}
 
 	/**
+	 * Whether one drug changes an effect of another, neither of them hers, is answered with what relates them and neither
+	 * "Yes" nor "No" (ADR Decision 286), as ADR Decision 249 answers it where one is hers. On the 3.7.1 standalone Amina, on
+	 * neither, asked "Will ibuprofen raise her lithium levels?" and the model answered "No — ibuprofen should not be given:
+	 * coadministration with nonsteroidal anti-inflammatory drugs (NSAIDs) may increase serum lithium levels" — a "No" to
+	 * whether it raises them.
+	 */
+	@Test
+	public void whetherOneDrugChangesAnEffectOfAnotherNeitherHersIsAnsweredWithWhatRelatesThem() {
+		for (String question : Arrays.asList("Will ibuprofen raise her lithium levels?", "Does ibuprofen increase lithium levels?")) {
+			String answer = askOverTheShippedData(question, "Metformin 500mg", "Metformin").getModuleAnswer();
+			assertTrue(answer != null && answer.startsWith("Neither Ibuprofen nor Lithium carbonate is one of this patient's "
+					+ "active medications. What the interaction check relates between them:\n"), question + " was: " + answer);
+			assertTrue(answer.contains(":\nIbuprofen interacts with Lithium carbonate, also named in the question — Major. ["),
+				question + " was: " + answer);
+			assertTrue(!answer.contains("No —") && !answer.contains("Yes —"), "neither a Yes nor a No: " + answer);
+		}
+	}
+
+	/**
 	 * Whether her drug's dose is safe beside another drug is answered with the finding and neither "Yes" nor "No" (ADR
 	 * Decision 258). On the 3.7.1 standalone Donald Thompson's "Is his warfarin dose safe with his amiodarone?" was
 	 * answered by the model "No — Warfarin should not be given with Amiodarone", of two drugs he already takes.
@@ -345,6 +364,26 @@ public class TogetherWithHerOwnMedicationContextTest extends BaseModuleContextSe
 				+ "active order Nevirapine — Major. Coadministration with rifampin may substantially decrease the plasma "
 				+ "concentrations of nevirapine"), "the finding, its mechanism whole: " + answer);
 		assertTrue(!answer.contains("No —") && !answer.contains("Yes —"), "neither Yes nor No: " + answer);
+	}
+
+	/**
+	 * What the interaction between two drugs is, asked without the word "mechanism", is answered as its mechanism is (ADR
+	 * Decision 289). On the 3.7.1 standalone Ruth, on lopinavir/ritonavir, asked "What is the interaction between
+	 * rifampicin and her lopinavir?" and the model opened "No — Rifampicin should not be given".
+	 */
+	@Test
+	public void whatTheInteractionBetweenTwoDrugsIsIsAnsweredWithTheFindingWhole() {
+		for (String question : Arrays.asList("What is the interaction between nevirapine and rifampicin?",
+			"What interactions are there between rifampicin and her nevirapine?", "How do nevirapine and rifampicin interact?",
+			"How does rifampicin interact with her nevirapine?")) {
+			String answer = askOverTheShippedData(question, "Nevirapine 200mg", "Nevirapine").getModuleAnswer();
+			assertTrue(answer != null && answer.startsWith("Nevirapine is one of this patient's active medications.\nWhat the "
+					+ "interaction check relates between "), question + " was: " + answer);
+			assertTrue(answer.contains("\nRifampicin (rifampin) interacts with active order Nevirapine — Major. Coadministration "
+					+ "with rifampin may substantially decrease the plasma concentrations of nevirapine"),
+				"the finding, its mechanism whole: " + question + " was: " + answer);
+			assertTrue(!answer.contains("No —") && !answer.contains("Yes —"), "neither Yes nor No: " + answer);
+		}
 	}
 
 	/**

@@ -101,6 +101,20 @@ public class AtcCrossReactivityLicensingTest {
 				"being applied in the same place for the same purpose is not cross-reactivity");
 	}
 
+	/**
+	 * B01AC, "platelet aggregation inhibitors excl. heparin", names what its members are FOR — members acting on at least
+	 * five different targets share it — so an aspirin allergy is no cross-reactivity claim on clopidogrel (ADR Decision
+	 * 283), over the shipped knowledge base. Clopidogrel is what a patient allergic to aspirin is commonly given instead.
+	 */
+	@Test
+	public void anAspirinAllergyIsNoCrossReactivityClaimOnClopidogrel() {
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(DrugReferenceTestSupport.shippedServiceWithGroups())
+				.validate("", "Is it safe to give clopidogrel?", DrugReferenceTestSupport.ctx(60, null, null, null,
+						DrugReferenceTestSupport.set("Aspirin"), null));
+		assertEquals("[]", DrugReferenceTestSupport.details(warnings).toString(),
+				"sharing a purpose is not cross-reactivity");
+	}
+
 	@Test
 	public void theSamePurposeHeadedSubgroupStillRaisesADuplicateTherapyChip() throws IOException {
 		// The other half of the same decision, and the reason this is a per-arm rule and not a veto:

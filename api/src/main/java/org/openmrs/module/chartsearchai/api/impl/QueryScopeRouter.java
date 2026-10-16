@@ -797,6 +797,13 @@ public final class QueryScopeRouter {
 	 *  the interaction itself (ADR Decision 264). */
 	private static final List<Pattern> ABOUT_THE_PAIRS_INTERACTION_SHAPES = shapes("(?:what|which) (?:is|are) the (?:mechanisms?"
 			+ "|cause|reason|basis) (?:of|for|behind) (?:the )?(?:drug )?interactions? between " + HER_D + " and " + HER_D,
+			// "What is the interaction between rifampicin and her lopinavir?", "What interactions are there between X and Y?",
+			// "How do X and Y interact?", "How does X interact with her Y?" — what it is, asked without the word "mechanism"
+			// (ADR Decision 289)
+			"(?:what|which) (?:is|are) the (?:drug )?interactions? between " + HER_D + " and " + HER_D,
+			"(?:what|which) (?:drug )?interactions? (?:is|are) there between " + HER_D + " and " + HER_D,
+			"how (?:do|does|would|will) " + HER_D + " and " + HER_D + " interact(?: with each other)?",
+			"how (?:do|does|would|will) " + HER_D + " interact with " + HER_D,
 			// "Should I separate the doses of ciprofloxacin and her didanosine?" — the mechanism says whether spacing them
 			// helps (ADR Decision 270).
 			"(?:should|do|must|can) (?:i|we) (?:need to )?(?:separate|space|space out|stagger) (?:the )?(?:doses?|dosing"
@@ -804,9 +811,9 @@ public final class QueryScopeRouter {
 			"(?:should|must|do) " + HER_D + " and " + HER_D + " (?:need to )?be (?:given|taken) (?:apart|separately|at different times)");
 
 	/**
-	 * Whether a question asks what the interaction between two drugs IS — its mechanism, its cause — and nothing else (ADR
-	 * Decision 264). Its answer states the findings relating the two, each whole, and neither "Yes" nor "No". Fail-CLOSED as
-	 * {@link #asksWhetherToGiveADrug} is.
+	 * Whether a question asks what the interaction between two drugs IS — its mechanism, its cause, or simply what it is (ADR
+	 * Decision 289) — and nothing else (ADR Decision 264). Its answer states the findings relating the two, each whole, and
+	 * neither "Yes" nor "No". Fail-CLOSED as {@link #asksWhetherToGiveADrug} is.
 	 */
 	public static boolean asksAboutThePairsInteraction(List<String> wordsWithTheDrugsMarked) {
 		return fitsAShape(wordsWithTheDrugsMarked, ABOUT_THE_PAIRS_INTERACTION_SHAPES);

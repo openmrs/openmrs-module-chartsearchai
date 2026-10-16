@@ -2597,7 +2597,10 @@ public class DrugSafetyValidator {
 			this.answerTexts = fromAnswer;
 			this.referenceMaterial = referenceMaterialLower;
 			this.unbounded = scope == SubjectMatterScope.UNBOUNDED;
-			this.coversActiveOrders = QueryScopeRouter.asksAboutMedications(question);
+			// A choice of drug asked of the module is about her medications whatever word names the drugs — "painkiller"
+			// is no medication cue (ADR Decision 293).
+			this.coversActiveOrders = QueryScopeRouter.asksAboutMedications(question)
+					|| QueryScopeRouter.asksWhichDrugToGiveHer(question);
 			this.coversRecordedAllergies = QueryScopeRouter.asksAboutAllergies(question);
 			this.coversRecordedConditions = QueryScopeRouter.asksAboutConditions(question);
 		}

@@ -1270,7 +1270,16 @@ public class DrugReferenceInjector {
 		// and states none. Whether the answer is USED is LlmInferenceService's to decide.
 		// A proposal that said what the drug is for: the check weighed none of it, and the answer says so rather than read
 		// as a word on that use (ADR Decision 213).
-		String purpose = moduleAnswer == null || questionDrugs.isEmpty() ? null
+		// A choice of drug asked of the module — "Which pain medication is safe for her?" — is answered with the screen of
+		// what she takes, under a lead saying it chooses none and clears none, and with the purpose it did not weigh (ADR
+		// Decision 293).
+		boolean choice = moduleAnswer != null && questionDrugs.isEmpty() && QueryScopeRouter.asksWhichDrugToGiveHer(question);
+		if (choice) {
+			moduleAnswer = CHOOSES_NO_DRUG_LEAD + "\n" + moduleAnswer;
+		}
+		String purpose = moduleAnswer == null ? null
+				: choice ? QueryScopeRouter.statedPurposeOfAChoice(question)
+				: questionDrugs.isEmpty() ? null
 				: QueryScopeRouter.statedPurposeAsWritten(question, wordsBesideItsNames(question, questionDrugs));
 		if (purpose != null) {
 			moduleAnswer = moduleAnswer + "\n" + PURPOSE_NOT_WEIGHED_OPENING + purpose + ").";
@@ -6510,6 +6519,11 @@ public class DrugReferenceInjector {
 	/** What follows the drug's name in the lead of {@link #composeAboutHerOwnMedication} — read by
 	 *  {@link ModuleAnswerStatement} too, which marks the finding it states (ADR Decision 194). */
 	static final String OWN_MEDICATION_LEAD = " is one of this patient's active medications";
+
+	/** How the answer to a question asking the module to choose a drug for her opens (ADR Decision 293): no finding
+	 *  chooses a drug or clears one, and the screen that follows is of the medications she already takes. */
+	static final String CHOOSES_NO_DRUG_LEAD = "This check does not choose a medication to give this patient, and states"
+			+ " none as safe: it screens only the medications this patient is already taking.";
 
 	/** How an answer to a proposal that said what the drug is for closes, the purpose and ")." after it (ADR Decision 213). */
 	static final String PURPOSE_NOT_WEIGHED_OPENING = "This check did not weigh what the drug is for (";

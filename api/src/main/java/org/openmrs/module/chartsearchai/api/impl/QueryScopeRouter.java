@@ -234,7 +234,9 @@ public final class QueryScopeRouter {
 				// Two groups of her own medications, named by words the MEDICATIONS cues need not know — "her TB treatment",
 				// "her ARVs" — and asked whether they interact: the grammar says what the cues cannot (ADR Decision 221).
 				|| fitsAShape(words(question), MEDICATION_GROUPS_SHAPES)
-				|| asksAboutDuplicateTherapy(question));
+				|| asksAboutDuplicateTherapy(question)
+				// A choice of drug asked of the module is answered with the screen of what she takes (ADR Decision 293).
+				|| asksWhichDrugToGiveHer(question));
 	}
 
 	/**
@@ -1059,6 +1061,12 @@ public final class QueryScopeRouter {
 		if (purpose == null || question == null) {
 			return purpose;
 		}
+		return asWritten(question, purpose);
+	}
+
+	/** {@code purpose}, the closing words of {@code question} as the shapes read them, as the question wrote them — or
+	 *  {@code purpose} itself where the two cannot be lined up. */
+	private static String asWritten(String question, String purpose) {
 		List<String> written = new ArrayList<String>();
 		Matcher matcher = WORD.matcher(question);
 		while (matcher.find()) {
@@ -1122,12 +1130,81 @@ public final class QueryScopeRouter {
 	 * raises one.
 	 */
 	public static boolean asksOnlyToScreenHerMedications(String question) {
-		return fitsAShape(words(question), SCREEN_SHAPES)
+		return fitsAShape(words(question), SCREEN_SHAPES) || asksWhichDrugToGiveHer(question)
 				|| question != null && isInteractionScreening(question)
 						&& (MEDICATIONS_CUES.matcher(question).find() || DDI_CUES.matcher(question).find())
 						&& (asksForAReadingBesidesAChange(question) || CHANGE_REQUEST.matcher(question).find())
 						&& !asksForSomethingElseToo(question);
 	}
+
+	/**
+	 * Whether a question naming no drug asks the module to CHOOSE one for her — <em>"Which pain medication is safe for
+	 * her?"</em>, <em>"What painkiller can I safely give her?"</em>, <em>"What can I give her for pain?"</em> (ADR Decision
+	 * 293). No finding chooses a drug or clears one, so the module answers with what its screen of her own medications
+	 * found, under a lead saying it chooses none. A closed grammar, fail-CLOSED: a phrasing it misses keeps the model, and
+	 * a question carrying a factor the findings do not weigh ({@link #OTHER_FACTOR}) or a second question does too. The
+	 * thing chosen must be named a drug ({@link #DRUG_NOUN}), so "Which diet is best for her?" is not one.
+	 */
+	public static boolean asksWhichDrugToGiveHer(String question) {
+		if (question == null || question.indexOf('?') != question.lastIndexOf('?')
+				|| OTHER_FACTOR.matcher(question.toLowerCase(Locale.ROOT)).find()
+				|| SECOND_QUESTION.matcher(question.toLowerCase(Locale.ROOT)).find()) {
+			return false;
+		}
+		List<String> words = words(question);
+		if (fitsAShape(words, CHOICE_SHAPES)) {
+			return true;
+		}
+		List<String> choice = withoutAPurpose(words);
+		return choice != null && fitsAShape(choice, CHOICE_SHAPES);
+	}
+
+	/**
+	 * The purpose a question {@link #asksWhichDrugToGiveHer} closes with — "pain" in <em>"What can I give her for
+	 * pain?"</em> — as the question wrote it, or {@code null} (ADR Decision 293, as Decision 213 for a proposal).
+	 */
+	public static String statedPurposeOfAChoice(String question) {
+		List<String> words = words(question);
+		if (!asksWhichDrugToGiveHer(question) || fitsAShape(words, CHOICE_SHAPES)) {
+			return null;
+		}
+		List<String> choice = withoutAPurpose(words);
+		if (choice == null) {
+			return null;
+		}
+		return asWritten(question, String.join(" ", words.subList(choice.size() + 1, words.size())));
+	}
+
+	/** A noun naming what is chosen as a drug: a medication word, or a class of drugs a clinician asks a choice of. */
+	private static final String DRUG_NOUN = "(?:medications?|meds?|medicines?|drugs?|prescriptions?|painkillers?|pain killers?"
+			+ "|pain relievers?|pain relief|analgesics?|antibiotics?|antibacterials?|antifungals?|antivirals?|nsaids?"
+			+ "|opioids?|antihypertensives?|antidepressants?|antipsychotics?|anticoagulants?|antiplatelets?|statins?"
+			+ "|antiemetics?|antihistamines?|antiepileptics?|anticonvulsants?|diuretics?|sedatives?|steroids?)";
+
+	/** What is chosen: up to two words before a {@link #DRUG_NOUN}, or her own medications. */
+	private static final String CHOSEN = "(?:of " + POSSESSIVE + " (?:current |active )?|(?:\\p{L}+ ){0,2})" + DRUG_NOUN;
+
+	private static final String SAFE_WORD = "(?:safe|safest|safer|best|ok|okay|appropriate|suitable|preferred)";
+
+	private static final String GIVE_WORD = "(?:give|prescribe|use|start|offer|recommend|add)";
+
+	/** Who it is for, after the safety word: "for her", "to give her", "to use". */
+	private static final String FOR_HER = "(?: (?:for " + PATIENT + "|to " + GIVE_WORD + "(?: (?:to )?" + PATIENT + ")?"
+			+ "|(?:for|to) (?:her|his|their) (?:use|patient)))?";
+
+	private static final List<Pattern> CHOICE_SHAPES = shapes(
+			// "Which pain medication is safe for her?", "Which of her medications is safest?", "Which antibiotic would be
+			// best to give her?"
+			"(?:which|what) " + CHOSEN + " (?:is|are|would be|will be|might be|could be) (?:the )?(?:most )?" + SAFE_WORD
+					+ "(?: (?:option|choice))?" + FOR_HER,
+			// "What is the safest painkiller for her?", "Which is the best antibiotic to give her?"
+			"(?:which|what) (?:is|are|would be) (?:the )?(?:most )?" + SAFE_WORD + " (?:\\p{L}+ ){0,2}" + DRUG_NOUN + FOR_HER,
+			// "What painkiller can I safely give her?", "What can I give her?", "Which antibiotic should I use for her?"
+			"(?:which|what) (?:" + CHOSEN + " )?(?:can|could|should|may) (?:i|we) (?:safely )?" + GIVE_WORD
+					+ "(?: (?:to )?" + PATIENT + ")?(?: on)?(?: safely)?(?: (?:for|to) " + PATIENT + ")?",
+			// "What can she safely take?", "Which painkillers can he take?"
+			"(?:which|what) (?:" + CHOSEN + " )?(?:can|could|should|may) (?:she|he|they|the patient|this patient)"
+					+ " (?:safely )?(?:take|have|use|be given|be started on)(?: safely)?");
 
 	/**
 	 * Whether a question that asks for a screen of her medications ALSO asks for something the screen does not answer —

@@ -61,6 +61,30 @@ public class ScreenBesideHerOwnConflictsTest extends BaseModuleContextSensitiveT
 		assertEquals(DrugReferenceInjector.SCREEN_SCOPE, lines[4], "was: " + answer);
 	}
 
+	/** A question asking the module to choose a drug for him states his own conflicts too, though it names no medication
+	 *  word the router's medication cues know (ADR Decision 293): on the 3.7.1 standalone "What painkiller can I safely
+	 *  give her?" left out the ten allergy findings about Sarah Taylor's own corticosteroids that "Which pain medication is
+	 *  safe for her?" stated. */
+	@Test
+	public void aChoiceOfDrugStatesHisOwnConflictsWhateverWordNamesTheDrugs() {
+		for (String question : new String[] { "What painkiller can I safely give him?", "What can I give him for pain?",
+				"Which antibiotic is safest for him?" }) {
+			String answer = screen(question, "dexamethasone",
+				DrugReferenceTestSupport.activeOrder("order-dex", "Dexamethasone", "Dexamethasone"),
+				DrugReferenceTestSupport.activeOrder("order-pred", "Prednisone", "Prednisone"));
+
+			assertNotNull(answer, question + " — the module answers");
+			String[] lines = answer.split("\n");
+			assertEquals(DrugReferenceInjector.CHOOSES_NO_DRUG_LEAD, lines[0], question + " — was: " + answer);
+			assertEquals(true, lines[1].startsWith("No interactions were found among this patient's active medications. "),
+				question + " — was: " + answer);
+			assertEquals("2 contraindications about medications this patient is already taking, none with a severity rated:",
+				lines[2], question + " — was: " + answer);
+			assertEquals(true, lines[3].startsWith("The patient has a recorded allergy to Dexamethasone."),
+				question + " — was: " + answer);
+		}
+	}
+
 	/** A question asking only about interactions keeps the model call: Decision 190 would leave her conflicts to chips a
 	 *  client draws behind one neutral line, where the model's answer states them. */
 	@Test

@@ -18702,3 +18702,39 @@ Pinned by `CombinationOrderLineContextTest.whetherSheIsOnADrugSheTakesInACombina
 `LlmInferenceServiceAnswerFromFindingsContextTest.aQuestionNamingAsHersADrugSheIsNotOnSaysSo`, whose third question it
 adds; `OwnMedicationSafetyContextTest.theFindingThatHerOrdersCarryTheDrugTwiceIsNeitherAnInteractionNorAnUnratedOne` pins
 the drug she also takes alone.
+
+## Decision 293: A question asking the module to choose a drug for her is answered with the screen, and chooses none
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-16 to fix what *"Which pain medication is safe for
+her?"* returned on the 3.7.1 standalone. It carries
+[Decision 241](#decision-241-which-of-her-medications-should-i-stop-is-a-screen-in-either-voice)'s reading to a choice
+of drug to give.
+
+### Context
+
+Sarah Taylor takes ibuprofen, celecoxib and diclofenac, five corticosteroids and heparin. Asked *"Which pain medication
+is safe for her?"*, the screen raised all nineteen findings and the model stated one mechanism of them, the
+NSAID–corticosteroid caution: not that heparin raises the bleeding risk of each NSAID, nor that she takes three NSAIDs at
+once, and it never said that no drug was cleared. *"What painkiller can I safely give her?"*, carrying no medication cue,
+screened nothing, and the model answered *"The records do not contain any safety findings regarding painkillers"*.
+
+### The decision
+
+A question naming no drug that asks which drug to give her — *"Which pain medication is safe for her?"*, *"What
+painkiller can I safely give her?"*, *"What is the safest antibiotic for her?"*, *"What can she safely take?"*, *"What can
+I give her for pain?"* — is a screen (`QueryScopeRouter.asksWhichDrugToGiveHer`, a closed grammar), so the screening
+arm runs and the module answers. No finding chooses a drug or clears one, so the answer opens *"This check does not
+choose a medication to give this patient, and states none as safe: it screens only the medications this patient is
+already taking."* (`DrugReferenceInjector.CHOOSES_NO_DRUG_LEAD`) and goes on as a screen does; a purpose the question
+closes with is said not to have been weighed, as
+[Decision 213](#decision-213-a-proposal-that-says-what-the-drug-is-for-is-answered-as-the-proposal-and-the-answer-says-the-purpose-was-not-weighed)
+says of a proposal. What is chosen must be named as a drug, so *"Which diet is best for her?"* is not one; a dose,
+pregnancy, an organ or another factor the findings do not weigh, or a second question, keeps the model. The screen is of
+all her medications, not those in the class the question names: no class but the three of
+[Decision 275](#decision-275-which-of-her-orders-are-in-a-drug-class-the-question-names-is-said-where-the-classs-atc-group-is-the-class)
+resolves to her orders. Such a question is about her medications whatever word names the drugs, so her own allergy
+conflicts are stated too (`DrugSafetyValidator.SubjectMatter`): *"What painkiller can I safely give her?"* first left
+out the ten findings about her corticosteroids that *"Which pain medication is safe for her?"* stated.
+
+Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.askingWhichDrugIsSafeForHerIsAnsweredWithTheScreenAndNoChoice`
+and `ScreenBesideHerOwnConflictsTest.aChoiceOfDrugStatesHisOwnConflictsWhateverWordNamesTheDrugs`.

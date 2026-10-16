@@ -3073,6 +3073,50 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	}
 
 	/**
+	 * A question asking the module to CHOOSE a drug for her — "Which pain medication is safe for her?" — is answered by
+	 * the module, which chooses none, with the screen of what she already takes (ADR Decision 293). Measured on the 3.7.1
+	 * standalone: Sarah Taylor, on three NSAIDs, five corticosteroids and heparin, was answered by the model with the
+	 * NSAID–corticosteroid caution alone, leaving out the heparin bleeding risk and the three NSAIDs taken together; and
+	 * "What painkiller can I safely give her?" screened nothing and was told "The records do not contain any safety
+	 * findings regarding painkillers".
+	 */
+	@Test
+	public void askingWhichDrugIsSafeForHerIsAnsweredWithTheScreenAndNoChoice() throws Exception {
+		executeDataSet(WARFARIN_ORDER);
+		String lead = "This check does not choose a medication to give this patient, and states none as safe: it screens"
+				+ " only the medications this patient is already taking.";
+		for (String question : new String[] { "Which pain medication is safe for her?",
+				"What painkiller can I safely give her?", "Which antibiotic is safest for her?",
+				"What is the safest painkiller for her?", "What can she safely take?",
+				"Which of her medications is safe?", "Which blood pressure medicine would be best for her?" }) {
+			RecordingProvider provider = new RecordingProvider();
+			ChartAnswer answer = serviceWith(provider).search(patient, question);
+
+			assertEquals(0, provider.calls, question + " — the module answers: " + answer.getAnswer());
+			assertTrue(answer.isAnsweredByTheModule(), question);
+			String[] lines = answer.getAnswer().split("\n");
+			assertEquals(lead, lines[0], question + " — was: " + answer.getAnswer());
+			assertTrue(lines[2].startsWith("Acetylsalicylic acid (aspirin) interacts with active order"),
+					question + " — was: " + answer.getAnswer());
+			assertFalse(answer.getSafetyWarnings().isEmpty(), question + " — the screen's chips are published");
+		}
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider).search(patient, "What can I give her for pain?");
+		assertEquals(0, provider.calls, "the module answers: " + answer.getAnswer());
+		String[] lines = answer.getAnswer().split("\n");
+		assertEquals(lead, lines[0], answer.getAnswer());
+		assertEquals("This check did not weigh what the drug is for (pain).", lines[lines.length - 1], answer.getAnswer());
+
+		for (String question : new String[] { "Which diet is best for her?", "Which treatment option is best for her?",
+				"What is the safest dose for her?",
+				"What safe medications can I give her in pregnancy?", "Which pain medication is safe for her kidneys?" }) {
+			RecordingProvider model = new RecordingProvider();
+			serviceWith(model).search(patient, question);
+			assertEquals(1, model.calls, question + " is still the model's");
+		}
+	}
+
+	/**
 	 * A screen that related nothing is answered by the module with its own screen note, word for word, citing it (ADR
 	 * Decision 162). Until then the model answered from the note and dropped its scope — on the demo (2026-10-07)
 	 * "No interactions were found among this patient's active medications [46]", beside six orders that were never

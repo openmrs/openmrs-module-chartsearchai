@@ -18810,3 +18810,76 @@ That class's cases pinning the statement after a model's answer to a medication 
 duplicate-therapy question, which the module now answers; they ask *"What medications is she on?"* instead, and its
 case pinning Decision 124's boundary where the answer names her order asks *"Are any of her allergies a safety
 concern?"*.
+
+## Decision 296: A question about a drug states her own conflicts after its answer, and they no longer decide it
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-16 to keep fixing what the tested questions get
+wrong.
+
+### Context
+
+*"Can I add omeprazole to her medications?"*, asked of eighteen patients on the 3.7.1 standalone, went to the model for
+every patient recorded allergic to one of her own drugs: *"her medications"* puts her orders in scope, the allergy arm
+raises its findings about them, and those findings — which the validator draws apart as about her OTHER medications —
+kept every composed answer from applying. Sarah Taylor, whose omeprazole the check relates to none of her orders, was
+told it has *"several potential interactions with current medications: Diclofenac [349], Dexamethasone [349],
+Hydrocortisone [349], and Prednisone [349]"*: one allergy finding cited for four drugs.
+
+### The decision
+
+For a question naming a drug, a contraindication the validator drew apart as about another of her medications
+(`SafetyWarning.isAboutAnotherOfHerMedications`) decides nothing in `DrugReferenceInjector`'s composed answers; where
+one of them answers, the findings follow it under *"Found as well, about this patient's other medications:"*
+(`DrugReferenceInjector.ABOUT_HER_OTHER_MEDICATIONS_LEAD`), each a line. The whole list is restored for what the chart
+is stamped with after the answer.
+
+Pinned by `ProposalBesideHerOwnConflictsTest`.
+
+## Decision 297: What to monitor with her medications is answered with the screen, under a lead setting no monitoring
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-16 to keep fixing what the tested questions get
+wrong.
+
+### Context
+
+*"What should I monitor with her current medications?"*, asked of eighteen patients on the 3.7.1 standalone, went to
+the model, which led with verdicts the question did not ask for: Brian Lopez *"No — Diazepam should not be taken with
+Tramadol"*, Rose *"No — … should be changed"*, Carol Brown *"Simvastatin should be changed"*, and Sarah Taylor, with 21
+interactions, *"The patient can continue with her current medications"*.
+
+### The decision
+
+The question (`QueryScopeRouter.asksWhatToMonitorWithHerMedications`, a closed grammar) is a screen the module answers,
+opening *"This check does not say what to monitor: it states what it found among the medications this patient is
+already taking."* (`DrugReferenceInjector.SETS_NO_MONITORING_LEAD`), as
+[Decision 293](#decision-293-a-question-asking-the-module-to-choose-a-drug-for-her-is-answered-with-the-screen-and-chooses-none)
+opens a choice of drug. Monitoring of anything else — her blood pressure — keeps the model.
+
+Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.whatToMonitorWithHerMedicationsIsTheScreenUnderALeadSettingNoMonitoring`.
+
+## Decision 298: Whether she is on any drug of a group this module carries is answered with her orders in it
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-16 to keep fixing what the tested questions get
+wrong.
+
+### Context
+
+*"Is she on any NSAIDs?"*, asked of eighteen patients on the 3.7.1 standalone, went to the model with the class note:
+Agnes Adams, on aspirin, was told *"No — NSAIDs should not be given"*, and most others *"The records do not address
+NSAIDs"* — while the module's NSAID group, which its duplicate-therapy lines already state membership of, names her
+orders in it.
+
+### The decision
+
+Where the class the question names is a drug group this module carries (`DrugClassTerms.groupNamedBy`) and the question
+asks whether she takes any of it (`QueryScopeRouter.asksWhetherSheIsOnADrugClass`), the module answers with her orders
+in the group by its duplicate-therapy membership, the one
+[Decision 197](#decision-197-a-screen-says-once-which-of-her-medications-share-a-drug-group-and-a-group-may-name-members-for-that-alone)'s
+lines state: *"Yes — 2 of this patient's active medication orders are in the drug group this module carries as NSAID:
+Advil 400mg and Aspirin 81mg."*, or *"None of this patient's active medication orders is in the drug group this module
+carries as NSAID."* — the latter only where every order of hers was read and identified, by
+[Decision 275](#decision-275-which-of-her-orders-are-in-a-drug-class-the-question-names-is-said-where-the-classs-atc-group-is-the-class)'s
+lookup, which now takes the class's membership test. A class the module carries no group for keeps the model and
+Decision 275's statement.
+
+Pinned by `OnADrugGroupQuestionTest`.

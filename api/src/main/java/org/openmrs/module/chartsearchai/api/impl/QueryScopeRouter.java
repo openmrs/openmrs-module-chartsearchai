@@ -235,8 +235,9 @@ public final class QueryScopeRouter {
 				// "her ARVs" — and asked whether they interact: the grammar says what the cues cannot (ADR Decision 221).
 				|| fitsAShape(words(question), MEDICATION_GROUPS_SHAPES)
 				|| asksAboutDuplicateTherapy(question)
-				// A choice of drug asked of the module is answered with the screen of what she takes (ADR Decision 293).
-				|| asksWhichDrugToGiveHer(question));
+				// A choice of drug asked of the module is answered with the screen of what she takes (ADR Decision 293), and so
+				// is what to monitor with her medications (ADR Decision 297).
+				|| asksWhichDrugToGiveHer(question) || asksWhatToMonitorWithHerMedications(question));
 	}
 
 	/**
@@ -1131,6 +1132,7 @@ public final class QueryScopeRouter {
 	 */
 	public static boolean asksOnlyToScreenHerMedications(String question) {
 		return fitsAShape(words(question), SCREEN_SHAPES) || asksWhichDrugToGiveHer(question)
+				|| asksWhatToMonitorWithHerMedications(question)
 				|| question != null && isInteractionScreening(question)
 						&& (MEDICATIONS_CUES.matcher(question).find() || DDI_CUES.matcher(question).find())
 						&& (asksForAReadingBesidesAChange(question) || CHANGE_REQUEST.matcher(question).find())
@@ -1184,6 +1186,43 @@ public final class QueryScopeRouter {
 		return question != null && question.indexOf('?') == question.lastIndexOf('?')
 				&& fitsAShape(words(question), ALLERGIC_TO_HER_MEDICATIONS_SHAPES);
 	}
+
+	/**
+	 * Whether a question asks what to monitor with the medications she takes, and nothing else — <em>"What should I
+	 * monitor with her current medications?"</em> (ADR Decision 297). No finding sets monitoring, so the module answers
+	 * with what its screen found, under a lead saying so. A closed grammar, fail-CLOSED: "What should I monitor for her
+	 * blood pressure?" asks about something else.
+	 */
+	public static boolean asksWhatToMonitorWithHerMedications(String question) {
+		return question != null && question.indexOf('?') == question.lastIndexOf('?')
+				&& fitsAShape(words(question), MONITORING_SHAPES);
+	}
+
+	/**
+	 * Whether a question asks whether she takes any drug of a CLASS, and nothing else — <em>"Is she on any NSAIDs?"</em>,
+	 * <em>"Does she take any NSAIDs?"</em> (ADR Decision 298). The class is not read here: the caller asks
+	 * {@code DrugReferenceService.namedDrugClass} which class the question names, and answers only for a group it carries.
+	 */
+	public static boolean asksWhetherSheIsOnADrugClass(String question) {
+		return question != null && question.indexOf('?') == question.lastIndexOf('?')
+				&& fitsAShape(words(question), ON_A_DRUG_CLASS_SHAPES);
+	}
+
+	private static final List<Pattern> ON_A_DRUG_CLASS_SHAPES = shapes(
+			// "Is she on any NSAIDs?", "Is she currently taking an NSAID?"
+			"(?:is|are) " + SUBJECT + " (?:currently |still )?(?:on|taking|receiving|using) (?:any|an?|some)(?: \\p{L}+){1,3}",
+			// "Does she take any NSAIDs?"
+			"(?:does|do) " + SUBJECT + " (?:currently |still )?(?:take|use|receive) (?:any|an?|some)(?: \\p{L}+){1,3}");
+
+	private static final String HER_MEDICATIONS = POSSESSIVE + " " + MEDICATIONS;
+
+	private static final List<Pattern> MONITORING_SHAPES = shapes(
+			// "What should I monitor with her current medications?", "What do I need to monitor with her meds?"
+			"what (?:should|do|must) (?:i|we) (?:need to )?monitor (?:with|for|on|in) " + HER_MEDICATIONS,
+			// "What monitoring does she need for her medications?"
+			"what monitoring (?:does|do|should) " + SUBJECT + " (?:need|have|get) (?:for|with|on) " + HER_MEDICATIONS,
+			// "What needs to be monitored with her medications?"
+			"what (?:needs|should|has) (?:to )?be monitored (?:with|for|on) " + HER_MEDICATIONS);
 
 	private static final String ALLERGIC = "(?:allergic|(?:she|he|they)'s allergic|(?:she|he|they) (?:is|are) allergic)";
 

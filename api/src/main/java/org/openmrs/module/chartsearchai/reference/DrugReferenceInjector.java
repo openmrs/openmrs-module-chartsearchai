@@ -28,6 +28,7 @@ import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -971,6 +972,25 @@ public class DrugReferenceInjector {
 		String twoOrdersByName;
 		String oneOrderByName;
 		String twoProposalsAnswer;
+		// A question about a drug: the findings the validator drew apart as about her OTHER medications decide nothing below,
+		// and are stated after the answer (ADR Decision 296). The whole list is restored for what is stamped after it.
+		List<SafetyWarning> allFindings = findings;
+		List<Integer> allFindingNumbers = findingNumbers;
+		List<SafetyWarning> apart = new ArrayList<SafetyWarning>();
+		List<Integer> apartNumbers = new ArrayList<Integer>();
+		if (!questionDrugs.isEmpty()) {
+			List<SafetyWarning> kept = new ArrayList<SafetyWarning>();
+			List<Integer> keptNumbers = new ArrayList<Integer>();
+			for (int n = 0; n < findings.size(); n++) {
+				SafetyWarning finding = findings.get(n);
+				boolean aboutHerOther = finding.isAboutAnotherOfHerMedications()
+						&& SafetyWarning.TYPE_CONTRAINDICATION.equals(finding.getType());
+				(aboutHerOther ? apart : kept).add(finding);
+				(aboutHerOther ? apartNumbers : keptNumbers).add(findingNumbers.get(n));
+			}
+			findings = kept;
+			findingNumbers = keptNumbers;
+		}
 		// Her active orders the drug data does not identify — once, for every composition below (ADR Decision 161).
 		List<PatientClinicalContext.ActiveDrugOrder> unidentified = context == null
 				? Collections.<PatientClinicalContext.ActiveDrugOrder> emptyList()
@@ -1218,6 +1238,23 @@ public class DrugReferenceInjector {
 							orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers),
 					context, screenedSubstances.size(), unidentified.size());
 		}
+		// Whether she is on any drug of a group this module carries: her orders in it (ADR Decision 298).
+		CrossReactivityGroup askedGroup = namedClass == null ? null
+				: DrugClassTerms.groupNamedBy(namedClass, drugReferenceService.getCrossReactivityGroups());
+		if (moduleAnswer == null && askedGroup != null && questionDrugs.isEmpty()
+				&& QueryScopeRouter.asksWhetherSheIsOnADrugClass(question)
+				&& ChartSearchAiUtils.getBooleanGlobalProperty(
+						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
+						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS)) {
+			List<String> inIt = ordersFiledUnder(askedGroup::containsAnyCodeForDuplicateTherapy, orderEntries, context);
+			if (inIt != null) {
+				String carried = " in the drug group this module carries as " + askedGroup.getName();
+				moduleAnswer = inIt.isEmpty() ? "None of this patient's active medication orders is" + carried + "."
+						: "Yes — " + (inIt.size() == 1 ? "one of this patient's active medication orders is"
+								: inIt.size() + " of this patient's active medication orders are")
+								+ carried + ": " + DrugSafetyValidator.joinPartners(inIt) + ".";
+			}
+		}
 		// Whether she is allergic to any of her medications: what her allergy findings say of them (ADR Decision 295).
 		if (moduleAnswer == null && allergyToHerMedications
 				&& ChartSearchAiUtils.getBooleanGlobalProperty(
@@ -1255,6 +1292,20 @@ public class DrugReferenceInjector {
 				moduleAnswer = beside.statementFor(named.get(0).label);
 			}
 		}
+		// What the validator drew apart as about her other medications follows the answer it decided nothing of (ADR Decision
+		// 296).
+		if (moduleAnswer != null && !apart.isEmpty()) {
+			Map<String, Integer> herRecords = orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context)
+					: orderRecordNumbers;
+			StringBuilder lines = new StringBuilder(moduleAnswer).append("\n").append(ABOUT_HER_OTHER_MEDICATIONS_LEAD);
+			for (int n = 0; n < apart.size(); n++) {
+				lines.append("\n").append(findingLine(apart.get(n), apartNumbers.get(n), orderRecordNumbers, herRecords,
+						false));
+			}
+			moduleAnswer = lines.toString();
+		}
+		findings = allFindings;
+		findingNumbers = allFindingNumbers;
 		// An order the drug data does not identify no longer gives the question up (ADR Decision 161): the answer says
 		// which, and that it was not checked. History questions are answered below under their own gate, unchanged.
 		if (moduleAnswer != null && !unidentified.isEmpty()) {
@@ -1294,6 +1345,12 @@ public class DrugReferenceInjector {
 		boolean choice = moduleAnswer != null && questionDrugs.isEmpty() && QueryScopeRouter.asksWhichDrugToGiveHer(question);
 		if (choice) {
 			moduleAnswer = CHOOSES_NO_DRUG_LEAD + "\n" + moduleAnswer;
+		}
+		// What to monitor with her medications, likewise: the screen, under a lead saying it sets no monitoring (ADR
+		// Decision 297).
+		if (moduleAnswer != null && questionDrugs.isEmpty()
+				&& QueryScopeRouter.asksWhatToMonitorWithHerMedications(question)) {
+			moduleAnswer = SETS_NO_MONITORING_LEAD + "\n" + moduleAnswer;
 		}
 		String purpose = moduleAnswer == null ? null
 				: choice ? QueryScopeRouter.statedPurposeOfAChoice(question)
@@ -6146,25 +6203,39 @@ public class DrugReferenceInjector {
 	 * cannot be said: her orders were not read, or one of them the drug data does not identify (ADR Decision 275).
 	 */
 	private List<String> ordersFiledUnder(String group, List<DrugReference> orderEntries, PatientClinicalContext context) {
+		return ordersFiledUnder(codes -> {
+			for (String code : codes) {
+				if (code.startsWith(group)) {
+					return true;
+				}
+			}
+			return false;
+		}, orderEntries, context);
+	}
+
+	/** As above, for the class {@code inClass} answers of a set of normalized codes — an ATC group's prefix, or a drug group
+	 *  this module carries (ADR Decision 298). */
+	private List<String> ordersFiledUnder(Predicate<Set<String>> inClass, List<DrugReference> orderEntries,
+			PatientClinicalContext context) {
 		if (context == null || !context.chartReadForSafety()) {
 			return null;
 		}
 		List<DrugReference> entries = orderEntries == null ? Collections.<DrugReference> emptyList() : orderEntries;
 		List<String> filed = new ArrayList<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : context.getActiveDrugOrders()) {
-			boolean inIt = false;
+			Set<String> ownCodes = new LinkedHashSet<String>();
 			for (String code : order.getAtcCodes()) {
 				String normalized = DrugReference.normalizeAtcToken(code);
-				inIt |= normalized != null && normalized.startsWith(group);
+				if (normalized != null) {
+					ownCodes.add(normalized);
+				}
 			}
+			boolean inIt = inClass.test(ownCodes);
 			for (DrugReference entry : entries) {
 				if (inIt) {
 					break;
 				}
-				boolean coded = false;
-				for (String code : entry.normalizedAtcCodes()) {
-					coded |= code.startsWith(group);
-				}
+				boolean coded = inClass.test(entry.normalizedAtcCodes());
 				inIt = coded && DrugSafetyValidator.ordersOfSubstance(drugReferenceService, entry, entries, context)
 						.contains(order);
 			}
@@ -6635,10 +6706,18 @@ public class DrugReferenceInjector {
 	 *  {@link ModuleAnswerStatement} too, which marks the finding it states (ADR Decision 194). */
 	static final String OWN_MEDICATION_LEAD = " is one of this patient's active medications";
 
+	/** What opens the findings a drug question's answer states after it, which the validator drew apart as about her other
+	 *  medications (ADR Decision 296). */
+	static final String ABOUT_HER_OTHER_MEDICATIONS_LEAD = "Found as well, about this patient's other medications:";
+
 	/** How the answer to a question asking the module to choose a drug for her opens (ADR Decision 293): no finding
 	 *  chooses a drug or clears one, and the screen that follows is of the medications she already takes. */
 	static final String CHOOSES_NO_DRUG_LEAD = "This check does not choose a medication to give this patient, and states"
 			+ " none as safe: it screens only the medications this patient is already taking.";
+
+	/** How the answer to what to monitor with her medications opens (ADR Decision 297): no finding sets monitoring. */
+	static final String SETS_NO_MONITORING_LEAD = "This check does not say what to monitor: it states what it found among"
+			+ " the medications this patient is already taking.";
 
 	/** How an answer to a proposal that said what the drug is for closes, the purpose and ")." after it (ADR Decision 213). */
 	static final String PURPOSE_NOT_WEIGHED_OPENING = "This check did not weigh what the drug is for (";

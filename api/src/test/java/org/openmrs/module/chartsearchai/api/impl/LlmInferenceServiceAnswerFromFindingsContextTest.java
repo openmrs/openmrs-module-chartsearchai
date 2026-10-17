@@ -3117,6 +3117,33 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	}
 
 	/**
+	 * What to monitor with her medications is answered by the module with the screen, under a lead saying it sets no
+	 * monitoring (ADR Decision 297). On the 3.7.1 standalone the model answered "No — Diazepam should not be taken with
+	 * Tramadol", "Simvastatin should be changed", and, for Sarah Taylor's 21 interactions, "The patient can continue with
+	 * her current medications".
+	 */
+	@Test
+	public void whatToMonitorWithHerMedicationsIsTheScreenUnderALeadSettingNoMonitoring() throws Exception {
+		executeDataSet(WARFARIN_ORDER);
+		for (String question : new String[] { "What should I monitor with her current medications?",
+				"What should we monitor for her medications?", "What monitoring does she need for her medications?",
+				"What do I need to monitor with her meds?" }) {
+			RecordingProvider provider = new RecordingProvider();
+			ChartAnswer answer = serviceWith(provider).search(patient, question);
+
+			assertEquals(0, provider.calls, question + " — the module answers: " + answer.getAnswer());
+			String[] lines = answer.getAnswer().split("\n");
+			assertEquals("This check does not say what to monitor: it states what it found among the medications this "
+					+ "patient is already taking.", lines[0], question + " — was: " + answer.getAnswer());
+			assertTrue(lines[2].startsWith("Acetylsalicylic acid (aspirin) interacts with active order"),
+					question + " — was: " + answer.getAnswer());
+		}
+		RecordingProvider provider = new RecordingProvider();
+		serviceWith(provider).search(patient, "What should I monitor for her blood pressure?");
+		assertEquals(1, provider.calls, "monitoring of something other than her medications is still the model's");
+	}
+
+	/**
 	 * A screen that related nothing is answered by the module with its own screen note, word for word, citing it (ADR
 	 * Decision 162). Until then the model answered from the note and dropped its scope — on the demo (2026-10-07)
 	 * "No interactions were found among this patient's active medications [46]", beside six orders that were never

@@ -689,6 +689,11 @@ public final class QueryScopeRouter {
 
 	private static final List<Pattern> BESIDE_HER_MEDICATIONS_SHAPES = shapes(
 			SAFE_WITH_HER_MEDICATIONS,
+			// "Is her amiodarone safe?", "Is her ibuprofen safe to continue?" — her drug named as hers, whether it is safe,
+			// and "What interacts with her ibuprofen?" (ADR Decision 301)
+			"is " + POSSESSIVE + " " + D + " (?:safe|ok|okay|appropriate)(?: for " + PATIENT + ")?(?: to (?:continue|keep"
+					+ " taking|take|use))?(?: now)?",
+			"what (?:drugs |medications |medicines |meds )?(?:interacts?|interferes?) with " + POSSESSIVE + " " + D,
 			// "Which of her medications interact with lopinavir/ritonavir?", "What other meds of hers interact with X?"
 			"(?:which|what) (?:of )?" + POSSESSIVE + " (?:other )?" + MEDICATIONS + " (?:interact|interacts) with " + D,
 			// "Is rifampicin causing any interactions with her other drugs?", "Is X interacting with any of her medications?",

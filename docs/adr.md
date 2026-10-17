@@ -18954,3 +18954,38 @@ that the module already answers in other words, each answered wrongly there:
 Pinned by `AllergyToHerMedicationsQuestionTest.anAllergyToADrugSheTakesIsAYes`, `AlcoholAskedAboutTest.drinkingAlcoholBesideHerMetronidazoleIsCheckedAsEthanol`,
 `LlmInferenceServiceAnswerFromFindingsContextTest.askingWhichOfHerMedicationsIShouldStopIsAScreen` and
 `.whichOfHerMedicationsAreHighRiskIsTheScreenUnderALeadRatingNoRisk`.
+
+## Decision 301: Whether her own drug is safe, and what interacts with it, is answered as her own medication
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-16 to keep fixing what the tested questions get
+wrong, narrowed on 2026-10-17 to drug-interaction problems.
+
+### Context
+
+A sixth round asked forty patients on the 3.7.1 standalone about the drugs they take. *"Is her X safe?"* went to the
+model for every one of them: it told Donald Thompson *"No — Amiodarone should not be given"* of his own amiodarone, two
+patients *"Lamivudine can be given"* of theirs, Sarah Taylor *"No — Budesonide should be changed"*, and eleven patients
+on one order *"The records do not address the safety of X"*. *"What interacts with her X?"* went to the model for every
+one too, which mostly listed the first five partners the reference carries — *"ketoconazole, lefamulin, leflunomide,
+levacetylmethadol, and lomitapide"* — none of which she takes.
+
+### The decision
+
+Both are questions about her drug beside her medications, and join
+[Decision 202](#decision-202-a-question-whether-she-is-on-her-own-drug-or-whether-it-is-safe-with-her-other-medications-is-answered-as-her-own-medication-and-the-answer-names-the-order)'s
+grammar (`QueryScopeRouter.asksAboutADrugBesideHerMedications`), whose one reader asks it of a drug her orders carry: the
+answer names her order and states what relates it to her other medications, or that nothing does
+([Decision 206](#decision-206-her-own-drug-in-two-of-her-orders-is-no-interaction-with-her-other-medications-and-one-related-to-none-of-them-is-answered-as-hers)'s). Of a drug she is not
+on, the model answers, as before.
+
+**Left as it was:** *"Can I give her fluconazole with her aspirin?"*, where the data lists the drug proposed against
+hers without a rating, stays the model's, which calls that unrated relationship a caution. For a two-drug question the
+question-pair arm states the pair extent and publishes no below-floor rows, so the module has none to answer from;
+publishing them is a change to what that arm states, under Decisions 69 and 71.
+
+**Also left:** a patient on that one order alone, with no finding about it, is still the model's, as Decision 193 pins
+(`OwnMedicationSafetyContextTest.herOwnDrugWithNoInteractionIsLeftToTheModel`): the module states findings and has none
+to state. Measured on the rig, those answers say the records do not address the drug's safety, or list partners the
+reference carries.
+
+Pinned by `OwnMedicationSafetyContextTest.whetherHerOwnDrugIsSafeOrWhatInteractsWithItIsAnsweredAsHers`.

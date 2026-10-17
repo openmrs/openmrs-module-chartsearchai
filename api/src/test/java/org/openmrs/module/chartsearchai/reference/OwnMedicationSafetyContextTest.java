@@ -365,6 +365,23 @@ public class OwnMedicationSafetyContextTest extends BaseModuleContextSensitiveTe
 	}
 
 	@Test
+	public void whetherHerOwnDrugIsSafeOrWhatInteractsWithItIsAnsweredAsHers() throws IOException {
+		// ADR Decision 301: asked of forty patients on the 3.7.1 standalone, "Is her X safe?" went to the model, which told
+		// Donald Thompson "No — Amiodarone should not be given" of his own amiodarone and two patients "Lamivudine can be
+		// given" of theirs; "What interacts with her X?" listed five partners from the reference she does not take.
+		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
+			DrugReferenceTestSupport.activeOrder("order-ibuprofen", "Ibuprofen 400mg"),
+			DrugReferenceTestSupport.activeOrder("order-prednisone", "Prednisone 5mg"));
+		String expected = answer("Is ibuprofen safe with her other medications?", null, orders);
+		assertNotNull(expected, "precondition: the module answers the shape Decision 202 admits");
+		for (String question : Arrays.asList("Is her ibuprofen safe?", "Is her ibuprofen safe for her?",
+			"Is her ibuprofen safe to continue?", "What interacts with her ibuprofen?",
+			"What drugs interact with her ibuprofen?")) {
+			assertEquals(expected, answer(question, null, orders), question);
+		}
+	}
+
+	@Test
 	public void whetherToHoldOrStopHerOwnDrugIsAnsweredAsHers() throws IOException {
 		// Carol Brown's "Should I hold her metformin?" was answered by the model "Metformin can be given, with two
 		// cautions": her own drug, read as one proposed (ADR Decision 259).

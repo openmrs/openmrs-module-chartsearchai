@@ -1,7 +1,7 @@
-# Drug-interaction questions tested from 2026-10-15 to 2026-10-17
+# Drug-interaction questions tested from 2026-10-15 to 2026-10-18
 
 Every question asked of the RefApp 3.7.1 standalone during the drug-interaction sweep of 2026-10-15 and the follow-ups
-that fixed the errors it left, which produced [ADR Decisions 227 to 300](adr.md#decision-227-the-placeholder-a-free-text-allergy-is-saved-on-is-no-allergen-and-an-unchecked-allergy-is-named-as-the-chart-spells-it).
+that fixed the errors it left, which produced [ADR Decisions 227 to 301](adr.md#decision-227-the-placeholder-a-free-text-allergy-is-saved-on-is-no-allergen-and-an-unchecked-allergy-is-named-as-the-chart-spells-it).
 Each question is written exactly as it was asked, misspellings and phone-keyboard apostrophes included, under the
 patient it was asked about. Each patient's active medication orders and recorded drug allergies are as the chart held
 them at the end of the sweep, so that "her" and "his" in a question can be read.
@@ -59,6 +59,10 @@ Drug allergies: NSAIDs.
 - Is she on any blood thinners?
 - Can I give her prednisone?
 - Is it safe to give her tramadol and diazepam?
+- Is her aspirin safe?
+- Can I stop her aspirin?
+- What interacts with her aspirin?
+- Can I give her fluconazole with her aspirin?
 
 ## Amina Wekesa
 
@@ -76,6 +80,10 @@ Drug allergies: none.
 - Will ibuprofen raise her lithium levels?
 - What was her last lithium level?
 - Is she on lithium?
+- Is her sulfamethoxazole / trimethoprim safe?
+- Can I stop her sulfamethoxazole / trimethoprim?
+- What interacts with her sulfamethoxazole / trimethoprim?
+- Can I give her fluconazole with her sulfamethoxazole / trimethoprim?
 
 ## Barbara Miller
 
@@ -129,6 +137,12 @@ Drug allergies: Ibuprofen.
 - Is she on any blood thinners?
 - Can I give her prednisone?
 - Is it safe to give her tramadol and diazepam?
+- Is her aspirin safe?
+- Can I stop her aspirin?
+- What interacts with her aspirin?
+- Can I give her fluconazole with her aspirin?
+- Does her aspirin interact with her ibuprofen?
+- Is aspirin safe with ibuprofen?
 
 ## Betty Williams
 
@@ -180,6 +194,12 @@ Drug allergies: Aspirin, Ketoconazole, Lidocaine.
 - Is she on any blood thinners?
 - Can I give her prednisone?
 - Is it safe to give her tramadol and diazepam?
+- Is her bupivacaine safe?
+- Can I stop her bupivacaine?
+- What interacts with her bupivacaine?
+- Can I give her fluconazole with her bupivacaine?
+- Does her bupivacaine interact with her lidocaine?
+- Is bupivacaine safe with lidocaine?
 
 ## Brian Lopez
 
@@ -245,6 +265,12 @@ Drug allergies: none.
 - Is he on any blood thinners?
 - Can I give him prednisone?
 - Is it safe to give him tramadol and diazepam?
+- Is his diazepam safe?
+- Can I stop his diazepam?
+- What interacts with his diazepam?
+- Can I give him fluconazole with his diazepam?
+- Does his diazepam interact with his enalapril?
+- Is diazepam safe with enalapril?
 
 ## Carol Brown
 
@@ -356,6 +382,12 @@ Drug allergies: none.
 - Is she on any blood thinners?
 - Can I give her prednisone?
 - Is it safe to give her tramadol and diazepam?
+- Is her amlodipine safe?
+- Can I stop her amlodipine?
+- What interacts with her amlodipine?
+- Can I give her fluconazole with her amlodipine?
+- Does her amlodipine interact with her aspirin?
+- Is amlodipine safe with aspirin?
 
 ## David Williams
 
@@ -364,6 +396,10 @@ Drug allergies: none.
 
 - Can I start him on clopidogrel?
 - Is naproxen safe for him?
+- Is his acetylsalicylic acid safe?
+- Can I stop his acetylsalicylic acid?
+- What interacts with his acetylsalicylic acid?
+- Can I give him fluconazole with his acetylsalicylic acid?
 
 ## Donald Thompson
 
@@ -462,6 +498,12 @@ Drug allergies: none.
 - Is he on any blood thinners?
 - Can I give him prednisone?
 - Is it safe to give him tramadol and diazepam?
+- Is his amiodarone safe?
+- Can I stop his amiodarone?
+- What interacts with his amiodarone?
+- Can I give him fluconazole with his amiodarone?
+- Does his amiodarone interact with his atorvastatin?
+- Is amiodarone safe with atorvastatin?
 
 ## Donna Roberts
 
@@ -478,6 +520,12 @@ Drug allergies: none.
 
 - Is there an interaction between her rifampicin and nevirapine?
 - How severe is the interaction between her rifampicin and nevirapine?
+- Is her nevirapine safe?
+- Can I stop her nevirapine?
+- What interacts with her nevirapine?
+- Can I give her fluconazole with her nevirapine?
+- Does her nevirapine interact with her rifampicin?
+- Is nevirapine safe with rifampicin?
 
 ## Dora DdiExpired
 
@@ -485,6 +533,10 @@ Active orders: Nevirapine 200mg.
 Drug allergies: none.
 
 - Can I give her rifampicin?
+- Is her nevirapine safe?
+- Can I stop her nevirapine?
+- What interacts with her nevirapine?
+- Can I give her fluconazole with her nevirapine?
 
 ## Dora DdiScheduled
 
@@ -492,6 +544,12 @@ Active orders: Nevirapine 200mg, Rifampicin 150mg (scheduled to start 2026-10-29
 Drug allergies: none.
 
 - Any interactions between her medications?
+- Is her nevirapine safe?
+- Can I stop her nevirapine?
+- What interacts with her nevirapine?
+- Can I give her fluconazole with her nevirapine?
+- Does her nevirapine interact with her rifampicin?
+- Is nevirapine safe with rifampicin?
 
 ## Dora DdiVoided
 
@@ -499,6 +557,10 @@ Active orders: Nevirapine 200mg.
 Drug allergies: none.
 
 - Any interactions between her medications?
+- Is her nevirapine safe?
+- Can I stop her nevirapine?
+- What interacts with her nevirapine?
+- Can I give her fluconazole with her nevirapine?
 
 ## Dorothy Odinga
 
@@ -552,6 +614,10 @@ Drug allergies: Ibuprofen, Ciprofloxacin lactate.
 - Is she on any blood thinners?
 - Can I give her prednisone?
 - Is it safe to give her tramadol and diazepam?
+- Is her aspirin safe?
+- Can I stop her aspirin?
+- What interacts with her aspirin?
+- Can I give her fluconazole with her aspirin?
 
 ## Edward Robinson
 
@@ -574,6 +640,10 @@ Drug allergies: Penicillin G.
 - Can I give him St John’s wort?
 - Can I give him co-amoxiclav?
 - Can I give him Augmentin?
+- Is his nevirapine safe?
+- Can I stop his nevirapine?
+- What interacts with his nevirapine?
+- Can I give him fluconazole with his nevirapine?
 
 ## George Anderson
 
@@ -632,6 +702,10 @@ Drug allergies: Pantoprazole, Ibuprofen, NSAID.
 - Is he on any blood thinners?
 - Can I give him prednisone?
 - Is it safe to give him tramadol and diazepam?
+- Is his acetaminophen safe?
+- Can I stop his acetaminophen?
+- What interacts with his acetaminophen?
+- Can I give him fluconazole with his acetaminophen?
 
 ## Helen Roberts
 
@@ -693,6 +767,11 @@ Drug allergies: none.
 - Is she on any blood thinners?
 - Can I give her prednisone?
 - Is it safe to give her tramadol and diazepam?
+- Is her methotrexate safe?
+- Can I stop her methotrexate?
+- What interacts with her methotrexate?
+- Can I give her fluconazole with her methotrexate?
+- Is methotrexate safe with salicylic acid?
 
 ## James Martinez
 
@@ -710,6 +789,10 @@ Drug allergies: Sulfamethoxazole / trimethoprim, Omeprazole / sodium bicarbonate
 - Can I give him lithium?
 - Are any of his medications duplicates?
 - Should one of his metronidazole orders be stopped?
+- Is his metronidazole safe?
+- Can I stop his metronidazole?
+- What interacts with his metronidazole?
+- Can I give him fluconazole with his metronidazole?
 
 ## Joshua Johnson
 
@@ -727,6 +810,10 @@ Drug allergies: Aspirin.
 - Can I give him ibuprofen 400 mg?
 - Can I give him amoxicillin 500 mg three times a day?
 - Can I give him amoxicillin?
+- Is his lisinopril safe?
+- Can I stop his lisinopril?
+- What interacts with his lisinopril?
+- Can I give him fluconazole with his lisinopril?
 
 ## Karen Sanchez
 
@@ -740,6 +827,10 @@ Drug allergies: none.
 - Any problems with her metronidazole?
 - Can I give her disulfiram?
 - Is alcohol safe with her metronidazole?
+- Is her metronidazole safe?
+- Can I stop her metronidazole?
+- What interacts with her metronidazole?
+- Can I give her fluconazole with her metronidazole?
 
 ## Karen Thompson
 
@@ -751,6 +842,10 @@ Drug allergies: none.
 - Can she take promethazine?
 - Can she take ibuprofen with her cold medicine?
 - Can I give her paracetamol with her cold medicine?
+- Is her eucalyptus & diphenhydramine & phenylephrine safe?
+- Can I stop her eucalyptus & diphenhydramine & phenylephrine?
+- What interacts with her eucalyptus & diphenhydramine & phenylephrine?
+- Can I give her fluconazole with her eucalyptus & diphenhydramine & phenylephrine?
 
 ## Kenneth Hernandez
 
@@ -765,6 +860,11 @@ Drug allergies: none.
 - Does his enalapril interact with his salicylic acid?
 - Can I give him an NSAID for his back pain?
 - Can I give him lithium carbonate?
+- Is his enalapril safe?
+- Can I stop his enalapril?
+- What interacts with his enalapril?
+- Can I give him fluconazole with his enalapril?
+- Is enalapril safe with salicylic acid?
 
 ## Kevin Brown
 
@@ -819,6 +919,10 @@ Drug allergies: Levothyroxine, Levothyroxine sodium, Clarithromycine, Tozinamera
 - Is he on any blood thinners?
 - Can I give him prednisone?
 - Is it safe to give him tramadol and diazepam?
+- Is his clarithromycine safe?
+- Can I stop his clarithromycine?
+- What interacts with his clarithromycine?
+- Can I give him fluconazole with his clarithromycine?
 
 ## Margaret King
 
@@ -832,6 +936,10 @@ Drug allergies: Botulinum toxin type A.
 - Can I give her a fluoroquinolone?
 - Is she on any drugs that interact with dexamethasone?
 - Can I give her a live vaccine?
+- Is her dexamethasone safe?
+- Can I stop her dexamethasone?
+- What interacts with her dexamethasone?
+- Can I give her fluconazole with her dexamethasone?
 
 ## Mark Smith
 
@@ -888,6 +996,12 @@ Drug allergies: Ciprofloxacin.
 - Is he on any blood thinners?
 - Can I give him prednisone?
 - Is it safe to give him tramadol and diazepam?
+- Is his chloroquine safe?
+- Can I stop his chloroquine?
+- What interacts with his chloroquine?
+- Can I give him fluconazole with his chloroquine?
+- Does his chloroquine interact with his diphenhydramine?
+- Is chloroquine safe with diphenhydramine?
 
 ## Mark Williams
 
@@ -902,6 +1016,10 @@ Drug allergies: none.
 - Can I give him Zithromax?
 - Can I give him fluoxetine?
 - Can I give him apomorphine?
+- Is his ondansetron safe?
+- Can I stop his ondansetron?
+- What interacts with his ondansetron?
+- Can I give him fluconazole with his ondansetron?
 
 ## Mary Smith
 
@@ -920,6 +1038,10 @@ Drug allergies: none.
 - Is it safe to increase her simvastatin dose?
 - Can I give her itraconazole?
 - Any interactions with her warfarin?
+- Is her simvastatin safe?
+- Can I stop her simvastatin?
+- What interacts with her simvastatin?
+- Can I give her fluconazole with her simvastatin?
 
 ## Melissa Wright
 
@@ -977,6 +1099,10 @@ Drug allergies: Esomeprazole, Vitamin A, B.
 - Is she on any blood thinners?
 - Can I give her prednisone?
 - Is it safe to give her tramadol and diazepam?
+- Is her spironolactone safe?
+- Can I stop her spironolactone?
+- What interacts with her spironolactone?
+- Can I give her fluconazole with her spironolactone?
 
 ## Michael Turner
 
@@ -990,6 +1116,12 @@ Drug allergies: Enalaprilat.
 - Can I give him atorvastatin?
 - Is Zolvimix safe with Klarizom?
 - Can I give him Zolvimix?
+- Is his klarizom safe?
+- Can I stop his klarizom?
+- What interacts with his klarizom?
+- Can I give him fluconazole with his klarizom?
+- Does his klarizom interact with his zolvimix?
+- Is klarizom safe with zolvimix?
 
 ## Michelle Lewis
 
@@ -1005,6 +1137,10 @@ Drug allergies: none.
 - Can I give her rifampicin instead of rifapentine?
 - Can I give her dolutegravir?
 - Is she on isoniazid?
+- Is her isoniazid / rifapentine safe?
+- Can I stop her isoniazid / rifapentine?
+- What interacts with her isoniazid / rifapentine?
+- Can I give her fluconazole with her isoniazid / rifapentine?
 
 ## Mogan Kamwara
 
@@ -1087,6 +1223,12 @@ Drug allergies: none.
 - Is she on any blood thinners?
 - Can I give her prednisone?
 - Is it safe to give her tramadol and diazepam?
+- Is her lamivudine safe?
+- Can I stop her lamivudine?
+- What interacts with her lamivudine?
+- Can I give her fluconazole with her lamivudine?
+- Does her lamivudine interact with her nevirapine?
+- Is lamivudine safe with nevirapine?
 
 ## Priya Severity
 
@@ -1148,6 +1290,12 @@ Drug allergies: none.
 - Is she on any blood thinners?
 - Can I give her prednisone?
 - Is it safe to give her tramadol and diazepam?
+- Is her amoxicillin safe?
+- Can I stop her amoxicillin?
+- What interacts with her amoxicillin?
+- Can I give her fluconazole with her amoxicillin?
+- Does her amoxicillin interact with her clopidogrel?
+- Is amoxicillin safe with clopidogrel?
 
 ## Provenance Probe
 
@@ -1180,6 +1328,12 @@ Drug allergies: none.
 - Is it safe to continue all her ARVs together?
 - Is she on zidovudine?
 - Does her lopinavir interact with her other medications?
+- Is her abacavir safe?
+- Can I stop her abacavir?
+- What interacts with her abacavir?
+- Can I give her fluconazole with her abacavir?
+- Does her abacavir interact with her didanosine?
+- Is abacavir safe with didanosine?
 
 ## Richard Brown
 
@@ -1188,6 +1342,10 @@ Drug allergies: none.
 
 - Does he have any drug interactions?
 - Can I give him warfarin?
+- Is his salicylic acid safe?
+- Can I stop his salicylic acid?
+- What interacts with his salicylic acid?
+- Can I give him fluconazole with his salicylic acid?
 
 ## Richard Jones
 
@@ -1239,6 +1397,12 @@ Drug allergies: Dexamethasone.
 - Is he on any blood thinners?
 - Can I give him prednisone?
 - Is it safe to give him tramadol and diazepam?
+- Is his dexamethasone safe?
+- Can I stop his dexamethasone?
+- What interacts with his dexamethasone?
+- Can I give him fluconazole with his dexamethasone?
+- Does his dexamethasone interact with his hydrocortisone?
+- Is dexamethasone safe with hydrocortisone?
 
 ## Rita Phantomrif
 
@@ -1246,6 +1410,12 @@ Active orders: Lamivudine 150mg, Nevirapine 200mg.
 Drug allergies: none.
 
 - Can I give her efavirenz instead of nevirapine?
+- Is her lamivudine safe?
+- Can I stop her lamivudine?
+- What interacts with her lamivudine?
+- Can I give her fluconazole with her lamivudine?
+- Does her lamivudine interact with her nevirapine?
+- Is lamivudine safe with nevirapine?
 
 ## Rose Rifadupla
 
@@ -1302,6 +1472,12 @@ Drug allergies: none.
 - Is she on any blood thinners?
 - Can I give her prednisone?
 - Is it safe to give her tramadol and diazepam?
+- Is her efavirenz safe?
+- Can I stop her efavirenz?
+- What interacts with her efavirenz?
+- Can I give her fluconazole with her efavirenz?
+- Does her efavirenz interact with her isoniazid / pyrazinamide / rifampin?
+- Is efavirenz safe with isoniazid / pyrazinamide / rifampin?
 
 ## Ruth Ritonavira
 
@@ -1327,6 +1503,12 @@ Drug allergies: none.
 - Can I switch her lopinavir to atazanavir?
 - Does her lopinavir interact with her other medications?
 - Is she on lopinavir?
+- Is her abacavir safe?
+- Can I stop her abacavir?
+- What interacts with her abacavir?
+- Can I give her fluconazole with her abacavir?
+- Does her abacavir interact with her didanosine?
+- Is abacavir safe with didanosine?
 
 ## Sarah Taylor
 
@@ -1380,6 +1562,12 @@ Drug allergies: Dexamethasone, Levothyroxine, Levothyroxine sodium, Clarithromyc
 - Is she on any blood thinners?
 - Can I give her prednisone?
 - Is it safe to give her tramadol and diazepam?
+- Is her budesonide safe?
+- Can I stop her budesonide?
+- What interacts with her budesonide?
+- Can I give her fluconazole with her budesonide?
+- Does her budesonide interact with her celecoxib?
+- Is budesonide safe with celecoxib?
 
 ## Steven White
 
@@ -1390,6 +1578,10 @@ Drug allergies: none.
 - Is it safe to give him methadone?
 - Will his TB preventive therapy interact with efavirenz?
 - Can he take dolutegravir and his TB preventive therapy together?
+- Is his isoniazid / rifapentine safe?
+- Can I stop his isoniazid / rifapentine?
+- What interacts with his isoniazid / rifapentine?
+- Can I give him fluconazole with his isoniazid / rifapentine?
 
 ## Susan Hall
 
@@ -1461,3 +1653,9 @@ Drug allergies: Tiotropium, Tetryzoline (ophthalmic), Lidocaïne.
 - Is she on any blood thinners?
 - Can I give her prednisone?
 - Is it safe to give her tramadol and diazepam?
+- Is her lidocaine safe?
+- Can I stop her lidocaine?
+- What interacts with her lidocaine?
+- Can I give her fluconazole with her lidocaine?
+- Does her lidocaine interact with her metoclopramide?
+- Is lidocaine safe with metoclopramide?

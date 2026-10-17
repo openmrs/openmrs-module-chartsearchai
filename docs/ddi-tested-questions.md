@@ -1,7 +1,7 @@
 # Drug-interaction questions tested from 2026-10-15 to 2026-10-17
 
 Every question asked of the RefApp 3.7.1 standalone during the drug-interaction sweep of 2026-10-15 and the follow-ups
-that fixed the errors it left, which produced [ADR Decisions 227 to 299](adr.md#decision-227-the-placeholder-a-free-text-allergy-is-saved-on-is-no-allergen-and-an-unchecked-allergy-is-named-as-the-chart-spells-it).
+that fixed the errors it left, which produced [ADR Decisions 227 to 300](adr.md#decision-227-the-placeholder-a-free-text-allergy-is-saved-on-is-no-allergen-and-an-unchecked-allergy-is-named-as-the-chart-spells-it).
 Each question is written exactly as it was asked, misspellings and phone-keyboard apostrophes included, under the
 patient it was asked about. Each patient's active medication orders and recorded drug allergies are as the chart held
 them at the end of the sweep, so that "her" and "his" in a question can be read.
@@ -49,6 +49,16 @@ Drug allergies: NSAIDs.
 - Is there a safer alternative to her current medications?
 - Can I give her codeine for pain?
 - Is amiodarone safe for her?
+- Can I give her warfarin and ibuprofen together?
+- Does warfarin interact with aspirin?
+- What drugs should she avoid?
+- Can she drink alcohol with her medications?
+- Which of her medications are high risk?
+- Does she need any of her medications adjusted?
+- Are any of her medications contraindicated with her allergies?
+- Is she on any blood thinners?
+- Can I give her prednisone?
+- Is it safe to give her tramadol and diazepam?
 
 ## Amina Wekesa
 
@@ -109,6 +119,16 @@ Drug allergies: Ibuprofen.
 - Is there a safer alternative to her current medications?
 - Can I give her codeine for pain?
 - Is amiodarone safe for her?
+- Can I give her warfarin and ibuprofen together?
+- Does warfarin interact with aspirin?
+- What drugs should she avoid?
+- Can she drink alcohol with her medications?
+- Which of her medications are high risk?
+- Does she need any of her medications adjusted?
+- Are any of her medications contraindicated with her allergies?
+- Is she on any blood thinners?
+- Can I give her prednisone?
+- Is it safe to give her tramadol and diazepam?
 
 ## Betty Williams
 
@@ -150,6 +170,16 @@ Drug allergies: Aspirin, Ketoconazole, Lidocaine.
 - Is there a safer alternative to her current medications?
 - Can I give her codeine for pain?
 - Is amiodarone safe for her?
+- Can I give her warfarin and ibuprofen together?
+- Does warfarin interact with aspirin?
+- What drugs should she avoid?
+- Can she drink alcohol with her medications?
+- Which of her medications are high risk?
+- Does she need any of her medications adjusted?
+- Are any of her medications contraindicated with her allergies?
+- Is she on any blood thinners?
+- Can I give her prednisone?
+- Is it safe to give her tramadol and diazepam?
 
 ## Brian Lopez
 
@@ -205,6 +235,16 @@ Drug allergies: none.
 - Is there a safer alternative to his current medications?
 - Can I give him codeine for pain?
 - Is amiodarone safe for him?
+- Can I give him warfarin and ibuprofen together?
+- Does warfarin interact with aspirin?
+- What drugs should he avoid?
+- Can he drink alcohol with his medications?
+- Which of his medications are high risk?
+- Does he need any of his medications adjusted?
+- Are any of his medications contraindicated with his allergies?
+- Is he on any blood thinners?
+- Can I give him prednisone?
+- Is it safe to give him tramadol and diazepam?
 
 ## Carol Brown
 
@@ -306,6 +346,16 @@ Drug allergies: none.
 - Is there a safer alternative to her current medications?
 - Can I give her codeine for pain?
 - Is amiodarone safe for her?
+- Can I give her warfarin and ibuprofen together?
+- Does warfarin interact with aspirin?
+- What drugs should she avoid?
+- Can she drink alcohol with her medications?
+- Which of her medications are high risk?
+- Does she need any of her medications adjusted?
+- Are any of her medications contraindicated with her allergies?
+- Is she on any blood thinners?
+- Can I give her prednisone?
+- Is it safe to give her tramadol and diazepam?
 
 ## David Williams
 
@@ -402,6 +452,16 @@ Drug allergies: none.
 - Is there a safer alternative to his current medications?
 - Can I give him codeine for pain?
 - Is amiodarone safe for him?
+- Can I give him warfarin and ibuprofen together?
+- Does warfarin interact with aspirin?
+- What drugs should he avoid?
+- Can he drink alcohol with his medications?
+- Which of his medications are high risk?
+- Does he need any of his medications adjusted?
+- Are any of his medications contraindicated with his allergies?
+- Is he on any blood thinners?
+- Can I give him prednisone?
+- Is it safe to give him tramadol and diazepam?
 
 ## Donna Roberts
 
@@ -482,6 +542,16 @@ Drug allergies: Ibuprofen, Ciprofloxacin lactate.
 - Is there a safer alternative to her current medications?
 - Can I give her codeine for pain?
 - Is amiodarone safe for her?
+- Can I give her warfarin and ibuprofen together?
+- Does warfarin interact with aspirin?
+- What drugs should she avoid?
+- Can she drink alcohol with her medications?
+- Which of her medications are high risk?
+- Does she need any of her medications adjusted?
+- Are any of her medications contraindicated with her allergies?
+- Is she on any blood thinners?
+- Can I give her prednisone?
+- Is it safe to give her tramadol and diazepam?
 
 ## Edward Robinson
 
@@ -552,6 +622,16 @@ Drug allergies: Pantoprazole, Ibuprofen, NSAID.
 - Is there a safer alternative to his current medications?
 - Can I give him codeine for pain?
 - Is amiodarone safe for him?
+- Can I give him warfarin and ibuprofen together?
+- Does warfarin interact with aspirin?
+- What drugs should he avoid?
+- Can he drink alcohol with his medications?
+- Which of his medications are high risk?
+- Does he need any of his medications adjusted?
+- Are any of his medications contraindicated with his allergies?
+- Is he on any blood thinners?
+- Can I give him prednisone?
+- Is it safe to give him tramadol and diazepam?
 
 ## Helen Roberts
 
@@ -603,6 +683,16 @@ Drug allergies: none.
 - Is there a safer alternative to her current medications?
 - Can I give her codeine for pain?
 - Is amiodarone safe for her?
+- Can I give her warfarin and ibuprofen together?
+- Does warfarin interact with aspirin?
+- What drugs should she avoid?
+- Can she drink alcohol with her medications?
+- Which of her medications are high risk?
+- Does she need any of her medications adjusted?
+- Are any of her medications contraindicated with her allergies?
+- Is she on any blood thinners?
+- Can I give her prednisone?
+- Is it safe to give her tramadol and diazepam?
 
 ## James Martinez
 
@@ -719,6 +809,16 @@ Drug allergies: Levothyroxine, Levothyroxine sodium, Clarithromycine, Tozinamera
 - Is there a safer alternative to his current medications?
 - Can I give him codeine for pain?
 - Is amiodarone safe for him?
+- Can I give him warfarin and ibuprofen together?
+- Does warfarin interact with aspirin?
+- What drugs should he avoid?
+- Can he drink alcohol with his medications?
+- Which of his medications are high risk?
+- Does he need any of his medications adjusted?
+- Are any of his medications contraindicated with his allergies?
+- Is he on any blood thinners?
+- Can I give him prednisone?
+- Is it safe to give him tramadol and diazepam?
 
 ## Margaret King
 
@@ -778,6 +878,16 @@ Drug allergies: Ciprofloxacin.
 - Is there a safer alternative to his current medications?
 - Can I give him codeine for pain?
 - Is amiodarone safe for him?
+- Can I give him warfarin and ibuprofen together?
+- Does warfarin interact with aspirin?
+- What drugs should he avoid?
+- Can he drink alcohol with his medications?
+- Which of his medications are high risk?
+- Does he need any of his medications adjusted?
+- Are any of his medications contraindicated with his allergies?
+- Is he on any blood thinners?
+- Can I give him prednisone?
+- Is it safe to give him tramadol and diazepam?
 
 ## Mark Williams
 
@@ -857,6 +967,16 @@ Drug allergies: Esomeprazole, Vitamin A, B.
 - Is there a safer alternative to her current medications?
 - Can I give her codeine for pain?
 - Is amiodarone safe for her?
+- Can I give her warfarin and ibuprofen together?
+- Does warfarin interact with aspirin?
+- What drugs should she avoid?
+- Can she drink alcohol with her medications?
+- Which of her medications are high risk?
+- Does she need any of her medications adjusted?
+- Are any of her medications contraindicated with her allergies?
+- Is she on any blood thinners?
+- Can I give her prednisone?
+- Is it safe to give her tramadol and diazepam?
 
 ## Michael Turner
 
@@ -957,6 +1077,16 @@ Drug allergies: none.
 - Is there a safer alternative to her current medications?
 - Can I give her codeine for pain?
 - Is amiodarone safe for her?
+- Can I give her warfarin and ibuprofen together?
+- Does warfarin interact with aspirin?
+- What drugs should she avoid?
+- Can she drink alcohol with her medications?
+- Which of her medications are high risk?
+- Does she need any of her medications adjusted?
+- Are any of her medications contraindicated with her allergies?
+- Is she on any blood thinners?
+- Can I give her prednisone?
+- Is it safe to give her tramadol and diazepam?
 
 ## Priya Severity
 
@@ -1008,6 +1138,16 @@ Drug allergies: none.
 - Is there a safer alternative to her current medications?
 - Can I give her codeine for pain?
 - Is amiodarone safe for her?
+- Can I give her warfarin and ibuprofen together?
+- Does warfarin interact with aspirin?
+- What drugs should she avoid?
+- Can she drink alcohol with her medications?
+- Which of her medications are high risk?
+- Does she need any of her medications adjusted?
+- Are any of her medications contraindicated with her allergies?
+- Is she on any blood thinners?
+- Can I give her prednisone?
+- Is it safe to give her tramadol and diazepam?
 
 ## Provenance Probe
 
@@ -1089,6 +1229,16 @@ Drug allergies: Dexamethasone.
 - Is there a safer alternative to his current medications?
 - Can I give him codeine for pain?
 - Is amiodarone safe for him?
+- Can I give him warfarin and ibuprofen together?
+- Does warfarin interact with aspirin?
+- What drugs should he avoid?
+- Can he drink alcohol with his medications?
+- Which of his medications are high risk?
+- Does he need any of his medications adjusted?
+- Are any of his medications contraindicated with his allergies?
+- Is he on any blood thinners?
+- Can I give him prednisone?
+- Is it safe to give him tramadol and diazepam?
 
 ## Rita Phantomrif
 
@@ -1142,6 +1292,16 @@ Drug allergies: none.
 - Is there a safer alternative to her current medications?
 - Can I give her codeine for pain?
 - Is amiodarone safe for her?
+- Can I give her warfarin and ibuprofen together?
+- Does warfarin interact with aspirin?
+- What drugs should she avoid?
+- Can she drink alcohol with her medications?
+- Which of her medications are high risk?
+- Does she need any of her medications adjusted?
+- Are any of her medications contraindicated with her allergies?
+- Is she on any blood thinners?
+- Can I give her prednisone?
+- Is it safe to give her tramadol and diazepam?
 
 ## Ruth Ritonavira
 
@@ -1210,6 +1370,16 @@ Drug allergies: Dexamethasone, Levothyroxine, Levothyroxine sodium, Clarithromyc
 - Is there a safer alternative to her current medications?
 - Can I give her codeine for pain?
 - Is amiodarone safe for her?
+- Can I give her warfarin and ibuprofen together?
+- Does warfarin interact with aspirin?
+- What drugs should she avoid?
+- Can she drink alcohol with her medications?
+- Which of her medications are high risk?
+- Does she need any of her medications adjusted?
+- Are any of her medications contraindicated with her allergies?
+- Is she on any blood thinners?
+- Can I give her prednisone?
+- Is it safe to give her tramadol and diazepam?
 
 ## Steven White
 
@@ -1281,3 +1451,13 @@ Drug allergies: Tiotropium, Tetryzoline (ophthalmic), Lidocaïne.
 - Is there a safer alternative to her current medications?
 - Can I give her codeine for pain?
 - Is amiodarone safe for her?
+- Can I give her warfarin and ibuprofen together?
+- Does warfarin interact with aspirin?
+- What drugs should she avoid?
+- Can she drink alcohol with her medications?
+- Which of her medications are high risk?
+- Does she need any of her medications adjusted?
+- Are any of her medications contraindicated with her allergies?
+- Is she on any blood thinners?
+- Can I give her prednisone?
+- Is it safe to give her tramadol and diazepam?

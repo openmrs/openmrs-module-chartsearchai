@@ -1,7 +1,7 @@
-# Drug-interaction questions tested on 2026-10-15 and 2026-10-16
+# Drug-interaction questions tested from 2026-10-15 to 2026-10-17
 
 Every question asked of the RefApp 3.7.1 standalone during the drug-interaction sweep of 2026-10-15 and the follow-ups
-that fixed the errors it left, which produced [ADR Decisions 227 to 292](adr.md#decision-227-the-placeholder-a-free-text-allergy-is-saved-on-is-no-allergen-and-an-unchecked-allergy-is-named-as-the-chart-spells-it).
+that fixed the errors it left, which produced [ADR Decisions 227 to 299](adr.md#decision-227-the-placeholder-a-free-text-allergy-is-saved-on-is-no-allergen-and-an-unchecked-allergy-is-named-as-the-chart-spells-it).
 Each question is written exactly as it was asked, misspellings and phone-keyboard apostrophes included, under the
 patient it was asked about. Each patient's active medication orders and recorded drug allergies are as the chart held
 them at the end of the sweep, so that "her" and "his" in a question can be read.
@@ -20,6 +20,35 @@ Drug allergies: NSAIDs.
 - Can I give her ibuprofin?
 - Are her medications safe?
 - Can I give her naproxen?
+- Any duplicate therapy?
+- Which of her medications should I stop?
+- Can I give her Tylenol?
+- Can I give her warfarin?
+- Can I add fluconazole?
+- Can I start her on clarithromycin?
+- Is it safe to give her tramadol for pain?
+- Does she have any drug interactions?
+- What happens if I give her rifampicin?
+- Is it safe to continue all her medications?
+- Should I stop any of her medications?
+- What should I monitor with her current medications?
+- Are there any contraindications among her medicines?
+- Is she on any NSAIDs?
+- Can I give her a statin?
+- Can I give her paracetamol?
+- Can I give her amoxicillin?
+- Is metformin safe for her?
+- Can I add omeprazole to her medications?
+- Is ibuprofen safe with her current medications?
+- Any problems if I start her on fluconazole?
+- Can she take aspirin?
+- Should I avoid giving her clarithromycin?
+- Is it OK to prescribe metronidazole for her?
+- What are her drug allergies?
+- Which of her medications interact with each other?
+- Is there a safer alternative to her current medications?
+- Can I give her codeine for pain?
+- Is amiodarone safe for her?
 
 ## Amina Wekesa
 
@@ -48,6 +77,38 @@ Drug allergies: Ibuprofen.
 - Can she take Advil?
 - Should she keep taking both aspirin and Advil?
 - Is it okay to continue her aspirin?
+- Are her medications safe?
+- Is she allergic to any of her medications?
+- Any duplicate therapy?
+- Which of her medications should I stop?
+- Can I give her ibuprofen?
+- Can I give her Tylenol?
+- Can I give her warfarin?
+- Can I add fluconazole?
+- Can I start her on clarithromycin?
+- Is it safe to give her tramadol for pain?
+- Does she have any drug interactions?
+- What happens if I give her rifampicin?
+- Is it safe to continue all her medications?
+- Should I stop any of her medications?
+- What should I monitor with her current medications?
+- Are there any contraindications among her medicines?
+- Is she on any NSAIDs?
+- Can I give her a statin?
+- Can I give her paracetamol?
+- Can I give her amoxicillin?
+- Is metformin safe for her?
+- Can I add omeprazole to her medications?
+- Is ibuprofen safe with her current medications?
+- Any problems if I start her on fluconazole?
+- Can she take aspirin?
+- Should I avoid giving her clarithromycin?
+- Is it OK to prescribe metronidazole for her?
+- What are her drug allergies?
+- Which of her medications interact with each other?
+- Is there a safer alternative to her current medications?
+- Can I give her codeine for pain?
+- Is amiodarone safe for her?
 
 ## Betty Williams
 
@@ -58,6 +119,37 @@ Drug allergies: Aspirin, Ketoconazole, Lidocaine.
 - Can I give her fluconazole?
 - Can I give her more lidocaine?
 - Can I give her propranolol?
+- Are her medications safe?
+- Is she allergic to any of her medications?
+- Any duplicate therapy?
+- Which of her medications should I stop?
+- Can I give her ibuprofen?
+- Can I give her Tylenol?
+- Can I give her warfarin?
+- Can I add fluconazole?
+- Can I start her on clarithromycin?
+- Is it safe to give her tramadol for pain?
+- What happens if I give her rifampicin?
+- Is it safe to continue all her medications?
+- Should I stop any of her medications?
+- What should I monitor with her current medications?
+- Are there any contraindications among her medicines?
+- Is she on any NSAIDs?
+- Can I give her a statin?
+- Can I give her paracetamol?
+- Can I give her amoxicillin?
+- Is metformin safe for her?
+- Can I add omeprazole to her medications?
+- Is ibuprofen safe with her current medications?
+- Any problems if I start her on fluconazole?
+- Can she take aspirin?
+- Should I avoid giving her clarithromycin?
+- Is it OK to prescribe metronidazole for her?
+- What are her drug allergies?
+- Which of her medications interact with each other?
+- Is there a safer alternative to her current medications?
+- Can I give her codeine for pain?
+- Is amiodarone safe for her?
 
 ## Brian Lopez
 
@@ -91,6 +183,28 @@ Drug allergies: none.
 - Will omeprazole lower his levothyroxine absorption?
 - Should he avoid codeine with his tramadol?
 - Is tramadol dangerous with his diazepam?
+- What can I give him for pain?
+- Which sleeping medication is safe for him?
+- Is it safe to continue all his medications?
+- Should I stop any of his medications?
+- What should I monitor with his current medications?
+- Are there any contraindications among his medicines?
+- Is he on any NSAIDs?
+- Can I give him a statin?
+- Can I give him paracetamol?
+- Can I give him amoxicillin?
+- Is metformin safe for him?
+- Can I add omeprazole to his medications?
+- Is ibuprofen safe with his current medications?
+- Any problems if I start him on fluconazole?
+- Can he take aspirin?
+- Should I avoid giving him clarithromycin?
+- Is it OK to prescribe metronidazole for him?
+- What are his drug allergies?
+- Which of his medications interact with each other?
+- Is there a safer alternative to his current medications?
+- Can I give him codeine for pain?
+- Is amiodarone safe for him?
 
 ## Carol Brown
 
@@ -170,6 +284,28 @@ Drug allergies: none.
 - Is she on clopidogrel?
 - Is she on aspirin?
 - Does her ibuprofen interact with her other medications?
+- Which blood pressure medication is safest for her?
+- What can I give her for a headache?
+- Is it safe to continue all her medications?
+- Should I stop any of her medications?
+- What should I monitor with her current medications?
+- Are there any contraindications among her medicines?
+- Is she on any NSAIDs?
+- Can I give her a statin?
+- Can I give her paracetamol?
+- Can I give her amoxicillin?
+- Is metformin safe for her?
+- Can I add omeprazole to her medications?
+- Is ibuprofen safe with her current medications?
+- Any problems if I start her on fluconazole?
+- Can she take aspirin?
+- Should I avoid giving her clarithromycin?
+- Is it OK to prescribe metronidazole for her?
+- What are her drug allergies?
+- Which of her medications interact with each other?
+- Is there a safer alternative to her current medications?
+- Can I give her codeine for pain?
+- Is amiodarone safe for her?
 
 ## David Williams
 
@@ -244,6 +380,28 @@ Drug allergies: none.
 - Can he drink alcohol?
 - Can I give him diazepam for alcohol withdrawal?
 - Is co-trimoxazole safe with his warfarin?
+- Which antibiotic is safe for him?
+- What painkiller can he take?
+- Is it safe to continue all his medications?
+- Should I stop any of his medications?
+- What should I monitor with his current medications?
+- Are there any contraindications among his medicines?
+- Is he on any NSAIDs?
+- Can I give him a statin?
+- Can I give him paracetamol?
+- Can I give him amoxicillin?
+- Is metformin safe for him?
+- Can I add omeprazole to his medications?
+- Is ibuprofen safe with his current medications?
+- Any problems if I start him on fluconazole?
+- Can he take aspirin?
+- Should I avoid giving him clarithromycin?
+- Is it OK to prescribe metronidazole for him?
+- What are his drug allergies?
+- Which of his medications interact with each other?
+- Is there a safer alternative to his current medications?
+- Can I give him codeine for pain?
+- Is amiodarone safe for him?
 
 ## Donna Roberts
 
@@ -293,6 +451,37 @@ Drug allergies: Ibuprofen, Ciprofloxacin lactate.
 - Can I give her naproxen for her joint pain?
 - Can I give her levofloxacin?
 - Which pain medication is safe for her?
+- Are her medications safe?
+- Any duplicate therapy?
+- Which of her medications should I stop?
+- Can I give her ibuprofen?
+- Can I give her Tylenol?
+- Can I give her warfarin?
+- Can I add fluconazole?
+- Can I start her on clarithromycin?
+- Is it safe to give her tramadol for pain?
+- Does she have any drug interactions?
+- What happens if I give her rifampicin?
+- Is it safe to continue all her medications?
+- Should I stop any of her medications?
+- What should I monitor with her current medications?
+- Are there any contraindications among her medicines?
+- Is she on any NSAIDs?
+- Can I give her a statin?
+- Can I give her paracetamol?
+- Can I give her amoxicillin?
+- Is metformin safe for her?
+- Can I add omeprazole to her medications?
+- Is ibuprofen safe with her current medications?
+- Any problems if I start her on fluconazole?
+- Can she take aspirin?
+- Should I avoid giving her clarithromycin?
+- Is it OK to prescribe metronidazole for her?
+- What are her drug allergies?
+- Which of her medications interact with each other?
+- Is there a safer alternative to her current medications?
+- Can I give her codeine for pain?
+- Is amiodarone safe for her?
 
 ## Edward Robinson
 
@@ -333,6 +522,36 @@ Drug allergies: Pantoprazole, Ibuprofen, NSAID.
 - Can I give him ibuprofen?
 - Is 1 g of paracetamol safe for him?
 - Is paracetamol safe for him?
+- Are his medications safe?
+- Is he allergic to any of his medications?
+- Any duplicate therapy?
+- Which of his medications should I stop?
+- Can I give him Tylenol?
+- Can I add fluconazole?
+- Can I start him on clarithromycin?
+- Is it safe to give him tramadol for pain?
+- Does he have any drug interactions?
+- What happens if I give him rifampicin?
+- Is it safe to continue all his medications?
+- Should I stop any of his medications?
+- What should I monitor with his current medications?
+- Are there any contraindications among his medicines?
+- Is he on any NSAIDs?
+- Can I give him a statin?
+- Can I give him paracetamol?
+- Can I give him amoxicillin?
+- Is metformin safe for him?
+- Can I add omeprazole to his medications?
+- Is ibuprofen safe with his current medications?
+- Any problems if I start him on fluconazole?
+- Can he take aspirin?
+- Should I avoid giving him clarithromycin?
+- Is it OK to prescribe metronidazole for him?
+- What are his drug allergies?
+- Which of his medications interact with each other?
+- Is there a safer alternative to his current medications?
+- Can I give him codeine for pain?
+- Is amiodarone safe for him?
 
 ## Helen Roberts
 
@@ -352,6 +571,38 @@ Drug allergies: none.
 - Can I give her penicillin?
 - Is penicillin safe with her methotrexate?
 - Can I give her penicillin V?
+- Are her medications safe?
+- Is she allergic to any of her medications?
+- Any duplicate therapy?
+- Which of her medications should I stop?
+- Can I give her ibuprofen?
+- Can I give her Tylenol?
+- Can I give her warfarin?
+- Can I add fluconazole?
+- Can I start her on clarithromycin?
+- Is it safe to give her tramadol for pain?
+- Does she have any drug interactions?
+- What happens if I give her rifampicin?
+- Is it safe to continue all her medications?
+- Should I stop any of her medications?
+- What should I monitor with her current medications?
+- Are there any contraindications among her medicines?
+- Is she on any NSAIDs?
+- Can I give her a statin?
+- Can I give her paracetamol?
+- Can I give her amoxicillin?
+- Is metformin safe for her?
+- Can I add omeprazole to her medications?
+- Is ibuprofen safe with her current medications?
+- Any problems if I start her on fluconazole?
+- Can she take aspirin?
+- Should I avoid giving her clarithromycin?
+- Is it OK to prescribe metronidazole for her?
+- What are her drug allergies?
+- Which of her medications interact with each other?
+- Is there a safer alternative to her current medications?
+- Can I give her codeine for pain?
+- Is amiodarone safe for her?
 
 ## James Martinez
 
@@ -439,6 +690,35 @@ Drug allergies: Levothyroxine, Levothyroxine sodium, Clarithromycine, Tozinamera
 - Does he have any drug interactions?
 - Are his medications safe?
 - Can I give him ergotamine?
+- Any duplicate therapy?
+- Which of his medications should I stop?
+- Can I give him ibuprofen?
+- Can I give him Tylenol?
+- Can I give him warfarin?
+- Can I add fluconazole?
+- Can I start him on clarithromycin?
+- Is it safe to give him tramadol for pain?
+- What happens if I give him rifampicin?
+- Is it safe to continue all his medications?
+- Should I stop any of his medications?
+- What should I monitor with his current medications?
+- Are there any contraindications among his medicines?
+- Is he on any NSAIDs?
+- Can I give him a statin?
+- Can I give him paracetamol?
+- Can I give him amoxicillin?
+- Is metformin safe for him?
+- Can I add omeprazole to his medications?
+- Is ibuprofen safe with his current medications?
+- Any problems if I start him on fluconazole?
+- Can he take aspirin?
+- Should I avoid giving him clarithromycin?
+- Is it OK to prescribe metronidazole for him?
+- What are his drug allergies?
+- Which of his medications interact with each other?
+- Is there a safer alternative to his current medications?
+- Can I give him codeine for pain?
+- Is amiodarone safe for him?
 
 ## Margaret King
 
@@ -467,6 +747,37 @@ Drug allergies: Ciprofloxacin.
 - Is Benadryl okay with his chloroquine?
 - Can I give him hydroxychloroquine?
 - Can I give him azithromycin?
+- Are his medications safe?
+- Is he allergic to any of his medications?
+- Any duplicate therapy?
+- Which of his medications should I stop?
+- Can I give him ibuprofen?
+- Can I give him Tylenol?
+- Can I give him warfarin?
+- Can I add fluconazole?
+- Can I start him on clarithromycin?
+- Is it safe to give him tramadol for pain?
+- What happens if I give him rifampicin?
+- Is it safe to continue all his medications?
+- Should I stop any of his medications?
+- What should I monitor with his current medications?
+- Are there any contraindications among his medicines?
+- Is he on any NSAIDs?
+- Can I give him a statin?
+- Can I give him paracetamol?
+- Can I give him amoxicillin?
+- Is metformin safe for him?
+- Can I add omeprazole to his medications?
+- Is ibuprofen safe with his current medications?
+- Any problems if I start him on fluconazole?
+- Can he take aspirin?
+- Should I avoid giving him clarithromycin?
+- Is it OK to prescribe metronidazole for him?
+- What are his drug allergies?
+- Which of his medications interact with each other?
+- Is there a safer alternative to his current medications?
+- Can I give him codeine for pain?
+- Is amiodarone safe for him?
 
 ## Mark Williams
 
@@ -514,6 +825,38 @@ Drug allergies: Esomeprazole, Vitamin A, B.
 - Can I give her eplerenone?
 - Can I give her amiloride?
 - Can lisinopril be given alongside her spironolactone?
+- Are her medications safe?
+- Is she allergic to any of her medications?
+- Any duplicate therapy?
+- Which of her medications should I stop?
+- Can I give her ibuprofen?
+- Can I give her Tylenol?
+- Can I give her warfarin?
+- Can I add fluconazole?
+- Can I start her on clarithromycin?
+- Is it safe to give her tramadol for pain?
+- Does she have any drug interactions?
+- What happens if I give her rifampicin?
+- Is it safe to continue all her medications?
+- Should I stop any of her medications?
+- What should I monitor with her current medications?
+- Are there any contraindications among her medicines?
+- Is she on any NSAIDs?
+- Can I give her a statin?
+- Can I give her paracetamol?
+- Can I give her amoxicillin?
+- Is metformin safe for her?
+- Can I add omeprazole to her medications?
+- Is ibuprofen safe with her current medications?
+- Any problems if I start her on fluconazole?
+- Can she take aspirin?
+- Should I avoid giving her clarithromycin?
+- Is it OK to prescribe metronidazole for her?
+- What are her drug allergies?
+- Which of her medications interact with each other?
+- Is there a safer alternative to her current medications?
+- Can I give her codeine for pain?
+- Is amiodarone safe for her?
 
 ## Michael Turner
 
@@ -581,6 +924,39 @@ Drug allergies: none.
 - Is she taking tenofovir?
 - Is she on stavudine?
 - Is zidovudine one of her medications?
+- Which antibiotic should I use for her?
+- Are her medications safe?
+- Is she allergic to any of her medications?
+- Any duplicate therapy?
+- Which of her medications should I stop?
+- Can I give her ibuprofen?
+- Can I give her Tylenol?
+- Can I give her warfarin?
+- Can I add fluconazole?
+- Can I start her on clarithromycin?
+- Is it safe to give her tramadol for pain?
+- Does she have any drug interactions?
+- What happens if I give her rifampicin?
+- Is it safe to continue all her medications?
+- Should I stop any of her medications?
+- What should I monitor with her current medications?
+- Are there any contraindications among her medicines?
+- Is she on any NSAIDs?
+- Can I give her a statin?
+- Can I give her paracetamol?
+- Can I give her amoxicillin?
+- Is metformin safe for her?
+- Can I add omeprazole to her medications?
+- Is ibuprofen safe with her current medications?
+- Any problems if I start her on fluconazole?
+- Can she take aspirin?
+- Should I avoid giving her clarithromycin?
+- Is it OK to prescribe metronidazole for her?
+- What are her drug allergies?
+- Which of her medications interact with each other?
+- Is there a safer alternative to her current medications?
+- Can I give her codeine for pain?
+- Is amiodarone safe for her?
 
 ## Priya Severity
 
@@ -600,6 +976,38 @@ Drug allergies: none.
 - Is esomeprazole safe with her clopidogrel?
 - Does omeprazole reduce the effect of her clopidogrel?
 - Is clopidogrel safe alongside her simvastatin?
+- Are her medications safe?
+- Is she allergic to any of her medications?
+- Any duplicate therapy?
+- Which of her medications should I stop?
+- Can I give her ibuprofen?
+- Can I give her Tylenol?
+- Can I give her warfarin?
+- Can I add fluconazole?
+- Can I start her on clarithromycin?
+- Is it safe to give her tramadol for pain?
+- Does she have any drug interactions?
+- What happens if I give her rifampicin?
+- Is it safe to continue all her medications?
+- Should I stop any of her medications?
+- What should I monitor with her current medications?
+- Are there any contraindications among her medicines?
+- Is she on any NSAIDs?
+- Can I give her a statin?
+- Can I give her paracetamol?
+- Can I give her amoxicillin?
+- Is metformin safe for her?
+- Can I add omeprazole to her medications?
+- Is ibuprofen safe with her current medications?
+- Any problems if I start her on fluconazole?
+- Can she take aspirin?
+- Should I avoid giving her clarithromycin?
+- Is it OK to prescribe metronidazole for her?
+- What are her drug allergies?
+- Which of her medications interact with each other?
+- Is there a safer alternative to her current medications?
+- Can I give her codeine for pain?
+- Is amiodarone safe for her?
 
 ## Provenance Probe
 
@@ -650,6 +1058,37 @@ Drug allergies: Dexamethasone.
 - Can I give him methylprednisolone?
 - Does he have any drug interactions?
 - Are his medications safe to take together?
+- Are his medications safe?
+- Is he allergic to any of his medications?
+- Any duplicate therapy?
+- Which of his medications should I stop?
+- Can I give him ibuprofen?
+- Can I give him Tylenol?
+- Can I give him warfarin?
+- Can I add fluconazole?
+- Can I start him on clarithromycin?
+- Is it safe to give him tramadol for pain?
+- What happens if I give him rifampicin?
+- Is it safe to continue all his medications?
+- Should I stop any of his medications?
+- What should I monitor with his current medications?
+- Are there any contraindications among his medicines?
+- Is he on any NSAIDs?
+- Can I give him a statin?
+- Can I give him paracetamol?
+- Can I give him amoxicillin?
+- Is metformin safe for him?
+- Can I add omeprazole to his medications?
+- Is ibuprofen safe with his current medications?
+- Any problems if I start him on fluconazole?
+- Can he take aspirin?
+- Should I avoid giving him clarithromycin?
+- Is it OK to prescribe metronidazole for him?
+- What are his drug allergies?
+- Which of his medications interact with each other?
+- Is there a safer alternative to his current medications?
+- Can I give him codeine for pain?
+- Is amiodarone safe for him?
 
 ## Rita Phantomrif
 
@@ -671,6 +1110,38 @@ Drug allergies: none.
 - If I stop her rifampicin, which interactions go away?
 - Is there any problem combining her TB drugs with fluconazole?
 - any ddis
+- Are her medications safe?
+- Is she allergic to any of her medications?
+- Any duplicate therapy?
+- Which of her medications should I stop?
+- Can I give her ibuprofen?
+- Can I give her Tylenol?
+- Can I give her warfarin?
+- Can I add fluconazole?
+- Can I start her on clarithromycin?
+- Is it safe to give her tramadol for pain?
+- Does she have any drug interactions?
+- What happens if I give her rifampicin?
+- Is it safe to continue all her medications?
+- Should I stop any of her medications?
+- What should I monitor with her current medications?
+- Are there any contraindications among her medicines?
+- Is she on any NSAIDs?
+- Can I give her a statin?
+- Can I give her paracetamol?
+- Can I give her amoxicillin?
+- Is metformin safe for her?
+- Can I add omeprazole to her medications?
+- Is ibuprofen safe with her current medications?
+- Any problems if I start her on fluconazole?
+- Can she take aspirin?
+- Should I avoid giving her clarithromycin?
+- Is it OK to prescribe metronidazole for her?
+- What are her drug allergies?
+- Which of her medications interact with each other?
+- Is there a safer alternative to her current medications?
+- Can I give her codeine for pain?
+- Is amiodarone safe for her?
 
 ## Ruth Ritonavira
 
@@ -715,6 +1186,30 @@ Drug allergies: Dexamethasone, Levothyroxine, Levothyroxine sodium, Clarithromyc
 - Any issues with her Advil?
 - What happens if I give her warfarin?
 - Can I add naproxen to her ibuprofen?
+- Which pain medication is safe for her?
+- What can I give her for pain?
+- What is the safest painkiller for her?
+- Which treatment option is best for her?
+- Is it safe to continue all her medications?
+- Should I stop any of her medications?
+- What should I monitor with her current medications?
+- Are there any contraindications among her medicines?
+- Is she on any NSAIDs?
+- Can I give her a statin?
+- Can I give her paracetamol?
+- Can I give her amoxicillin?
+- Is metformin safe for her?
+- Can I add omeprazole to her medications?
+- Is ibuprofen safe with her current medications?
+- Any problems if I start her on fluconazole?
+- Can she take aspirin?
+- Should I avoid giving her clarithromycin?
+- Is it OK to prescribe metronidazole for her?
+- What are her drug allergies?
+- Which of her medications interact with each other?
+- Is there a safer alternative to her current medications?
+- Can I give her codeine for pain?
+- Is amiodarone safe for her?
 
 ## Steven White
 
@@ -757,3 +1252,32 @@ Drug allergies: Tiotropium, Tetryzoline (ophthalmic), Lidocaïne.
 - Are her medications safe to take together?
 - Is her metoclopramide safe with her lidocaine?
 - Can I give her a second dose of neomycin?
+- Are her medications safe?
+- Any duplicate therapy?
+- Which of her medications should I stop?
+- Can I give her ibuprofen?
+- Can I give her Tylenol?
+- Can I give her warfarin?
+- Can I add fluconazole?
+- Can I start her on clarithromycin?
+- Is it safe to give her tramadol for pain?
+- What happens if I give her rifampicin?
+- Is it safe to continue all her medications?
+- Should I stop any of her medications?
+- What should I monitor with her current medications?
+- Are there any contraindications among her medicines?
+- Is she on any NSAIDs?
+- Can I give her a statin?
+- Can I give her paracetamol?
+- Can I give her amoxicillin?
+- Is metformin safe for her?
+- Can I add omeprazole to her medications?
+- Is ibuprofen safe with her current medications?
+- Any problems if I start her on fluconazole?
+- Can she take aspirin?
+- Should I avoid giving her clarithromycin?
+- Is it OK to prescribe metronidazole for her?
+- What are her drug allergies?
+- Is there a safer alternative to her current medications?
+- Can I give her codeine for pain?
+- Is amiodarone safe for her?

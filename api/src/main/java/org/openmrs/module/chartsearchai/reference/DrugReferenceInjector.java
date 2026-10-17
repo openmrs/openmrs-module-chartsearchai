@@ -1346,6 +1346,11 @@ public class DrugReferenceInjector {
 		if (choice) {
 			moduleAnswer = CHOOSES_NO_DRUG_LEAD + "\n" + moduleAnswer;
 		}
+		// Which of her medications are high risk, likewise, under a lead saying it rates no risk (ADR Decision 300).
+		if (moduleAnswer != null && questionDrugs.isEmpty()
+				&& QueryScopeRouter.asksWhichOfHerMedicationsAreHighRisk(question)) {
+			moduleAnswer = RATES_NO_RISK_LEAD + "\n" + moduleAnswer;
+		}
 		// What to monitor with her medications, likewise: the screen, under a lead saying it sets no monitoring (ADR
 		// Decision 297).
 		if (moduleAnswer != null && questionDrugs.isEmpty()
@@ -6735,6 +6740,11 @@ public class DrugReferenceInjector {
 	 *  chooses a drug or clears one, and the screen that follows is of the medications she already takes. */
 	static final String CHOOSES_NO_DRUG_LEAD = "This check does not choose a medication to give this patient, and states"
 			+ " none as safe: it screens only the medications this patient is already taking.";
+
+	/** How the answer to which of her medications are high risk opens (ADR Decision 300): no finding rates a medication's
+	 *  risk. */
+	static final String RATES_NO_RISK_LEAD = "This check does not rate a medication's risk: it states what it found among"
+			+ " the medications this patient is already taking.";
 
 	/** How the answer to what to monitor with her medications opens (ADR Decision 297): no finding sets monitoring. */
 	static final String SETS_NO_MONITORING_LEAD = "This check does not say what to monitor: it states what it found among"

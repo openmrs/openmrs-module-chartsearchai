@@ -237,7 +237,9 @@ public final class QueryScopeRouter {
 				|| asksAboutDuplicateTherapy(question)
 				// A choice of drug asked of the module is answered with the screen of what she takes (ADR Decision 293), and so
 				// is what to monitor with her medications (ADR Decision 297).
-				|| asksWhichDrugToGiveHer(question) || asksWhatToMonitorWithHerMedications(question));
+				|| asksWhichDrugToGiveHer(question) || asksWhatToMonitorWithHerMedications(question)
+				// And which of her medications are high risk, and whether any need changing (ADR Decision 300).
+				|| asksWhichOfHerMedicationsAreHighRisk(question) || asksWhetherHerMedicationsNeedChanging(question));
 	}
 
 	/**
@@ -347,6 +349,13 @@ public final class QueryScopeRouter {
 			// "Can I add ibuprofen to her medications?" (ADR Decision 180)
 			"(?:can|could|may|should) (?:i|we) (?:also )?(?:safely )?add " + D + " to " + POSSESSIVE + " " + MEDICATIONS
 					+ "(?: now| today)?",
+			// "Can she drink alcohol with her medications?", "Is it safe for her to drink alcohol with her meds?" (ADR Decision
+			// 300) — a substance she would take herself, beside what she takes,
+			// proposed as "Can she drink alcohol?" is (ADR Decision 268)
+			"(?:can|could|may|should) (?:she|he|they|the patient|this patient) (?:safely )?(?:drink|have|take|consume) " + D
+					+ " (?:with|alongside|while (?:on|taking)) " + POSSESSIVE + " " + MEDICATIONS,
+			"is it (?:safe|ok|okay) for (?:her|him|them|the patient|this patient) to (?:drink|have|take|consume) " + D
+					+ " (?:with|alongside|while (?:on|taking)) " + POSSESSIVE + " " + MEDICATIONS,
 			// "Can this patient take warfarin?", "Can she take ibuprofen?", "Can she drink alcohol?" (ADR Decision 268)
 			"(?:can|could|may|should) (?:she|he|they|the patient|this patient) (?:also )?(?:safely )?(?:take|start|be given|be started on"
 					+ "|have|use|drink) " + D + "(?: now| today)?",
@@ -1150,7 +1159,8 @@ public final class QueryScopeRouter {
 	 */
 	public static boolean asksOnlyToScreenHerMedications(String question) {
 		return fitsAShape(words(question), SCREEN_SHAPES) || asksWhichDrugToGiveHer(question)
-				|| asksWhatToMonitorWithHerMedications(question)
+				|| asksWhatToMonitorWithHerMedications(question) || asksWhichOfHerMedicationsAreHighRisk(question)
+				|| asksWhetherHerMedicationsNeedChanging(question)
 				|| question != null && isInteractionScreening(question)
 						&& (MEDICATIONS_CUES.matcher(question).find() || DDI_CUES.matcher(question).find())
 						&& (asksForAReadingBesidesAChange(question) || CHANGE_REQUEST.matcher(question).find())
@@ -1234,6 +1244,41 @@ public final class QueryScopeRouter {
 
 	private static final String HER_MEDICATIONS = POSSESSIVE + " " + MEDICATIONS;
 
+	/**
+	 * Whether a question asks which of her medications are high risk, and nothing else — <em>"Which of her medications are
+	 * high risk?"</em> (ADR Decision 300). No finding rates a medication's risk, so the module answers with its screen under
+	 * a lead saying so. A closed grammar, fail-CLOSED.
+	 */
+	public static boolean asksWhichOfHerMedicationsAreHighRisk(String question) {
+		return question != null && question.indexOf('?') == question.lastIndexOf('?')
+				&& fitsAShape(words(question), HIGH_RISK_SHAPES);
+	}
+
+	private static final String RISKY = "(?:high risk|higher risk|dangerous|risky|unsafe|concerning|a concern)";
+
+	private static final List<Pattern> HIGH_RISK_SHAPES = shapes(
+			// "Which of her medications are high risk?", "Which of her meds are dangerous?"
+			"(?:which|what) (?:of )?" + HER_MEDICATIONS + " (?:are|is) " + RISKY,
+			// "Are any of her medications high risk?"
+			"(?:are|is) any of " + HER_MEDICATIONS + " " + RISKY);
+
+	/**
+	 * Whether a question asks whether any of her medications need changing — <em>"Does she need any of her medications
+	 * adjusted?"</em> — the change {@link #CHANGE_REQUEST} asks in other words, which a screen informs (ADR Decision 300).
+	 */
+	public static boolean asksWhetherHerMedicationsNeedChanging(String question) {
+		return question != null && question.indexOf('?') == question.lastIndexOf('?')
+				&& fitsAShape(words(question), NEED_CHANGING_SHAPES);
+	}
+
+	private static final String CHANGED = "(?:adjusted|changed|stopped|modified|reviewed|adjusting|changing|stopping)";
+
+	private static final List<Pattern> NEED_CHANGING_SHAPES = shapes(
+			// "Does she need any of her medications adjusted?"
+			"(?:does|do) " + SUBJECT + " need any of " + HER_MEDICATIONS + " " + CHANGED,
+			// "Do any of her medications need to be changed?"
+			"(?:do|does) any of " + HER_MEDICATIONS + " need (?:to be )?" + CHANGED);
+
 	private static final List<Pattern> MONITORING_SHAPES = shapes(
 			// "What should I monitor with her current medications?", "What do I need to monitor with her meds?"
 			"what (?:should|do|must) (?:i|we) (?:need to )?monitor (?:with|for|on|in) " + HER_MEDICATIONS,
@@ -1252,6 +1297,12 @@ public final class QueryScopeRouter {
 			// "Is she on anything she is allergic to?", "Is she taking any medication she's allergic to?"
 			"(?:is|are) " + SUBJECT + " (?:on|taking|receiving) (?:anything|any (?:medications?|meds|medicines?|drugs?))"
 					+ " (?:that )?" + ALLERGIC + " to",
+			// "Are any of her medications contraindicated with her allergies?", "Do any of her medications conflict with her
+			// allergies?" (ADR Decision 300)
+			"(?:are|is) any of " + POSSESSIVE + " " + MEDICATIONS + " contraindicated (?:with|by|because of|due to|given) "
+					+ POSSESSIVE + " (?:drug )?allerg(?:y|ies)",
+			"(?:do|does) any of " + POSSESSIVE + " " + MEDICATIONS + " (?:conflict|clash) with " + POSSESSIVE
+					+ " (?:drug )?allerg(?:y|ies)",
 			// "Are any of her medications ones she is allergic to?"
 			"(?:are|is) any of " + POSSESSIVE + " " + MEDICATIONS + " (?:ones? |something )?(?:that )?" + ALLERGIC + " to");
 

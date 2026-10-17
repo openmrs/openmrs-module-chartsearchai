@@ -43,7 +43,10 @@ public class AllergyToHerMedicationsQuestionTest extends BaseModuleContextSensit
 	public void anAllergyToADrugSheTakesIsAYes() {
 		for (String question : Arrays.asList("Is she allergic to any of her medications?",
 				"Is she allergic to any of her current medications?", "Does she have an allergy to any of her meds?",
-				"Is she on anything she is allergic to?", "Is she taking any medication she's allergic to?")) {
+				"Is she on anything she is allergic to?", "Is she taking any medication she's allergic to?",
+				// ADR Decision 300: Kevin Brown was told "No — Clarithromycin should not be given" of his own allergy.
+				"Are any of her medications contraindicated with her allergies?",
+				"Do any of her medications conflict with her allergies?")) {
 			String answer = ask(question, DrugReferenceTestSupport.set("lidocaine"),
 				DrugReferenceTestSupport.activeOrder("order-lido", "Lidocaine", "Lidocaine"),
 				DrugReferenceTestSupport.activeOrder("order-bupi", "Bupivacaine", "Bupivacaine"));

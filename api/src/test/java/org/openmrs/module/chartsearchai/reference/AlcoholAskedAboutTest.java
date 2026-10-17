@@ -42,7 +42,10 @@ public class AlcoholAskedAboutTest extends BaseModuleContextSensitiveTest {
 	@Test
 	public void drinkingAlcoholBesideHerMetronidazoleIsCheckedAsEthanol() {
 		for (String question : Arrays.asList("Can she drink alcohol while on metronidazole?", "Can she drink alcohol?",
-			"Is alcohol safe with her metronidazole?", "Can she have alcohol with her metronidazole?")) {
+			"Is alcohol safe with her metronidazole?", "Can she have alcohol with her metronidazole?",
+			// ADR Decision 300: asked of her medications, the model told Kevin Brown, on clarithromycin alone, of "major
+			// interactions with several medications, including metformin".
+			"Can she drink alcohol with her medications?", "Is it safe for her to drink alcohol with her meds?")) {
 			String answer = answer(ask(question, "Metronidazole 500mg"), question);
 			assertTrue(answer.contains("No — this module's drug-safety check found a reason to withhold Ethanol."),
 				question + " was: " + answer);

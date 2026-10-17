@@ -18917,3 +18917,40 @@ continued"*.
 
 Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.whetherADrugIsSafeWithHerMedicationsOrCausesProblemsIfStartedIsAnsweredFromTheFindings`
 and `.askingWhichDrugIsSafeForHerIsAnsweredWithTheScreenAndNoChoice`.
+
+## Decision 300: Four more wordings of questions the module answers reach those answers
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-16 to keep fixing what the tested questions get
+wrong.
+
+### Context
+
+A fifth round of ten questions asked of eighteen patients on the 3.7.1 standalone found four wordings left to the model
+that the module already answers in other words, each answered wrongly there:
+
+- *"Are any of her medications contraindicated with her allergies?"* — Kevin Brown, allergic to the clarithromycin he
+  takes, *"No — Clarithromycin should not be given"*; Sarah Taylor *"No — the following medications should be changed"*.
+- *"Does she need any of her medications adjusted?"* — Brian Lopez *"No — Diazepam should be changed"*.
+- *"Can she drink alcohol with her medications?"* — Kevin Brown, on clarithromycin alone, *"No — alcohol consumption
+  should be avoided due to major interactions with several medications, including metformin"*; Priya Severity
+  *"Simvastatin can be given"*.
+- *"Which of her medications are high risk?"* — Kevin Brown's recorded allergies named as his high-risk medications.
+
+### The decision
+
+- The first is [Decision 295](#decision-295-whether-she-is-allergic-to-any-of-her-medications-is-answered-from-her-allergy-findings)'s
+  question, and joins its grammar.
+- The second asks for the change [Decision 241](#decision-241-which-of-her-medications-should-i-stop-is-a-screen-in-either-voice)'s
+  screen informs (`QueryScopeRouter.asksWhetherHerMedicationsNeedChanging`).
+- The third proposes ethanol beside her medications, as
+  [Decision 268](#decision-268-alcohol-a-clinician-asks-about-is-checked-as-the-knowledge-bases-ethanol)'s *"Can she drink
+  alcohol?"* does, and joins the proposal grammar.
+- The fourth is a screen under its own lead, *"This check does not rate a medication's risk: it states what it found
+  among the medications this patient is already taking."*
+  (`QueryScopeRouter.asksWhichOfHerMedicationsAreHighRisk`, `DrugReferenceInjector.RATES_NO_RISK_LEAD`), as
+  [Decision 297](#decision-297-what-to-monitor-with-her-medications-is-answered-with-the-screen-under-a-lead-setting-no-monitoring)
+  opens monitoring.
+
+Pinned by `AllergyToHerMedicationsQuestionTest.anAllergyToADrugSheTakesIsAYes`, `AlcoholAskedAboutTest.drinkingAlcoholBesideHerMetronidazoleIsCheckedAsEthanol`,
+`LlmInferenceServiceAnswerFromFindingsContextTest.askingWhichOfHerMedicationsIShouldStopIsAScreen` and
+`.whichOfHerMedicationsAreHighRiskIsTheScreenUnderALeadRatingNoRisk`.

@@ -3083,7 +3083,9 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		executeDataSet(WARFARIN_ORDER);
 		for (String question : new String[] { "Which of her medications should I stop?",
 				"Which of her meds should we change?", "Which medications should I discontinue?",
-				"Which of her medications should be stopped?" }) {
+				"Which of her medications should be stopped?",
+				// ADR Decision 300: Brian Lopez was told "No — Diazepam should be changed".
+				"Does she need any of her medications adjusted?", "Do any of her medications need to be changed?" }) {
 			RecordingProvider provider = new RecordingProvider();
 			ChartAnswer answer = serviceWith(provider).search(patient, question);
 
@@ -3168,6 +3170,28 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		RecordingProvider provider = new RecordingProvider();
 		serviceWith(provider).search(patient, "What should I monitor for her blood pressure?");
 		assertEquals(1, provider.calls, "monitoring of something other than her medications is still the model's");
+	}
+
+	/**
+	 * Which of her medications are high risk is answered by the module with the screen, under a lead saying it rates no
+	 * medication's risk (ADR Decision 300). On the 3.7.1 standalone the model named Kevin Brown's recorded allergies as his
+	 * high-risk medications.
+	 */
+	@Test
+	public void whichOfHerMedicationsAreHighRiskIsTheScreenUnderALeadRatingNoRisk() throws Exception {
+		executeDataSet(WARFARIN_ORDER);
+		for (String question : new String[] { "Which of her medications are high risk?",
+				"Are any of her medications high risk?", "Which of her meds are dangerous?" }) {
+			RecordingProvider provider = new RecordingProvider();
+			ChartAnswer answer = serviceWith(provider).search(patient, question);
+
+			assertEquals(0, provider.calls, question + " — the module answers: " + answer.getAnswer());
+			String[] lines = answer.getAnswer().split("\n");
+			assertEquals("This check does not rate a medication's risk: it states what it found among the medications this "
+					+ "patient is already taking.", lines[0], question + " — was: " + answer.getAnswer());
+			assertTrue(lines[2].startsWith("Acetylsalicylic acid (aspirin) interacts with active order"),
+					question + " — was: " + answer.getAnswer());
+		}
 	}
 
 	/**

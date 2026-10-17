@@ -1192,7 +1192,7 @@ public class DrugReferenceInjector {
 						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
 						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS)
 				&& context.chartReadForSafety()) {
-			boolean proposes = questionProposes(question, questionDrugs);
+			boolean proposes = proposesADrugNotHers(question, questionDrugs, screenedSubstances);
 			moduleAnswer = composeFromBelowFloor(proposes, questionDrugs, screenedSubstances, pairExtent.stated(),
 					mappings, context);
 			if (moduleAnswer == null) {
@@ -4114,7 +4114,7 @@ public class DrugReferenceInjector {
 		// after saying she is not on it (ADR Decision 260); so is whether she is on one she is not, under a lead saying
 		// neither "Yes" nor "No" (ADR Decision 287).
 		if (asked.size() != 1 && !namesOneProduct(question, questionDrugs) || !Collections.disjoint(asked, herSubstances)
-				|| !questionProposes(question, questionDrugs) && !asksWhetherItInteracts(question, questionDrugs)
+				|| !proposesADrugNotHers(question, questionDrugs, herSubstances) && !asksWhetherItInteracts(question, questionDrugs)
 						&& !QueryScopeRouter.asksAboutADrugNamedAsHers(wordsBesideItsNames(question, questionDrugs))
 						&& !asksWhetherSheIsOnIt(question, questionDrugs)) {
 			return false;
@@ -4243,6 +4243,27 @@ public class DrugReferenceInjector {
 	static boolean questionProposes(String question, List<DrugReference> questionDrugs) {
 		return !questionDrugs.isEmpty()
 				&& QueryScopeRouter.asksWhetherToGiveADrug(wordsBesideItsNames(question, questionDrugs));
+	}
+
+	/**
+	 * {@link #questionProposes}, or a question whether a drug none of {@code herSubstances} is is safe with her medications
+	 * (ADR Decision 299): of a drug she is not on, that asks what a proposal asks. Of her own drug it asks about her
+	 * medication (ADR Decision 202), so it is no proposal there, and {@link #questionProposes}'s other readers never see it.
+	 */
+	static boolean proposesADrugNotHers(String question, List<DrugReference> questionDrugs, Set<Object> herSubstances) {
+		if (questionProposes(question, questionDrugs)) {
+			return true;
+		}
+		if (questionDrugs.isEmpty()
+				|| !QueryScopeRouter.asksWhetherADrugIsSafeWithHerMedications(wordsBesideItsNames(question, questionDrugs))) {
+			return false;
+		}
+		for (DrugReference entry : questionDrugs) {
+			if (herSubstances.contains(entry.substanceGroupKey())) {
+				return false;
+			}
+		}
+		return true;
 	}
 
 	/**

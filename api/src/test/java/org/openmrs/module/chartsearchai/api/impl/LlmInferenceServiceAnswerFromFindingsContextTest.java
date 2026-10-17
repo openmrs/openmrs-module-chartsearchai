@@ -519,6 +519,31 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	}
 
 	/**
+	 * Whether a drug she is not on is safe with her medications is a proposal, and whether there are problems if she is
+	 * started on it inverts "No" (ADR Decision 299). On the 3.7.1 standalone both went to the model for every patient
+	 * asked: Dorothy Odinga's fluconazole was "No — should not be started" over an unrated interaction, and Richard Jones's
+	 * ibuprofen was answered with his own dexamethasone allergy.
+	 */
+	@Test
+	public void whetherADrugIsSafeWithHerMedicationsOrCausesProblemsIfStartedIsAnsweredFromTheFindings() {
+		for (String question : new String[] { "Is ibuprofen safe with her current medications?",
+				"Is ibuprofen okay with her meds?" }) {
+			RecordingProvider provider = new RecordingProvider();
+			ChartAnswer answer = serviceWith(provider).search(patient, question);
+			assertEquals(0, provider.calls, question + " — " + answer.getAnswer());
+			assertTrue(answer.getAnswer().startsWith(DrugReferenceInjector.WITHHOLD_LEAD_OPENING), answer.getAnswer());
+		}
+		for (String question : new String[] { "Any problems if I start her on ibuprofen?",
+				"Are there any issues if I give her ibuprofen?" }) {
+			RecordingProvider provider = new RecordingProvider();
+			ChartAnswer answer = serviceWith(provider).search(patient, question);
+			assertEquals(0, provider.calls, question + " — " + answer.getAnswer());
+			assertTrue(answer.getAnswer().startsWith(DrugReferenceInjector.NEUTRAL_WITHHOLD_LEAD_OPENING + "Ibuprofen.\n"),
+					question + " — " + answer.getAnswer());
+		}
+	}
+
+	/**
 	 * Whether a drug is DANGEROUS, harmful or a cause of problems inverts "No" as whether it is contraindicated does (ADR
 	 * Decision 255): "No" would say it is not.
 	 */
@@ -3088,7 +3113,9 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		for (String question : new String[] { "Which pain medication is safe for her?",
 				"What painkiller can I safely give her?", "Which antibiotic is safest for her?",
 				"What is the safest painkiller for her?", "What can she safely take?",
-				"Which of her medications is safe?", "Which blood pressure medicine would be best for her?" }) {
+				"Which of her medications is safe?", "Which blood pressure medicine would be best for her?",
+				// ADR Decision 299: Agnes Adams was told "No — Aspirin should not be continued".
+				"Is there a safer alternative to her current medications?", "Are there any better options for her meds?" }) {
 			RecordingProvider provider = new RecordingProvider();
 			ChartAnswer answer = serviceWith(provider).search(patient, question);
 

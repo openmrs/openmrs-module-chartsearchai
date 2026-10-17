@@ -18883,3 +18883,37 @@ lookup, which now takes the class's membership test. A class the module carries 
 Decision 275's statement.
 
 Pinned by `OnADrugGroupQuestionTest`.
+
+## Decision 299: Whether a drug is safe with her medications, or causes problems if started, is answered as its proposal
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-16 to keep fixing what the tested questions get
+wrong.
+
+### Context
+
+Asked of eighteen patients on the 3.7.1 standalone, *"Is ibuprofen safe with her current medications?"* and *"Any
+problems if I start her on fluconazole?"* went to the model for nearly every patient. It answered Dorothy Odinga's and
+Melissa Wright's fluconazole *"No — … should not be started"* over an interaction the data does not rate, Richard
+Jones's and Kevin Brown's ibuprofen with their own allergies to drugs they take, and four patients *"The records do not
+address"* it. *"Is there a safer alternative to her current medications?"* got Agnes Adams *"No — Aspirin should not be
+continued"*.
+
+### The decision
+
+- A drug the data resolved and she is not on, asked whether it is safe with her medications
+  (`QueryScopeRouter.asksWhetherADrugIsSafeWithHerMedications`), is proposed by the question
+  (`DrugReferenceInjector.proposesADrugNotHers`), so it is answered as any proposal is. Of her own drug the question asks
+  about her medication, and `questionProposes`, which the validator and Decision 292's companions read, is left as it
+  was: widened there, it reddened `OwnMedicationSafetyContextTest`. The shape stays out of the proposal grammar itself,
+  which
+  [Decision 202](#decision-202-a-question-whether-she-is-on-her-own-drug-or-whether-it-is-safe-with-her-other-medications-is-answered-as-her-own-medication-and-the-answer-names-the-order) keeps
+  from finding an unrecognised word's slot there.
+- *"Any problems if I start her on X?"* joins the questions whose "No" would read backwards
+  ([Decision 255](#decision-255-whether-a-drug-is-dangerous-harmful-or-a-cause-of-problems-is-answered-with-neither-yes-nor-no)'s
+  family), answered with the neutral lead.
+- *"Is there a safer alternative to her current medications?"* asks the module to choose, and is answered as
+  [Decision 293](#decision-293-a-question-asking-the-module-to-choose-a-drug-for-her-is-answered-with-the-screen-and-chooses-none)
+  answers a choice.
+
+Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.whetherADrugIsSafeWithHerMedicationsOrCausesProblemsIfStartedIsAnsweredFromTheFindings`
+and `.askingWhichDrugIsSafeForHerIsAnsweredWithTheScreenAndNoChoice`.

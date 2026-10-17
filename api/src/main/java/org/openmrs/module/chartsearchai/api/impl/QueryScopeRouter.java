@@ -406,6 +406,9 @@ public final class QueryScopeRouter {
 					+ " (?:add|give|start|prescribe) (?:" + PATIENT + " )?(?:on )?" + D,
 			"what (?:happens|would happen|will happen) if (?:i|we) (?:give|add|start|prescribe) (?:" + PATIENT + " )?(?:on )?" + D
 					+ "(?: (?:to|for) " + PATIENT + ")?",
+			// "Any problems if I start her on ibuprofen?", "Are there any issues if I give her ibuprofen?" (ADR Decision 299)
+			"(?:(?:is|are) there )?any (?:problems?|issues?|concerns?|risks?) if (?:i|we) (?:give|start|prescribe|add) (?:"
+					+ PATIENT + " )?(?:on )?" + D + "(?: (?:to|for) " + PATIENT + ")?",
 			// "Any problem giving her ibuprofen?", "Are there any concerns with starting ibuprofen?"
 			"(?:(?:is|are) there )?any (?:problems?|issues?|concerns?) (?:with )?(?:giving|starting|prescribing|adding) (?:"
 					+ PATIENT + " )?(?:on )?" + D + "(?: (?:to|for) " + PATIENT + ")?",
@@ -658,10 +661,25 @@ public final class QueryScopeRouter {
 
 	private static final List<Pattern> ANY_INTERACTIONS_WITH_HER_D_SHAPES = shapes(ANY_INTERACTIONS_WITH_HER_D);
 
+	/** "Is lidocaine safe with her other medications?", "Is ibuprofen okay with her current meds?" */
+	private static final String SAFE_WITH_HER_MEDICATIONS = "is " + D + " (?:safe|ok|okay|appropriate) (?:with|alongside) "
+			+ "(?:any of )?" + POSSESSIVE + " (?:other )?" + MEDICATIONS;
+
+	private static final List<Pattern> SAFE_WITH_HER_MEDICATIONS_SHAPES = shapes(SAFE_WITH_HER_MEDICATIONS);
+
+	/**
+	 * Whether a question asks whether its one drug is safe with her medications — <em>"Is ibuprofen safe with her current
+	 * medications?"</em> — over {@link #words} with the drug marked (ADR Decision 299). Asked by
+	 * {@code DrugReferenceInjector.questionProposes} of a drug the data RESOLVED, so a drug she is not on is answered as
+	 * the proposal it is; kept out of {@link #PROPOSAL_SHAPES} itself for Decision 202's reason, that grammar also finding
+	 * the slot an unrecognised word sits in.
+	 */
+	public static boolean asksWhetherADrugIsSafeWithHerMedications(List<String> wordsWithTheDrugMarked) {
+		return fitsAShape(wordsWithTheDrugMarked, SAFE_WITH_HER_MEDICATIONS_SHAPES);
+	}
+
 	private static final List<Pattern> BESIDE_HER_MEDICATIONS_SHAPES = shapes(
-			// "Is lidocaine safe with her other medications?", "Is ibuprofen okay with her current meds?"
-			"is " + D + " (?:safe|ok|okay|appropriate) (?:with|alongside) (?:any of )?" + POSSESSIVE + " (?:other )?"
-					+ MEDICATIONS,
+			SAFE_WITH_HER_MEDICATIONS,
 			// "Which of her medications interact with lopinavir/ritonavir?", "What other meds of hers interact with X?"
 			"(?:which|what) (?:of )?" + POSSESSIVE + " (?:other )?" + MEDICATIONS + " (?:interact|interacts) with " + D,
 			// "Is rifampicin causing any interactions with her other drugs?", "Is X interacting with any of her medications?",
@@ -1264,6 +1282,10 @@ public final class QueryScopeRouter {
 			// "What painkiller can I safely give her?", "What can I give her?", "Which antibiotic should I use for her?"
 			"(?:which|what) (?:" + CHOSEN + " )?(?:can|could|should|may) (?:i|we) (?:safely )?" + GIVE_WORD
 					+ "(?: (?:to )?" + PATIENT + ")?(?: on)?(?: safely)?(?: (?:for|to) " + PATIENT + ")?",
+			// "Is there a safer alternative to her current medications?", "Are there any better options for her meds?" (ADR
+			// Decision 299)
+			"(?:is|are) there (?:a |any )?(?:safer|better|safe) (?:alternatives?|options?) (?:to|for) " + POSSESSIVE + " "
+					+ MEDICATIONS,
 			// "What can she safely take?", "Which painkillers can he take?"
 			"(?:which|what) (?:" + CHOSEN + " )?(?:can|could|should|may) (?:she|he|they|the patient|this patient)"
 					+ " (?:safely )?(?:take|have|use|be given|be started on)(?: safely)?");

@@ -19408,3 +19408,23 @@ that sentence. It states no finding and clears nothing, so Decision 193's reason
 
 `OwnMedicationSafetyContextTest.herOwnDrugWithNoInteractionIsLeftToTheModel`, which pinned the hand-off, is now
 `.herOwnDrugWithNoOtherMedicationSaysThereIsNoneToCheckItAgainst`.
+
+## Decision 317: A drug name written with a one-letter chemical prefix is the drug's name, prefix and all
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient.
+
+### Context
+
+*"Can I give her N-acetylcysteine?"* resolved acetylcysteine, but the question's words, its drug names marked, read *"can i
+give her n DRUG"*: the prefix was a word of its own, which no question shape admits. So the model answered every patient
+on the 3.7.1 standalone — *"N-acetylcysteine can be given, with one caution: it has an Unknown severity interaction with
+metronidazole"*, a clearance over an unrated row, and Joshua Johnson *"No — N-acetylcysteine should not be given because it
+has an Unknown severity interaction with Lisinopril"*.
+
+### The decision
+
+`DrugReferenceInjector.namedCharacters` marks a single letter joined to a drug's name by a hyphen, and standing as a word
+of its own before it, as part of that name. The question is then answered as the same question without the prefix is.
+
+Pinned by `LetterPrefixedDrugNameTest`.

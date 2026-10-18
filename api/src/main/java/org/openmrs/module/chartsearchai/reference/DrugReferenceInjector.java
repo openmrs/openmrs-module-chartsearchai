@@ -4697,7 +4697,14 @@ public class DrugReferenceInjector {
 		boolean[] named = new boolean[folded.length()];
 		for (DrugReference entry : entries) {
 			for (DrugReference.NamedOccurrence occurrence : occurrencesInTheQuestion(entry, folded)) {
-				for (int k = occurrence.getStart(); k < occurrence.getEnd(); k++) {
+				int start = occurrence.getStart();
+				// A one-letter chemical prefix joined by a hyphen is part of the name — "N-acetylcysteine" (ADR Decision
+				// 317): left a word of its own, it fitted no question shape.
+				if (start >= 2 && folded.charAt(start - 1) == '-' && Character.isLetter(folded.charAt(start - 2))
+						&& (start == 2 || !Character.isLetterOrDigit(folded.charAt(start - 3)))) {
+					start -= 2;
+				}
+				for (int k = start; k < occurrence.getEnd(); k++) {
 					named[k] = true;
 				}
 			}

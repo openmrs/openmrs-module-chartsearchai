@@ -1002,8 +1002,16 @@ public class DrugReferenceInjector {
 		String againstHerAllergies = composeAgainstHerAllergies(question, questionDrugs, findings, findingNumbers,
 				orderRecordNumbers, orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers,
 				context);
+		// A combination product proposed that carries a substance she already takes: what the check found about it, no
+		// verdict (ADR Decision 330).
+		String productCarryingHers = againstHerAllergies != null ? null
+				: composeProductCarryingHerDrug(question, questionDrugs, screenedSubstances, findings, findingNumbers,
+						orderRecordNumbers,
+						orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers, context);
 		if (againstHerAllergies != null) {
 			moduleAnswer = againstHerAllergies;
+		} else if (productCarryingHers != null) {
+			moduleAnswer = productCarryingHers;
 		} else if (!findings.isEmpty()
 				&& ChartSearchAiUtils.getBooleanGlobalProperty(
 						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
@@ -7440,6 +7448,53 @@ public class DrugReferenceInjector {
 		}
 		return anyDrugAllergy ? "None of this patient's recorded drug allergies that the drug data identifies relates to "
 				+ drug.label + "." : "No drug allergies are recorded for this patient.";
+	}
+
+	/**
+	 * The module's answer to a proposal of a combination product, named as one, that carries a substance her orders already
+	 * carry (ADR Decision 330), or {@code null} where the model answers: under {@link #FOUND_LEAD_OPENING} and the product's
+	 * name, each finding about its substances — that one is already in her order, and what relates them to her other
+	 * medications — and no verdict: what the product adds beside her own order is the clinician's to weigh. Fail-closed: a
+	 * proposal grammar admits the question, her chart read, and every finding about the product an interaction or a
+	 * contraindication.
+	 */
+	private static String composeProductCarryingHerDrug(String question, List<DrugReference> questionDrugs,
+			Set<Object> herSubstances, List<SafetyWarning> findings, List<Integer> numbers,
+			Map<String, Integer> orderRecordNumbers, Map<String, Integer> herOrderRecords, PatientClinicalContext context) {
+		String product = combinationAskedAbout(question, questionDrugs, context);
+		if (product == null || context == null || !context.chartReadForSafety()
+				|| !ChartSearchAiUtils.getBooleanGlobalProperty(ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
+						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS)
+				|| !QueryScopeRouter.asksWhetherToGiveADrug(wordsBesideItsNames(question, questionDrugs))) {
+			return null;
+		}
+		Set<Object> substances = askedDrugs(question, questionDrugs, context, false).get(0).substances;
+		if (Collections.disjoint(substances, herSubstances)) {
+			return null;
+		}
+		List<String> already = new ArrayList<String>();
+		List<String> others = new ArrayList<String>();
+		for (int i = 0; i < findings.size(); i++) {
+			SafetyWarning finding = findings.get(i);
+			if (finding.statesOrdersSharingASubstance() || !isAbout(finding, substances)) {
+				continue;
+			}
+			if (!SafetyWarning.TYPE_INTERACTION.equals(finding.getType())
+					&& !SafetyWarning.TYPE_CONTRAINDICATION.equals(finding.getType())) {
+				return null;
+			}
+			String line = finding.alreadyOrdered() != null ? finding.getDetail() + ". [" + numbers.get(i) + "]"
+					: findingLine(finding, numbers.get(i), orderRecordNumbers, herOrderRecords, true);
+			(finding.alreadyOrdered() != null ? already : others).add(line);
+		}
+		if (already.isEmpty()) {
+			return null;
+		}
+		List<String> lines = new ArrayList<String>();
+		lines.add(FOUND_LEAD_OPENING + product + ":");
+		lines.addAll(already);
+		lines.addAll(others);
+		return String.join("\n", lines);
 	}
 
 	/** How the answer to which drugs to avoid in her opens (ADR Decision 324): no finding lists drugs to avoid. */

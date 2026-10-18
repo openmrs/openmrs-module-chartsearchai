@@ -19741,3 +19741,26 @@ and `.aQuestionWhetherTwoDrugsNeitherOfThemHersInteractIsLeftToTheModelWhereTheD
 over pairs the data lists only below the floor; they are now `.aQuestionWhetherHerDrugAndAnotherInteractStatesTheListingWhereNoFindingRelatesThem`
 and `.aQuestionWhetherTwoDrugsNeitherOfThemHersInteractStatesTheListingWhereNoFindingRelatesThem`, asserting the listing and
 neither "Yes" nor "No".
+
+## Decision 330: A combination product proposed that carries a substance she already takes is answered with what the check found
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient.
+
+### Context
+
+A product named as one — *"Bactrim"*, *"Augmentin"* — is answered as its proposal for a patient on none of its substances
+([Decision 304](#decision-304-a-combination-proposed-by-one-name-that-raises-no-finding-is-answered-as-a-single-drug-is)). Where one is already hers the proposal gate refuses it, so the model answered: on the 3.7.1
+standalone patients on cotrimoxazole asked *"Can I give her Bactrim?"* read *"For Sulfamethoxazole, the drug can be given,
+with one caution"*, and Priya, on amoxicillin, *"Is Augmentin safe for her?"* read *"The drug can be given, with one caution:
+adding it would duplicate that order"*.
+
+### The decision
+
+`DrugReferenceInjector.composeProductCarryingHerDrug` answers such a proposal under *"What this module's drug-safety check
+found about Bactrim:"*: first each substance already in her orders, in the finding's own words — *"Sulfamethoxazole is
+already in active order Cotrimoxazole 960mg — adding it would duplicate the Sulfamethoxazole that order carries."*, a
+proposal's sentence for a proposal — then each other finding about its substances, and no verdict. A finding other than an
+interaction or a contraindication keeps the model call.
+
+Pinned by `ProductCarryingHerOwnDrugTest`.

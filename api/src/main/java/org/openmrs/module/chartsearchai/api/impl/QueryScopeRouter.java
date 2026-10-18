@@ -459,7 +459,33 @@ public final class QueryScopeRouter {
 			// "Is there an interaction if I give her ibuprofen?" — answered "No — X should not be given: it interacts with …"
 			// (ADR Decision 256)
 			"is there (?:an |any )?(?:drug )?interactions? if (?:i|we) (?:give|start|prescribe|add) (?:" + PATIENT + " )?(?:on )?"
-					+ D + "(?: to " + PATIENT + ")?");
+					+ D + "(?: to " + PATIENT + ")?",
+			// "Is there anything in her med list that interacts with warfarin?", "Is she on any drugs that interact with
+			// dexamethasone?", "Does clarithromycin interact with anything she takes?", "Does she have any interactions with
+			// clarithromycin?" (ADR Decision 319)
+			"is there anything (?:in|on) " + POSSESSIVE + " (?:med |medication |drug )?(?:list|medications|meds|medicines|drugs)"
+					+ " that (?:interacts|interferes) with " + D,
+			"is (?:she|he|they|the patient|this patient) (?:on|taking) any (?:drugs|medications|medicines|meds) that "
+					+ "(?:interact|interfere) with " + D,
+			"(?:does|will|would|could|can) " + D + " interact with anything (?:she|he|they|the patient|this patient) "
+					+ "(?:takes|is taking|is on)",
+			"(?:does|do) (?:she|he|they|the patient|this patient) have any (?:drug )?interactions? with " + D);
+
+	/**
+	 * Which of her medications interact with ONE drug — "Which of her medications interact with rifampicin?", "Which of her
+	 * drugs is the problem with warfarin?" — answered with the findings relating it to them and neither "Yes" nor "No"
+	 * (ADR Decision 319): "Yes" does not answer "which".
+	 */
+	private static final List<Pattern> WHICH_OF_HER_MEDICATIONS_INTERACT_SHAPES = shapes(
+			"(?:which|what) (?:of )?" + POSSESSIVE + " (?:other |current |active )?(?:medications|meds|medicines|drugs|"
+					+ "prescriptions) (?:interact|interacts|interfere|interferes) with " + D,
+			"which of " + POSSESSIVE + " (?:medications|meds|medicines|drugs) (?:is|are) the problems? with " + D);
+
+	/** Whether a question asks which of her medications interact with its one drug — {@link
+	 *  #WHICH_OF_HER_MEDICATIONS_INTERACT_SHAPES} (ADR Decision 319). Fail-CLOSED as {@link #asksWhetherToGiveADrug} is. */
+	public static boolean asksWhichOfHerMedicationsInteractWith(List<String> wordsWithTheDrugMarked) {
+		return fitsAShape(wordsWithTheDrugMarked, WHICH_OF_HER_MEDICATIONS_INTERACT_SHAPES);
+	}
 
 	/**
 	 * Whether a question asks whether ONE drug interacts with her medications, and nothing else — one of {@link

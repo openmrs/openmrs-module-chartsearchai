@@ -19449,3 +19449,30 @@ question (`asksOnlyAboutInteractions`): it is answered as *"Are her medications 
 interactions, then her contraindications, then what the screen does not cover.
 
 Pinned by `InteractionsOrAllergyConflictsScreenTest`.
+
+## Decision 319: Which of her medications interact with a drug is answered with the findings, and whether anything she takes interacts with it as whether it interacts
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It carries
+[Decision 202](#decision-202-a-question-whether-she-is-on-her-own-drug-or-whether-it-is-safe-with-her-other-medications-is-answered-as-her-own-medication-and-the-answer-names-the-order)'s *"Which of her medications interact with X?"* past a drug her orders carry.
+
+### Context
+
+*"Which of her medications interact with rifampicin?"* had a shape only for a drug she takes, so for every other patient
+on the 3.7.1 standalone the model answered: Richard Brown, on salicylic acid, was told *"The medications that interact
+with Rifampicin are ivosidenib, ixazomib, ketoconazole, larotrectinib, and lefamulin"* — the reference record's partners,
+none of them his. The same gap held *"Which of her drugs is the problem with warfarin?"*, and the yes/no wordings *"Is
+there anything in her med list that interacts with warfarin?"*, *"Is she on any drugs that interact with
+dexamethasone?"*, *"Does clarithromycin interact with anything she takes?"* and *"Does she have any interactions with
+clarithromycin?"*.
+
+### The decision
+
+The yes/no wordings are among `QueryScopeRouter.INTERACTS_WITH_HER_MEDICATIONS_SHAPES` and are answered as *"Does X
+interact with her medications?"* is ([Decision 181](#decision-181-a-question-whether-not-to-give-a-drug-or-whether-it-interacts-is-answered-without-an-inverted-no)). The "which" wordings are
+`QueryScopeRouter.WHICH_OF_HER_MEDICATIONS_INTERACT_SHAPES`: admitted as that question is
+(`DrugReferenceInjector.asksWhetherItInteracts`), but under `Lead.NOT_GIVE`, as
+[Decision 281](#decision-281-whether-one-drug-changes-an-effect-of-a-group-of-her-medications-is-answered-with-neither-yes-nor-no) answers whether a drug changes an effect of hers — the findings, and neither "Yes" nor "No",
+since "Yes" does not answer "which".
+
+Pinned by `WhichOfHerMedicationsInteractTest`.

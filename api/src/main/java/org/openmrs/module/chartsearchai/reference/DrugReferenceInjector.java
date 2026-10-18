@@ -3131,8 +3131,10 @@ public class DrugReferenceInjector {
 			List<String> words = wordsBesideItsNames(question, questionDrugs);
 			// Whether it changes an effect of a group of hers: neither "Yes" nor "No" (ADR Decision 281). Nor whether she is
 			// on it, where the answer has said she is not before the lead (ADR Decision 287).
+			// Nor which of hers it interacts with (ADR Decision 319).
 			return QueryScopeRouter.asksWhetherNotToGiveADrug(words)
 					|| QueryScopeRouter.asksWhetherADrugChangesHerMedications(words)
+					|| QueryScopeRouter.asksWhichOfHerMedicationsInteractWith(words)
 					|| QueryScopeRouter.asksWhetherSheIsOnADrug(words) ? NOT_GIVE
 					: QueryScopeRouter.asksWhetherADrugInteractsWithHerMedications(words)
 							|| QueryScopeRouter.asksAboutADrugNamedAsHers(words) ? INTERACTS : GIVE;
@@ -3147,7 +3149,8 @@ public class DrugReferenceInjector {
 		}
 		List<String> words = wordsBesideItsNames(question, questionDrugs);
 		return QueryScopeRouter.asksWhetherADrugInteractsWithHerMedications(words)
-				|| QueryScopeRouter.asksWhetherADrugChangesHerMedications(words);
+				|| QueryScopeRouter.asksWhetherADrugChangesHerMedications(words)
+				|| QueryScopeRouter.asksWhichOfHerMedicationsInteractWith(words);
 	}
 
 	/** How the lead of an answer about her own drug names the other substances of the combination order she takes it in

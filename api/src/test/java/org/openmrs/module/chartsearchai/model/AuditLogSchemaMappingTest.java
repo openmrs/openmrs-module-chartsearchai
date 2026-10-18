@@ -51,6 +51,25 @@ public class AuditLogSchemaMappingTest {
 		assertColumnsDeclared("chartsearchai_conversation_turn", "ClinicalConversationTurn.hbm.xml");
 	}
 
+	@Test
+	public void everyDeclaredConversationColumnIsMapped() throws Exception {
+		assertDeclaredColumnsMapped("chartsearchai_conversation", "ClinicalConversation.hbm.xml");
+	}
+
+	@Test
+	public void everyDeclaredTurnColumnIsMapped() throws Exception {
+		assertDeclaredColumnsMapped("chartsearchai_conversation_turn", "ClinicalConversationTurn.hbm.xml");
+	}
+
+	/** The converse, for the tables this module creates: a declared column nothing maps is a column
+	 *  nothing reads or writes, so it carries no data and only implies a feature that does not exist. */
+	private void assertDeclaredColumnsMapped(String table, String mapping) throws Exception {
+		Set<String> unmapped = new TreeSet<String>(declaredColumns(table));
+		unmapped.removeAll(mappedColumns(table, mapping));
+		assertTrue(unmapped.isEmpty(), "the changelog declares columns on " + table + " that " + mapping
+				+ " never maps: " + unmapped);
+	}
+
 	private void assertColumnsDeclared(String table, String mapping) throws Exception {
 		Set<String> mapped = mappedColumns(table, mapping);
 		Set<String> declared = declaredColumns(table);

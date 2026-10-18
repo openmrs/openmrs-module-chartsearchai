@@ -186,7 +186,6 @@
 				<constraints nullable="false"/>
 			</column>
 			<column name="ended_at" type="datetime"/>
-			<column name="title" type="varchar(200)"/>
 			<column name="status" type="varchar(20)" defaultValue="active">
 				<constraints nullable="false"/>
 			</column>

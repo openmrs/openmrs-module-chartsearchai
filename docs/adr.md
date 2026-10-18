@@ -17218,7 +17218,7 @@ screen note was not written beside a contraindication at all (Decision 87's stat
   beyond drug interactions and contraindications, are not covered."*
 - **A question asking only about interactions keeps the model call and its prompt as they were.** Decision 190 would
   leave her conflicts to chips a client draws behind one neutral line, while the model's answer to such a question
-  states them; the three cases pinning that (`LlmInferenceServiceAnswerFromFindingsContextTest.aScreenWhoseOnlyFindingIsNotAnInteractionStillAsksTheModel`,
+  states them; the three cases pinning that (`LlmInferenceServiceAnswerFromFindingsContextTest.aScreenWhoseOnlyFindingIsNotAnInteractionStillAsksTheModel`, renamed by Decision 303,
   `AllergyQuestionConflictingOrderContextTest.aMedicationQuestionKeepsTheFindingAsAChip`,
   `.aDrugSafetyReadingKeepsTheFindingAChipWhereTheAnswerNamesHerOrder`) stand.
 - **With the interaction checks off no screen ran**, so neither the note nor this answer is written.
@@ -19018,3 +19018,34 @@ interaction rows and its reference record in the chart, no finding relating them
 and every order of hers identified — anything else keeps the model.
 
 Pinned by `TwoDrugsTheDataDoesNotRelateTest`.
+
+## Decision 303: A screen asking only about interactions that relates no pair states her own conflicts after it
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It supersedes the hand-off to the model in
+[Decision 236](#decision-236-a-safety-screen-that-related-no-pair-states-her-own-conflicts-after-what-it-found).
+
+### Context
+
+*"Any interactions with her current medications?"*, asked of every patient on the 3.7.1 standalone, went to the model for
+those whose screen related no pair while their own allergy records conflicted with an order: Dorothy Odinga, on aspirin
+and allergic to ibuprofen, was told *"No — Aspirine Co 81mg should be changed"*, a "No" to whether she has any
+interactions followed by a reason to change her drug. Decision 236 had kept such a question with the model so that her
+conflicts were stated rather than left to chips behind one neutral line.
+
+### The decision
+
+The module answers it with what the screen found — the screen note's words, or that she has one order and nothing to
+check it against — then her own conflicts under *"Found as well, beyond interactions:"*
+(`DrugReferenceInjector.BEYOND_INTERACTIONS_LEAD`), each a line. They are stated, which is what Decision 236 wanted of
+the model, and the screen's own answer leads. The screen note is now written beside such conflicts on any screen
+question, not only a safety one.
+
+Pinned by `ScreenBesideHerOwnConflictsTest.aScreenAskingOnlyAboutInteractionsStatesHisOwnConflictsApart`, which replaces
+the case pinning Decision 236's hand-off, and
+`LlmInferenceServiceAnswerFromFindingsContextTest.aScreenWhoseOnlyFindingIsNotAnInteractionStatesWhatTheScreenFoundFirst`,
+which replaces `.aScreenWhoseOnlyFindingIsNotAnInteractionStillAsksTheModel` and keeps its reason: the answer is never
+the conflict alone. `AllergyQuestionConflictingOrderContextTest.aMedicationQuestionKeepsTheFindingAsAChip` and
+`.aDrugSafetyReadingKeepsTheFindingAChipWhereTheAnswerNamesHerOrder` reached Decision 124's boundary through the
+interactions screen, which the module now answers; they ask *"Are any of her medications unsafe for her kidneys?"*, a
+drug-safety reading the model still answers, assertions unchanged.

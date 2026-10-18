@@ -377,7 +377,9 @@ public class AllergyQuestionConflictingOrderContextTest extends BaseModuleContex
 
 	@Test
 	public void aMedicationQuestionKeepsTheFindingAsAChip() throws IOException {
-		String question = "Are there any drug interactions with her current medications?";
+		// Asked until ADR Decision 303 as "Are there any drug interactions with her current medications?", which the module
+		// now answers itself.
+		String question = "Are any of her medications unsafe for her kidneys?";
 		ChartAnswer answer = serviceAnswering(MODEL_ANSWER).search(patient, question);
 
 		SafetyWarning chip = theAspirinChip(answer);
@@ -629,8 +631,10 @@ public class AllergyQuestionConflictingOrderContextTest extends BaseModuleContex
 		int number = theAspirinOrderRecordNumber(SLICE);
 		String modelAnswer = "Her aspirin [" + number + "] interacts with nothing else she takes.";
 
+		// Asked until ADR Decision 303 as "Are there any drug interactions with her current medications?", which the module
+		// now answers itself.
 		ChartAnswer answer = serviceAnswering(modelAnswer).search(patient,
-				"Are there any drug interactions with her current medications?");
+				"Are any of her medications unsafe for her kidneys?");
 
 		assertEquals(number, theOrderRecord(answer, Context.getOrderService().getOrder(111).getUuid()).getIndex(),
 				"precondition: the same chart numbers the order alike");

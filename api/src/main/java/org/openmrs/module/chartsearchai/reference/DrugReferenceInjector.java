@@ -728,7 +728,8 @@ public class DrugReferenceInjector {
 		boolean nothingResolved = matched.isEmpty() && findings.isEmpty() && namedClass == null;
 		boolean screenRelatedNothing = matched.isEmpty() && namedClass == null
 				&& (nothingButOrdersSharingASubstance(findings)
-						|| statesHerOwnConflicts(question) && nothingButOrdersSharingASubstanceOrHerOwnConflicts(findings))
+						// Her own conflicts beside it, on any screen question: stated after it (ADR Decisions 236, 303).
+						|| warnsOnInteractions() && nothingButOrdersSharingASubstanceOrHerOwnConflicts(findings))
 				&& questionDrugs.isEmpty()
 				&& QueryScopeRouter.isInteractionScreening(question)
 				&& screenedSubstances.size() >= 2 && context.activeDrugOrdersRead();
@@ -4609,8 +4610,12 @@ public class DrugReferenceInjector {
 	 * chips (Decision 190) and keeps the model call, and with the interaction checks off no screen ran to state.
 	 */
 	private static boolean statesHerOwnConflicts(String question) {
-		return !QueryScopeRouter.asksOnlyAboutInteractions(question) && ChartSearchAiUtils.getBooleanGlobalProperty(
-				ChartSearchAiConstants.GP_DRUG_SAFETY_WARN_ON_INTERACTIONS,
+		return !QueryScopeRouter.asksOnlyAboutInteractions(question) && warnsOnInteractions();
+	}
+
+	/** Whether the interaction checks are on, so a screen ran. */
+	private static boolean warnsOnInteractions() {
+		return ChartSearchAiUtils.getBooleanGlobalProperty(ChartSearchAiConstants.GP_DRUG_SAFETY_WARN_ON_INTERACTIONS,
 				ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_WARN_ON_INTERACTIONS);
 	}
 
@@ -4892,8 +4897,9 @@ public class DrugReferenceInjector {
 			List<SafetyWarning> findings, List<Integer> findingNumbers, Map<String, Integer> orderRecordNumbers,
 			Map<String, Integer> herOrderRecords, PatientClinicalContext context, int unidentified) {
 		// Her own records directly conflicting with her orders are no pair the screen relates (ADR Decision 236): on a
-		// safety question what the screen found is answered from the rest, and they follow it. A question asking only
-		// about interactions keeps the model call, as before.
+		// safety question what the screen found is answered from the rest, and they follow it. A question asking only about
+		// interactions states them after it under their own lead (ADR Decision 303): the model answered it "No — X should be
+		// changed".
 		List<SafetyWarning> contraindications = new ArrayList<SafetyWarning>();
 		List<Integer> contraindicationNumbers = new ArrayList<Integer>();
 		List<SafetyWarning> rest = new ArrayList<SafetyWarning>();
@@ -4905,13 +4911,18 @@ public class DrugReferenceInjector {
 			(herOwnConflict ? contraindications : rest).add(finding);
 			(herOwnConflict ? contraindicationNumbers : restNumbers).add(findingNumbers.get(i));
 		}
-		if (!contraindications.isEmpty() && !statesHerOwnConflicts(question)) {
-			return null;
-		}
 		String opening = noPairOpening(screenNoteIndex, screened, rest, restNumbers, orderRecordNumbers, herOrderRecords,
 				context, unidentified);
 		if (opening == null || contraindications.isEmpty()) {
 			return opening;
+		}
+		if (!statesHerOwnConflicts(question)) {
+			StringBuilder apart = new StringBuilder(opening).append("\n").append(BEYOND_INTERACTIONS_LEAD);
+			for (int i = 0; i < contraindications.size(); i++) {
+				apart.append("\n").append(findingLine(contraindications.get(i), contraindicationNumbers.get(i),
+						orderRecordNumbers, herOrderRecords, false));
+			}
+			return apart.toString();
 		}
 		String stated = composeFromFindings(contraindications, contraindicationNumbers, orderRecordNumbers, herOrderRecords,
 				false, null, Lead.of(question, Collections.<DrugReference> emptyList()), SCREEN_SCOPE);
@@ -6856,6 +6867,10 @@ public class DrugReferenceInjector {
 	/** What follows the drug's name in the lead of {@link #composeAboutHerOwnMedication} — read by
 	 *  {@link ModuleAnswerStatement} too, which marks the finding it states (ADR Decision 194). */
 	static final String OWN_MEDICATION_LEAD = " is one of this patient's active medications";
+
+	/** What opens her own conflicts after a screen that asked only about interactions and related no pair (ADR Decision
+	 *  303). */
+	static final String BEYOND_INTERACTIONS_LEAD = "Found as well, beyond interactions:";
 
 	/** What opens the findings a drug question's answer states after it, which the validator drew apart as about her other
 	 *  medications (ADR Decision 296). */

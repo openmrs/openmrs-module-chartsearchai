@@ -3334,18 +3334,26 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	}
 
 	/**
-	 * A screen of her medications is answered by the module only where it relates at least one pair
-	 * of them: the order-driven arm also raises a finding about an allergy to something she is
-	 * prescribed on a medication question, and an answer that was only that finding would never say
-	 * what the screen found — nor could it, with the interaction arms switched off.
+	 * A screen of her medications whose only finding is not an interaction — her allergy against an order of hers — is
+	 * answered with what the screen found, that finding after it under its own lead, never with that finding alone (ADR
+	 * Decision 303, which superseded the model call this case pinned): an answer of only that finding would never say what
+	 * the screen found.
 	 */
 	@Test
-	public void aScreenWhoseOnlyFindingIsNotAnInteractionStillAsksTheModel() throws Exception {
+	public void aScreenWhoseOnlyFindingIsNotAnInteractionStatesWhatTheScreenFoundFirst() throws Exception {
 		DrugReferenceTestSupport.recordFreeTextAllergy(patient, 88, "Aspirin");
 		executeDataSet(METFORMIN_ORDER);
 		assertFalse(findingsInThePromptFor(SCREEN).isEmpty(),
 				"precondition: her aspirin allergy against her aspirin order is a finding");
-		assertTheModelIsAsked(SCREEN);
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider).search(patient, SCREEN);
+		assertEquals(0, provider.calls, "the module answers: " + answer.getAnswer());
+		String[] lines = answer.getAnswer().split("\n");
+		assertTrue(lines[0].startsWith("No interactions were found among this patient's active medications. "),
+				answer.getAnswer());
+		assertEquals("Found as well, beyond interactions:", lines[1], answer.getAnswer());
+		assertTrue(lines.length == 3 && lines[2].matches("The patient has a recorded allergy to Acetylsalicylic acid \\(aspirin\\)\\. "
+				+ "This finding is about a medication this patient is already taking\\. \\[\\d+\\]"), answer.getAnswer());
 	}
 
 	/** A question about her medications that carries a safety or change word but asks for no screen

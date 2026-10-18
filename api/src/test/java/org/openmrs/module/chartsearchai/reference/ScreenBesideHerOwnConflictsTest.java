@@ -85,13 +85,34 @@ public class ScreenBesideHerOwnConflictsTest extends BaseModuleContextSensitiveT
 		}
 	}
 
-	/** A question asking only about interactions keeps the model call: Decision 190 would leave her conflicts to chips a
-	 *  client draws behind one neutral line, where the model's answer states them. */
+	/**
+	 * A question asking only about interactions states what the screen found, then his own conflicts under their own lead
+	 * (ADR Decision 303, superseding Decision 236's hand-off to the model): on the 3.7.1 standalone the model answered
+	 * Dorothy Odinga's "Any interactions with her current medications?" with "No — Aspirine Co 81mg should be changed".
+	 */
 	@Test
-	public void aScreenAskingOnlyAboutInteractionsKeepsTheModelCall() {
-		assertNull(screen("Does he have any drug interactions?", "dexamethasone",
-			DrugReferenceTestSupport.activeOrder("order-dex", "Dexamethasone", "Dexamethasone"),
-			DrugReferenceTestSupport.activeOrder("order-pred", "Prednisone", "Prednisone")));
+	public void aScreenAskingOnlyAboutInteractionsStatesHisOwnConflictsApart() {
+		for (String question : Arrays.asList("Does he have any drug interactions?",
+				"Any interactions with his current medications?")) {
+			String answer = screen(question, "dexamethasone",
+				DrugReferenceTestSupport.activeOrder("order-dex", "Dexamethasone", "Dexamethasone"),
+				DrugReferenceTestSupport.activeOrder("order-pred", "Prednisone", "Prednisone"));
+			assertNotNull(answer, question + " — the module answers");
+			String[] lines = answer.split("\n");
+			assertEquals(true, lines[0].startsWith("No interactions were found among this patient's active medications. "),
+				question + " — was: " + answer);
+			assertEquals(DrugReferenceInjector.BEYOND_INTERACTIONS_LEAD, lines[1], question + " — was: " + answer);
+			assertEquals(true, lines[2].startsWith("The patient has a recorded allergy to Dexamethasone."),
+				question + " — was: " + answer);
+		}
+		String one = screen("Any interactions with his current medications?", "clarithromycin",
+			DrugReferenceTestSupport.activeOrder("order-clari", "Clarithromycin 500mg", "Clarithromycin"));
+		assertNotNull(one, "the module answers a screen of one order too");
+		String[] lines = one.split("\n");
+		assertEquals("This patient has one active medication order, Clarithromycin 500mg, so there is no other active "
+				+ "medication to check it against.", lines[0], "was: " + one);
+		assertEquals(DrugReferenceInjector.BEYOND_INTERACTIONS_LEAD, lines[1], "was: " + one);
+		assertEquals(true, lines[2].startsWith("The patient has a recorded allergy to Clarithromycin."), "was: " + one);
 	}
 
 	/** With the interaction checks off no screen ran, so the module states none. */

@@ -18989,3 +18989,32 @@ to state. Measured on the rig, those answers say the records do not address the 
 reference carries.
 
 Pinned by `OwnMedicationSafetyContextTest.whetherHerOwnDrugIsSafeOrWhatInteractsWithItIsAnsweredAsHers`.
+
+## Decision 302: Two drugs the interaction data relates in no way are said to be so, with which of them she takes
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18, on a question copied from
+`docs/ddi-tested-questions.md`.
+
+### Context
+
+*"Does his chloroquine interact with his diphenhydramine?"* was answered by the model *"The records do not address the
+interaction between Chloroquine and Diphenhydramine."* on the 3.7.1 standalone — for Mark Smith, who takes both, and for
+Sarah Taylor, who takes neither, and whose celecoxib chloroquine interacts with (Moderate). The question-pair arm had
+compared the two and related them in no way; every composed two-drug answer
+([Decisions 203](#decision-203-two-drugs-she-already-takes-asked-about-together-are-answered-with-what-relates-them--never-that-they-may-be-combined),
+[220](#decision-220-whether-two-drugs-neither-hers-interact-is-answered-yes-where-the-data-relates-them)) states
+a finding relating the pair, so with none the model answered, and said nothing of what the check had established.
+
+### The decision
+
+Where a question asks about two drugs together — whether they interact, whether one is safe with the other, whether to
+give them together — and the interaction data relates them in no way at any rating, in either direction
+(`DrugSafetyValidator.anyRuleIdentifiesAny`, the test Decision 206 asks), the module answers
+(`DrugReferenceInjector.composeTwoDrugsTheDataDoesNotRelate`): each is named as hers with her orders, or said not to be;
+*"The interaction data lists no interaction between Chloroquine and Diphenhydramine at any rating."*, citing both
+reference records; each drug she does not take against her medications, as Decision 220 states it; then what the check
+does not compare (`SHARED_CLASS_NOT_COMPARED`). Never a clearance. Fail-closed: two drugs exactly, each carrying
+interaction rows and its reference record in the chart, no finding relating them and no contraindication about either,
+and every order of hers identified — anything else keeps the model.
+
+Pinned by `TwoDrugsTheDataDoesNotRelateTest`.

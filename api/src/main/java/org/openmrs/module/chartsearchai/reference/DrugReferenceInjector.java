@@ -1238,6 +1238,20 @@ public class DrugReferenceInjector {
 							orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers),
 					context, screenedSubstances.size(), unidentified.size());
 		}
+		// Two drugs asked about together that the interaction data relates in no way, at any rating: that, and which she takes
+		// (ADR Decision 302).
+		if (moduleAnswer == null && context != null
+				&& ChartSearchAiUtils.getBooleanGlobalProperty(
+						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
+						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS)
+				&& context.chartReadForSafety()) {
+			// Her orders' records even where no finding was raised to index them, as Decision 204's answer cites them.
+			moduleAnswer = composeTwoDrugsTheDataDoesNotRelate(question, questionDrugs, screenedSubstances, findings,
+					findingNumbers, orderRecordNumbers,
+					!orderRecordNumbers.isEmpty() ? orderRecordNumbers
+							: orderRecordNumbers(findingRecords != null ? findingRecords : new DrugOrderRecords(mappings), context),
+					mappings, orderEntries, context);
+		}
 		// Whether she is on any drug of a group this module carries: her orders in it (ADR Decision 298).
 		CrossReactivityGroup askedGroup = namedClass == null ? null
 				: DrugClassTerms.groupNamedBy(namedClass, drugReferenceService.getCrossReactivityGroups());
@@ -5841,6 +5855,117 @@ public class DrugReferenceInjector {
 		answer.append('\n').append(BELOW_FLOOR_SCOPE);
 		return withHerOwnOrdersSharingASubstance(answer.toString(), sharing, sharingNumbers, orderRecordNumbers,
 			herOrderRecords);
+	}
+
+	/** What closes an answer saying the data relates two drugs in no way (ADR Decision 302): what that does not compare. */
+	static final String SHARED_CLASS_NOT_COMPARED = "This check compares individual substances: a relationship resting only"
+			+ " on the two sharing a drug class is not part of it.";
+
+	/**
+	 * The module's answer to two drugs asked about together — whether they interact, whether one is safe with the other —
+	 * that the interaction data relates in no way, at any rating, in either direction ({@link
+	 * DrugSafetyValidator#anyRuleIdentifiesAny}), or {@code null} where the model answers (ADR Decision 302). Each is named
+	 * as hers, with her orders, or said not to be; then <em>"The interaction data lists no interaction between X and Y at
+	 * any rating."</em> citing both reference records; then each one not hers against her medications, as Decision 220
+	 * states it; then what the check does not compare. Fail-closed: two drugs exactly, both carrying interaction rows (a row
+	 * listing none says nothing of a pair), each with its reference record in the chart, and no finding relating the two
+	 * nor any contraindication about either; every order of hers identified.
+	 */
+	private String composeTwoDrugsTheDataDoesNotRelate(String question, List<DrugReference> questionDrugs,
+			Set<Object> herSubstances, List<SafetyWarning> findings, List<Integer> numbers,
+			Map<String, Integer> orderRecordNumbers, Map<String, Integer> herOrderRecords, List<RecordMapping> mappings,
+			List<DrugReference> orderEntries, PatientClinicalContext context) {
+		if (questionDrugs.isEmpty()) {
+			return null;
+		}
+		List<String> words = wordsBesideItsNames(question, questionDrugs);
+		if (!QueryScopeRouter.asksWhetherTwoDrugsInteract(words) && !QueryScopeRouter.asksAboutTwoDrugsTogether(words)
+				&& !QueryScopeRouter.asksWhetherToGiveDrugsTogether(words)) {
+			return null;
+		}
+		List<AskedDrug> asked = askedDrugs(question, questionDrugs, context, true);
+		if (asked.size() != 2 || !Collections.disjoint(asked.get(0).substances, asked.get(1).substances)
+				|| !DrugSafetyValidator.unresolvedActiveOrders(drugReferenceService, context,
+						orderEntries == null ? Collections.<DrugReference> emptyList() : orderEntries).isEmpty()) {
+			return null;
+		}
+		List<Integer> cited = new ArrayList<Integer>();
+		for (AskedDrug drug : asked) {
+			boolean carries = false;
+			for (DrugReference row : drug.rows) {
+				carries |= !row.getInteractions().isEmpty();
+			}
+			Integer record = null;
+			List<String> ids = rowIds(drug.rows);
+			for (RecordMapping mapping : mappings) {
+				if (ChartSearchAiConstants.RESOURCE_TYPE_DRUG_REFERENCE.equals(mapping.getResourceType())
+						&& ids.contains(mapping.getResourceUuid())) {
+					record = mapping.getIndex();
+					break;
+				}
+			}
+			if (!carries || record == null) {
+				return null;
+			}
+			cited.add(record);
+		}
+		if (DrugSafetyValidator.anyRuleIdentifiesAny(asked.get(0).rows, asked.get(1).rows)
+				|| DrugSafetyValidator.anyRuleIdentifiesAny(asked.get(1).rows, asked.get(0).rows)) {
+			return null;
+		}
+		Set<Object> both = new HashSet<Object>(asked.get(0).substances);
+		both.addAll(asked.get(1).substances);
+		List<Integer> notHersLines = new ArrayList<Integer>();
+		for (int i = 0; i < findings.size(); i++) {
+			SafetyWarning finding = findings.get(i);
+			Set<Object> about = subjectSubstances(finding);
+			if (Collections.disjoint(about, both) && !hasPartnerOf(finding, both)) {
+				continue;
+			}
+			if (!SafetyWarning.TYPE_INTERACTION.equals(finding.getType()) || finding.statesOrdersSharingASubstance()
+					|| about.size() != 1) {
+				return null;
+			}
+			boolean ofOneNotHers = false;
+			for (AskedDrug drug : asked) {
+				ofOneNotHers |= !drug.isHers(herSubstances) && drug.substances.containsAll(about);
+			}
+			if (!ofOneNotHers) {
+				return null;
+			}
+			notHersLines.add(i);
+		}
+		List<String> lines = new ArrayList<String>();
+		boolean first = asked.get(0).isHers(herSubstances);
+		boolean second = asked.get(1).isHers(herSubstances);
+		if (first && second) {
+			String a = herStartedOrdersOf(asked.get(0), orderEntries, context, herOrderRecords);
+			String b = herStartedOrdersOf(asked.get(1), orderEntries, context, herOrderRecords);
+			if (a.isEmpty() || b.isEmpty()) {
+				return null;
+			}
+			lines.add(asked.get(0).label + a + " and " + asked.get(1).label + b
+					+ " are both among this patient's active medications.");
+		} else if (!first && !second) {
+			lines.add("Neither " + asked.get(0).label + " nor " + asked.get(1).label
+					+ " is one of this patient's active medications.");
+		} else {
+			AskedDrug hers = first ? asked.get(0) : asked.get(1);
+			AskedDrug other = first ? asked.get(1) : asked.get(0);
+			String orders = herStartedOrdersOf(hers, orderEntries, context, herOrderRecords);
+			if (orders.isEmpty()) {
+				return null;
+			}
+			lines.add(hers.label + OWN_MEDICATION_LEAD + orders + "; " + other.label + " is not.");
+		}
+		lines.add("The interaction data lists no interaction between " + asked.get(0).label + " and " + asked.get(1).label
+				+ " at any rating. [" + cited.get(0) + "] [" + cited.get(1) + "]");
+		if (!notHersLines.isEmpty()) {
+			lines.add("Against this patient's active medications:");
+			lines.addAll(findingLines(findings, numbers, notHersLines, orderRecordNumbers, herOrderRecords, true));
+		}
+		lines.add(SHARED_CLASS_NOT_COMPARED);
+		return String.join("\n", lines);
 	}
 
 	/**

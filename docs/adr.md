@@ -19566,3 +19566,28 @@ ceilings as its control; *"Can I give her ibuprofen 400mg?"* leaves
 `StatedDoseProposalTest.aProposalStatingADoseRaisesTheProposalsFindingsAndLeavesTheAnswerToTheModel` is now
 `.aProposalStatingADoseRaisesTheProposalsFindingsAndIsAnsweredAsTheProposal`: over the shipped knowledge base the module's
 answer is the proposal's.
+
+## Decision 323: A drug asked about in place of one she is not on says she is not on it, and is answered as its proposal
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It carries [Decision 219](#decision-219-a-question-whether-to-switch-one-of-her-drugs-to-another-is-answered-for-the-new-drug-against-her-other-medications)'s switch, as
+[Decision 230](#decision-230-a-drug-given-instead-of-one-of-hers-is-a-switch) words it, to a drug switched from that she does not take.
+
+### Context
+
+`composeSwitch` answered *"Can I give her efavirenz instead of nevirapine?"* only where nevirapine was hers, so for every
+other patient on the 3.7.1 standalone the model answered: Joshua Johnson, on lisinopril, was told *"Efavirenz can be
+given, with two cautions"* — a clearance, one caution about the nevirapine he does not take — and Helen Roberts that
+*"Nevirapine can be given"* too.
+
+### The decision
+
+Where the drug switched from is none of hers, the answer opens *"Nevirapine is not one of this patient's active
+medications, so this switch replaces no order of it."*, then answers the new drug as its proposal is answered from its
+findings against her medications — its "No", its cautions, that the check raised none, or that she has no active order —
+leaving out what relates it to the drug she is not on, then `BELOW_FLOOR_SCOPE`. A contraindication or a finding no
+proposal answer states keeps the model call, as before. Where she already takes the new drug, there is nothing to switch:
+the answer says both — *"Efavirenz is already one of this patient's active medications (Efavirenz 600mg)."* — as Rose,
+on efavirenz and no nevirapine, was told *"Efavirenz can be given"*.
+
+Pinned by `SwitchFromADrugSheIsNotOnTest`.

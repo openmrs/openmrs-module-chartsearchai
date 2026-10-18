@@ -1162,7 +1162,7 @@ public class DrugReferenceInjector {
 				&& (switchAnswer = composeSwitch(question, questionDrugs, screenedSubstances, findings, findingNumbers,
 						orderRecordNumbers,
 						orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers,
-						pairExtent.stated(), context)) != null) {
+						pairExtent.stated(), orderEntries, context)) != null) {
 			// One of her drugs switched to another: the new drug against her medications other than the one it replaces
 			// (ADR Decision 219).
 			moduleAnswer = switchAnswer;
@@ -6048,9 +6048,10 @@ public class DrugReferenceInjector {
 	 * hers and the second not; and the new drug's findings against her other medications answerable as a proposal's are
 	 * ({@link #licensesTheModulesNo}, or cautions about it alone), or none.
 	 */
-	private static String composeSwitch(String question, List<DrugReference> questionDrugs, Set<Object> herSubstances,
+	private String composeSwitch(String question, List<DrugReference> questionDrugs, Set<Object> herSubstances,
 			List<SafetyWarning> findings, List<Integer> numbers, Map<String, Integer> orderRecordNumbers,
-			Map<String, Integer> herOrderRecords, PairChipExtent pairs, PatientClinicalContext context) {
+			Map<String, Integer> herOrderRecords, PairChipExtent pairs, List<DrugReference> orderEntries,
+			PatientClinicalContext context) {
 		if (questionDrugs.isEmpty()) {
 			return null;
 		}
@@ -6068,7 +6069,21 @@ public class DrugReferenceInjector {
 		}
 		AskedDrug from = byPosition.get(fromFirst ? 0 : 1);
 		AskedDrug to = byPosition.get(fromFirst ? 1 : 0);
-		if (!from.isHers(herSubstances) || !Collections.disjoint(to.substances, herSubstances)) {
+		// The drug asked about is hers already and the one it would replace is not: there is nothing to switch, and both are
+		// said (ADR Decision 323).
+		if (to.isHers(herSubstances) && Collections.disjoint(from.substances, herSubstances)) {
+			String herOrders = herStartedOrdersOf(to, orderEntries, context, herOrderRecords);
+			return herOrders.isEmpty() ? null : from.label
+					+ " is not one of this patient's active medications, so this switch replaces no order of it.\n" + to.label
+					+ " is already one of this patient's active medications" + herOrders + ".";
+		}
+		if (!Collections.disjoint(to.substances, herSubstances)) {
+			return null;
+		}
+		// The drug switched from is not hers: said so, and the new drug answered as its proposal is against her medications,
+		// what relates it to the drug she is not on left out (ADR Decision 323).
+		boolean replacesNone = !from.isHers(herSubstances);
+		if (replacesNone && !Collections.disjoint(from.substances, herSubstances)) {
 			return null;
 		}
 		List<SafetyWarning> kept = new ArrayList<SafetyWarning>();
@@ -6095,7 +6110,13 @@ public class DrugReferenceInjector {
 				formsOf(Collections.singletonList(to)));
 		String newDrug = to.label;
 		String forTheNewDrug;
-		if (kept.isEmpty()) {
+		if (replacesNone && context.getActiveDrugOrders().isEmpty()) {
+			forTheNewDrug = "This patient has no active medication orders, so the interaction check had none to relate "
+					+ newDrug + " to.";
+		} else if (replacesNone && kept.isEmpty()) {
+			forTheNewDrug = "The interaction check raised no finding about " + newDrug
+					+ " against this patient's active medications.";
+		} else if (kept.isEmpty()) {
 			forTheNewDrug = "Apart from " + from.label + ", the interaction check raised no finding about "
 					+ newDrug + " against this patient's active medications.";
 		} else {
@@ -6112,9 +6133,10 @@ public class DrugReferenceInjector {
 				return null;
 			}
 		}
-		StringBuilder answer = new StringBuilder(from.label).append(OWN_MEDICATION_LEAD)
-				.append(", and this switch replaces it.\n").append(forTheNewDrug);
-		if (!replacedLines.isEmpty()) {
+		StringBuilder answer = new StringBuilder(from.label).append(replacesNone
+				? " is not one of this patient's active medications, so this switch replaces no order of it.\n"
+				: OWN_MEDICATION_LEAD + ", and this switch replaces it.\n").append(forTheNewDrug);
+		if (!replacesNone && !replacedLines.isEmpty()) {
 			answer.append("\nAbout the order the switch replaces:");
 			for (String line : replacedLines) {
 				answer.append('\n').append(line);

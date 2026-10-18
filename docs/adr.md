@@ -19686,3 +19686,30 @@ the data does not identify is said not checked, as everywhere ([Decision 223](#d
 Pinned by `DrugAgainstHerAllergiesTest`. `AllergyQuestionConflictingOrderContextTest.aFindingOfADrugTheQuestionNamesKeepsEveryFindingAsAChip`,
 which needs a model-written answer to a question naming her allergen, asks *"When was her aspirin allergy recorded?"* in
 place of *"Is she allergic to aspirin?"*; its assertions are unchanged.
+
+## Decision 328: A switch whose new drug only a contraindication relates to her is answered with what the check found
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It brings
+[Decision 311](#decision-311-a-proposal-whose-findings-make-no-verdict-is-answered-with-what-the-check-found)'s no-verdict answer to [Decision 219](#decision-219-a-question-whether-to-switch-one-of-her-drugs-to-another-is-answered-for-the-new-drug-against-her-other-medications)'s switch.
+
+### Context
+
+`composeSwitch` answered the new drug only where its findings against her other medications were a rated reason to
+withhold it or cautions, so a contraindication handed the question to the model. On the 3.7.1 standalone George
+Anderson, on acetaminophen and recorded allergic to ibuprofen, asked *"Can I give him ibuprofen instead of
+paracetamol?"* and was told *"No — Ibuprofen should not be given"*, a "No" no rating makes.
+
+### The decision
+
+Where `noVerdictAbout` holds of the new drug's findings, the switch states them as its proposal would: *"Acetaminophen is
+one of this patient's active medications, and this switch replaces it."*, then *"What this module's drug-safety check found
+about Ibuprofen:"* and each finding, with no verdict.
+
+Pinned by `SwitchFromADrugSheIsNotOnTest.aSwitchWhoseNewDrugAContraindicationRelatesStatesWhatTheCheckFound`.
+`SwitchingHerDrugContextTest.aSwitchToADrugSheAlreadyTakesOrFromOneSheDoesNotIsLeftToTheModel` and
+`.aDrugGivenInsteadOfOneHeDoesNotTakeIsLeftToTheModel` pinned Decisions 219 and 230's model call for a switch from a drug he
+does not take, which [Decision 323](#decision-323-a-drug-asked-about-in-place-of-one-she-is-not-on-says-she-is-not-on-it-and-is-answered-as-its-proposal) answers; they passed past it only because that fixture's new drug carries a
+reason to withhold no rating makes, which this decision answers too. They are now
+`.aSwitchToADrugSheAlreadyTakesIsLeftToTheModelAndOneFromADrugSheDoesNotSaysSo` and `.aDrugGivenInsteadOfOneHeDoesNotTakeSaysSo`;
+a switch to a drug he already takes, from one he takes, stays the model's.

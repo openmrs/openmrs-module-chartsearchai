@@ -75,6 +75,29 @@ public class SwitchFromADrugSheIsNotOnTest extends BaseModuleContextSensitiveTes
 			mask(answer));
 	}
 
+	/**
+	 * A switch whose new drug a contraindication relates to her, no rating making a reason to withhold it, is answered with
+	 * what the check found and no verdict, as its proposal is (ADR Decision 328): on the 3.7.1 standalone George Anderson,
+	 * on acetaminophen and recorded allergic to ibuprofen, was told by the model "No — Ibuprofen should not be given".
+	 */
+	@Test
+	public void aSwitchWhoseNewDrugAContraindicationRelatesStatesWhatTheCheckFound() {
+		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
+			DrugReferenceTestSupport.activeOrder("order-apap", "Acetaminophen", "Acetaminophen"));
+		LinkedHashSet<String> names = new LinkedHashSet<String>(orders.get(0).getNames());
+		String answer = DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.shippedServiceWithGroups())
+				.injectRecords(DrugReferenceTestSupport.oneRecordChart(), DrugReferenceTestSupport.ctx(45, null, names, null,
+					DrugReferenceTestSupport.set("ibuprofen"), null, orders), "Can I give him ibuprofen instead of paracetamol?")
+				.getModuleAnswer();
+		assertNotNull(answer, "the module answers");
+		String[] lines = answer.split("\n");
+		assertEquals("Acetaminophen is one of this patient's active medications, and this switch replaces it.", lines[0],
+			"was: " + answer);
+		assertEquals(DrugReferenceInjector.FOUND_LEAD_OPENING + "Ibuprofen:", lines[1], "was: " + answer);
+		assertTrue(answer.contains("\nThe patient has a recorded allergy to Ibuprofen."), "was: " + answer);
+		assertTrue(!answer.contains("No —"), "no rating makes a No: " + answer);
+	}
+
 	private static String mask(String answer) {
 		return answer == null ? null : answer.replaceAll("\\[\\d+\\]", "[n]");
 	}

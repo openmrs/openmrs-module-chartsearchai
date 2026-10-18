@@ -110,10 +110,15 @@ public class SwitchingHerDrugContextTest extends BaseModuleContextSensitiveTest 
 				+ "Tenofovir alafenamide. ["), "was: " + answer);
 	}
 
+	/** A switch to a drug he already takes, from one he takes, is left to the model; one from a drug he does not take says
+	 *  so and answers the new drug as its proposal (ADR Decisions 323, 328). */
 	@Test
-	public void aSwitchToADrugSheAlreadyTakesOrFromOneSheDoesNotIsLeftToTheModel() {
+	public void aSwitchToADrugSheAlreadyTakesIsLeftToTheModelAndOneFromADrugSheDoesNotSaysSo() {
 		assertNull(ask("Can I switch his lamivudine to nevirapine?").getModuleAnswer(), "the new drug is already his");
-		assertNull(ask("Can I switch his rifampicin to efavirenz?").getModuleAnswer(), "the old drug is not his");
+		String answer = ask("Can I switch his rifampicin to efavirenz?").getModuleAnswer();
+		assertTrue(answer != null && answer.startsWith("Rifampicin (rifampin) is not one of this patient's active medications, "
+				+ "so this switch replaces no order of it.\n" + DrugReferenceInjector.FOUND_LEAD_OPENING + "Efavirenz:\n"),
+			"the old drug is not his: " + answer);
 	}
 
 	/**
@@ -134,8 +139,9 @@ public class SwitchingHerDrugContextTest extends BaseModuleContextSensitiveTest 
 	}
 
 	@Test
-	public void aDrugGivenInsteadOfOneHeDoesNotTakeIsLeftToTheModel() {
-		assertNull(ask("Can I give him efavirenz instead of rifampicin?").getModuleAnswer(), "the old drug is not his");
+	public void aDrugGivenInsteadOfOneHeDoesNotTakeSaysSo() {
+		assertEquals(ask("Can I switch his rifampicin to efavirenz?").getModuleAnswer(),
+			ask("Can I give him efavirenz instead of rifampicin?").getModuleAnswer(), "the old drug is not his (ADR Decision 323)");
 		assertNull(ask("Can I give him nevirapine instead of lamivudine?").getModuleAnswer(), "the new drug is already his");
 	}
 

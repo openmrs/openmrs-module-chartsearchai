@@ -6136,7 +6136,10 @@ public class DrugReferenceInjector {
 			for (SafetyWarning finding : kept) {
 				withholds |= licensesTheModulesNo(finding);
 			}
-			if (!withholds && !cautionsOnlyAbout(to.substances, kept)) {
+			// A contraindication no rating makes a reason to withhold is stated with what the check found and no verdict, as
+			// the proposal's is (ADR Decisions 311, 328).
+			if (!withholds && !cautionsOnlyAbout(to.substances, kept)
+					&& !noVerdictAbout(to.substances, notHerOwnOrdersSharingASubstance(kept))) {
 				return null;
 			}
 			forTheNewDrug = composeFromFindings(kept, keptNumbers, orderRecordNumbers, herOrderRecords, true, pairs, Lead.GIVE,

@@ -113,7 +113,21 @@ public class HttpHubStreamTransport implements HubStreamTransport {
 		cancellation.bindCloseable(wait);
 		try {
 			if (cancellation.isCancelled()) throw new CancellationException("Hub request cancelled");
-			return httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream());
+			return httpClient.send(request, info -> {
+				HttpResponse.BodySubscriber<InputStream> body = HttpResponse.BodySubscribers.ofInputStream();
+				// Java 11 keeps an interrupted exchange running (JDK-8245462); close a late response at once.
+				body.getBody().thenAccept(stream -> {
+					if (cancellation.isCancelled()) {
+						try {
+							stream.close();
+						}
+						catch (IOException ignored) {
+							// nothing left to release
+						}
+					}
+				});
+				return body;
+			});
 		} finally {
 			wait.finished();
 			cancellation.unbindCloseable(wait);

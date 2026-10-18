@@ -94,6 +94,54 @@ public class HttpHubStreamTransportTest {
 		}
 	}
 
+	/**
+	 * A peer that answers only after the turn was cancelled must find the connection closed, or the
+	 * Hub keeps generating a turn nobody reads. On Java 11 an interrupted {@code send} leaves the
+	 * exchange running (JDK-8245462), so this case is red there without the late-response close; on
+	 * 17 and later the JDK cancels the exchange itself.
+	 */
+	@Test
+	public void aPeerAnsweringAfterTheCancelFindsTheConnectionClosed() throws Exception {
+		CountDownLatch received = new CountDownLatch(1);
+		CountDownLatch cancelled = new CountDownLatch(1);
+		CountDownLatch writeFailed = new CountDownLatch(1);
+		server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+		server.createContext("/stream", exchange -> {
+			try {
+				exchange.getRequestBody().readAllBytes();
+				received.countDown();
+				cancelled.await(5, TimeUnit.SECONDS);
+				Thread.sleep(500);
+				exchange.getResponseHeaders().add("Content-Type", "text/event-stream");
+				exchange.sendResponseHeaders(200, 0);
+				OutputStream body = exchange.getResponseBody();
+				for (int i = 0; i < 100; i++) {
+					body.write(": still generating\n\n".getBytes(StandardCharsets.UTF_8));
+					body.flush();
+					Thread.sleep(50);
+				}
+			} catch (IOException e) {
+				writeFailed.countDown();
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+			} finally {
+				exchange.close();
+			}
+		});
+		server.start();
+		TurnCancellation cancellation = new TurnCancellation();
+		HubClinicalAnswerProvider provider = httpProvider(Duration.ofSeconds(30));
+		executor = Executors.newSingleThreadExecutor();
+		Future<TurnResult> completed = executor.submit(() ->
+				provider.execute(turn(), event -> { }, cancellation).toCompletableFuture().get());
+		assertTrue(received.await(5, TimeUnit.SECONDS));
+		cancellation.cancel();
+		cancelled.countDown();
+		assertEquals("cancelled", completed.get(3, TimeUnit.SECONDS).getProblemCode());
+		assertTrue(writeFailed.await(4, TimeUnit.SECONDS),
+				"the peer kept writing to a response nobody reads after the turn was cancelled");
+	}
+
 	@Test
 	public void theHeaderDeadlineDoesNotLimitTheAnswerAndReviewBody() throws Exception {
 		server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);

@@ -25,8 +25,9 @@ import java.util.Set;
  *   <li>A turn begins with exactly one {@code turn_started}.</li>
  *   <li>A turn ends with exactly one terminal event ({@code turn_done} or {@code turn_error}),
  *       and nothing follows it.</li>
- *   <li>{@code turn_done} requires a preceding {@code answer_done}; {@code turn_error} does not,
- *       because a turn may fail before any answer exists.</li>
+ *   <li>{@code turn_done}, {@code answer_validation}, {@code evidence_updated} and In-Depth
+ *       events require a preceding {@code answer_done}; {@code turn_error} does not, because a
+ *       turn may fail before any answer exists.</li>
  *   <li>Events follow the canonical stage order; only the delta events may repeat. The optional
  *       progressive PREVIEW stream ({@code preliminary_delta}) precedes committed reasoning and
  *       may not resume once it has begun, because committed reasoning replaces the preview rather
@@ -132,6 +133,12 @@ public final class TurnLifecycleValidator {
 		}
 		if (inDepthOutcomes > 0 && count(counts, TurnEventType.INDEPTH_PENDING) == 0) {
 			violations.add("an In-Depth outcome requires a preceding indepth_pending");
+		}
+		int postAnswerEvents = count(counts, TurnEventType.ANSWER_VALIDATION)
+				+ count(counts, TurnEventType.EVIDENCE_UPDATED)
+				+ count(counts, TurnEventType.INDEPTH_PENDING) + inDepthOutcomes;
+		if (postAnswerEvents > 0 && !answered) {
+			violations.add("answer_validation, evidence_updated and In-Depth events require answer_done");
 		}
 
 		requireCapability(violations, capabilities, ProviderCapability.ANSWER,

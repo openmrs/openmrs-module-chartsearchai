@@ -234,4 +234,20 @@ public class TurnLifecycleConformanceTest {
 								"indepth_error", "turn_done"))
 				.isEmpty(), "both indepth_done and indepth_error must be rejected");
 	}
+
+	@Test
+	public void postAnswerEventsRequireAnswerDoneEvenOnFailedTurns() {
+		assertFalse(TurnLifecycleValidator
+				.violations(FULL_CAPABILITIES,
+						events("turn_started", "answer_validation", "turn_error"))
+				.isEmpty(), "answer_validation without answer_done must be rejected");
+		assertFalse(TurnLifecycleValidator
+				.violations(FULL_CAPABILITIES,
+						events("turn_started", "evidence_updated", "turn_error"))
+				.isEmpty(), "evidence_updated without answer_done must be rejected");
+		assertFalse(TurnLifecycleValidator
+				.violations(FULL_CAPABILITIES,
+						events("turn_started", "indepth_pending", "turn_error"))
+				.isEmpty(), "indepth_pending without answer_done must be rejected");
+	}
 }

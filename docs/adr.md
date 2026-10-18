@@ -19332,3 +19332,26 @@ current medications"* — are no group (`QueryScopeRouter.groupOfHerMedicationsN
 
 Pinned by `GroupOfHerMedicationsNamedTest`. `DrugBesideHerMedicationGroupTest`'s two cases assert their previous
 openings after the lead, which now comes first.
+
+## Decision 314: Whether a drug interacts with her medications, withheld by no rating, is answered "Yes" with no reason to withhold claimed
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It carries
+[Decision 312](#decision-312-a-proposal-withheld-by-no-rating-an-interaction-folded-with-a-shared-class-included-is-answered-with-what-the-check-found)
+to the question [Decision 181](#decision-181-a-question-whether-not-to-give-a-drug-or-whether-it-interacts-is-answered-without-an-inverted-no) admitted.
+
+### Context
+
+*"Does X interact with her medications?"* was the module's to answer only where its findings were cautions or a rated
+reason to withhold. A reason to withhold no rating makes — a class folded onto a lower-rated rule — left it to the model.
+On the 3.7.1 standalone Mogan Kamwara, on nevirapine, lamivudine and stavudine, asked *"Does efavirenz interact with his
+TB drugs?"* and was told *"Yes, Efavirenz interacts with the patient's TB drugs"* — of three antiretrovirals — over *"a
+Moderate reason to withhold it"*, a rating no finding states.
+
+### The decision
+
+Such a question is answered by the module wherever Decision 312's `noVerdictAbout` holds of its findings: *"Yes — X
+interacts with this patient's active medications."* and each finding as a line. The sentence *"This module's drug-safety
+check found a reason to withhold it."* follows the "Yes" only where a finding `licensesTheModulesNo`.
+
+Pinned by `InteractsWithoutARatedReasonTest`.

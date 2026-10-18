@@ -4305,7 +4305,10 @@ public class DrugReferenceInjector {
 		}
 		// A proposal whose findings make no verdict — a contraindication among them, none a rated reason to withhold — is
 		// answered with what the check found and no verdict (ADR Decision 311): the model invented severities for them.
-		if (Lead.of(question, questionDrugs) == Lead.GIVE
+		// Whether it interacts with her medications likewise, answered "Yes" and no reason to withhold claimed (ADR
+		// Decision 314).
+		Lead lead = Lead.of(question, questionDrugs);
+		if ((lead == Lead.GIVE || lead == Lead.INTERACTS)
 				&& noVerdictAbout(asked, notHerOwnOrdersSharingASubstance(findings))) {
 			return true;
 		}
@@ -4967,8 +4970,9 @@ public class DrugReferenceInjector {
 		if (proposal && lead == Lead.INTERACTS) {
 			// "Does it interact with her medications?" — every question admitted so has an interaction finding about the
 			// drug, so "Yes" is true of it, and the withholding call follows where a finding makes it (ADR Decision 181).
+			// A reason to withhold no rating makes is no reason claimed (ADR Decision 314).
 			lines.add(0, "Yes — " + leadDrug + " interacts with this patient's active medications."
-					+ (STRENGTH_WITHHOLD.equals(clauses[leadIndex])
+					+ (STRENGTH_WITHHOLD.equals(clauses[leadIndex]) && anyLicensesTheModulesNo(findings)
 							? " This module's drug-safety check found a reason to withhold it." : ""));
 		} else if (STRENGTH_WITHHOLD.equals(clauses[leadIndex]) && (lead == Lead.NOT_GIVE && !licensesTheModulesNo(first)
 				|| lead == Lead.GIVE && proposal && !anyLicensesTheModulesNo(findings))) {

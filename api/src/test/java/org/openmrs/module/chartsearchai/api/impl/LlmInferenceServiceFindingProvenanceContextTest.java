@@ -68,7 +68,10 @@ public class LlmInferenceServiceFindingProvenanceContextTest extends BaseModuleC
 	 *  {@code AllergyValidator} requires behind a free-text allergen. */
 	private static final int OTHER_NON_CODED_CONCEPT = 88;
 
-	private static final String QUESTION = "Can I give ibuprofen?";
+	/** A question the MODEL answers that raises the allergy finding on ibuprofen: since ADR Decision 311 the module answers
+	 *  "Can I give ibuprofen?" itself, and a stated dose keeps the model call (ADR Decision 269) with the drug's findings
+	 *  raised, which is the arrangement this class is about. */
+	private static final String QUESTION = "Can I give 400 mg of ibuprofen?";
 
 	/** The chart record the allergy IS — the one the second form asserted and cited nothing for. */
 	private static final int ALLERGY_RECORD = 2;

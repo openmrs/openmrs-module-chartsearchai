@@ -19233,3 +19233,34 @@ yet started)."* (`DrugReferenceInjector.composeFromNoPair`); where none is sched
 Pinned by `NoPairBesideAScheduledOrderTest` and
 `LlmInferenceServiceAnswerFromFindingsContextTest.aProposalOfNoPairBesideAnOrderThatHasNotStartedSaysItIsScheduled`, which
 replaces `.aProposalOfNoPairBesideAnOrderThatHasNotStartedStillAsksTheModel`.
+
+## Decision 311: A proposal whose findings make no verdict is answered with what the check found
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It keeps
+[Decision 140](#decision-140-a-proposal-whose-findings-are-all-cautions-about-the-drug-is-answered-with-the-cautions-found)'s rule — a contraindication
+never licenses the module's "No" — and ends the hand-off to the model that rule was enforced by.
+
+### Context
+
+A drug proposed for a patient whose own allergy records relate to it — a recorded allergy, a cross-reactive class —
+went to the model wherever no interaction rated a reason to withhold it. The model mostly answered "No — X should not be
+given", and drifted: Betty Williams was told fluconazole shares a class with her ketoconazole allergy, *"which is a Major
+problem"* — a severity no finding carries — and other answers trailed off mid-sentence.
+
+### The decision
+
+Where every finding about the drug proposed is an interaction or a contraindication about that drug, at least one a
+contraindication, none rated a reason to withhold (`licensesTheModulesNo`) and none about a medication she already
+takes, the module answers with *"What this module's drug-safety check found about X:"* and each finding as a line, no
+verdict — as [Decision 257](#decision-257-a-question-whose-no-would-read-backwards-about-a-drug-withheld-by-no-rating-states-what-the-check-found)
+answers a question whose "No" would read backwards (`DrugReferenceInjector.noVerdictAbout`). A finding resting on an
+uncorroborated match keeps its hedge in the line. A rated interaction still makes the "No", as before.
+
+Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aProposalNoInteractionWithholdsIsAnsweredWithWhatTheCheckFound`
+and `.aCuratedContraindicationRuleAloneLicensesNoNo`, which replace `.aProposalNoInteractionWithholdsStillAsksTheModel`
+and `.aCuratedContraindicationRuleAloneStillAsksTheModel`. `LlmInferenceServiceFindingProvenanceContextTest`, which needs a model-written answer
+citing an allergy finding about ibuprofen, asks *"Can I give 400 mg of ibuprofen?"* in place of *"Can I give
+ibuprofen?"* — a stated dose keeps the model call with the drug's findings raised
+([Decision 269](#decision-269-a-proposal-stating-a-dose-raises-the-findings-the-proposal-does)); its assertions are
+unchanged.

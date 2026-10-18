@@ -4293,11 +4293,52 @@ public class DrugReferenceInjector {
 				&& withholdsWithoutARating(asked, notHerOwnOrdersSharingASubstance(findings))) {
 			return true;
 		}
+		// A proposal whose findings make no verdict — a contraindication among them, none a rated reason to withhold — is
+		// answered with what the check found and no verdict (ADR Decision 311): the model invented severities for them.
+		if (Lead.of(question, questionDrugs) == Lead.GIVE
+				&& noVerdictAbout(asked, notHerOwnOrdersSharingASubstance(findings))) {
+			return true;
+		}
 		// Or every finding is an interaction caution about the drug proposed (ADR Decision 140), answered with
 		// the cautions and never a clearance — see cautionsOnlyAbout. A finding that her own orders share a
 		// substance is about neither the drug nor a pair, so it is set aside here as it is where no finding was
 		// raised (ADR Decisions 159, 160), and stated after the cautions by composeFromFindings.
 		return cautionsOnlyAbout(asked, notHerOwnOrdersSharingASubstance(findings));
+	}
+
+	/** Whether any of {@code findings} {@link #licensesTheModulesNo}. */
+	private static boolean anyLicensesTheModulesNo(List<SafetyWarning> findings) {
+		for (SafetyWarning finding : findings) {
+			if (licensesTheModulesNo(finding)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Whether {@code findings} are about the substance {@code asked} names — interactions and contraindications, at least
+	 * one contraindication — none of them {@link #licensesTheModulesNo}, none about a medication she already takes: a
+	 * proposal the module answers with what its check found and no verdict (ADR Decision 311). Fail-closed: any other type
+	 * or subject keeps the model call.
+	 */
+	private static boolean noVerdictAbout(Set<Object> asked, List<SafetyWarning> findings) {
+		boolean contraindication = false;
+		for (SafetyWarning finding : findings) {
+			boolean interaction = SafetyWarning.TYPE_INTERACTION.equals(finding.getType());
+			boolean contra = SafetyWarning.TYPE_CONTRAINDICATION.equals(finding.getType());
+			if (!interaction && !contra || licensesTheModulesNo(finding) || finding.isAboutACurrentMedication()
+					|| finding.subjectRows().isEmpty()) {
+				return false;
+			}
+			for (DrugReference row : finding.subjectRows()) {
+				if (!asked.contains(row.substanceGroupKey())) {
+					return false;
+				}
+			}
+			contraindication |= contra;
+		}
+		return contraindication;
 	}
 
 	/**
@@ -4914,7 +4955,9 @@ public class DrugReferenceInjector {
 			lines.add(0, "Yes — " + leadDrug + " interacts with this patient's active medications."
 					+ (STRENGTH_WITHHOLD.equals(clauses[leadIndex])
 							? " This module's drug-safety check found a reason to withhold it." : ""));
-		} else if (lead == Lead.NOT_GIVE && STRENGTH_WITHHOLD.equals(clauses[leadIndex]) && !licensesTheModulesNo(first)) {
+		} else if (STRENGTH_WITHHOLD.equals(clauses[leadIndex]) && (lead == Lead.NOT_GIVE && !licensesTheModulesNo(first)
+				|| lead == Lead.GIVE && proposal && !anyLicensesTheModulesNo(findings))) {
+			// No rated reason to withhold, so no claim of one either: what the check found (ADR Decisions 257, 311).
 			// No rated reason to withhold, so no claim of one either: what the check found (ADR Decision 257).
 			lines.add(0, FOUND_LEAD_OPENING + leadDrug + ":");
 		} else if (STRENGTH_WITHHOLD.equals(clauses[leadIndex])) {

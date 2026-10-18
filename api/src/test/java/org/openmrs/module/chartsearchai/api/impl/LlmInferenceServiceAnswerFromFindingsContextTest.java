@@ -670,15 +670,23 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	}
 
 	/**
-	 * A proposed drug withheld only by a contraindication — here her recorded allergy to the very drug — is
-	 * answered by the model: the "No" would rest on a curated rule's token matched against her records' free
-	 * text, which review found false three ways, and a withholding clause beside the cautions leaves no
-	 * caution-only answer to compose either (ADR Decision 140).
+	 * A proposed drug withheld only by a contraindication — here her recorded allergy to the very drug — is answered by
+	 * the module with what the check found and no verdict (ADR Decision 311, superseding the model call this case
+	 * pinned): a "No" would rest on a curated rule's token matched against her records' free text, which review found
+	 * false three ways (ADR Decision 140), and stating the finding asserts no "No". On the 3.7.1 standalone the model
+	 * answered such a question "No — … the patient's allergy to Ketoconazole, which is a Major problem", a severity no
+	 * finding carries.
 	 */
 	@Test
-	public void aProposalNoInteractionWithholdsStillAsksTheModel() {
+	public void aProposalNoInteractionWithholdsIsAnsweredWithWhatTheCheckFound() {
 		DrugReferenceTestSupport.recordFreeTextAllergy(patient, 88, "Omeprazole");
-		assertTheModelIsAsked("Can I give her omeprazole?");
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider).search(patient, "Can I give her omeprazole?");
+		assertEquals(0, provider.calls, "the module answers: " + answer.getAnswer());
+		String[] lines = answer.getAnswer().split("\\n");
+		assertEquals(DrugReferenceInjector.FOUND_LEAD_OPENING + "Omeprazole:", lines[0], answer.getAnswer());
+		assertTrue(answer.getAnswer().contains("recorded allergy to Omeprazole"), answer.getAnswer());
+		assertFalse(answer.getAnswer().startsWith("No") || answer.getAnswer().contains("can be given"), answer.getAnswer());
 	}
 
 	/**
@@ -2553,10 +2561,11 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	/**
 	 * A curated contraindication rule is never what licenses the module's "No": here its token
 	 * {@code opium} matched her allergy {@code Tiotropium} by containment alone, a match the finding
-	 * itself marks uncorroborated — one of the ways a rule's free-text match can be false.
+	 * itself marks uncorroborated — one of the ways a rule's free-text match can be false. Since ADR Decision 311 the
+	 * module states the finding, hedge and all, under no verdict, which the model was asked for until then.
 	 */
 	@Test
-	public void aCuratedContraindicationRuleAloneStillAsksTheModel() throws Exception {
+	public void aCuratedContraindicationRuleAloneLicensesNoNo() throws Exception {
 		DrugReferenceService curated = DrugReferenceTestSupport
 				.curatedFixtureService("chartsearchai-test/drug-reference-mid-word-allergy-token.json");
 		DrugReferenceTestSupport.recordFreeTextAllergy(patient, 88, "Tiotropium");
@@ -2573,8 +2582,10 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		RecordingProvider provider = new RecordingProvider();
 		ChartAnswer answer = serviceWith(provider, curated).search(patient, question);
 
-		assertEquals(1, provider.calls, "a contraindication alone never licenses the module's No");
-		assertFalse(answer.isAnsweredByTheModule());
+		assertEquals(0, provider.calls, "the module states what it found: " + answer.getAnswer());
+		assertTrue(answer.getAnswer().startsWith(DrugReferenceInjector.FOUND_LEAD_OPENING), answer.getAnswer());
+		assertTrue(answer.getAnswer().contains("could not corroborate"), "the hedge stands: " + answer.getAnswer());
+		assertFalse(answer.getAnswer().startsWith("No"), "a contraindication alone never licenses the module's No");
 	}
 
 	/**

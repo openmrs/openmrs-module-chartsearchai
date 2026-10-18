@@ -38,7 +38,9 @@ public final class QueryScopeRouter {
 	/** Beyond the literal allergy words: "adverse", "reaction(s)" and "intolerance" are the
 	 *  allergy-table's own vocabulary (records read "Allergy: X. Reaction: rash"; the OpenMRS
 	 *  allergy UI captures adverse reactions and intolerances), so "any adverse drug reactions?"
-	 *  asks about her allergies. */
+	 *  is an allergy question, and the order-driven contraindication check then covers every recorded
+	 *  allergy rather than only one the answer names ({@code DrugSafetyValidator.SubjectMatter}). These
+	 *  cues widen a safety check; they do not change which records QueryStore retrieves. */
 	private static final Pattern ALLERGIES_CUES = cues("allerg(?:y|ies|ic|en|ens)", "adverse",
 			"reactions?", "intoleran(?:t|ce|ces)");
 

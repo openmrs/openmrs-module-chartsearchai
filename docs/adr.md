@@ -19591,3 +19591,27 @@ the answer says both — *"Efavirenz is already one of this patient's active med
 on efavirenz and no nevirapine, was told *"Efavirenz can be given"*.
 
 Pinned by `SwitchFromADrugSheIsNotOnTest`.
+
+## Decision 324: Which drugs to avoid in her is answered with her recorded drug allergies and the screen of her medications
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It answers the question as
+[Decision 293](#decision-293-a-question-asking-the-module-to-choose-a-drug-for-her-is-answered-with-the-screen-and-chooses-none) answers a choice of drug.
+
+### Context
+
+*"What drugs should I avoid in this patient?"* fitted no shape, so the model answered every patient on the 3.7.1
+standalone: Rhoda, on seven antiretrovirals the screen relates thirteen times, was told *"The records do not address
+which drugs should be avoided"*; James Martinez *"Yes — the patient has an allergy to Aspirin, which is a Moderate severity
+drug allergen causing Anaemia"*; others had their allergies listed, and their medications' conflicts left out.
+
+### The decision
+
+`QueryScopeRouter.asksWhichDrugsToAvoid` — *"What drugs should I avoid in this patient?"*, *"What should I avoid
+prescribing for her?"*, *"Which drugs should I avoid with his current medications?"* — is a screen of her medications.
+The answer opens *"This check does not list drugs to avoid: it states this patient's recorded drug allergies and what it
+found among the medications this patient is already taking."* (`DrugReferenceInjector.LISTS_NO_DRUG_TO_AVOID_LEAD`), then
+her recorded drug allergies, each as the chart spells it, or that none is recorded, then the screen's answer. Where her
+allergy records were not read the model answers, as before.
+
+Pinned by `DrugsToAvoidQuestionTest`.

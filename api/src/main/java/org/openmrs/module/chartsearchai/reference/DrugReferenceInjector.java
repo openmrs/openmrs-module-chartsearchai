@@ -1397,6 +1397,12 @@ public class DrugReferenceInjector {
 				&& QueryScopeRouter.asksWhichOfHerMedicationsAreHighRisk(question)) {
 			moduleAnswer = RATES_NO_RISK_LEAD + "\n" + moduleAnswer;
 		}
+		// Which drugs to avoid in her: her recorded drug allergies and the screen, under a lead saying it lists none to avoid
+		// (ADR Decision 324). Not where her allergy records were not read: the allergy line would be a guess.
+		if (moduleAnswer != null && questionDrugs.isEmpty() && QueryScopeRouter.asksWhichDrugsToAvoid(question)) {
+			moduleAnswer = context == null || !context.contraindicationRecordsRead() ? null
+					: LISTS_NO_DRUG_TO_AVOID_LEAD + "\n" + recordedDrugAllergiesLine(context) + "\n" + moduleAnswer;
+		}
 		// What to monitor with her medications, likewise: the screen, under a lead saying it sets no monitoring (ADR
 		// Decision 297).
 		if (moduleAnswer != null && questionDrugs.isEmpty()
@@ -7358,6 +7364,22 @@ public class DrugReferenceInjector {
 			+ " the \"";
 
 	static final String GROUP_NOT_IDENTIFIED_CLOSING = "\" the question names, so it checked ";
+
+	/** How the answer to which drugs to avoid in her opens (ADR Decision 324): no finding lists drugs to avoid. */
+	static final String LISTS_NO_DRUG_TO_AVOID_LEAD = "This check does not list drugs to avoid: it states this patient's"
+			+ " recorded drug allergies and what it found among the medications this patient is already taking.";
+
+	/** Her recorded drug allergies, each as the chart spells it, or that none is recorded (ADR Decision 324). */
+	private static String recordedDrugAllergiesLine(PatientClinicalContext context) {
+		Set<String> spelled = new LinkedHashSet<String>();
+		for (String token : context.getAllergyTokens()) {
+			if (!context.getNonDrugAllergyTokens().contains(token)) {
+				spelled.add(context.allergySpelling(token));
+			}
+		}
+		return spelled.isEmpty() ? "No drug allergies are recorded for this patient."
+				: "Recorded drug allergies: " + String.join("; ", spelled) + ".";
+	}
 
 	/** How the answer to what to monitor with her medications opens (ADR Decision 297): no finding sets monitoring. */
 	static final String SETS_NO_MONITORING_LEAD = "This check does not say what to monitor: it states what it found among"

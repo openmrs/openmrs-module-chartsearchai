@@ -239,7 +239,9 @@ public final class QueryScopeRouter {
 				// is what to monitor with her medications (ADR Decision 297).
 				|| asksWhichDrugToGiveHer(question) || asksWhatToMonitorWithHerMedications(question)
 				// And which of her medications are high risk, and whether any need changing (ADR Decision 300).
-				|| asksWhichOfHerMedicationsAreHighRisk(question) || asksWhetherHerMedicationsNeedChanging(question));
+				|| asksWhichOfHerMedicationsAreHighRisk(question) || asksWhetherHerMedicationsNeedChanging(question)
+				// And which drugs to avoid in her (ADR Decision 324).
+				|| asksWhichDrugsToAvoid(question));
 	}
 
 	/**
@@ -1247,7 +1249,7 @@ public final class QueryScopeRouter {
 	public static boolean asksOnlyToScreenHerMedications(String question) {
 		return fitsAShape(words(question), SCREEN_SHAPES) || asksWhichDrugToGiveHer(question)
 				|| asksWhatToMonitorWithHerMedications(question) || asksWhichOfHerMedicationsAreHighRisk(question)
-				|| asksWhetherHerMedicationsNeedChanging(question)
+				|| asksWhetherHerMedicationsNeedChanging(question) || asksWhichDrugsToAvoid(question)
 				|| question != null && isInteractionScreening(question)
 						&& (MEDICATIONS_CUES.matcher(question).find() || DDI_CUES.matcher(question).find())
 						&& (asksForAReadingBesidesAChange(question) || CHANGE_REQUEST.matcher(question).find())
@@ -1365,6 +1367,28 @@ public final class QueryScopeRouter {
 			"(?:does|do) " + SUBJECT + " need any of " + HER_MEDICATIONS + " " + CHANGED,
 			// "Do any of her medications need to be changed?"
 			"(?:do|does) any of " + HER_MEDICATIONS + " need (?:to be )?" + CHANGED);
+
+	/**
+	 * Whether a question asks which drugs to avoid in her, and nothing else — <em>"What drugs should I avoid in this
+	 * patient?"</em>, <em>"What should I avoid prescribing for her?"</em> (ADR Decision 324). No finding lists drugs to
+	 * avoid, so the module answers with her recorded drug allergies and its screen of her own medications, under a lead
+	 * saying so. A closed grammar, fail-CLOSED.
+	 */
+	public static boolean asksWhichDrugsToAvoid(String question) {
+		return question != null && question.indexOf('?') == question.lastIndexOf('?')
+				&& fitsAShape(words(question), AVOID_SHAPES);
+	}
+
+	private static final String DRUGS_NOUN = "(?:drugs|medications|medicines|meds)";
+
+	private static final List<Pattern> AVOID_SHAPES = shapes(
+			// "What drugs should I avoid in this patient?", "Which medications should we avoid for her?"
+			"(?:what|which) " + DRUGS_NOUN + " should (?:i|we) avoid(?: (?:in|for|with|giving) (?:" + PATIENT + "|"
+					+ HER_MEDICATIONS + "))?",
+			// "What should I avoid prescribing for her?", "What should I avoid giving him?"
+			"what should (?:i|we) avoid (?:prescribing|giving)(?: (?:for|to) " + PATIENT + "| " + PATIENT + ")?",
+			// "What drugs should she avoid?"
+			"(?:what|which) " + DRUGS_NOUN + " should " + SUBJECT + " avoid");
 
 	private static final List<Pattern> MONITORING_SHAPES = shapes(
 			// "What should I monitor with her current medications?", "What do I need to monitor with her meds?"

@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -72,6 +73,12 @@ public class HubProfileService {
 		catch (InterruptedException e) {
 			Thread.currentThread().interrupt();
 			throw new APIException("Hub profile discovery was interrupted.", e);
+		}
+		catch (JsonProcessingException e) {
+			// A parser quotes what it could not parse and callers log this message, so name the type
+			// and leave the Hub's text on the cause (ADR Decision 102).
+			throw new APIException("Hub profile discovery returned a body that is not JSON ("
+					+ e.getClass().getSimpleName() + ").", e);
 		}
 		catch (IOException | IllegalArgumentException e) {
 			throw new APIException("Hub profile discovery failed: " + e.getMessage(), e);

@@ -10,6 +10,7 @@
 package org.openmrs.module.chartsearchai.api.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -88,6 +89,32 @@ public class HubProfileServiceTest extends BaseModuleContextSensitiveTest {
 			org.openmrs.api.APIException failure = assertThrows(org.openmrs.api.APIException.class,
 					() -> new HubProfileService().listProfiles());
 			assertTrue(failure.getMessage().contains("ceiling"));
+		} finally {
+			server.stop(0);
+		}
+	}
+
+	/** A parser quotes what it could not parse, and the REST layer logs this message, so a body that
+	 *  is not JSON is reported by type and never by the Hub's own words (ADR Decision 102). */
+	@Test
+	public void profileDiscoveryDoesNotRepeatAnUnparseableBodyInItsMessage() throws Exception {
+		HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
+		server.createContext("/v1/models", exchange -> {
+			byte[] body = "Metformin_500_mg_BID".getBytes(StandardCharsets.UTF_8);
+			exchange.sendResponseHeaders(200, body.length);
+			try (OutputStream output = exchange.getResponseBody()) {
+				output.write(body);
+			}
+		});
+		server.start();
+		try {
+			Context.getAdministrationService().setGlobalProperty(
+					ChartSearchAiConstants.GP_HUB_ENDPOINT_URL,
+					"http://localhost:" + server.getAddress().getPort() + "/v1/chat/completions");
+			org.openmrs.api.APIException failure = assertThrows(org.openmrs.api.APIException.class,
+					() -> new HubProfileService().listProfiles());
+			assertFalse(failure.getMessage().contains("Metformin"), failure.getMessage());
+			assertTrue(failure.getMessage().contains("not JSON"), failure.getMessage());
 		} finally {
 			server.stop(0);
 		}

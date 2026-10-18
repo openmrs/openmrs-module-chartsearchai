@@ -113,6 +113,16 @@ public final class EndedOrderStatement {
 	 * and it states the date only where the chip carries one. It states what the chart RECORDS, never
 	 * that the drug may or may not be given: that is the finding's call, and the prompt's.
 	 */
+	/** As {@link #withEndedOrdersStated}, the sentences on a line of their own after {@code answer}: the module's composed
+	 *  lines end in record markers (ADR Decision 321). */
+	public static String withEndedOrdersStatedOnALine(String answer, List<SafetyWarning> unstated) {
+		if (unstated == null || unstated.isEmpty()) {
+			return answer;
+		}
+		String stated = withEndedOrdersStated("", unstated).trim();
+		return answer.trim() + "\n" + stated;
+	}
+
 	public static String withEndedOrdersStated(String answer, List<SafetyWarning> unstated) {
 		if (unstated == null || unstated.isEmpty()) {
 			return answer;

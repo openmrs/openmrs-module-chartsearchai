@@ -19504,3 +19504,32 @@ interaction check had none to relate X to."*
 Pinned by `WhichOfHerMedicationsInteractTest.rowsBelowTheFloorOrNoOrderAreStatedForEveryWording`.
 `LlmInferenceServiceAnswerFromFindingsContextTest.aBelowFloorQuestionThatProposesNothingStillAsksTheModel`, which pinned
 the model call, is now `.aBelowFloorQuestionWhetherItInteractsStatesTheRowsAndNoVerdict`.
+
+## Decision 321: A question about a drug her chart holds only as an ended order is answered from its findings
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It lets the module compose over the ended-order
+clauses [Decision 110](#decision-110-a-finding-about-a-drug-the-chart-records-only-as-an-ended-order-says-so-rather-than-reading-as-a-proposal) introduced for the model's prose.
+
+### Context
+
+A finding about a drug the chart records only as an order no longer in force carries the ended-order clause — *"a reason
+against giving it should it be proposed again"* — wherever the question proposes nothing, and `strengthRank` refused that
+clause, so every such question went to the model. On the 3.7.1 standalone Rita, whose rifampicin order ended on
+2026-09-23, asked *"Does rifampicin interact with her medications?"* and was told *"No — Rifampicin should not be proposed
+again"*, a "No" to whether it interacts. *"Which of her medications interact with rifampicin?"* went to the model for her
+and for Dora DdiVoided alike.
+
+### The decision
+
+The module's own answer reads the ended-order pair as the strength it carries (`DrugReferenceInjector.moduleClause`): in
+`composeFromFindings` and in the gates deciding whether the module answers (`cautionsOnlyAbout`, `withholdsWithoutARating`,
+`noVerdictAbout`). Its lines state no clause and its lead makes the call, as for a drug she never took; and
+`EndedOrderStatement`, already applied to the module's answer, states what the chart records — *"The chart records
+Rifampicin (rifampin) only as an order no longer in force (ended 2026-09-23), not as a current medication."* — on a line
+of its own (`EndedOrderStatement.withEndedOrdersStatedOnALine`), the composed lines ending in record markers. The model's
+prompt and the record's stamp keep the ended-order clause. A proposal never carries it: the validator keeps the drug a
+proposal.
+
+Pinned by `EndedOrderDrugAskedAboutTest` and
+`LlmInferenceServiceEndedOrderStatementContextTest.theModulesOwnAnswerStatesTheEndedOrderOnALineOfItsOwn`.

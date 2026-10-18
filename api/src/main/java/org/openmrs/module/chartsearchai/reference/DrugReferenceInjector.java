@@ -4382,7 +4382,7 @@ public class DrugReferenceInjector {
 					return false;
 				}
 			}
-			withholds |= STRENGTH_WITHHOLD.equals(strengthClause(finding));
+			withholds |= STRENGTH_WITHHOLD.equals(moduleClause(finding));
 		}
 		return withholds;
 	}
@@ -4396,7 +4396,7 @@ public class DrugReferenceInjector {
 	private static boolean withholdsWithoutARating(Set<Object> asked, List<SafetyWarning> findings) {
 		boolean withholds = false;
 		for (SafetyWarning finding : findings) {
-			String clause = strengthClause(finding);
+			String clause = moduleClause(finding);
 			if (!SafetyWarning.TYPE_INTERACTION.equals(finding.getType()) || licensesTheModulesNo(finding)
 					|| !STRENGTH_WITHHOLD.equals(clause) && !STRENGTH_CAUTION.equals(clause) || finding.subjectRows().isEmpty()) {
 				return false;
@@ -4430,7 +4430,7 @@ public class DrugReferenceInjector {
 		}
 		for (SafetyWarning finding : findings) {
 			if (!SafetyWarning.TYPE_INTERACTION.equals(finding.getType())
-					|| !STRENGTH_CAUTION.equals(strengthClause(finding)) || finding.subjectRows().isEmpty()) {
+					|| !STRENGTH_CAUTION.equals(moduleClause(finding)) || finding.subjectRows().isEmpty()) {
 				return false;
 			}
 			for (DrugReference row : finding.subjectRows()) {
@@ -4947,7 +4947,7 @@ public class DrugReferenceInjector {
 		final String[] clauses = new String[findings.size()];
 		List<Integer> order = new ArrayList<Integer>(findings.size());
 		for (int i = 0; i < findings.size(); i++) {
-			clauses[i] = strengthClause(findings.get(i));
+			clauses[i] = moduleClause(findings.get(i));
 			if (strengthRank(clauses[i]) < 0) {
 				return null;
 			}
@@ -8183,6 +8183,19 @@ public class DrugReferenceInjector {
 	 * and question-pair arms and exclusive with the current-medication referent. Same strengths again;
 	 * ADR Decision 110.
 	 */
+	/**
+	 * {@link #strengthClause} as the module's own answer reads it: the ended-order pair read as the strength it carries
+	 * (ADR Decision 321). That pair names the referent a question proposing nothing lacks — "should it be proposed
+	 * again" — for the MODEL's prose; the module's lines state no clause, its lead decides the call, and the statement
+	 * that the chart records the drug only as an ended order is appended to its answer as to the model's
+	 * ({@code EndedOrderStatement}). A proposal never carries the pair, the validator keeping its drug a proposal.
+	 */
+	private static String moduleClause(SafetyWarning finding) {
+		String clause = strengthClause(finding);
+		return STRENGTH_WITHHOLD_ENDED_ORDER.equals(clause) ? STRENGTH_WITHHOLD
+				: STRENGTH_CAUTION_ENDED_ORDER.equals(clause) ? STRENGTH_CAUTION : clause;
+	}
+
 	private static String strengthClause(SafetyWarning finding) {
 		// The REFERENT axis, asked first because it is orthogonal to the strength axis below and
 		// because reading them the other way round is how a branch gets missed: every clause the

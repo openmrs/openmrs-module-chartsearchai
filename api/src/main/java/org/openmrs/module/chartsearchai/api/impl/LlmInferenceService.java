@@ -1059,10 +1059,10 @@ public class LlmInferenceService implements ChartSearchService {
 				mappings), chart);
 		String answer = FindingPartnerCoverageCheck.withUnstatedPartnersNamed(composed,
 				extractCitedReferences(composed, null, mappings), mappings, drugSafetyValidator);
-		// Issue #472's statement too, so the two paths cannot differ — though no composed answer is
-		// about an ended order today: strengthRank refuses the ended-order clauses, so a question whose
-		// findings carry one keeps the model call.
-		answer = EndedOrderStatement.withEndedOrdersStated(answer,
+		// Issue #472's statement too, so the two paths cannot differ: a question proposing nothing about a drug
+		// her chart holds only as an ended order is composed from its findings (ADR Decision 321), and this says
+		// what the chart records of it.
+		answer = EndedOrderStatement.withEndedOrdersStatedOnALine(answer,
 				EndedOrderStatement.unstatedEndedOrders(composed, safetyWarnings,
 						drugSafetyValidator));
 		// And issue #515's: a proposal after a list is composed since ADR Decision 149, and the sentence takes a

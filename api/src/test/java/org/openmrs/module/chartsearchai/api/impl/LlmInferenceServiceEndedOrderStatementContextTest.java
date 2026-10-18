@@ -136,6 +136,21 @@ public class LlmInferenceServiceEndedOrderStatementContextTest extends BaseModul
 		assertEquals(1, early.size(), "precondition: the early done fired");
 	}
 
+	/**
+	 * The module's own answer about a drug the chart holds only as an ended order states what the chart records on a line of
+	 * its own (ADR Decision 321): its lines end in record markers, and the sentence appended to the last of them read
+	 * "— Major. [11] [5]. The chart records …" on the 3.7.1 standalone.
+	 */
+	@Test
+	public void theModulesOwnAnswerStatesTheEndedOrderOnALineOfItsOwn() {
+		Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
+			"true");
+		ChartAnswer answer = serviceWith(MODEL_ANSWER, DrugReferenceTestSupport.obsRecord(1, "BP 120/80"),
+			endedIbuprofen()).search(patient, "Does ibuprofen interact with her medications?");
+		assertTrue(answer.isAnsweredByTheModule(), "precondition: the module answers: " + answer.getAnswer());
+		assertTrue(answer.getAnswer().endsWith("]\n" + STATEMENT.trim()), answer.getAnswer());
+	}
+
 	@Test
 	public void anAnswerThatAlreadySaysTheOrderIsNoLongerInForceIsReturnedByteForByte() {
 		String stated = "Ibuprofen's order is no longer in force [2]. It interacts with her Acetylsalicylic "

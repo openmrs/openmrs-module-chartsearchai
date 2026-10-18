@@ -803,11 +803,14 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	}
 
 	/**
-	 * A pair whose order has not started keeps the model's answer (ADR Decision 142): the line would call it her
-	 * active order. Patient 6 holds only an aspirin order scheduled for 2099.
+	 * A pair whose order has not started is stated with that order said to be scheduled (ADR Decision 307, superseding the
+	 * model call Decision 142 kept): the answer's sentence counts her orders and never calls one active, so nothing it says
+	 * is false of a scheduled order once it says which it is. On the 3.7.1 standalone the model called the unrated pair
+	 * beside Dora DdiScheduled's scheduled rifampicin "one caution". Patient 6 holds only an aspirin order scheduled for
+	 * 2099.
 	 */
 	@Test
-	public void aBelowFloorPairOnAnOrderThatHasNotStartedStillAsksTheModel() {
+	public void aBelowFloorPairOnAnOrderThatHasNotStartedIsStatedAsScheduled() {
 		executeDataSet("ScheduledAspirinOrderTestData.xml");
 		Patient six = Context.getPatientService().getPatient(6);
 		String question = "Can I give her clarithromycin?";
@@ -821,8 +824,10 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		RecordingProvider provider = new RecordingProvider();
 		ChartAnswer answer = serviceWith(provider).search(six, question);
 
-		assertEquals(1, provider.calls, "the model is asked: " + answer.getAnswer());
-		assertFalse(answer.isAnsweredByTheModule());
+		assertEquals(0, provider.calls, "the module answers: " + answer.getAnswer());
+		assertTrue(answer.getAnswer().split("\n")[0].matches("The interaction data gives no rated reason to withhold "
+				+ "Clarithromycin: it lists Clarithromycin against one of this patient's orders, scheduled and not yet started, "
+				+ ".*\\[\\d+\\]"), answer.getAnswer());
 	}
 
 	/**

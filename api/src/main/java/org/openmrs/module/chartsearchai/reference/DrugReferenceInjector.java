@@ -3381,12 +3381,24 @@ public class DrugReferenceInjector {
 		if (records == null) {
 			return null;
 		}
-		BelowFloorRows rows = BelowFloorRows.of(extent);
+		// A pair on an order that has not started is stated, and that order said to be scheduled (ADR Decision 307): the
+		// sentence counts her orders and calls none of them active.
+		BelowFloorRows rows = BelowFloorRows.of(extent, true);
 		if (rows == null) {
 			return null;
 		}
 		if (product != null) {
 			rows.drug = product;
+		}
+		int scheduled = 0;
+		for (String display : rows.orders) {
+			for (PatientClinicalContext.ActiveDrugOrder order : context == null
+					? Collections.<PatientClinicalContext.ActiveDrugOrder> emptyList() : context.getActiveDrugOrders()) {
+				if (!order.hasStarted() && order.getDisplay() != null && order.getDisplay().trim().equals(display.trim())) {
+					scheduled++;
+					break;
+				}
+			}
 		}
 		// One sentence with a bottom line scoped to the interaction data (ADR Decision 144), the scope it does not
 		// cover on a line of its own. It cites the data and not her orders (ADR Decision 146): the claim is the
@@ -3395,7 +3407,10 @@ public class DrugReferenceInjector {
 		// In a clinician's words, not the data's: "rows" was the dataset's term for what a clinician reads as the drug
 		// being listed against her orders (ADR Decision 144, reworded on the owner's decision 2026-10-13).
 		String against = "it lists " + rows.drug + " against " + (n == 1 ? "one" : String.valueOf(n))
-				+ " of this patient's orders, ";
+				+ " of this patient's orders"
+				+ (scheduled == 0 ? "" : scheduled == n ? (n == 1 ? ", " : ", all ") + "scheduled and not yet started"
+						: " (" + (scheduled == 1 ? "one" : String.valueOf(scheduled)) + " of them scheduled and not yet started)")
+				+ ", ";
 		return "The interaction data gives no rated reason to withhold " + rows.drug + ": " + against
 				+ (!rows.allUnknown ? "rated " + rows.ratings() + ", below the level this module reports as a finding"
 						: (n == 1 ? "with no severity" : "none with a severity") + (rows.noMechanism ? " or mechanism" : "")
@@ -3534,9 +3549,16 @@ public class DrugReferenceInjector {
 		private String drug;
 
 		static BelowFloorRows of(PairChipExtent extent) {
+			return of(extent, false);
+		}
+
+		/** As above; {@code scheduledToo} admits a pair on an order that has not started, which the caller then says is
+		 *  scheduled (ADR Decision 307). */
+		static BelowFloorRows of(PairChipExtent extent, boolean scheduledToo) {
 			BelowFloorRows rows = new BelowFloorRows();
 			for (PairChipExtent.BelowFloorPair pair : extent.getBelowFloor()) {
-				if (!pair.onStartedOrdersOnly() || ChartSearchAiUtils.isBlank(pair.getSeverity())) {
+				if (!scheduledToo && !pair.onStartedOrdersOnly() || pair.herOrders().isEmpty()
+						|| ChartSearchAiUtils.isBlank(pair.getSeverity())) {
 					return null;
 				}
 				String severity = pair.getSeverity().trim();

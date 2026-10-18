@@ -13589,7 +13589,7 @@ order whose record `orderRecordNumbers` declines.
 
 Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aProposalRelatedToHerOrdersOnlyBelowTheFloorIsAnsweredWithThoseRows`,
 `.aBelowFloorAnswerDoesNotDependOnHowTheProposalIsWorded`, `.aPairBelowARaisedFloorIsStatedWithItsOwnRating`,
-`.aBelowFloorQuestionThatProposesNothingStillAsksTheModel` and `.aBelowFloorPairOnAnOrderThatHasNotStartedStillAsksTheModel`.
+`.aBelowFloorQuestionThatProposesNothingStillAsksTheModel` and `.aBelowFloorPairOnAnOrderThatHasNotStartedStillAsksTheModel` (replaced by Decision 307).
 
 ## Decision 143: A proposal related to none of her orders is answered with what the interaction check established
 
@@ -19128,3 +19128,31 @@ hers and answers the other as its proposal alone is answered
 answer; never published).
 
 Pinned by `TogetherWithHerOwnBelowFloorTest`.
+
+## Decision 307: A proposal related below the floor to an order not yet started says that order is scheduled
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It supersedes the refusal
+[Decision 142](#decision-142-a-proposal-related-to-her-orders-only-below-the-severity-floor-is-answered-with-those-rows)
+kept for an order that has not started.
+
+### Context
+
+Dora DdiScheduled takes nevirapine and has rifampicin scheduled to start later. *"Is it safe to give her potassium
+chloride?"* and *"Can I give him ibuprofen?"* went to the model for her, which answered *"Potassium chloride can be given,
+with one caution: it has an Unknown severity interaction with Nevirapine"* — an unrated pair called a caution — while
+every other patient whose orders the data relates to the drug only without a rating got the module's answer. Decision 142
+refused any such pair on an order that has not started because its line called the order her active order; since
+[Decision 144](#decision-144-a-below-floor-answer-states-a-bottom-line-scoped-to-the-interaction-data) the answer is
+one sentence that counts her orders and calls none of them active.
+
+### The decision
+
+The proposal's below-floor answer states such a pair and says which of her orders are scheduled: *"it lists Potassium
+chloride against 2 of this patient's orders (one of them scheduled and not yet started), none with a severity or
+mechanism on file"*, or *"against one of this patient's orders, scheduled and not yet started, …"*
+(`BelowFloorRows.of(extent, true)`). The answer about her own drug below the floor keeps the refusal, and the no-pair
+answer, which calls her orders her active medications, still refuses an order not yet started.
+
+Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aBelowFloorPairOnAnOrderThatHasNotStartedIsStatedAsScheduled`,
+which replaces `.aBelowFloorPairOnAnOrderThatHasNotStartedStillAsksTheModel`.

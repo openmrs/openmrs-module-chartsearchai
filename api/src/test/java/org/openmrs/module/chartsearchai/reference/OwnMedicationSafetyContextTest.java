@@ -104,10 +104,18 @@ public class OwnMedicationSafetyContextTest extends BaseModuleContextSensitiveTe
 	}
 
 	@Test
-	public void herOwnDrugWithNoInteractionIsLeftToTheModel() throws IOException {
-		// No finding relates it to another of her orders, and the module states findings, never a clearance.
-		assertEquals(null, answer("Is ibuprofen safe for her?", null,
-			Arrays.asList(DrugReferenceTestSupport.activeOrder("order-ibuprofen", "Ibuprofen 400mg"))));
+	public void herOwnDrugWithNoOtherMedicationSaysThereIsNoneToCheckItAgainst() throws IOException {
+		// No finding relates it to another of her orders, for she has none, and the module states findings, never a
+		// clearance — so it says what the check could not do (ADR Decision 316, superseding Decision 193's hand-off to the
+		// model). On the 3.7.1 standalone the model answered Mark Williams's "Can I give her ondansetron?", ondansetron her
+		// one order, "The drug can be given, with one caution".
+		for (String question : Arrays.asList("Is ibuprofen safe for her?", "Can I give her ibuprofen?", "Is her ibuprofen safe?")) {
+			String answer = answer(question, null,
+				Arrays.asList(DrugReferenceTestSupport.activeOrder("order-ibuprofen", "Ibuprofen 400mg")));
+			assertNotNull(answer, question + " — the module answers");
+			assertTrue(answer.matches("Ibuprofen is one of this patient's active medications \\(Ibuprofen 400mg \\[\\d+\\]\\), and "
+					+ "this patient has no other active medication to check it against\\."), question + " was: " + answer);
+		}
 	}
 
 	@Test

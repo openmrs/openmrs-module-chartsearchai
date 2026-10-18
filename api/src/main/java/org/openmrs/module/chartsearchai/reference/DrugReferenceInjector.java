@@ -5703,8 +5703,8 @@ public class DrugReferenceInjector {
 	 * of Decision 193's or 202's shapes; the check stated an extent that found no pair at any rating; her allergy records
 	 * checked; no finding about it but those saying her orders carry it; every other order of hers started and identified
 	 * by the data; the drug carrying interaction rows that no rule of those orders names; and its reference record in the
-	 * chart, which it cites. With NO other order of hers and a finding that her orders carry it more than once, it says
-	 * there is none to check it against instead.
+	 * chart, which it cites. With NO other order of hers it says there is none to check it against instead, beside any
+	 * finding that her orders carry it more than once (ADR Decision 316).
 	 */
 	private String composeNoPairAboutHerOwnMedication(String question, List<DrugReference> questionDrugs,
 			Set<Object> herSubstances, List<SafetyWarning> findings, List<Integer> findingNumbers, PairChipExtent extent,
@@ -5763,12 +5763,9 @@ public class DrugReferenceInjector {
 		if (herOrders.isEmpty()) {
 			return null;
 		}
-		// Nothing else of hers to relate it to: said as Decision 178 says it of a screen over one order — where there is a
-		// finding to state beside it, that her orders carry it twice; one order and no finding stays the model's, as
-		// Decision 193 pins (OwnMedicationSafetyContextTest.herOwnDrugWithNoInteractionIsLeftToTheModel).
-		if (others == 0 && lines.isEmpty()) {
-			return null;
-		}
+		// Nothing else of hers to relate it to: said as Decision 178 says it of a screen over one order, with any finding
+		// that her orders carry it twice beside it — and with none, said alone, never a clearance (ADR Decision 316): the
+		// model, asked instead, answered "The drug can be given, with one caution".
 		if (others == 0) {
 			StringBuilder alone = new StringBuilder(DrugSafetyValidator.interactionSubject(questionDrugs, context).displayLabel() + OWN_MEDICATION_LEAD + herOrders
 					+ ", and this patient has no other active medication to check it against.");

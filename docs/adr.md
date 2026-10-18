@@ -19384,3 +19384,27 @@ bare forms, so *"Any problem giving her ibuprofen?"* read as naming ibuprofen as
 
 Pinned by `HerDrugSheIsNotOnTest`, and for the verb forms by
 `LlmInferenceServiceAnswerFromFindingsContextTest.aQuestionWhetherNotToGiveADrugIsAnsweredWithoutAYesOrNo`.
+
+## Decision 316: A question about her own drug, her only medication, says there is no other to check it against
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It supersedes the part of
+[Decision 193](#decision-193-a-safety-question-about-a-drug-she-already-takes-is-answered-by-the-module-as-her-own-medication) that left her own drug with no finding to the model.
+
+### Context
+
+Decision 193 left a safety question about a drug she takes to the model wherever no finding related it to another of her
+orders: the module states findings, never a clearance. The model, asked instead, wrote the clearance. On the 3.7.1
+standalone Mark Williams, whose one order is ondansetron, was told for *"Can I give her ondansetron?"* *"Ondansetron is
+already in active order Ondansetron. Adding it would duplicate that order. The drug can be given, with one caution"*; Joshua
+Johnson's own lisinopril and Amina Wekesa's trimethoprim (in her cotrimoxazole) were answered in the same garbled way.
+
+### The decision
+
+Where she has no other active medication, `composeNoPairAboutHerOwnMedication` answers such a question with what the check
+could not do — *"Ondansetron is one of this patient's active medications (Ondansetron [n]), and this patient has no other
+active medication to check it against."* — as it already did where a finding that her orders carry it twice stood beside
+that sentence. It states no finding and clears nothing, so Decision 193's reason holds.
+
+`OwnMedicationSafetyContextTest.herOwnDrugWithNoInteractionIsLeftToTheModel`, which pinned the hand-off, is now
+`.herOwnDrugWithNoOtherMedicationSaysThereIsNoneToCheckItAgainst`.

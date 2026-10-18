@@ -39,11 +39,16 @@ public class DrugBesideHerMedicationGroupTest extends BaseModuleContextSensitive
 
 	@Test
 	public void aDrugBesideAGroupOfHerMedicationsIsAnsweredAsWhetherItInteractsWithThem() {
-		for (String question : Arrays.asList("Is there any problem combining her TB drugs with fluconazole?",
-			"Does fluconazole interact with her TB drugs?", "Are there any issues with giving fluconazole with her TB treatment?")) {
+		String[][] asked = { { "Is there any problem combining her TB drugs with fluconazole?", "TB drugs" },
+			{ "Does fluconazole interact with her TB drugs?", "TB drugs" },
+			{ "Are there any issues with giving fluconazole with her TB treatment?", "TB treatment" } };
+		for (String[] each : asked) {
+			String question = each[0];
 			String answer = ask(question);
 			assertNotNull(answer, question + ": the module answers");
-			assertTrue(answer.startsWith("Yes — Fluconazole interacts with this patient's active medications."),
+			// Under the lead naming the group, which no drug name identifies (ADR Decision 313).
+			assertTrue(answer.startsWith(groupLead(each[1], "Fluconazole")
+					+ "Yes — Fluconazole interacts with this patient's active medications."),
 				question + " was: " + answer);
 			assertTrue(answer.contains("\nFluconazole interacts with active order Rifampicin (rifampin) — Major."),
 				question + " was: " + answer);
@@ -60,17 +65,25 @@ public class DrugBesideHerMedicationGroupTest extends BaseModuleContextSensitive
 	 */
 	@Test
 	public void whetherADrugChangesAnEffectOfAGroupOfHerMedicationsIsAnsweredWithTheFindingAndNeitherYesNorNo() {
-		for (String question : Arrays.asList("Will rifampicin reduce the effect of her ARVs?",
-			"Does rifampicin affect her ARVs?", "Will rifampicin lower her ARV levels?")) {
+		String[][] asked = { { "Will rifampicin reduce the effect of her ARVs?", "ARVs" },
+			{ "Does rifampicin affect her ARVs?", "ARVs" }, { "Will rifampicin lower her ARV levels?", "ARV" } };
+		for (String[] each : asked) {
+			String question = each[0];
 			String answer = ask(question, DrugReferenceTestSupport.activeOrder("order-lpv", "Lopinavir / ritonavir 200mg/50mg",
 				"Lopinavir / ritonavir"), DrugReferenceTestSupport.activeOrder("order-nvp", "Nevirapine 200mg"));
 			assertNotNull(answer, question + ": the module answers");
-			assertTrue(answer.startsWith(DrugReferenceInjector.NEUTRAL_WITHHOLD_LEAD_OPENING + "Rifampicin (rifampin).\n"),
+			assertTrue(answer.startsWith(groupLead(each[1], "Rifampicin (rifampin)")
+					+ DrugReferenceInjector.NEUTRAL_WITHHOLD_LEAD_OPENING + "Rifampicin (rifampin).\n"),
 				question + " was: " + answer);
 			assertTrue(answer.contains("\nRifampicin (rifampin) interacts with active order Nevirapine — Major."),
 				question + " was: " + answer);
 			assertTrue(!answer.contains("No —") && !answer.contains("Yes —"), question + " was: " + answer);
 		}
+	}
+
+	private static String groupLead(String group, String drug) {
+		return DrugReferenceInjector.GROUP_NOT_IDENTIFIED_OPENING + group + DrugReferenceInjector.GROUP_NOT_IDENTIFIED_CLOSING
+				+ drug + " against all of them.\n";
 	}
 
 	private static String ask(String question) {

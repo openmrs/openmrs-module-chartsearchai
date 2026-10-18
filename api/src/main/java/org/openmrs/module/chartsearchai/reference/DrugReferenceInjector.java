@@ -1400,6 +1400,15 @@ public class DrugReferenceInjector {
 				&& QueryScopeRouter.asksWhatToMonitorWithHerMedications(question)) {
 			moduleAnswer = SETS_NO_MONITORING_LEAD + "\n" + moduleAnswer;
 		}
+		// One drug asked about beside a group of her medications the question names: answered as beside her medications,
+		// under a lead saying the check cannot tell which of her orders the group means (ADR Decision 313).
+		String group = moduleAnswer == null || questionDrugs.isEmpty() || context == null
+				|| context.getActiveDrugOrders().isEmpty() ? null : QueryScopeRouter.groupOfHerMedicationsNamed(question);
+		if (group != null && (asksWhetherItInteracts(question, questionDrugs)
+				|| QueryScopeRouter.asksWhetherADrugIsSafeWithHerMedications(wordsBesideItsNames(question, questionDrugs)))) {
+			moduleAnswer = GROUP_NOT_IDENTIFIED_OPENING + group + GROUP_NOT_IDENTIFIED_CLOSING
+					+ askedDrugs(question, questionDrugs, context, false).get(0).label + " against all of them.\n" + moduleAnswer;
+		}
 		String purpose = moduleAnswer == null ? null
 				: choice ? QueryScopeRouter.statedPurposeOfAChoice(question)
 				: questionDrugs.isEmpty() ? null
@@ -7270,6 +7279,13 @@ public class DrugReferenceInjector {
 	 *  risk. */
 	static final String RATES_NO_RISK_LEAD = "This check does not rate a medication's risk: it states what it found among"
 			+ " the medications this patient is already taking.";
+
+	/** How the answer about one drug beside a named group of her medications opens, the group's words between these two
+	 *  and the drug and " against all of them." after them (ADR Decision 313): the words name no drug. */
+	static final String GROUP_NOT_IDENTIFIED_OPENING = "This check cannot tell which of this patient's active medications are"
+			+ " the \"";
+
+	static final String GROUP_NOT_IDENTIFIED_CLOSING = "\" the question names, so it checked ";
 
 	/** How the answer to what to monitor with her medications opens (ADR Decision 297): no finding sets monitoring. */
 	static final String SETS_NO_MONITORING_LEAD = "This check does not say what to monitor: it states what it found among"

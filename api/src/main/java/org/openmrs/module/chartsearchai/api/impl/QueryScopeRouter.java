@@ -547,6 +547,32 @@ public final class QueryScopeRouter {
 		return words != null && ENDS_ON_A_MEDICATION_GROUP_NOUN.matcher(words.toLowerCase(Locale.ROOT).trim()).find();
 	}
 
+	private static final Pattern A_GROUP_OF_HER_MEDICATIONS = Pattern.compile("(?:^| )" + POSSESSIVE + " ((?:\\p{L}+ ){0,2}"
+			+ MEDICATION_GROUP_NOUN + ")(?= |$)", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+
+	/** "Her regimen", "his current medications": every medication she takes, no group within them. */
+	private static final Pattern EVERY_MEDICATION_SHE_TAKES = Pattern.compile("(?:(?:other|current|active|usual|regular|daily"
+			+ "|all) ){0,2}(?:treatments?|therapy|therapies|regimens?|medications?|meds|medicines?|drugs?|pills|tablets)",
+			Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+
+	/**
+	 * The group of her medications {@code question} names, as written — "TB preventive therapy" of "Is dolutegravir safe
+	 * with her TB preventive therapy?" — or {@code null} where it names none, or names every medication she takes ("her
+	 * current regimen"). The words name no drug, so the check cannot tell which of her orders they mean (ADR Decision 313).
+	 */
+	public static String groupOfHerMedicationsNamed(String question) {
+		if (question == null) {
+			return null;
+		}
+		Matcher group = A_GROUP_OF_HER_MEDICATIONS.matcher(question.replaceAll("[^\\p{L}\\p{N}']+", " ").trim());
+		while (group.find()) {
+			if (!EVERY_MEDICATION_SHE_TAKES.matcher(group.group(1)).matches()) {
+				return group.group(1);
+			}
+		}
+		return null;
+	}
+
 	/** "Does her TB treatment interact with her ARVs?", "Do her TB drugs interact with her antiretrovirals?" (ADR Decision 221). */
 	private static final String TWO_OF_HER_MEDICATION_GROUPS_INTERACT = "(?:does|do|will|would) " + HER_MEDICATION_GROUP
 			+ " interact with " + HER_MEDICATION_GROUP;
@@ -565,6 +591,8 @@ public final class QueryScopeRouter {
 	 */
 	private static final List<Pattern> BESIDE_A_GROUP_OF_HER_MEDICATIONS_SHAPES = shapes(
 			"(?:does|will|would|could|can) " + D + " interact with (?:any of )?" + HER_MEDICATION_GROUP,
+			// "Will his TB preventive therapy interact with efavirenz?" — the group named first (ADR Decision 313)
+			"(?:does|do|will|would|could|can) " + HER_MEDICATION_GROUP + " interact with " + D,
 			"(?:(?:is|are) there )?any (?:problems?|issues?|concerns?|interactions?) (?:with |in )?(?:combining|mixing) "
 					+ HER_MEDICATION_GROUP + " (?:with|and) " + D,
 			"(?:(?:is|are) there )?any (?:problems?|issues?|concerns?|interactions?) (?:with |in )?(?:combining|mixing|giving|"
@@ -686,7 +714,17 @@ public final class QueryScopeRouter {
 	private static final String SAFE_WITH_HER_MEDICATIONS = "is " + D + " (?:safe|ok|okay|appropriate) (?:with|alongside) "
 			+ "(?:any of )?" + POSSESSIVE + " (?:other )?" + MEDICATIONS;
 
-	private static final List<Pattern> SAFE_WITH_HER_MEDICATIONS_SHAPES = shapes(SAFE_WITH_HER_MEDICATIONS);
+	/** "Is dolutegravir safe with her TB preventive therapy?" — one drug beside a group of her medications (ADR Decision
+	 *  313), answered as beside her medications under a lead naming the group. */
+	private static final String SAFE_WITH_A_GROUP_OF_HER_MEDICATIONS = "is " + D + " (?:safe|ok|okay|appropriate)"
+			+ "(?: to (?:give|take|use|start))? (?:with|alongside) (?:any of )?" + HER_MEDICATION_GROUP;
+
+	private static final List<Pattern> SAFE_WITH_HER_MEDICATIONS_SHAPES = shapes(SAFE_WITH_HER_MEDICATIONS,
+			SAFE_WITH_A_GROUP_OF_HER_MEDICATIONS,
+			// "Can he take dolutegravir and his TB preventive therapy together?", "Can I give her dolutegravir with her TB
+			// preventive therapy?" (ADR Decision 313)
+			"(?:can|could|may) (?:i give " + PATIENT + "|(?:he|she|they|the patient|this patient) (?:take|have|use)) " + D
+					+ " (?:and|with|alongside) " + HER_MEDICATION_GROUP + "(?: together)?");
 
 	/**
 	 * Whether a question asks whether its one drug is safe with her medications — <em>"Is ibuprofen safe with her current

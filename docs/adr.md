@@ -19301,3 +19301,34 @@ the module's "No" — is unchanged; the module, not the model, now states what w
 `TogetherWithHerOwnMedicationContextTest.aNeutralQuestionAboutADrugWithholdingWithoutARatingStatesWhatTheCheckFound`
 asserted that "Can I give her naproxen?" beside her aspirin — a Moderate rule with a drug group folded onto it — stays
 the model's; it now asserts the module states what the check found, with no "No" and no reason to withhold.
+
+## Decision 313: One drug asked about beside a named group of her medications says the check cannot tell which orders the group means
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It extends
+[Decision 271](#decision-271-one-drug-asked-about-beside-a-group-of-her-medications-is-asked-as-whether-it-interacts-with-them)
+and [Decision 281](#decision-281-whether-one-drug-changes-an-effect-of-a-group-of-her-medications-is-answered-with-neither-yes-nor-no).
+
+### Context
+
+On the 3.7.1 standalone *"Is dolutegravir safe with her TB preventive therapy?"* went to the model for all 45 patients:
+no shape held a drug *safe with* a group of her medications. Mogan Kamwara, on nevirapine and no TB drug, was told *"No —
+dolutegravir should not be given: it interacts with active order Nevirapine"*, a "No" that reads as about the TB therapy
+she does not take; patients on no medication at all were told *"The records do not address"* it. Decision 271's own
+answer has the same gap: *"Is there any problem combining her TB drugs with dolutegravir?"* was answered for her *"Yes —
+Dolutegravir interacts with this patient's active medications"*, with nevirapine the only partner. A group's words name
+no drug, and which of her orders are her "TB preventive therapy" is medical knowledge the module does not hold.
+
+### The decision
+
+*"Is X safe with her ⟨group⟩?"* (`QueryScopeRouter.SAFE_WITH_A_GROUP_OF_HER_MEDICATIONS`), and *"Can he take X and his
+⟨group⟩ together?"*, are answered as *"Is X safe
+with her medications?"* is ([Decision 299](#decision-299-whether-a-drug-is-safe-with-her-medications-or-causes-problems-if-started-is-answered-as-its-proposal)),
+and *"Will her ⟨group⟩ interact with X?"* as whether X interacts with her medications. Wherever one drug is asked about
+beside a group the question names, and she has an active order, the module's answer opens *"This check cannot tell which
+of this patient's active medications are the "⟨group⟩" the question names, so it checked X against all of them."*
+(`DrugReferenceInjector.GROUP_NOT_IDENTIFIED_OPENING`). Words naming every medication she takes — *"her regimen"*, *"her
+current medications"* — are no group (`QueryScopeRouter.groupOfHerMedicationsNamed`) and get no lead.
+
+Pinned by `GroupOfHerMedicationsNamedTest`. `DrugBesideHerMedicationGroupTest`'s two cases assert their previous
+openings after the lead, which now comes first.

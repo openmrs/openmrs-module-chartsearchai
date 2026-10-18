@@ -19637,3 +19637,25 @@ rest keep the model call). The answer is the proposal's, closed by *"This check 
 has a UTI)."*, the statement as the question wrote it.
 
 Pinned by `ConditionStatedAfterAProposalTest`.
+
+## Decision 326: An amount stated in words before the drug is a stated dose
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It widens [Decision 269](#decision-269-a-proposal-stating-a-dose-raises-the-findings-the-proposal-does)'s reading of a
+dose.
+
+### Context
+
+*"Can I give her more lidocaine?"* fitted no shape: "more" stood between the verb and the drug, and Decision 269 read only
+a number. So the model answered every patient on the 3.7.1 standalone — Karen Sanchez *"No — Lidocaine should not be
+given due to an Unknown severity interaction with Metronidazole"*, Joshua Johnson *"Lidocaine can be given, with one
+caution"*. *"Can I give her a second dose of neomycin?"* is the same question in other words.
+
+### The decision
+
+`QueryScopeRouter.withoutAStatedDose` also reads past an amount in words before the drug — *more*, *extra*,
+*additional*, *another*, *a second*, *a further*, *an extra*, *an additional* or *a repeat dose of* — so the question is
+asked as the same question without it, and `statesADose` holds of it: the module answers it as
+[Decision 322](#decision-322-a-proposal-stating-a-dose-the-data-cannot-check-is-answered-by-the-module-the-dose-said-not-checked) answers a stated dose the data cannot check, the dose said not checked.
+
+Pinned by `AmountInWordsDoseTest`.

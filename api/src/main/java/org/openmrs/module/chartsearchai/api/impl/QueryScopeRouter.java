@@ -1076,9 +1076,14 @@ public final class QueryScopeRouter {
 
 	private static final Pattern DOSE_AFTER_THE_DRUG = Pattern.compile("(" + D + ") " + AMOUNT + "(?: " + FREQUENCY + ")?(?= |$)");
 
-	/** {@code joined} without the dose stated beside its drug, or {@code null} where it states none (ADR Decision 269). */
+	/** An amount stated in words before the drug — "more lidocaine", "a second dose of neomycin" (ADR Decision 326). */
+	private static final Pattern AMOUNT_IN_WORDS_BEFORE_THE_DRUG = Pattern.compile("(?<=^| )(?:more|extra|additional|"
+			+ "(?:another|a second|a further|an extra|an additional|a repeat) dose of) (" + D + ")");
+
+	/** {@code joined} without the dose stated beside its drug, or {@code null} where it states none (ADR Decisions 269, 326). */
 	private static String withoutAStatedDose(String joined) {
-		String without = DOSE_AFTER_THE_DRUG.matcher(DOSE_BEFORE_THE_DRUG.matcher(joined).replaceAll("$1")).replaceAll("$1");
+		String without = DOSE_AFTER_THE_DRUG.matcher(DOSE_BEFORE_THE_DRUG.matcher(
+				AMOUNT_IN_WORDS_BEFORE_THE_DRUG.matcher(joined).replaceAll("$1")).replaceAll("$1")).replaceAll("$1");
 		return without.equals(joined) ? null : without;
 	}
 

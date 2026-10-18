@@ -61,6 +61,14 @@ public class ChartSearchAiContextFailureTest {
 	}
 
 	@Test
+	public void incompleteChartReadSendsTheClinicianToAnAdministratorRatherThanAskingThemToWait() {
+		// Indexing that is not running never finishes on its own: a completed QueryStore bootstrap is
+		// the precondition, and starting one is an administrator's action.
+		assertFailure(new IncompleteChartException("internal indexing details"),
+				503, "Ask your administrator to check that QueryStore indexing has completed", "Wait");
+	}
+
+	@Test
 	public void engineContextOverflowKeepsItsExistingRemedy() {
 		assertFailure(new ChartTooLargeException("internal engine details"),
 				413, "increase the LLM context size", "try again");

@@ -140,6 +140,11 @@ public class ChartSearchAiRestController {
 	 */
 	private static final String SSE_KEEP_ALIVE_COMMENT = ": keep-alive\n\n";
 
+	/** Shown when QueryStore could not return a complete chart. Indexing that is not running never
+	 *  finishes on its own, so the remedy is an administrator's: a completed QueryStore bootstrap. */
+	private static final String INCOMPLETE_CHART_MESSAGE = "This patient's chart could not be read completely, "
+			+ "so the answer was withheld. Ask your administrator to check that QueryStore indexing has completed.";
+
 	/**
 	 * How often {@link #streamAnswer} writes {@link #SSE_KEEP_ALIVE_COMMENT} until the answer is
 	 * finished.
@@ -282,9 +287,7 @@ public class ChartSearchAiRestController {
 		}
 		catch (IncompleteChartException e) {
 			log.warn("Incomplete chart read for patient [id={}]: {}", patient.getPatientId(), e.getMessage());
-			return new ResponseEntity<Object>(errorResponse("This patient's chart could not be read completely. "
-					+ "Wait for indexing to finish or ask your administrator to check chart indexing."),
-					HttpStatus.SERVICE_UNAVAILABLE);
+			return new ResponseEntity<Object>(errorResponse(INCOMPLETE_CHART_MESSAGE), HttpStatus.SERVICE_UNAVAILABLE);
 		}
 		catch (IllegalStateException e) {
 			log.error("Chart search configuration error", e);
@@ -875,8 +878,7 @@ public class ChartSearchAiRestController {
 			log.warn("Incomplete chart read during streaming for patient [id={}]: {}",
 					patient.getPatientId(), e.getMessage());
 			try {
-				writeSseEvent(out, "error", "This patient's chart could not be read completely. "
-						+ "Wait for indexing to finish or ask your administrator to check chart indexing.");
+				writeSseEvent(out, "error", INCOMPLETE_CHART_MESSAGE);
 			}
 			catch (IOException ioe) {
 				log.debug("Could not send incomplete-chart error event, client likely disconnected");

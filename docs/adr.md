@@ -19156,3 +19156,27 @@ answer, which calls her orders her active medications, still refuses an order no
 
 Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aBelowFloorPairOnAnOrderThatHasNotStartedIsStatedAsScheduled`,
 which replaces `.aBelowFloorPairOnAnOrderThatHasNotStartedStillAsksTheModel`.
+
+## Decision 308: A name called hers that none of her orders carries, and the data does not recognise, is said so
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient.
+
+### Context
+
+*"Can I give him fluconazole with his klarizom?"* and *"… with his clarithromycine?"* — Michael Turner's brand and the
+spelling of Kevin Brown's order — went to the model for every other patient: *"The records do not address the
+interaction between Fluconazole and Clarithromycin."*
+[Decision 250](#decision-250-a-two-drug-question-whose-one-drug-the-data-does-not-recognise-says-the-pair-was-not-checked)
+stood down for any word the question calls hers, on the reasoning that *"her ARVs"* names something she takes, all of
+which was checked — true of a group of her medications, false of a name none of her orders carries.
+
+### The decision
+
+Decision 250's statement is made of a name called hers where her orders were read and none carries it, and the word is
+not a group of medications (`QueryScopeRouter.namesAMedicationGroup` — the nouns
+[Decision 221](#decision-221-whether-two-groups-of-her-own-medications-interact-is-a-screen-of-her-medications)'s grammar closes
+on), opening *"None of this patient's active orders is named "klarizom"."* A group called hers, and a name one of her
+orders carries, are as before.
+
+Pinned by `UnrecognisedNameNamedAsHersTest`.

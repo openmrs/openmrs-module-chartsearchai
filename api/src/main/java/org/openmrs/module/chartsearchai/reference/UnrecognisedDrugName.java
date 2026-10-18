@@ -69,14 +69,22 @@ final class UnrecognisedDrugName {
 	/** Whether the word stands in a switch's place (ADR Decision 261): no pair was the question, so no pair is named. */
 	private final boolean inASwitch;
 
+	/** Whether the question called the word hers while none of her orders carries it (ADR Decision 308). */
+	private final boolean namedAsHersButNoOrder;
+
 	private UnrecognisedDrugName(String word, List<String> suggestions) {
 		this(word, suggestions, false);
 	}
 
 	private UnrecognisedDrugName(String word, List<String> suggestions, boolean inASwitch) {
+		this(word, suggestions, inASwitch, false);
+	}
+
+	private UnrecognisedDrugName(String word, List<String> suggestions, boolean inASwitch, boolean namedAsHersButNoOrder) {
 		this.word = word;
 		this.suggestions = suggestions;
 		this.inASwitch = inASwitch;
+		this.namedAsHersButNoOrder = namedAsHersButNoOrder;
 	}
 
 	/**
@@ -122,11 +130,15 @@ final class UnrecognisedDrugName {
 				// her active orders' names carries is her drug, checked through the order: "Is warfarin safe with her
 				// cotrimoxazole?" of a patient on "Cotrimoxazole 960mg" was checked, whatever the data calls it.
 				// And a word the question names as hers — "her ARVs" — is something she takes, all of which was checked.
+				// A group named as hers — "her ARVs" — was checked as her orders; a NAME called hers that none of her read orders
+				// carries — "his klarizom" of a patient on no Klarizom — was checked as nothing, and is said so (ADR Decision 308).
+				boolean hers = namedAsHers(words, i);
 				if (!isAName(span) || namedByOneOf(questionDrugs, word) || namesOneOfHerOrders(context, word)
-						|| namedAsHers(words, i)) {
+						|| hers && (QueryScopeRouter.namesAMedicationGroup(word) || context == null
+								|| !context.activeDrugOrdersRead())) {
 					return null;
 				}
-				return new UnrecognisedDrugName(asWritten(word, question), suggestionsFor(word, entries), inASwitch);
+				return new UnrecognisedDrugName(asWritten(word, question), suggestionsFor(word, entries), inASwitch, hers);
 			}
 		}
 		return null;
@@ -313,7 +325,9 @@ final class UnrecognisedDrugName {
 	 * namedDrug}, the data does recognise, so that what was not checked is the pair (ADR Decision 250).
 	 */
 	String statementBeside(String namedDrug) {
-		return withSuggestions(new StringBuilder("No interaction check was run for \"").append(word).append("\" and ")
+		return withSuggestions(new StringBuilder(namedAsHersButNoOrder
+				? "None of this patient's active orders is named \"" + word + "\".\n" : "")
+				.append("No interaction check was run for \"").append(word).append("\" and ")
 				.append(namedDrug).append(": \"").append(word).append("\" is not a drug name the interaction data recognises."));
 	}
 

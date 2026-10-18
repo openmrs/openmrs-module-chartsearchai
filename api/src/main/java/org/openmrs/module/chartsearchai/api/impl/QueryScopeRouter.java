@@ -531,9 +531,21 @@ public final class QueryScopeRouter {
 	 * ARVs", "her blood pressure pills" (ADR Decision 221). Never resolved to drugs: a question asking whether two such
 	 * groups interact is a screen of her medications, which states every pair, those between the two among them.
 	 */
-	private static final String HER_MEDICATION_GROUP = POSSESSIVE + " (?:\\p{L}+ ){0,2}(?:treatments?|therapy|therapies|"
+	private static final String MEDICATION_GROUP_NOUN = "(?:treatments?|therapy|therapies|"
 			+ "regimens?|medications?|meds|medicines?|drugs?|pills|tablets|arvs?|antiretrovirals?|antibiotics?|antimalarials?|"
 			+ "antihypertensives?|antiepileptics?|anticonvulsants?|antidepressants?)";
+
+	private static final String HER_MEDICATION_GROUP = POSSESSIVE + " (?:\\p{L}+ ){0,2}" + MEDICATION_GROUP_NOUN;
+
+	private static final Pattern ENDS_ON_A_MEDICATION_GROUP_NOUN = Pattern.compile("(?:^| )" + MEDICATION_GROUP_NOUN + "$");
+
+	/**
+	 * Whether {@code words} close on a noun of medication — "ARVs", "TB treatment", "blood pressure pills" — the group of her
+	 * own medications {@link #HER_MEDICATION_GROUP} reads, never one drug's name (ADR Decisions 221, 308).
+	 */
+	public static boolean namesAMedicationGroup(String words) {
+		return words != null && ENDS_ON_A_MEDICATION_GROUP_NOUN.matcher(words.toLowerCase(Locale.ROOT).trim()).find();
+	}
 
 	/** "Does her TB treatment interact with her ARVs?", "Do her TB drugs interact with her antiretrovirals?" (ADR Decision 221). */
 	private static final String TWO_OF_HER_MEDICATION_GROUPS_INTERACT = "(?:does|do|will|would) " + HER_MEDICATION_GROUP

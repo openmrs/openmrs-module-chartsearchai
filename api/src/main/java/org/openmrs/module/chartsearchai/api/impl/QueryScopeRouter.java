@@ -606,6 +606,10 @@ public final class QueryScopeRouter {
 			TWO_OF_HER_MEDICATION_GROUPS_INTERACT, HER_MEDICATION_GROUP_SAFE_TOGETHER,
 			// "Are there any drug interactions with her current medications?"
 			"(?:are|is) there (?:any )?(?:drug )?interactions? (?:with|between|among) " + POSSESSIVE + " " + MEDICATIONS,
+			// "Any drug interactions or allergy conflicts with her current medications?" — the safety screen (ADR Decision
+			// 318)
+			"(?:(?:are|is) there )?any (?:drug )?interactions? (?:or|and) (?:drug )?(?:allergy|allergic|allergies) (?:conflicts?|"
+					+ "issues?|problems?|concerns?|reactions?) (?:with|between|among|in) " + POSSESSIVE + " " + MEDICATIONS,
 			// "Are any of her current medications interacting with each other?", "Do any of her meds
 			// interact?", "Do her medications interact with each other?"
 			"(?:are|do) (?:any of )?" + POSSESSIVE + " " + MEDICATIONS + " (?:interact|interacting)"

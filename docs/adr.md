@@ -19428,3 +19428,24 @@ has an Unknown severity interaction with Lisinopril"*.
 of its own before it, as part of that name. The question is then answered as the same question without the prefix is.
 
 Pinned by `LetterPrefixedDrugNameTest`.
+
+## Decision 318: Whether her medications carry drug interactions or allergy conflicts is the safety screen
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient.
+
+### Context
+
+*"Any drug interactions or allergy conflicts with her current medications?"* fitted no screen shape, so the model answered
+every patient on the 3.7.1 standalone: Carol Brown was told *"No — Simvastatin should be changed"*, Agnes Adams that her
+NSAID allergy is *"a reason to change a medication this patient is already taking"*, Rita *"Yes — no interactions were
+found"*, and patients whose screen found nothing *"The records do not address drug interactions or allergy conflicts"*.
+
+### The decision
+
+`QueryScopeRouter.SCREEN_SHAPES` admits *"(Are there) any (drug) interactions or allergy conflicts with her
+medications?"* and its variants (issues, problems, concerns, reactions). It names allergies, so it is no interactions-only
+question (`asksOnlyAboutInteractions`): it is answered as *"Are her medications safe to take together?"* is — her
+interactions, then her contraindications, then what the screen does not cover.
+
+Pinned by `InteractionsOrAllergyConflictsScreenTest`.

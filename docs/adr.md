@@ -19659,3 +19659,30 @@ asked as the same question without it, and `statesADose` holds of it: the module
 [Decision 322](#decision-322-a-proposal-stating-a-dose-the-data-cannot-check-is-answered-by-the-module-the-dose-said-not-checked) answers a stated dose the data cannot check, the dose said not checked.
 
 Pinned by `AmountInWordsDoseTest`.
+
+## Decision 327: A question about one drug and her allergies is answered with what the check found between them
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient.
+
+### Context
+
+*"Is his clarithromycin safe with his allergies?"* read "allergies" as a second drug the question named as his, which no
+order carries ([Decision 308](#decision-308-a-name-called-hers-that-none-of-her-orders-carries-and-the-data-does-not-recognise-is-said-so)), so every patient on the 3.7.1 standalone was told *"No interaction check was run
+for "allergies" and Clarithromycin: "allergies" is not a drug name the interaction data recognises"* — Kevin Brown, recorded
+allergic to the clarithromycin he takes, among them.
+
+### The decision
+
+"Allergies", "allergy" and their like are never an unrecognised drug name (`UnrecognisedDrugName`). And a question about
+one drug and her allergies — *"Is his clarithromycin safe with his allergies?"*, *"Is he allergic to clarithromycin?"*,
+*"Is clarithromycin safe given his allergies?"* (`QueryScopeRouter.asksAboutADrugAndHerAllergies`) — is answered by the
+module where her allergy records were read: under *"What this module's drug-safety check found about Clarithromycin and
+this patient's recorded allergies:"*, each finding relating the drug to them — an allergy to it, or a cross-reactive one —
+else *"None of this patient's recorded drug allergies that the drug data identifies relates to Clarithromycin."*, or that
+none is recorded. A drug named as hers that she is not on is said so first ([Decision 315](#decision-315-a-drug-the-question-names-as-hers-and-she-is-not-on-it-is-said-so-before-whatever-the-module-answers)), and an allergy
+the data does not identify is said not checked, as everywhere ([Decision 223](#decision-223-a-recorded-drug-allergy-the-data-does-not-identify-is-said-to-be-unchecked)).
+
+Pinned by `DrugAgainstHerAllergiesTest`. `AllergyQuestionConflictingOrderContextTest.aFindingOfADrugTheQuestionNamesKeepsEveryFindingAsAChip`,
+which needs a model-written answer to a question naming her allergen, asks *"When was her aspirin allergy recorded?"* in
+place of *"Is she allergic to aspirin?"*; its assertions are unchanged.

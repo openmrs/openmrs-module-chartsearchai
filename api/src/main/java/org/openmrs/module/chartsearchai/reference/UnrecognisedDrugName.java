@@ -133,6 +133,10 @@ final class UnrecognisedDrugName {
 				// A group named as hers — "her ARVs" — was checked as her orders; a NAME called hers that none of her read orders
 				// carries — "his klarizom" of a patient on no Klarizom — was checked as nothing, and is said so (ADR Decision 308).
 				boolean hers = namedAsHers(words, i);
+				// "Her allergies" is her allergy list, never a drug's name (ADR Decision 327).
+				if (word.contains("allerg")) {
+					return null;
+				}
 				if (!isAName(span) || namedByOneOf(questionDrugs, word) || namesOneOfHerOrders(context, word)
 						|| hers && (QueryScopeRouter.namesAMedicationGroup(word) || context == null
 								|| !context.activeDrugOrdersRead())) {

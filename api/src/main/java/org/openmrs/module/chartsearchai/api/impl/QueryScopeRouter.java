@@ -1431,6 +1431,24 @@ public final class QueryScopeRouter {
 			// "What drugs should she avoid?"
 			"(?:what|which) " + DRUGS_NOUN + " should " + SUBJECT + " avoid");
 
+	/**
+	 * Whether a question asks about ONE drug and her allergies — <em>"Is his clarithromycin safe with his allergies?"</em>,
+	 * <em>"Is he allergic to clarithromycin?"</em> — over {@link #words} with the drug marked (ADR Decision 327). The module
+	 * answers with what its check found between the drug and her recorded allergies. Fail-CLOSED.
+	 */
+	public static boolean asksAboutADrugAndHerAllergies(List<String> wordsWithTheDrugMarked) {
+		return fitsAShape(wordsWithTheDrugMarked, DRUG_AND_HER_ALLERGIES_SHAPES);
+	}
+
+	private static final String HER_ALLERGIES = "(?:" + POSSESSIVE + "|the patient's) (?:recorded |known |drug )?allerg(?:y|ies)";
+
+	private static final List<Pattern> DRUG_AND_HER_ALLERGIES_SHAPES = shapes(
+			"is " + HER_D + " (?:safe|ok|okay|appropriate) (?:with|given|for|despite) " + HER_ALLERGIES,
+			"(?:is|are) " + SUBJECT + " allergic to " + HER_D,
+			"(?:does|do) " + SUBJECT + " have (?:an |any )?allerg(?:y|ies) to " + HER_D,
+			"(?:can|could|may) (?:i give " + PATIENT + "|" + SUBJECT + " (?:take|have)) " + D + " (?:with|given|despite) "
+					+ HER_ALLERGIES);
+
 	private static final List<Pattern> MONITORING_SHAPES = shapes(
 			// "What should I monitor with her current medications?", "What do I need to monitor with her meds?"
 			"what (?:should|do|must) (?:i|we) (?:need to )?monitor (?:with|for|on|in) " + HER_MEDICATIONS,

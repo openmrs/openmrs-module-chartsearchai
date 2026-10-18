@@ -646,8 +646,9 @@ public class AllergyQuestionConflictingOrderContextTest extends BaseModuleContex
 	public void aFindingOfADrugTheQuestionNamesKeepsEveryFindingAsAChip() throws IOException {
 		// The question names her allergen, which puts the drug in play: its finding is the drug-in-play
 		// arm's, a drug the question put in play, which ADR Decision 124 keeps a chip. Since issue #552 that
-		// chip names her order on the wire, so the statement's gate is not "no order is known".
-		String question = "Is she allergic to aspirin?";
+		// chip names her order on the wire, so the statement's gate is not "no order is known". Asked until ADR Decision 327
+		// as "Is she allergic to aspirin?", which the module now answers itself.
+		String question = "When was her aspirin allergy recorded?";
 		ChartAnswer answer = serviceAnswering(MODEL_ANSWER).search(patient, question);
 		String orderUuid = Context.getOrderService().getOrder(111).getUuid();
 

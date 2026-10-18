@@ -998,7 +998,13 @@ public class DrugReferenceInjector {
 				? Collections.<PatientClinicalContext.ActiveDrugOrder> emptyList()
 				: DrugSafetyValidator.unresolvedActiveOrders(drugReferenceService, context,
 						orderEntries == null ? Collections.<DrugReference> emptyList() : orderEntries);
-		if (!findings.isEmpty()
+		// One drug asked about against her allergies: what the check found between them (ADR Decision 327).
+		String againstHerAllergies = composeAgainstHerAllergies(question, questionDrugs, findings, findingNumbers,
+				orderRecordNumbers, orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers,
+				context);
+		if (againstHerAllergies != null) {
+			moduleAnswer = againstHerAllergies;
+		} else if (!findings.isEmpty()
 				&& ChartSearchAiUtils.getBooleanGlobalProperty(
 						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
 						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS)
@@ -7364,6 +7370,50 @@ public class DrugReferenceInjector {
 			+ " the \"";
 
 	static final String GROUP_NOT_IDENTIFIED_CLOSING = "\" the question names, so it checked ";
+
+	/** How the answer about one drug and her allergies opens, the drug and " and this patient's recorded allergies:" after
+	 *  it (ADR Decision 327). */
+	static final String ABOUT_HER_ALLERGIES_OPENING = "What this module's drug-safety check found about ";
+
+	/**
+	 * The module's answer to a question about ONE drug and her allergies (ADR Decision 327), or {@code null} where the model
+	 * answers: each finding relating the drug to her recorded allergies — an allergy to it, or a cross-reactive one — under
+	 * {@link #ABOUT_HER_ALLERGIES_OPENING}; else that none of her identified drug allergies relates to it, or that none is
+	 * recorded. Never a clearance. Fail-closed: her allergy records read, one drug asked about.
+	 */
+	private static String composeAgainstHerAllergies(String question, List<DrugReference> questionDrugs,
+			List<SafetyWarning> findings, List<Integer> numbers, Map<String, Integer> orderRecordNumbers,
+			Map<String, Integer> herOrderRecords, PatientClinicalContext context) {
+		if (questionDrugs.isEmpty() || context == null || !context.contraindicationRecordsRead()
+				|| !ChartSearchAiUtils.getBooleanGlobalProperty(ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
+						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS)
+				|| !QueryScopeRouter.asksAboutADrugAndHerAllergies(wordsBesideItsNames(question, questionDrugs))) {
+			return null;
+		}
+		List<AskedDrug> asked = askedDrugs(question, questionDrugs, context, false);
+		if (asked.size() != 1) {
+			return null;
+		}
+		AskedDrug drug = asked.get(0);
+		List<String> lines = new ArrayList<String>();
+		for (int i = 0; i < findings.size(); i++) {
+			SafetyWarning finding = findings.get(i);
+			if (SafetyWarning.TYPE_CONTRAINDICATION.equals(finding.getType()) && isAbout(finding, drug.substances)
+					&& (finding.isARecordedAllergyToItsSubstance() || finding.isACrossReactivityFinding())) {
+				lines.add(findingLine(finding, numbers.get(i), orderRecordNumbers, herOrderRecords, true));
+			}
+		}
+		if (!lines.isEmpty()) {
+			return ABOUT_HER_ALLERGIES_OPENING + drug.label + " and this patient's recorded allergies:\n"
+					+ String.join("\n", lines);
+		}
+		boolean anyDrugAllergy = false;
+		for (String token : context.getAllergyTokens()) {
+			anyDrugAllergy |= !context.getNonDrugAllergyTokens().contains(token);
+		}
+		return anyDrugAllergy ? "None of this patient's recorded drug allergies that the drug data identifies relates to "
+				+ drug.label + "." : "No drug allergies are recorded for this patient.";
+	}
 
 	/** How the answer to which drugs to avoid in her opens (ADR Decision 324): no finding lists drugs to avoid. */
 	static final String LISTS_NO_DRUG_TO_AVOID_LEAD = "This check does not list drugs to avoid: it states this patient's"

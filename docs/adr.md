@@ -19533,3 +19533,36 @@ proposal.
 
 Pinned by `EndedOrderDrugAskedAboutTest` and
 `LlmInferenceServiceEndedOrderStatementContextTest.theModulesOwnAnswerStatesTheEndedOrderOnALineOfItsOwn`.
+
+## Decision 322: A proposal stating a dose the data cannot check is answered by the module, the dose said not checked
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It narrows
+[Decision 269](#decision-269-a-proposal-stating-a-dose-raises-the-findings-the-proposal-does)'s model call to a dataset that publishes dose ceilings, and moves
+[Decision 274](#decision-274-a-dose-the-question-states-is-said-not-to-have-been-checked)'s sentence onto the module's answer.
+
+### Context
+
+Decision 269 left a question stating a dose to the model, the findings weighing no dose, and Decision 274 appended that
+the dose was not checked where the data publishes no ceiling. With the knowledge base the module ships — no dosing at all
+— the model wrote the clearance the module never states: on the 3.7.1 standalone *"Can I give her 1 g of paracetamol?"*
+was answered for Karen Sanchez, on metronidazole, *"Paracetamol can be given, with one caution"*, and for Richard Brown
+*"Acetaminophen can be given, with one caution"*, the dose sentence after each. No reader of that answer could weigh the
+dose either.
+
+### The decision
+
+Where the dataset publishes no dose ceiling (`DrugSafetyValidator.doseCeilingCoverage()` neither `PUBLISHED` nor
+unknown), a question stating a dose is answered by the module as the same question without it
+(`DrugReferenceInjector.aDoseCanBeWeighed`), and `DoseStatement.withDoseNotCheckedOnALine` adds *"The dose asked about was
+not checked: the drug data this module carries has no dosing."* on a line of its own. Where the dataset publishes ceilings
+the model answers, the dosing record injected, as before.
+
+`LlmInferenceServiceAnswerFromFindingsContextTest.aDoseTheQuestionStatesIsSaidNotToHaveBeenCheckedAfterTheModelsAnswer`,
+which pinned the model call over a dataset with no dosing, is now
+`.aDoseTheDataCannotCheckIsAnsweredAsTheProposalWithTheDoseSaidNotChecked`, which keeps the model call over one with
+ceilings as its control; *"Can I give her ibuprofen 400mg?"* leaves
+`.aQuestionTheModuleDidNotResolveAsASuitabilityQuestionStillAsksTheModel`.
+`StatedDoseProposalTest.aProposalStatingADoseRaisesTheProposalsFindingsAndLeavesTheAnswerToTheModel` is now
+`.aProposalStatingADoseRaisesTheProposalsFindingsAndIsAnsweredAsTheProposal`: over the shipped knowledge base the module's
+answer is the proposal's.

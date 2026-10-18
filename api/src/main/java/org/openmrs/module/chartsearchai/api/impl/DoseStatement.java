@@ -43,4 +43,13 @@ final class DoseStatement {
 		}
 		return (DrugSafetyValidator.endSentence(answer.trim()) + " " + NOT_CHECKED).trim();
 	}
+
+	/** As {@link #withDoseNotChecked}, on a line of its own: the module's composed lines end in markers (ADR Decision 322). */
+	static String withDoseNotCheckedOnALine(String answer, boolean questionStatesADose, DrugReferenceLoad.Coverage doseCeilings) {
+		if (!questionStatesADose || answer == null || doseCeilings == null
+				|| doseCeilings == DrugReferenceLoad.Coverage.PUBLISHED || answer.contains(NOT_CHECKED)) {
+			return answer;
+		}
+		return answer.trim() + "\n" + NOT_CHECKED;
+	}
 }

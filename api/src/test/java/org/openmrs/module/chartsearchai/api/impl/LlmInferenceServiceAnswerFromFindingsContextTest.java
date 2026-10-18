@@ -36,6 +36,7 @@ import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
 import org.openmrs.module.chartsearchai.api.impl.LlmProvider.LlmResponse;
 import org.openmrs.module.chartsearchai.reference.DrugReference;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceInjector;
+import org.openmrs.module.chartsearchai.reference.DrugReferenceLoad;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceService;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport;
 import org.openmrs.module.chartsearchai.reference.DrugSafetyValidator;
@@ -2480,8 +2481,8 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	public void aQuestionTheModuleDidNotResolveAsASuitabilityQuestionStillAsksTheModel() {
 		answerFromFindings(true);
 		String[] questions = {
-			// a dose: the injected reference record addresses it, the findings do not
-			"Can I give her ibuprofen 400mg?",
+			// what dose to give: a question no finding answers (a proposal stating a dose is the module's where the data
+			// carries no dosing, ADR Decision 322: aDoseTheDataCannotCheckIsAnsweredAsTheProposalWithTheDoseSaidNotChecked)
 			"What dose of ibuprofen can I give her?",
 			// current use, not a proposal — of a drug she does not take, answered by the module since ADR Decision 287
 			// (whetherSheTakesADrugSheDoesNotIsAnsweredThatSheDoesNotThenWithTheFindings)
@@ -2978,18 +2979,30 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	}
 
 	/**
-	 * A dose the question states is said after the model's answer not to have been checked, where the dataset publishes no
-	 * dose ceiling (ADR Decision 274): on the 3.7.1 standalone "Is 1 g of paracetamol safe for him?" read only the model's
-	 * answer, which says nothing of the dose, while the knowledge base the module ships carries no dosing at all.
+	 * A proposal stating a dose the dataset publishes no ceiling to check is answered by the module as the same proposal
+	 * without the dose, and the dose said, on a line of its own, not to have been checked (ADR Decision 322, superseding
+	 * Decision 269's model call and Decision 274's sentence after the model's answer): on the 3.7.1 standalone the model
+	 * answered "Can I give her 1 g of paracetamol?" for Karen Sanchez, on metronidazole, "Paracetamol can be given, with
+	 * one caution" — a clearance no finding makes. Where the data publishes dose ceilings the model still answers it.
 	 */
 	@Test
-	public void aDoseTheQuestionStatesIsSaidNotToHaveBeenCheckedAfterTheModelsAnswer() {
+	public void aDoseTheDataCannotCheckIsAnsweredAsTheProposalWithTheDoseSaidNotChecked() {
 		answerFromFindings(true);
+		RecordingProvider plain = new RecordingProvider();
+		ChartAnswer proposal = serviceWith(plain).search(patient, PROPOSAL);
+		assertEquals(0, plain.calls, "precondition: the module answers the proposal without a dose");
 		RecordingProvider provider = new RecordingProvider();
 		ChartAnswer answer = serviceWith(provider).search(patient, "Can I give her ibuprofen 400mg?");
-		assertEquals(1, provider.calls, "the model answers a question stating a dose");
-		assertTrue(answer.getAnswer().endsWith(" The dose asked about was not checked: the drug data this module carries has "
-				+ "no dosing."), answer.getAnswer());
+		assertEquals(0, provider.calls, "the module answers the dose too: " + answer.getAnswer());
+		assertEquals(proposal.getAnswer().replaceAll("\\[\\d+\\]", "[n]") + "\n" + DoseStatement.NOT_CHECKED,
+			answer.getAnswer().replaceAll("\\[\\d+\\]", "[n]"));
+
+		DrugReferenceService ceilings = DrugReferenceTestSupport.curatedService();
+		assertEquals(DrugReferenceLoad.Coverage.PUBLISHED, DrugReferenceTestSupport.validator(ceilings).doseCeilingCoverage(),
+			"precondition: this dataset publishes dose ceilings");
+		RecordingProvider checked = new RecordingProvider();
+		serviceWith(checked, ceilings).search(patient, "Can I give her ibuprofen 400mg?");
+		assertEquals(1, checked.calls, "a dose the data can weigh is the model's, with the dosing record injected");
 
 		RecordingProvider noDose = new RecordingProvider();
 		ChartAnswer without = serviceWith(noDose).search(patient, "Is ibuprofen safe for her kidneys?");

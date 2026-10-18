@@ -1431,11 +1431,12 @@ public class DrugReferenceInjector {
 		if (purpose != null) {
 			moduleAnswer = moduleAnswer + "\n" + PURPOSE_NOT_WEIGHED_OPENING + purpose + ").";
 		}
-		// A dose the question states is no part of what the findings weigh, so the model answers such a question, as it
-		// always did — now with the findings its drug raises, which the dose used to keep from being raised at all (ADR
-		// Decision 269).
+		// A dose the question states is no part of what the findings weigh, so where the data publishes dose ceilings the
+		// model answers such a question, the dosing record injected (ADR Decision 269). Where it publishes none, no one can
+		// weigh the dose: the module answers as it answers the question without it, and the answer says the dose was not
+		// checked (ADR Decision 322) — the model, asked instead, wrote a clearance.
 		if (moduleAnswer != null && !questionDrugs.isEmpty()
-				&& QueryScopeRouter.statesADose(wordsBesideItsNames(question, questionDrugs))) {
+				&& QueryScopeRouter.statesADose(wordsBesideItsNames(question, questionDrugs)) && aDoseCanBeWeighed()) {
 			moduleAnswer = null;
 		}
 		if (moduleAnswer != null) {
@@ -4359,6 +4360,13 @@ public class DrugReferenceInjector {
 			}
 		}
 		return false;
+	}
+
+	/** Whether the loaded dataset publishes a dose ceiling a stated dose could be weighed against — or this pass cannot say,
+	 *  which keeps the model call (ADR Decision 322). */
+	private boolean aDoseCanBeWeighed() {
+		DrugReferenceLoad.Coverage ceilings = drugSafetyValidator == null ? null : drugSafetyValidator.doseCeilingCoverage();
+		return ceilings == null || ceilings == DrugReferenceLoad.Coverage.PUBLISHED;
 	}
 
 	/**

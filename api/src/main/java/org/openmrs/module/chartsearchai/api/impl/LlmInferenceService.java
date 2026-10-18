@@ -1070,6 +1070,8 @@ public class LlmInferenceService implements ChartSearchService {
 		answer = ListedDrugStatement.withListedDrugsStatedOnALine(answer, chart.getListedDrugsWithNoActiveOrder());
 		// And which drug the data's name in it is, where the question named it otherwise (ADR Decision 277).
 		answer = NameAsAskedStatement.withNamesAsAskedStatedOnALine(answer, chart.getNamedAsAsked());
+		// And that a dose the question states was not checked, where the data publishes no ceiling (ADR Decision 322).
+		answer = DoseStatement.withDoseNotCheckedOnALine(answer, chart.statesADose(), doseCeilingCoverage);
 		List<RecordReference> references = extractCitedReferences(answer, null, mappings);
 		List<ChartSearchService.OrderStopDate> orderStopDates =
 				ChartSearchAiUtils.orderStopDates(answer, references, mappings);

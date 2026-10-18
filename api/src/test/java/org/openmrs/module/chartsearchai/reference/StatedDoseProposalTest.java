@@ -10,7 +10,6 @@
 package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Arrays;
@@ -28,9 +27,9 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  * A proposal stating a dose raises the findings the proposal does (ADR Decision 269). On the 3.7.1 standalone George, on
  * acetaminophen, asked "Is 1 g of paracetamol safe for him?" and read "The records do not address the safety of 1 g of
  * paracetamol.": the dose kept the question from being read as a proposal, so nothing said that he already takes it —
- * which "Is paracetamol safe for him?" does say. The findings weigh no dose, so the model answers such a question, as
- * {@code LlmInferenceServiceAnswerFromFindingsContextTest.aQuestionTheModuleDidNotResolveAsASuitabilityQuestionStillAsksTheModel}
- * holds. Over the shipped knowledge base.
+ * which "Is paracetamol safe for him?" does say. The findings weigh no dose, and the shipped knowledge base publishes no
+ * dose ceiling, so the module answers it as the proposal without the dose (ADR Decision 322, superseding this decision's
+ * model call); the service says the dose was not checked. Over the shipped knowledge base.
  */
 public class StatedDoseProposalTest extends BaseModuleContextSensitiveTest {
 
@@ -41,7 +40,7 @@ public class StatedDoseProposalTest extends BaseModuleContextSensitiveTest {
 	}
 
 	@Test
-	public void aProposalStatingADoseRaisesTheProposalsFindingsAndLeavesTheAnswerToTheModel() {
+	public void aProposalStatingADoseRaisesTheProposalsFindingsAndIsAnsweredAsTheProposal() {
 		PatientChart without = ask("Can I give him amoxicillin?", "Amoxicillin 250mg");
 		assertTrue(without.getText().contains("Amoxicillin is already in active order Amoxicillin 250mg"),
 			"precondition: the proposal finds the drug in his order — " + without.getText());
@@ -49,7 +48,7 @@ public class StatedDoseProposalTest extends BaseModuleContextSensitiveTest {
 			"Can I give him amoxicillin 500mg tds?", "Can I give him 500 mg of amoxicillin?")) {
 			PatientChart chart = ask(question, "Amoxicillin 250mg");
 			assertEquals(DrugReferenceTestSupport.findingTexts(without), DrugReferenceTestSupport.findingTexts(chart), question);
-			assertNull(chart.getModuleAnswer(), question + " is the model's: the findings weigh no dose");
+			assertEquals(without.getModuleAnswer(), chart.getModuleAnswer(), question + " is answered as the proposal without its dose");
 		}
 	}
 

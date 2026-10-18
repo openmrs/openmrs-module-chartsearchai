@@ -1231,6 +1231,16 @@ public class DrugReferenceInjector {
 					orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers,
 					pairExtent, mappings, matched, context, reading.states(), unidentified.size());
 		}
+		// A drug proposed beside one of hers that the data relates to her orders only without a rating, or to none: her drug is
+		// named, then the answer its proposal alone gets, over the drug-in-play arm's own statement of it (ADR Decision 306).
+		if (moduleAnswer == null && context != null
+				&& ChartSearchAiUtils.getBooleanGlobalProperty(
+						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
+						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS)
+				&& context.chartReadForSafety()) {
+			moduleAnswer = composeProposedBesideHerOwnUnrated(question, questionDrugs, screenedSubstances, findings,
+					pairExtent, mappings, orderEntries, matched, context, reading.states(), unidentified.size());
+		}
 		// A question whether her medications duplicate one another: what the screen found, each a line, and what the check
 		// does not cover (ADR Decision 232); found none, what it compared, and never "No" (ADR Decision 294).
 		if (moduleAnswer == null && context != null && questionDrugs.isEmpty()
@@ -6283,6 +6293,48 @@ public class DrugReferenceInjector {
 			about.add(row.substanceGroupKey());
 		}
 		return about;
+	}
+
+	/**
+	 * The module's answer to a drug proposed together with one of hers — {@code QueryScopeRouter.asksWhetherToGiveDrugsTogether}
+	 * naming two drugs, exactly one of them not hers — where no finding is about the drug proposed: her drug named, then
+	 * {@link #composeFromBelowFloor} or {@link #composeFromNoPair} of the proposed drug alone, over what the drug-in-play
+	 * arm stated of it ({@code PairChipExtent.Sink.statedFor}, as {@link #composeAfterAList} reads it: two drugs open the
+	 * question-pair arm, which states no rows below the floor), as its proposal alone is answered (ADR Decision 306).
+	 * {@code null} otherwise; a finding about it is {@link #composeTogetherWithHerOwn}'s.
+	 */
+	private String composeProposedBesideHerOwnUnrated(String question, List<DrugReference> questionDrugs,
+			Set<Object> herSubstances, List<SafetyWarning> findings, PairChipExtent.Sink pairExtent, List<RecordMapping> mappings,
+			List<DrugReference> orderEntries, Map<DrugReference, SubstanceRendering> matched, PatientClinicalContext context,
+			boolean states, int unidentified) {
+		List<AskedDrug> asked = askedDrugs(question, questionDrugs, context, false);
+		if (asked.size() != 2 || !QueryScopeRouter.asksWhetherToGiveDrugsTogether(wordsBesideItsNames(question, questionDrugs))) {
+			return null;
+		}
+		AskedDrug proposed = null;
+		AskedDrug hers = null;
+		for (AskedDrug drug : asked) {
+			if (drug.isHers(herSubstances)) {
+				hers = drug;
+			} else {
+				proposed = proposed == null ? drug : null;
+			}
+		}
+		if (proposed == null || hers == null || proposed.substances.size() != 1) {
+			return null;
+		}
+		for (SafetyWarning finding : notHerOwnOrdersSharingASubstance(findings)) {
+			if (isAbout(finding, proposed.substances)) {
+				return null;
+			}
+		}
+		PairChipExtent own = pairExtent.statedFor(proposed.substances.iterator().next());
+		String alone = composeFromBelowFloor(true, proposed.rows, herSubstances, own, mappings, context);
+		if (alone == null) {
+			alone = composeFromNoPair(true, proposed.rows, herSubstances, orderEntries, own, mappings, matched, context,
+					states, unidentified);
+		}
+		return alone == null ? null : hers.label + OWN_MEDICATION_LEAD + ".\n" + alone;
 	}
 
 	/**

@@ -19100,3 +19100,31 @@ drug-safety check found about X:"* (`DrugReferenceInjector.FOUND_LEAD_OPENING`),
 answers a single drug. A contraindication still licenses no "No".
 
 Pinned by `TwoProposalsNeutralFindingsTest`.
+
+## Decision 306: A drug proposed beside one of hers, related to her orders only without a rating, is answered as its proposal
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It fixes what
+[Decision 301](#decision-301-whether-her-own-drug-is-safe-and-what-interacts-with-it-is-answered-as-her-own-medication)
+left to the model.
+
+### Context
+
+*"Can I give her fluconazole with her aspirin?"* went to the model wherever the data lists fluconazole against her orders
+without a rating: Agnes Adams was told *"Fluconazole can be given, with one caution: it has an Unknown severity
+interaction with aspirin"* — an unrated relationship called a caution — and others *"The records do not address"* it.
+[Decision 196](#decision-196-two-drugs-asked-about-together-one-of-them-hers-are-answered-for-the-other-and-her-drugs-other-findings-are-drawn-apart)'s
+answer needs a finding about the drug proposed; the below-floor and no-pair answers a proposal alone gets read the pair
+extent, and for two drugs the question-pair arm states it, with no rows below the floor. Decision 301 recorded that as
+needing a change to what that arm publishes; it does not.
+
+### The decision
+
+Where two drugs are asked about together, exactly one of them hers, and no finding is about the other, the module names
+hers and answers the other as its proposal alone is answered
+(`DrugReferenceInjector.composeProposedBesideHerOwnUnrated`), over the drug-in-play arm's own statement of it
+(`PairChipExtent.Sink.statedFor`, read already by
+[Decision 149](#decision-149-a-proposal-after-a-list-of-drugs-is-answered-with-what-the-check-established-for-the-drug-proposed)'s
+answer; never published).
+
+Pinned by `TogetherWithHerOwnBelowFloorTest`.

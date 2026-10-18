@@ -1165,7 +1165,9 @@ public final class QueryScopeRouter {
 		if (proposal == null || !fitsAShape(proposal, PROPOSAL_SHAPES) && !asksWhetherNotToGiveADrug(proposal)) {
 			return null;
 		}
-		return String.join(" ", wordsWithTheDrugMarked.subList(proposal.size() + 1, wordsWithTheDrugMarked.size()));
+		// After "for", or the whole closing statement of what she has (ADR Decision 325).
+		int from = "for".equals(wordsWithTheDrugMarked.get(proposal.size())) ? proposal.size() + 1 : proposal.size();
+		return String.join(" ", wordsWithTheDrugMarked.subList(from, wordsWithTheDrugMarked.size()));
 	}
 
 	/**
@@ -1211,6 +1213,10 @@ public final class QueryScopeRouter {
 	 * ({@link #OTHER_FACTOR}) — each of which keeps the model call, as the grammar's fail-closed design has it.
 	 */
 	static List<String> withoutAPurpose(List<String> words) {
+		List<String> withoutAStatement = withoutAStatedCondition(words);
+		if (withoutAStatement != null) {
+			return withoutAStatement;
+		}
 		int at = words.lastIndexOf("for");
 		int length = words.size() - at - 1;
 		if (at < 1 || length < 1 || length > 4) {
@@ -1226,6 +1232,36 @@ public final class QueryScopeRouter {
 			}
 		}
 		return new ArrayList<String>(words.subList(0, at));
+	}
+
+	/** The subjects a closing statement of what she has opens with. */
+	private static final Set<String> STATEMENT_SUBJECTS = new HashSet<String>(Arrays.asList("she", "he", "they"));
+
+	/**
+	 * {@code words} with a closing statement of what she HAS taken off — <em>"Can I give her ciprofloxacin? She has a
+	 * UTI."</em> — or {@code null} (ADR Decision 325): a purpose stated as its own sentence, set aside as
+	 * {@link #withoutAPurpose} sets aside one after "for", on the same conditions — at most four words after "has", none the
+	 * drug, a word joining a second question ({@link #NOT_A_PURPOSE}) or a factor the findings do not weigh
+	 * ({@link #OTHER_FACTOR}).
+	 */
+	private static List<String> withoutAStatedCondition(List<String> words) {
+		for (int at = words.size() - 3; at >= 1; at--) {
+			if (!STATEMENT_SUBJECTS.contains(words.get(at)) || !"has".equals(words.get(at + 1))
+					&& !"have".equals(words.get(at + 1))) {
+				continue;
+			}
+			int length = words.size() - at - 2;
+			if (length < 1 || length > 4) {
+				return null;
+			}
+			for (String word : words.subList(at + 2, words.size())) {
+				if (DRUG_NAME.equals(word) || NOT_A_PURPOSE.contains(word) || OTHER_FACTOR.matcher(word).find()) {
+					return null;
+				}
+			}
+			return new ArrayList<String>(words.subList(0, at));
+		}
+		return null;
 	}
 
 	/**

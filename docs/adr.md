@@ -19615,3 +19615,25 @@ her recorded drug allergies, each as the chart spells it, or that none is record
 allergy records were not read the model answers, as before.
 
 Pinned by `DrugsToAvoidQuestionTest`.
+
+## Decision 325: A proposal followed by a sentence stating what she has is answered as the proposal, that condition not weighed
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It reads as [Decision 213](#decision-213-a-proposal-that-says-what-the-drug-is-for-is-answered-as-the-proposal-and-the-answer-says-the-purpose-was-not-weighed) reads a purpose
+the proposal states after "for".
+
+### Context
+
+*"Can I give her ciprofloxacin? She has a UTI."* fitted no shape: the proposal's words ran on into the second sentence's.
+So the model answered every patient on the 3.7.1 standalone, and wrote the clearance the module never does — Karen
+Sanchez, on metronidazole, was told *"Ciprofloxacin can be given, with one caution"*.
+
+### The decision
+
+`QueryScopeRouter.withoutAPurpose` sets aside a closing statement of what she has — *"she has a UTI"*, *"he has a
+urinary infection"* — on the conditions it sets aside a purpose after "for": at most four words after "has", none the
+drug, none joining a second question, none a factor the findings do not weigh (`OTHER_FACTOR`: kidney, pregnancy and the
+rest keep the model call). The answer is the proposal's, closed by *"This check did not weigh what the drug is for (She
+has a UTI)."*, the statement as the question wrote it.
+
+Pinned by `ConditionStatedAfterAProposalTest`.

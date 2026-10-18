@@ -50,8 +50,14 @@ public class HibernateConversationDAO implements ConversationDAO {
 
 	@Override
 	public ClinicalConversation getConversationForUpdate(Integer conversationId) {
-		return (ClinicalConversation) sessionFactory.getCurrentSession()
-				.get(ClinicalConversation.class, conversationId, LockOptions.UPGRADE);
+		ClinicalConversation conversation = (ClinicalConversation) sessionFactory.getCurrentSession()
+				.get(ClinicalConversation.class, conversationId);
+		if (conversation != null) {
+			// get() hands back an instance this session already holds without re-reading it; refresh
+			// under the lock so startTurn checks the committed status, not one loaded earlier.
+			sessionFactory.getCurrentSession().refresh(conversation, LockOptions.UPGRADE);
+		}
+		return conversation;
 	}
 
 	@Override

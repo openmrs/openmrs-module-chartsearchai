@@ -26,6 +26,7 @@ import java.util.Map;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import org.hibernate.SessionFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.Patient;
@@ -63,6 +64,9 @@ public class ConversationServicePersistenceTest extends BaseModuleContextSensiti
 
 	@Autowired
 	private AuditLogService auditLogService;
+
+	@Autowired
+	private SessionFactory sessionFactory;
 
 	private Patient patient;
 
@@ -352,6 +356,37 @@ public class ConversationServicePersistenceTest extends BaseModuleContextSensiti
 	@Test
 	public void recordingACheckedAnswerDoesNotReopenTheClosedConversation() {
 		assertClosedConversationSurvivesInflightWrite(true);
+	}
+
+	@Test
+	public void startingATurnOnAConversationThisSessionHoldsRejectsOneClosedSinceItWasLoaded() {
+		ClinicalConversation earlier = conversationService.openOrCreate(patient, "hub", ProviderMode.QUERY_SCOPED);
+		conversationService.startTurn(earlier, "earlier", "Question");
+		Context.flushSession();
+		Context.clearSession();
+		// The chat path loads the conversation into the request's session just before startTurn.
+		ClinicalConversation held = conversationService.getByUuid(earlier.getUuid());
+		// A bulk update bypasses the copy this session holds, standing in for another request closing it.
+		Date closedAt = new Date();
+		int closed = sessionFactory.getCurrentSession()
+				.createQuery("update ClinicalConversation set status = :status, endedAt = :endedAt "
+						+ "where conversationId = :conversationId")
+				.setParameter("status", ClinicalConversation.STATUS_CLOSED)
+				.setParameter("endedAt", closedAt)
+				.setParameter("conversationId", held.getConversationId())
+				.executeUpdate();
+		assertEquals(1, closed);
+		assertEquals(ClinicalConversation.STATUS_ACTIVE, held.getStatus(),
+				"precondition: the session still holds the conversation as it was loaded");
+
+		assertThrows(IllegalArgumentException.class,
+				() -> conversationService.startTurn(held, "after-close", "Question"));
+		Context.flushSession();
+		Context.clearSession();
+		ClinicalConversation stored = conversationDAO.getConversationByUuid(earlier.getUuid());
+		assertEquals(ClinicalConversation.STATUS_CLOSED, stored.getStatus());
+		assertNotNull(stored.getEndedAt());
+		assertEquals(1, conversationDAO.getTurns(stored).size(), "no turn was written after the close");
 	}
 
 	private void assertClosedConversationSurvivesInflightWrite(boolean checked) {

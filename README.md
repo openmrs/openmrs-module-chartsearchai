@@ -329,7 +329,7 @@ The `drugSafety.*` checks require both `chartsearchai.drugReference.enabled` and
 
 | Privilege | Purpose |
 |-----------|---------|
-| **AI Query Patient Data** | Execute chart search queries (`/search`, `/search/stream`, `/warmup`, `/feedback`) and read a patient's standing chart alerts (`/chartalerts`) |
+| **AI Query Patient Data** | Execute chart search queries (`/search`, `/search/stream`, `/warmup`, `/feedback`), read a patient's standing chart alerts (`/chartalerts`), list answer providers and Hub profiles (`/providers`, `/models`) and hold provider conversations (`/chat`, `/chat/new`, `/chat/stream`). With a Med Agent Hub configured, this privilege is also what lets a user send a patient's uuid, question and prior turns to that Hub |
 | **View AI Audit Logs** | Access the audit log endpoint |
 | **Manage AI Prewarm** | Trigger and monitor the bulk KV-prewarm bootstrap (`/prewarm`, `/prewarmstatus`) |
 

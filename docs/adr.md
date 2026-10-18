@@ -19076,3 +19076,27 @@ answered as one drug by those compositions, named as asked and citing each of it
 (`productExtent`, from `PairChipExtent.Sink.statedFor`, never published).
 
 Pinned by `CombinationProposalNoFindingTest`.
+
+## Decision 305: Two drugs proposed together state what the check found about one whose findings make no verdict
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient.
+
+### Context
+
+*"Is azithromycin safe with his ondansetron?"*, asked of every patient on the 3.7.1 standalone, is answered by
+[Decision 222](#decision-222-two-drugs-proposed-together-neither-hers-are-each-answered-as-their-own-proposal)'s
+composition — except where one drug's findings make no verdict, which handed the whole question to the model. Kevin Brown
+and Sarah Taylor, recorded allergic to clarithromycin, were told *"Ondansetron can be given with Azithromycin, with one
+caution"*, and azithromycin's shared class with clarithromycin (J01FA, possible cross-reactivity) was left out; Michael
+Turner, whose azithromycin–clarithromycin finding folds a shared macrolide class, was told *"Azithromycin can be given"*
+and lost its interaction with his simvastatin.
+
+### The decision
+
+A drug whose findings neither license the module's "No" nor are cautions only is stated under *"What this module's
+drug-safety check found about X:"* (`DrugReferenceInjector.FOUND_LEAD_OPENING`), every finding a line, and no verdict
+— as [Decision 257](#decision-257-a-question-whose-no-would-read-backwards-about-a-drug-withheld-by-no-rating-states-what-the-check-found)
+answers a single drug. A contraindication still licenses no "No".
+
+Pinned by `TwoProposalsNeutralFindingsTest`.

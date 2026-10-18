@@ -6208,7 +6208,15 @@ public class DrugReferenceInjector {
 				withholds |= licensesTheModulesNo(finding);
 			}
 			if (!withholds && !cautionsOnlyAbout(drug.substances, its)) {
-				return null;
+				// Findings that make no verdict — a contraindication, a reason to withhold no rating makes: what the check
+				// found, every one, and no verdict, as Decision 257 answers one drug (ADR Decision 305). The model answered
+				// "can be given" and left a cross-reactivity out.
+				lines.add(FOUND_LEAD_OPENING + drug.label + ":");
+				for (int f = 0; f < its.size(); f++) {
+					lines.add(findingLine(its.get(f), numbersOfEach.get(drug).get(f), orderRecordNumbers, herOrderRecords,
+							true));
+				}
+				continue;
 			}
 			String composed = composeFromFindings(its, numbersOfEach.get(drug), orderRecordNumbers, herOrderRecords,
 					true, pairs, Lead.GIVE, SCREEN_SCOPE, drug.substances.size() > 1 ? drug.label : null);

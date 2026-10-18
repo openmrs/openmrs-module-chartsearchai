@@ -75,6 +75,27 @@ public class WhichOfHerMedicationsInteractTest extends BaseModuleContextSensitiv
 		}
 	}
 
+	/**
+	 * Where the data relates the drug to her orders only below the severity floor, or she has no active order, the module
+	 * says so — which of her orders the data lists it against, and how rated — and neither "Yes" nor "No" (ADR Decision
+	 * 320). On the 3.7.1 standalone David Williams, on aspirin, was told "Aspirin has an Unknown severity interaction and
+	 * ivosidenib has a Major interaction", and patients on no medication the reference record's partners.
+	 */
+	@Test
+	public void rowsBelowTheFloorOrNoOrderAreStatedForEveryWording() {
+		List<PatientClinicalContext.ActiveDrugOrder> aspirin = Arrays.asList(
+			DrugReferenceTestSupport.activeOrder("order-asa", "Aspirin 81mg", "Aspirin"));
+		for (String question : Arrays.asList("Which of her medications interact with rifampicin?",
+				"Does rifampicin interact with her medications?", "Is she on any drugs that interact with rifampicin?")) {
+			assertEquals("The interaction data lists Rifampicin (rifampin) against one of this patient's orders, Aspirin 81mg, "
+					+ "with no severity or mechanism on file. [n]\n" + DrugReferenceInjector.BELOW_FLOOR_SCOPE,
+				mask(ask(question, aspirin)), question);
+			assertEquals("This patient has no active medication orders, so the interaction check had none to relate Rifampicin "
+					+ "(rifampin) to. [n]", mask(ask(question, Arrays.<PatientClinicalContext.ActiveDrugOrder> asList())),
+				question + " / no orders");
+		}
+	}
+
 	private static String mask(String answer) {
 		return answer == null ? null : answer.replaceAll("\\[\\d+\\]", "[n]");
 	}

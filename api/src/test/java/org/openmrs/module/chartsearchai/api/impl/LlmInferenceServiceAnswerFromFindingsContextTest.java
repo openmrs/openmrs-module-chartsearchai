@@ -794,9 +794,14 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 				+ "]\n" + "Interactions the data does not rate, and anything beyond drug interactions, are not covered.", answer.getAnswer());
 	}
 
-	/** A question that names the drug without proposing it keeps the model's answer, below-floor rows or not. */
+	/**
+	 * A question whether the drug interacts with her medications, over rows below the floor, is answered with which of her
+	 * orders the data lists it against and how rated, and neither "Yes", "No" nor a word on withholding (ADR Decision 320,
+	 * superseding the model call Decision 181 kept: its sentence was about withholding, and the model answered David
+	 * Williams's "Which of her medications interact with rifampicin?" with a drug he does not take).
+	 */
 	@Test
-	public void aBelowFloorQuestionThatProposesNothingStillAsksTheModel() {
+	public void aBelowFloorQuestionWhetherItInteractsStatesTheRowsAndNoVerdict() {
 		String question = "Does clarithromycin interact with her medications?";
 		RecordingProvider precondition = new RecordingProvider();
 		answerFromFindings(false);
@@ -806,8 +811,10 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 				"precondition: the question relates clarithromycin to her aspirin below the floor");
 		RecordingProvider provider = new RecordingProvider();
 		ChartAnswer answer = serviceWith(provider).search(patient, question);
-		assertEquals(1, provider.calls, "the model is asked: " + answer.getAnswer());
-		assertFalse(answer.isAnsweredByTheModule());
+		assertEquals(0, provider.calls, "the module answers: " + answer.getAnswer());
+		assertTrue(answer.getAnswer().startsWith("The interaction data lists Clarithromycin against "), answer.getAnswer());
+		assertFalse(answer.getAnswer().startsWith("Yes") || answer.getAnswer().startsWith("No")
+				|| answer.getAnswer().contains("withhold"), "no verdict: " + answer.getAnswer());
 	}
 
 	/**

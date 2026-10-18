@@ -19476,3 +19476,31 @@ interact with her medications?"* is ([Decision 181](#decision-181-a-question-whe
 since "Yes" does not answer "which".
 
 Pinned by `WhichOfHerMedicationsInteractTest`.
+
+## Decision 320: Whether a drug interacts with her medications, over rows below the floor or no order at all, is answered with what the data lists
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It supersedes the model call
+[Decision 181](#decision-181-a-question-whether-not-to-give-a-drug-or-whether-it-interacts-is-answered-without-an-inverted-no) kept for rows below the severity floor.
+
+### Context
+
+Decision 181 answered *"Does X interact with her medications?"* where the check related X to none of her orders, but
+not where it related X to them only below the severity floor: the below-floor sentence, *"The interaction data gives no
+rated reason to withhold X"*, is about withholding and does not answer whether X interacts. So the model answered — and
+after [Decision 319](#decision-319-which-of-her-medications-interact-with-a-drug-is-answered-with-the-findings-and-whether-anything-she-takes-interacts-with-it-as-whether-it-interacts) the same held of *"Which of her medications interact with X?"*. On the 3.7.1 standalone
+David Williams, on aspirin, was told *"Aspirin has an Unknown severity interaction and ivosidenib has a Major
+interaction"*, and patients with no active order were given the reference record's partners, none of them theirs.
+
+### The decision
+
+For a question `DrugReferenceInjector.asksWhetherItInteracts` admits, of a drug she is not on, `composeFromBelowFloor`
+states which of her orders the data lists the drug against and how rated — *"The interaction data lists Rifampicin
+(rifampin) against one of this patient's orders, Aspirin 81mg, with no severity or mechanism on file."* — then
+`BELOW_FLOOR_SCOPE`: no "Yes", no "No", and no word on withholding, which was not asked. With no active order at all,
+`composeFromNoActiveOrders` answers it as it answers a proposal: *"This patient has no active medication orders, so the
+interaction check had none to relate X to."*
+
+Pinned by `WhichOfHerMedicationsInteractTest.rowsBelowTheFloorOrNoOrderAreStatedForEveryWording`.
+`LlmInferenceServiceAnswerFromFindingsContextTest.aBelowFloorQuestionThatProposesNothingStillAsksTheModel`, which pinned
+the model call, is now `.aBelowFloorQuestionWhetherItInteractsStatesTheRowsAndNoVerdict`.

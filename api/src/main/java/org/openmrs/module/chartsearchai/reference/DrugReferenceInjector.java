@@ -1200,8 +1200,11 @@ public class DrugReferenceInjector {
 			// floor (ADR Decision 304).
 			String product = combinationAskedAbout(question, questionDrugs, context);
 			PairChipExtent extent = product == null ? pairExtent.stated() : productExtent(pairExtent, questionDrugs);
-			moduleAnswer = composeFromBelowFloor(proposes, questionDrugs, screenedSubstances, extent, mappings, context,
-					product);
+			// And a question whether it interacts with her medications, or which of them it interacts with: which orders
+			// the data lists it against, and how rated, with no word on withholding (ADR Decision 320).
+			boolean relates = !proposes && asksWhetherItInteracts(question, questionDrugs);
+			moduleAnswer = composeFromBelowFloor(proposes, relates, questionDrugs, screenedSubstances, extent, mappings,
+					context, product);
 			if (moduleAnswer == null) {
 				// A question whether the drug interacts with her medications is answered where the check related it to
 				// none of them: "relates X to none of …" answers it as it answers a proposal (ADR Decision 181). Not
@@ -1210,7 +1213,7 @@ public class DrugReferenceInjector {
 						extent, mappings, matched, context, reading.states(), unidentified.size(), product);
 			}
 			if (moduleAnswer == null) {
-				moduleAnswer = composeFromNoActiveOrders(proposes, questionDrugs, mappings, matched, context,
+				moduleAnswer = composeFromNoActiveOrders(proposes || relates, questionDrugs, mappings, matched, context,
 						reading.states(), product);
 			}
 			if (moduleAnswer == null) {
@@ -3403,18 +3406,23 @@ public class DrugReferenceInjector {
 	private static String composeFromBelowFloor(boolean proposes, List<DrugReference> questionDrugs,
 			Set<Object> herSubstances, PairChipExtent extent, List<RecordMapping> mappings,
 			PatientClinicalContext context) {
-		return composeFromBelowFloor(proposes, questionDrugs, herSubstances, extent, mappings, context, null);
+		return composeFromBelowFloor(proposes, false, questionDrugs, herSubstances, extent, mappings, context, null);
 	}
 
-	/** As above; {@code product}, where not null, is a combination the question names as one product, answered as one
-	 *  drug by that name and citing each of its substances' records (ADR Decision 304). */
-	private static String composeFromBelowFloor(boolean proposes, List<DrugReference> questionDrugs,
+	/**
+	 * As above; {@code product}, where not null, is a combination the question names as one product, answered as one
+	 * drug by that name and citing each of its substances' records (ADR Decision 304). Where {@code relates}, the question
+	 * asks whether the drug interacts with her medications, or which of them it interacts with: the answer names the
+	 * orders the data lists it against, and says nothing of withholding, which was not asked (ADR Decision 320).
+	 */
+	private static String composeFromBelowFloor(boolean proposes, boolean relates, List<DrugReference> questionDrugs,
 			Set<Object> herSubstances, PairChipExtent extent, List<RecordMapping> mappings,
 			PatientClinicalContext context, String product) {
 		if (extent == null || extent.getBelowFloor() == null || extent.getBelowFloor().isEmpty()) {
 			return null;
 		}
-		List<RecordMapping> records = proposedDrugsRecords(proposes, questionDrugs, herSubstances, mappings, product != null);
+		List<RecordMapping> records = proposedDrugsRecords(proposes || relates, questionDrugs, herSubstances, mappings,
+				product != null);
 		if (records == null) {
 			return null;
 		}
@@ -3448,6 +3456,15 @@ public class DrugReferenceInjector {
 				+ (scheduled == 0 ? "" : scheduled == n ? (n == 1 ? ", " : ", all ") + "scheduled and not yet started"
 						: " (" + (scheduled == 1 ? "one" : String.valueOf(scheduled)) + " of them scheduled and not yet started)")
 				+ ", ";
+		String rated = !rows.allUnknown ? "rated " + rows.ratings() + ", below the level this module reports as a finding"
+				: (n == 1 ? "with no severity" : "none with a severity") + (rows.noMechanism ? " or mechanism" : "") + " on file";
+		if (relates && !proposes) {
+			return "The interaction data lists " + rows.drug + " against " + (n == 1 ? "one" : String.valueOf(n))
+					+ " of this patient's orders, " + joinedAsAList(rows.orders)
+					+ (scheduled == 0 ? "" : scheduled == n ? (n == 1 ? ", " : ", all ") + "scheduled and not yet started"
+							: " (" + (scheduled == 1 ? "one" : String.valueOf(scheduled)) + " of them scheduled and not yet started)")
+					+ ", " + rated + "." + recordMarkers(records) + "\n" + BELOW_FLOOR_SCOPE;
+		}
 		return "The interaction data gives no rated reason to withhold " + rows.drug + ": " + against
 				+ (!rows.allUnknown ? "rated " + rows.ratings() + ", below the level this module reports as a finding"
 						: (n == 1 ? "with no severity" : "none with a severity") + (rows.noMechanism ? " or mechanism" : "")

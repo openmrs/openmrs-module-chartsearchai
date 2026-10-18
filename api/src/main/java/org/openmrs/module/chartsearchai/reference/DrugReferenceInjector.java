@@ -1400,6 +1400,18 @@ public class DrugReferenceInjector {
 				&& QueryScopeRouter.asksWhatToMonitorWithHerMedications(question)) {
 			moduleAnswer = SETS_NO_MONITORING_LEAD + "\n" + moduleAnswer;
 		}
+		// A drug the question names as hers, and she is not on it: said before the answer, wherever the answer came from
+		// (ADR Decision 315). Where she has no active order at all, the answer already says so.
+		List<AskedDrug> askedOnce = moduleAnswer == null || questionDrugs.isEmpty() || context == null
+				|| context.getActiveDrugOrders().isEmpty() ? Collections.<AskedDrug> emptyList()
+						: askedDrugs(question, questionDrugs, context, false);
+		if (askedOnce.size() == 1) {
+			AskedDrug named = askedOnce.get(0);
+			if (namedAsHers(question, named) && Collections.disjoint(named.substances, screenedSubstances)
+					&& !moduleAnswer.startsWith(named.label + " is not")) {
+				moduleAnswer = named.label + NOT_HER_MEDICATION + "\n" + moduleAnswer;
+			}
+		}
 		// One drug asked about beside a group of her medications the question names: answered as beside her medications,
 		// under a lead saying the check cannot tell which of her orders the group means (ADR Decision 313).
 		String group = moduleAnswer == null || questionDrugs.isEmpty() || context == null
@@ -4673,9 +4685,11 @@ public class DrugReferenceInjector {
 	private static final Set<String> POSSESSIVE_WORDS = new HashSet<String>(Arrays.asList("her", "his", "their",
 		"patient's"));
 
-	/** The verbs whose "her" is the patient given to, never a possessive. */
-	private static final Set<String> GIVING_TO_HER = new HashSet<String>(Arrays.asList("give", "start", "prescribe",
-		"administer", "add", "offer", "put", "get"));
+	/** The verbs whose "her" is the patient given to, never a possessive — in every form a question writes them: "Any
+	 *  problem giving her ibuprofen?" (ADR Decision 315). */
+	private static final Set<String> GIVING_TO_HER = new HashSet<String>(Arrays.asList("give", "gives", "giving", "gave",
+		"start", "starts", "starting", "prescribe", "prescribes", "prescribing", "administer", "administering", "add",
+		"adding", "offer", "offering", "put", "putting", "get", "getting"));
 
 	/** Which characters of {@code folded} one of {@code entries} names — the spans
 	 *  {@link DrugReference#namedOccurrences} reports. */

@@ -711,7 +711,7 @@ public final class QueryScopeRouter {
 	private static final List<Pattern> ANY_INTERACTIONS_WITH_HER_D_SHAPES = shapes(ANY_INTERACTIONS_WITH_HER_D);
 
 	/** "Is lidocaine safe with her other medications?", "Is ibuprofen okay with her current meds?" */
-	private static final String SAFE_WITH_HER_MEDICATIONS = "is " + D + " (?:safe|ok|okay|appropriate) (?:with|alongside) "
+	private static final String SAFE_WITH_HER_MEDICATIONS = "is " + HER_D + " (?:safe|ok|okay|appropriate) (?:with|alongside) "
 			+ "(?:any of )?" + POSSESSIVE + " (?:other )?" + MEDICATIONS;
 
 	/** "Is dolutegravir safe with her TB preventive therapy?" — one drug beside a group of her medications (ADR Decision
@@ -721,6 +721,8 @@ public final class QueryScopeRouter {
 
 	private static final List<Pattern> SAFE_WITH_HER_MEDICATIONS_SHAPES = shapes(SAFE_WITH_HER_MEDICATIONS,
 			SAFE_WITH_A_GROUP_OF_HER_MEDICATIONS,
+			// "Is her methotrexate safe?" of a drug she is not on: what a proposal asks (ADR Decision 315)
+			"is " + POSSESSIVE + " " + D + " (?:safe|ok|okay|appropriate)(?: for " + PATIENT + ")?",
 			// "Can he take dolutegravir and his TB preventive therapy together?", "Can I give her dolutegravir with her TB
 			// preventive therapy?" (ADR Decision 313)
 			"(?:can|could|may) (?:i give " + PATIENT + "|(?:he|she|they|the patient|this patient) (?:take|have|use)) " + D

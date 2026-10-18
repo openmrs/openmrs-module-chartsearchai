@@ -19355,3 +19355,32 @@ interacts with this patient's active medications."* and each finding as a line. 
 check found a reason to withhold it."* follows the "Yes" only where a finding `licensesTheModulesNo`.
 
 Pinned by `InteractsWithoutARatedReasonTest`.
+
+## Decision 315: A drug the question names as hers, and she is not on it, is said so before whatever the module answers
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It generalises
+[Decision 260](#decision-260-a-question-naming-as-hers-a-drug-she-is-not-on-says-she-is-not-on-it)'s statement past the one composer that made it.
+
+### Context
+
+On the 3.7.1 standalone *"Is her methotrexate safe with her other medications?"* went to the model for every patient: no
+shape admitted the drug named as hers. Patients on no methotrexate were told *"Methotrexate can be given, with one
+caution"* — a clearance — and Mark Williams, on ondansetron, *"No — Methotrexate should not be given with Ondansetron, as
+there is an Unknown severity interaction"*. *"Is her methotrexate safe?"*, asked of a patient not on it, went to the model
+too ([Decision 301](#decision-301-whether-her-own-drug-is-safe-and-what-interacts-with-it-is-answered-as-her-own-medication)'s shape is her own drug's).
+
+### The decision
+
+`QueryScopeRouter.SAFE_WITH_HER_MEDICATIONS` admits the drug named as hers, and *"Is her X safe?"* is among the shapes
+`asksWhetherADrugIsSafeWithHerMedications` reads. Of her own drug both are answered about her medication, as before; of
+a drug she is not on, as the proposal they ask. Wherever the module answers a question about one drug that the question
+names as hers and she has an active order but none of that drug, the answer opens *"X is not one of this patient's
+active medications."* (`DrugReferenceInjector.NOT_HER_MEDICATION`) — unless it already opens by saying so. With no active
+order at all the answer already says she has none, and states it once.
+
+`namedAsHers` reads "her" after a verb of giving as the patient given to, never a possessive; it knew only the verbs'
+bare forms, so *"Any problem giving her ibuprofen?"* read as naming ibuprofen as hers. It knows every form now.
+
+Pinned by `HerDrugSheIsNotOnTest`, and for the verb forms by
+`LlmInferenceServiceAnswerFromFindingsContextTest.aQuestionWhetherNotToGiveADrugIsAnsweredWithoutAYesOrNo`.

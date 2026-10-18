@@ -37,6 +37,7 @@ import org.openmrs.module.chartsearchai.reference.ChartReadStatus;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceInjector;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport;
 import org.openmrs.module.chartsearchai.reference.DrugSafetyValidator;
+import org.openmrs.module.chartsearchai.reference.PairChipExtent;
 import org.openmrs.module.chartsearchai.reference.SafetyWarning;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
@@ -1305,9 +1306,9 @@ public class ReferenceProseFidelityTest extends BaseModuleContextSensitiveTest {
 		created.setDrugSafetyValidator(new DrugSafetyValidator() {
 
 			@Override
-			public List<SafetyWarning> validate(String answer, String question, Patient patient,
-					List<RecordMapping> mappings) {
-				return Collections.emptyList();
+			public DrugSafetyValidator.SafetyCheckResult validateWithStatus(String answer, String question, Patient patient,
+					List<RecordMapping> mappings, PairChipExtent.Sink pairExtentSink) {
+				return new DrugSafetyValidator.SafetyCheckResult(DrugSafetyValidator.STATUS_CHECKED, Collections.<SafetyWarning>emptyList());
 			}
 		});
 		return created;

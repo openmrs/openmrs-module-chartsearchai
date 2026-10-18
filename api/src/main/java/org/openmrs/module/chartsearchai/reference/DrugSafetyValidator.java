@@ -374,16 +374,18 @@ public class DrugSafetyValidator {
 	 * {@code null}/empty mappings disables the scoping and keeps every answer-named drug in play (the
 	 * conservative pre-scoping behavior).
 	 *
-	 * <p><b>Since issue #336, {@code LlmInferenceService} calls the five-argument overload below,
-	 * not this one</b> — it also publishes how bounded the answer's interaction list is, which this
-	 * arity has nowhere to carry. A decorator or a test double that overrides THIS method alone is
-	 * therefore inert on the production path, and inert SILENTLY — it returns, production simply
-	 * never reaches it. Of the stubs in this repo that overrode it, exactly one asserted on the seam
-	 * and went red; the rest passed while stubbing nothing, and two of them were still doing so after
-	 * a review of the commit that added the overload — a sweep of the tree is what finds them, not a
-	 * reading of the diff. Override the overload below, and where a test asserts that production
-	 * reached the validator at all, assert WHICH arity it reached
-	 * ({@code LlmInferenceServiceCitationWiringTest} does).
+	 * <p><b>{@code LlmInferenceService} calls {@link #validateWithStatus}, not this one</b> — it also
+	 * publishes how bounded the answer's interaction list is (issue #336) and whether the check ran,
+	 * which this arity has nowhere to carry. A decorator or a test double that overrides THIS method,
+	 * or the five-argument overload below, is therefore inert on the production path, and inert
+	 * SILENTLY — it returns, production simply never reaches it. Of the stubs in this repo that
+	 * overrode it, exactly one asserted on the seam and went red; the rest passed while stubbing
+	 * nothing, and two of them were still doing so after a review of the commit that added the
+	 * overload — a sweep of the tree is what finds them, not a reading of the diff. When production
+	 * moved to {@link #validateWithStatus}, six more were left stubbing the five-argument overload.
+	 * Override {@link #validateWithStatus}, and where a test asserts that production reached the
+	 * validator at all, assert WHICH arity it reached ({@code LlmInferenceServiceCitationWiringTest}
+	 * does).
 	 */
 	public List<SafetyWarning> validate(String answer, String question, Patient patient,
 			List<RecordMapping> mappings) {
@@ -391,9 +393,10 @@ public class DrugSafetyValidator {
 	}
 
 	/**
-	 * The production entry point a caller uses when it intends to PUBLISH how bounded the answer's
-	 * interaction list is (issue #336). Identical to
-	 * {@link #validate(String, String, Patient, List)} in every other respect.
+	 * {@link #validateWithStatus}'s warnings alone, for a caller that publishes how bounded the
+	 * answer's interaction list is (issue #336) but not whether the check ran. Production calls
+	 * {@link #validateWithStatus}, so a test double overriding this overload is never reached.
+	 * Identical to {@link #validate(String, String, Patient, List)} in every other respect.
 	 *
 	 * @param pairExtentSink a caller-supplied one-slot accumulator the interaction arms state their
 	 *        candidate and reported counts into, or {@code null} from a caller that does not

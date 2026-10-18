@@ -188,9 +188,9 @@ public class IdenticalRecordCitationGroupTest extends BaseModuleContextSensitive
 		created.setDrugSafetyValidator(new DrugSafetyValidator() {
 
 			@Override
-			public List<SafetyWarning> validate(String answer, String question, Patient patient,
+			public DrugSafetyValidator.SafetyCheckResult validateWithStatus(String answer, String question, Patient patient,
 					List<RecordMapping> mappings, PairChipExtent.Sink pairExtentSink) {
-				return Collections.emptyList();
+				return new DrugSafetyValidator.SafetyCheckResult(DrugSafetyValidator.STATUS_CHECKED, Collections.<SafetyWarning>emptyList());
 			}
 		});
 		return created;

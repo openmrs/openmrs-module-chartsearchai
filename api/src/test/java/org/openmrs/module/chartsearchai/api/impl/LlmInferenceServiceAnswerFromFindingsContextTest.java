@@ -1403,14 +1403,19 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		assertFalse(answer.getAnswer().contains("ATC"), "the code-only stand-in is counted, never printed");
 	}
 
-	/** Beside an order that has not started, the answer would count it among her active medications, so the model
-	 *  answers (issue #592) — Decision 142 refuses a line on such an order for the same reason. Patient 6 holds only
-	 *  an aspirin order scheduled for 2099. */
+	/** Beside an order that has not started, the answer counts her medication orders and says which is scheduled (ADR
+	 *  Decision 310), never counting it among her active medications — which is why the model was asked until then
+	 *  (issue #592). Patient 6 holds only an aspirin order scheduled for 2099. */
 	@Test
-	public void aProposalOfNoPairBesideAnOrderThatHasNotStartedStillAsksTheModel() throws Exception {
+	public void aProposalOfNoPairBesideAnOrderThatHasNotStartedSaysItIsScheduled() throws Exception {
 		executeDataSet("ScheduledAspirinOrderTestData.xml");
 		Patient six = Context.getPatientService().getPatient(6);
-		assertTheModelAnswersWhatTheCheckRelatedToNothing(six, "Can I give her mebendazole?", shipped());
+		assertTheCheckRelatedNothing(six, "Can I give her mebendazole?", shipped());
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider, shipped()).search(six, "Can I give her mebendazole?");
+		assertEquals(0, provider.calls, "the module answers: " + answer.getAnswer());
+		assertTrue(answer.getAnswer().matches("The interaction check relates Mebendazole to none of this patient's 1 "
+				+ "medication order, scheduled and not yet started\\. \\[\\d+\\]"), answer.getAnswer());
 	}
 
 	/** The same answer however the proposal is worded, since no model words it (issue #592). */

@@ -13702,7 +13702,7 @@ Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aProposalTheDataRela
 `.anAnswerOfNoPairDoesNotDependOnHowTheProposalIsWorded`, `.aQuestionOfNoPairThatProposesNothingStillAsksTheModel`,
 `.aProposalOfNoPairWhoseReferenceRecordIsNotInTheChartStillAsksTheModel`,
 `.aProposalOfNoPairBesideAnOrderTheDataCannotNameStillAsksTheModel`,
-`.aProposalOfNoPairBesideAnOrderThatHasNotStartedStillAsksTheModel`,
+`.aProposalOfNoPairBesideAnOrderThatHasNotStartedStillAsksTheModel` (replaced by Decision 310),
 `.aProposalARowOfHerOwnOrdersNamesStillAsksTheModel`, `.aProposalOfADrugWithNoInteractionRowsStillAsksTheModel`,
 `.aProposalOfNoPairWithTheContraindicationArmsOffStillAsksTheModel`,
 `.aProposalRelatedToHerOrdersOnlyByAPairNoLineCanStateStillAsksTheModel`,
@@ -19208,3 +19208,28 @@ or that the check raised none. Two drugs keep their own decisions' answers. Fail
 about that is neither keeps the model.
 
 Pinned by `SeveralDrugsTogetherTest`.
+
+## Decision 310: A proposal related to none of her orders, one of them scheduled, says that order is scheduled
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It extends
+[Decision 307](#decision-307-a-proposal-related-below-the-floor-to-an-order-not-yet-started-says-that-order-is-scheduled)
+to the no-pair answer.
+
+### Context
+
+Dora DdiScheduled takes nevirapine and has rifampicin scheduled to start later. *"Is colchicine safe for him?"* and *"Can
+I give him lithium?"* went to the model for her, which answered *"The records do not address the safety of Colchicine"*:
+the interaction check had related colchicine to none of her orders, and
+[Decision 143](#decision-143-a-proposal-related-to-none-of-her-orders-is-answered-with-what-the-interaction-check-established)'s
+answer refused because its sentence calls her orders her active medications.
+
+### The decision
+
+Where one of her orders has not started, the no-pair answer counts her medication orders and says which are scheduled:
+*"The interaction check relates Colchicine to none of this patient's 2 medication orders (one of them scheduled and not
+yet started)."* (`DrugReferenceInjector.composeFromNoPair`); where none is scheduled it reads as before.
+
+Pinned by `NoPairBesideAScheduledOrderTest` and
+`LlmInferenceServiceAnswerFromFindingsContextTest.aProposalOfNoPairBesideAnOrderThatHasNotStartedSaysItIsScheduled`, which
+replaces `.aProposalOfNoPairBesideAnOrderThatHasNotStartedStillAsksTheModel`.

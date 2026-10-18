@@ -3669,10 +3669,11 @@ public class DrugReferenceInjector {
 		if (!contraindicationsChecked) {
 			return null;
 		}
-		// Every order counted has started: the sentence calls them her ACTIVE medications, which an order scheduled
-		// for later is not yet — the reason composeFromBelowFloor refuses a line on one (ADR Decision 142).
-		if (DrugSafetyValidator.anyHasNotStarted(context.getActiveDrugOrders())) {
-			return null;
+		// An order scheduled for later is not yet one of her ACTIVE medications: where she has one, the sentence counts her
+		// medication orders and says which are scheduled (ADR Decision 310), as Decision 307's answer does.
+		int scheduled = 0;
+		for (PatientClinicalContext.ActiveDrugOrder order : context.getActiveDrugOrders()) {
+			scheduled += order.hasStarted() ? 0 : 1;
 		}
 		List<RecordMapping> records = proposedDrugsRecords(proposes, questionDrugs, herSubstances, mappings, product != null);
 		if (records == null) {
@@ -3698,7 +3699,11 @@ public class DrugReferenceInjector {
 		// Beside orders the data does not identify, the count is of those it does: the drug was compared against
 		// them and no others, and the closing line names the rest (ADR Decision 161).
 		int n = context.getActiveDrugOrders().size() - unidentified;
-		String medications = n == 1 ? " active medication" : " active medications";
+		String medications = scheduled > 0
+				? (n == 1 ? " medication order" : " medication orders")
+						+ (scheduled == n ? (n == 1 ? ", scheduled and not yet started" : ", all scheduled and not yet started")
+								: " (" + (scheduled == 1 ? "one" : String.valueOf(scheduled)) + " of them scheduled and not yet started)")
+				: n == 1 ? " active medication" : " active medications";
 		return "The interaction check relates " + (product != null ? product : subject.displayLabel())
 				+ (unidentified == 0 ? " to none of this patient's " + n + medications
 						: " to none of the " + n + medications + " the drug data identifies for this patient")

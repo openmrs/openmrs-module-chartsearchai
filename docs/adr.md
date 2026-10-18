@@ -19049,3 +19049,30 @@ the conflict alone. `AllergyQuestionConflictingOrderContextTest.aMedicationQuest
 `.aDrugSafetyReadingKeepsTheFindingAChipWhereTheAnswerNamesHerOrder` reached Decision 124's boundary through the
 interactions screen, which the module now answers; they ask *"Are any of her medications unsafe for her kidneys?"*, a
 drug-safety reading the model still answers, assertions unchanged.
+
+## Decision 304: A combination proposed by one name that raises no finding is answered as a single drug is
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient.
+
+### Context
+
+*"Can I prescribe trimethoprim-sulfamethoxazole for her UTI?"*, asked of every patient on the 3.7.1 standalone, was the
+module's wherever a finding withheld or cautioned it, and the model's everywhere else: *"The records do not address the
+suitability of prescribing Trimethoprim-Sulfamethoxazole"* for patients with no orders, an unrated pair called
+*"one caution"*, and Mary Smith *"No — Trimethoprim interacts with simvastatin"* over a pair the data does not rate. A
+single drug in the same place gets
+[Decision 142](#decision-142-a-proposal-related-to-her-orders-only-below-the-severity-floor-is-answered-with-those-rows)'s,
+[143](#decision-143-a-proposal-related-to-none-of-her-orders-is-answered-with-what-the-interaction-check-established)'s or
+[158](#decision-158-a-proposal-for-a-patient-with-no-active-medication-orders-is-answered-with-what-the-check-had-to-compare)'s answer;
+those refused two substances, and two substances open the question-pair arm, which states no rows below the floor.
+
+### The decision
+
+A combination the question names as ONE product (`DrugReferenceInjector.combinationAskedAbout`,
+[Decision 217](#decision-217-a-proposal-naming-one-combination-product-is-answered-as-the-proposal-it-is)'s reading) is
+answered as one drug by those compositions, named as asked and citing each of its substances' reference records
+(`proposedDrugsRecords`), over what the drug-in-play arm stated of its substances together
+(`productExtent`, from `PairChipExtent.Sink.statedFor`, never published).
+
+Pinned by `CombinationProposalNoFindingTest`.

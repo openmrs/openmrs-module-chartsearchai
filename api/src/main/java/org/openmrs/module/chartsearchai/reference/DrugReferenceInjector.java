@@ -1194,22 +1194,27 @@ public class DrugReferenceInjector {
 						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS)
 				&& context.chartReadForSafety()) {
 			boolean proposes = proposesADrugNotHers(question, questionDrugs, screenedSubstances);
-			moduleAnswer = composeFromBelowFloor(proposes, questionDrugs, screenedSubstances, pairExtent.stated(),
-					mappings, context);
+			// A combination named as one product is answered as one drug, named as asked, over what the drug-in-play arm
+			// stated of each of its substances: two substances open the question-pair arm, which states no rows below the
+			// floor (ADR Decision 304).
+			String product = combinationAskedAbout(question, questionDrugs, context);
+			PairChipExtent extent = product == null ? pairExtent.stated() : productExtent(pairExtent, questionDrugs);
+			moduleAnswer = composeFromBelowFloor(proposes, questionDrugs, screenedSubstances, extent, mappings, context,
+					product);
 			if (moduleAnswer == null) {
 				// A question whether the drug interacts with her medications is answered where the check related it to
 				// none of them: "relates X to none of …" answers it as it answers a proposal (ADR Decision 181). Not
 				// below the floor, whose sentence is about withholding and leaves "does it interact?" unanswered.
 				moduleAnswer = composeFromNoPair(proposes || asksWhetherItInteracts(question, questionDrugs), questionDrugs, screenedSubstances, orderEntries,
-						pairExtent.stated(), mappings, matched, context, reading.states(), unidentified.size());
+						extent, mappings, matched, context, reading.states(), unidentified.size(), product);
 			}
 			if (moduleAnswer == null) {
 				moduleAnswer = composeFromNoActiveOrders(proposes, questionDrugs, mappings, matched, context,
-						reading.states());
+						reading.states(), product);
 			}
 			if (moduleAnswer == null) {
 				moduleAnswer = composeFromNoIdentifiedOrders(proposes, questionDrugs, screenedSubstances, mappings, matched,
-						context, reading.states(), unidentified.size());
+						context, reading.states(), unidentified.size(), product);
 			}
 			// A finding that her own orders share a substance says nothing about the drug proposed, so it does not
 			// stop the answer; it is stated after it (ADR Decision 159).
@@ -3351,17 +3356,27 @@ public class DrugReferenceInjector {
 	private static String composeFromBelowFloor(boolean proposes, List<DrugReference> questionDrugs,
 			Set<Object> herSubstances, PairChipExtent extent, List<RecordMapping> mappings,
 			PatientClinicalContext context) {
+		return composeFromBelowFloor(proposes, questionDrugs, herSubstances, extent, mappings, context, null);
+	}
+
+	/** As above; {@code product}, where not null, is a combination the question names as one product, answered as one
+	 *  drug by that name and citing each of its substances' records (ADR Decision 304). */
+	private static String composeFromBelowFloor(boolean proposes, List<DrugReference> questionDrugs,
+			Set<Object> herSubstances, PairChipExtent extent, List<RecordMapping> mappings,
+			PatientClinicalContext context, String product) {
 		if (extent == null || extent.getBelowFloor() == null || extent.getBelowFloor().isEmpty()) {
 			return null;
 		}
-		RecordMapping record = proposedDrugsRecord(proposes, questionDrugs, herSubstances, mappings);
-		if (record == null) {
+		List<RecordMapping> records = proposedDrugsRecords(proposes, questionDrugs, herSubstances, mappings, product != null);
+		if (records == null) {
 			return null;
 		}
-		Integer reference = Integer.valueOf(record.getIndex());
 		BelowFloorRows rows = BelowFloorRows.of(extent);
 		if (rows == null) {
 			return null;
+		}
+		if (product != null) {
+			rows.drug = product;
 		}
 		// One sentence with a bottom line scoped to the interaction data (ADR Decision 144), the scope it does not
 		// cover on a line of its own. It cites the data and not her orders (ADR Decision 146): the claim is the
@@ -3375,7 +3390,41 @@ public class DrugReferenceInjector {
 				+ (!rows.allUnknown ? "rated " + rows.ratings() + ", below the level this module reports as a finding"
 						: (n == 1 ? "with no severity" : "none with a severity") + (rows.noMechanism ? " or mechanism" : "")
 								+ " on file")
-				+ ". [" + reference + "]\n" + BELOW_FLOOR_SCOPE;
+				+ "." + recordMarkers(records) + "\n" + BELOW_FLOOR_SCOPE;
+	}
+
+	/**
+	 * What the drug-in-play arm stated of a combination product's substances together — its pairs found and reported
+	 * summed, its rows below the floor joined — or {@code null} where it stated nothing of one of them (ADR Decision 304).
+	 * Never published: {@code PairChipExtent.Sink.stated()} is, as before.
+	 */
+	private static PairChipExtent productExtent(PairChipExtent.Sink pairs, List<DrugReference> questionDrugs) {
+		Set<Object> substances = new LinkedHashSet<Object>();
+		for (DrugReference entry : questionDrugs) {
+			substances.add(entry.substanceGroupKey());
+		}
+		int found = 0;
+		int reported = 0;
+		List<PairChipExtent.BelowFloorPair> below = new ArrayList<PairChipExtent.BelowFloorPair>();
+		for (Object substance : substances) {
+			PairChipExtent own = pairs.statedFor(substance);
+			if (own == null || own.getBelowFloor() == null) {
+				return null;
+			}
+			found += own.getFound();
+			reported += own.getReported();
+			below.addAll(own.getBelowFloor());
+		}
+		return PairChipExtent.of(found, reported, below);
+	}
+
+	/** " [a] [b]" — each of {@code records}' numbers, as a line cites them. */
+	private static String recordMarkers(List<RecordMapping> records) {
+		StringBuilder markers = new StringBuilder();
+		for (RecordMapping record : records) {
+			markers.append(" [").append(record.getIndex()).append("]");
+		}
+		return markers.toString();
 	}
 
 	/**
@@ -3557,6 +3606,15 @@ public class DrugReferenceInjector {
 			Set<Object> herSubstances, List<DrugReference> orderEntries, PairChipExtent extent,
 			List<RecordMapping> mappings, Map<DrugReference, SubstanceRendering> matched, PatientClinicalContext context,
 			boolean contraindicationsChecked, int unidentified) {
+		return composeFromNoPair(proposes, questionDrugs, herSubstances, orderEntries, extent, mappings, matched, context,
+				contraindicationsChecked, unidentified, null);
+	}
+
+	/** As above, for a combination the question names as one {@code product} where not null (ADR Decision 304). */
+	private static String composeFromNoPair(boolean proposes, List<DrugReference> questionDrugs,
+			Set<Object> herSubstances, List<DrugReference> orderEntries, PairChipExtent extent,
+			List<RecordMapping> mappings, Map<DrugReference, SubstanceRendering> matched, PatientClinicalContext context,
+			boolean contraindicationsChecked, int unidentified, String product) {
 		if (extent == null || extent.getFound() != 0 || extent.getBelowFloor() == null
 				|| !extent.getBelowFloor().isEmpty() || herSubstances.isEmpty()) {
 			return null;
@@ -3572,10 +3630,11 @@ public class DrugReferenceInjector {
 		if (DrugSafetyValidator.anyHasNotStarted(context.getActiveDrugOrders())) {
 			return null;
 		}
-		RecordMapping record = proposedDrugsRecord(proposes, questionDrugs, herSubstances, mappings);
-		if (record == null) {
+		List<RecordMapping> records = proposedDrugsRecords(proposes, questionDrugs, herSubstances, mappings, product != null);
+		if (records == null) {
 			return null;
 		}
+		RecordMapping record = records.get(0);
 		// The proposed drug carries interaction rows, so the check compared it against something; and no row of her
 		// orders names it, which the arm — reading the proposed drug's rows alone — does not ask (see the javadoc).
 		boolean carriesInteractions = false;
@@ -3585,8 +3644,8 @@ public class DrugReferenceInjector {
 		if (!carriesInteractions || DrugSafetyValidator.anyRuleIdentifiesAny(orderEntries, questionDrugs)) {
 			return null;
 		}
-		DrugReference subject = subjectOfRecord(record, matched, context);
-		if (subject == null) {
+		DrugReference subject = product != null ? null : subjectOfRecord(record, matched, context);
+		if (subject == null && product == null) {
 			return null;
 		}
 		// Her medications are her PRESCRIPTIONS, the list a clinician reads, so a combination prescription is one
@@ -3596,10 +3655,10 @@ public class DrugReferenceInjector {
 		// them and no others, and the closing line names the rest (ADR Decision 161).
 		int n = context.getActiveDrugOrders().size() - unidentified;
 		String medications = n == 1 ? " active medication" : " active medications";
-		return "The interaction check relates " + subject.displayLabel()
+		return "The interaction check relates " + (product != null ? product : subject.displayLabel())
 				+ (unidentified == 0 ? " to none of this patient's " + n + medications
 						: " to none of the " + n + medications + " the drug data identifies for this patient")
-				+ ". [" + record.getIndex() + "]";
+				+ "." + recordMarkers(records);
 	}
 
 	/**
@@ -3634,21 +3693,21 @@ public class DrugReferenceInjector {
 	 */
 	private static String composeFromNoIdentifiedOrders(boolean proposes, List<DrugReference> questionDrugs,
 			Set<Object> herSubstances, List<RecordMapping> mappings, Map<DrugReference, SubstanceRendering> matched,
-			PatientClinicalContext context, boolean contraindicationsChecked, int unidentified) {
+			PatientClinicalContext context, boolean contraindicationsChecked, int unidentified, String product) {
 		if (!contraindicationsChecked || !herSubstances.isEmpty()
 				|| !noneOfHerOrdersIdentified(context, herSubstances.size(), unidentified)) {
 			return null;
 		}
-		RecordMapping record = proposedDrugsRecord(proposes, questionDrugs, herSubstances, mappings);
-		if (record == null) {
+		List<RecordMapping> records = proposedDrugsRecords(proposes, questionDrugs, herSubstances, mappings, product != null);
+		if (records == null) {
 			return null;
 		}
-		DrugReference subject = subjectOfRecord(record, matched, context);
-		if (subject == null) {
+		DrugReference subject = product != null ? null : subjectOfRecord(records.get(0), matched, context);
+		if (subject == null && product == null) {
 			return null;
 		}
-		return noneIdentifiedOpening(context) + "so the interaction check had none to relate " + subject.displayLabel()
-				+ " to. [" + record.getIndex() + "]";
+		return noneIdentifiedOpening(context) + "so the interaction check had none to relate "
+				+ (product != null ? product : subject.displayLabel()) + " to." + recordMarkers(records);
 	}
 
 	/**
@@ -3672,21 +3731,22 @@ public class DrugReferenceInjector {
 	 */
 	private static String composeFromNoActiveOrders(boolean proposes, List<DrugReference> questionDrugs,
 			List<RecordMapping> mappings, Map<DrugReference, SubstanceRendering> matched, PatientClinicalContext context,
-			boolean contraindicationsChecked) {
+			boolean contraindicationsChecked, String product) {
 		if (!contraindicationsChecked || !context.getActiveDrugOrders().isEmpty()
 				|| !context.getActiveDrugNames().isEmpty() || !context.getActiveDrugAtcCodes().isEmpty()) {
 			return null;
 		}
-		RecordMapping record = proposedDrugsRecord(proposes, questionDrugs, Collections.<Object> emptySet(), mappings);
-		if (record == null) {
+		List<RecordMapping> records = proposedDrugsRecords(proposes, questionDrugs, Collections.<Object> emptySet(), mappings,
+				product != null);
+		if (records == null) {
 			return null;
 		}
-		DrugReference subject = subjectOfRecord(record, matched, context);
-		if (subject == null) {
+		DrugReference subject = product != null ? null : subjectOfRecord(records.get(0), matched, context);
+		if (subject == null && product == null) {
 			return null;
 		}
 		return "This patient has no active medication orders, so the interaction check had none to relate "
-				+ subject.displayLabel() + " to. [" + record.getIndex() + "]";
+				+ (product != null ? product : subject.displayLabel()) + " to." + recordMarkers(records);
 	}
 
 	/**
@@ -4031,22 +4091,49 @@ public class DrugReferenceInjector {
 	 */
 	private static RecordMapping proposedDrugsRecord(boolean proposes, List<DrugReference> questionDrugs,
 			Set<Object> herSubstances, List<RecordMapping> mappings) {
+		List<RecordMapping> records = proposedDrugsRecords(proposes, questionDrugs, herSubstances, mappings, false);
+		return records == null ? null : records.get(0);
+	}
+
+	/**
+	 * As {@link #proposedDrugsRecord}, and for a combination the question names as ONE product ({@code oneProduct}, ADR
+	 * Decision 304) each of its substances' records, in the order the question's drugs list them — every one in the
+	 * chart, none of them hers — or {@code null}.
+	 */
+	private static List<RecordMapping> proposedDrugsRecords(boolean proposes, List<DrugReference> questionDrugs,
+			Set<Object> herSubstances, List<RecordMapping> mappings, boolean oneProduct) {
 		Set<Object> asked = new LinkedHashSet<Object>();
 		for (DrugReference entry : questionDrugs) {
 			asked.add(entry.substanceGroupKey());
 		}
-		if (asked.size() != 1 || !Collections.disjoint(asked, herSubstances) || !proposes) {
+		if (asked.isEmpty() || asked.size() != 1 && !oneProduct || !Collections.disjoint(asked, herSubstances) || !proposes) {
 			return null;
 		}
-		List<String> rows = rowIds(questionDrugs);
-		for (RecordMapping mapping : mappings) {
-			if (ChartSearchAiConstants.RESOURCE_TYPE_DRUG_REFERENCE.equals(mapping.getResourceType())
-					&& rows.contains(mapping.getResourceUuid())) {
-				return mapping;
+		List<RecordMapping> records = new ArrayList<RecordMapping>();
+		for (Object substance : asked) {
+			List<DrugReference> ofIt = new ArrayList<DrugReference>();
+			for (DrugReference entry : questionDrugs) {
+				if (entry.substanceGroupKey().equals(substance)) {
+					ofIt.add(entry);
+				}
 			}
+			RecordMapping found = null;
+			List<String> rows = rowIds(ofIt);
+			for (RecordMapping mapping : mappings) {
+				if (ChartSearchAiConstants.RESOURCE_TYPE_DRUG_REFERENCE.equals(mapping.getResourceType())
+						&& rows.contains(mapping.getResourceUuid())) {
+					found = mapping;
+					break;
+				}
+			}
+			if (found == null) {
+				return null;
+			}
+			records.add(found);
 		}
-		return null;
+		return records;
 	}
+
 
 	/**
 	 * Whether this injection's findings answer the question, so that no model need restate them —

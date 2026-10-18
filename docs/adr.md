@@ -19180,3 +19180,31 @@ on), opening *"None of this patient's active orders is named "klarizom"."* A gro
 orders carries, are as before.
 
 Pinned by `UnrecognisedNameNamedAsHersTest`.
+
+## Decision 309: Three or more drugs asked about together are answered, each she does not take as its proposal
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient.
+
+### Context
+
+*"Can I give her fluconazole with her nevirapine and lopinavir?"* names three drugs. Every composed answer to drugs asked
+about together takes two
+([Decisions 196](#decision-196-two-drugs-asked-about-together-one-of-them-hers-are-answered-for-the-other-and-her-drugs-other-findings-are-drawn-apart),
+[222](#decision-222-two-drugs-proposed-together-neither-hers-are-each-answered-as-their-own-proposal),
+[263](#decision-263-one-drug-asked-about-beside-several-of-hers-is-answered-for-it-saying-which-are-hers)'s of one beside several of
+hers), so for every patient not on both nevirapine and lopinavir the model answered: *"No — Lopinavir should not be
+given with Nevirapine"*, never speaking of fluconazole nor saying she takes neither.
+
+### The decision
+
+Three or more drugs asked about together — whether to give them together, whether they interact — are answered by the
+module (`DrugReferenceInjector.composeSeveralDrugsTogether`): which she takes and which she does not; under
+*"Between them:"* each interaction relating drugs the question names; then *"For X:"*, for each she does not take, the
+answer its proposal alone gets from its own findings — her own orders' findings against it included — its "No", its
+cautions, what the check found where they make no verdict
+([Decision 305](#decision-305-two-drugs-proposed-together-state-what-the-check-found-about-one-whose-findings-make-no-verdict)),
+or that the check raised none. Two drugs keep their own decisions' answers. Fail-closed: a finding about a drug asked
+about that is neither keeps the model.
+
+Pinned by `SeveralDrugsTogetherTest`.

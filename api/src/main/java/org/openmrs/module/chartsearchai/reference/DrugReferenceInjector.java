@@ -1231,6 +1231,18 @@ public class DrugReferenceInjector {
 					orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers,
 					pairExtent, mappings, matched, context, reading.states(), unidentified.size());
 		}
+		// Three or more drugs asked about together, hers or not: which she takes, what relates them, and each she does not take
+		// answered as its proposal (ADR Decision 309).
+		if (moduleAnswer == null && context != null
+				&& ChartSearchAiUtils.getBooleanGlobalProperty(
+						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
+						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS)
+				&& context.chartReadForSafety()) {
+			moduleAnswer = composeSeveralDrugsTogether(question, questionDrugs, screenedSubstances, findings, findingNumbers,
+					orderRecordNumbers,
+					orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers,
+					pairExtent.stated(), context);
+		}
 		// A drug proposed beside one of hers that the data relates to her orders only without a rating, or to none: her drug is
 		// named, then the answer its proposal alone gets, over the drug-in-play arm's own statement of it (ADR Decision 306).
 		if (moduleAnswer == null && context != null
@@ -6260,6 +6272,143 @@ public class DrugReferenceInjector {
 		lines.add(BELOW_FLOOR_SCOPE);
 		return withHerOwnOrdersSharingASubstance(String.join("\n", lines), sharing, sharingNumbers, orderRecordNumbers,
 			herOrderRecords);
+	}
+
+	/**
+	 * The module's answer to THREE or more drugs asked about together — whether to give them together, whether they
+	 * interact — any of them hers or not, or {@code null} where the model answers (ADR Decision 309): which she takes and which
+	 * she does not; under "Between them:" each finding relating two of the drugs asked about; then, for each she does not take,
+	 * the answer its proposal alone gets from its own findings — its "No" or its cautions, what the check found where they
+	 * make no verdict (Decision 305), or that the check raised none; then the scope. Two drugs are Decisions 196, 222 and 263's.
+	 * Fail-closed: a finding about a drug asked about that is neither of those is left to the model.
+	 */
+	private static String composeSeveralDrugsTogether(String question, List<DrugReference> questionDrugs,
+			Set<Object> herSubstances, List<SafetyWarning> findings, List<Integer> numbers,
+			Map<String, Integer> orderRecordNumbers, Map<String, Integer> herOrderRecords, PairChipExtent pairs,
+			PatientClinicalContext context) {
+		if (questionDrugs.isEmpty()) {
+			return null;
+		}
+		List<AskedDrug> asked = askedDrugs(question, questionDrugs, context, true);
+		List<String> words = wordsBesideItsNames(question, questionDrugs);
+		if (asked.size() < 3 || !QueryScopeRouter.asksWhetherToGiveDrugsTogether(words)
+				&& !QueryScopeRouter.asksWhetherTwoDrugsInteract(words)) {
+			return null;
+		}
+		List<AskedDrug> hers = new ArrayList<AskedDrug>();
+		List<AskedDrug> others = new ArrayList<AskedDrug>();
+		for (AskedDrug drug : asked) {
+			(drug.isHers(herSubstances) ? hers : others).add(drug);
+		}
+		if (others.isEmpty()) {
+			return null;
+		}
+		List<String> pairLines = new ArrayList<String>();
+		Map<AskedDrug, List<Integer>> ofEach = new LinkedHashMap<AskedDrug, List<Integer>>();
+		for (AskedDrug drug : others) {
+			ofEach.put(drug, new ArrayList<Integer>());
+		}
+		for (int i = 0; i < findings.size(); i++) {
+			SafetyWarning finding = findings.get(i);
+			if (finding.statesOrdersSharingASubstance() || finding.isAboutAnotherOfHerMedications()) {
+				continue;
+			}
+			Set<Object> about = subjectSubstances(finding);
+			Set<Object> touched = new HashSet<Object>(about);
+			touched.addAll(partnerSubstances(finding));
+			List<AskedDrug> touches = new ArrayList<AskedDrug>();
+			for (AskedDrug drug : asked) {
+				if (!Collections.disjoint(drug.substances, touched)) {
+					touches.add(drug);
+				}
+			}
+			AskedDrug subject = null;
+			for (AskedDrug drug : others) {
+				if (drug.substances.containsAll(about)) {
+					subject = drug;
+				}
+			}
+			// A drug she does not take against one of her own orders is that drug's own finding, stated under it; "Between
+			// them" is what relates drugs the question names that she does not both take.
+			boolean againstHerOwn = subject != null && !hers.isEmpty();
+			for (AskedDrug drug : touches) {
+				againstHerOwn &= drug == subject || hers.contains(drug);
+			}
+			if (touches.size() >= 2 && SafetyWarning.TYPE_INTERACTION.equals(finding.getType()) && !againstHerOwn) {
+				pairLines.add(findingLine(finding, numbers.get(i), orderRecordNumbers, herOrderRecords, true));
+				continue;
+			}
+			if (subject != null) {
+				ofEach.get(subject).add(i);
+			} else if (!Collections.disjoint(touched, unionOf(asked))) {
+				// About a drug asked about, in no way this answer knows how to state.
+				return null;
+			}
+		}
+		List<String> lines = new ArrayList<String>();
+		if (hers.isEmpty()) {
+			lines.add(joinedAsAList(labelsOf(others)) + ", asked about together; none is one of this patient's active "
+					+ "medications.");
+		} else {
+			lines.add(joinedAsAList(labelsOf(hers)) + (hers.size() == 1 ? " is one of this patient's active medications; "
+					: " are among this patient's active medications; ") + joinedAsAList(labelsOf(others))
+					+ (others.size() == 1 ? " is not." : " are not."));
+		}
+		if (!pairLines.isEmpty()) {
+			lines.add("Between them:");
+			lines.addAll(pairLines);
+		}
+		for (AskedDrug drug : others) {
+			List<SafetyWarning> its = new ArrayList<SafetyWarning>();
+			List<Integer> itsNumbers = new ArrayList<Integer>();
+			for (Integer i : ofEach.get(drug)) {
+				its.add(findings.get(i));
+				itsNumbers.add(numbers.get(i));
+			}
+			lines.add("For " + drug.label + ":");
+			if (its.isEmpty()) {
+				lines.add("The interaction check raised no finding about " + drug.label
+						+ " against this patient's active medications.");
+				continue;
+			}
+			boolean withholds = false;
+			for (SafetyWarning finding : its) {
+				withholds |= licensesTheModulesNo(finding);
+			}
+			if (!withholds && !cautionsOnlyAbout(drug.substances, its)) {
+				lines.add(FOUND_LEAD_OPENING + drug.label + ":");
+				for (int f = 0; f < its.size(); f++) {
+					lines.add(findingLine(its.get(f), itsNumbers.get(f), orderRecordNumbers, herOrderRecords, true));
+				}
+				continue;
+			}
+			String composed = composeFromFindings(its, itsNumbers, orderRecordNumbers, herOrderRecords, true, pairs, Lead.GIVE,
+					SCREEN_SCOPE, drug.substances.size() > 1 ? drug.label : null);
+			if (composed == null) {
+				return null;
+			}
+			lines.add(composed);
+		}
+		lines.add(BELOW_FLOOR_SCOPE);
+		return String.join("\n", lines);
+	}
+
+	/** Each of {@code drugs}' labels, in order. */
+	private static List<String> labelsOf(List<AskedDrug> drugs) {
+		List<String> labels = new ArrayList<String>();
+		for (AskedDrug drug : drugs) {
+			labels.add(drug.label);
+		}
+		return labels;
+	}
+
+	/** Every substance of {@code drugs}. */
+	private static Set<Object> unionOf(List<AskedDrug> drugs) {
+		Set<Object> all = new HashSet<Object>();
+		for (AskedDrug drug : drugs) {
+			all.addAll(drug.substances);
+		}
+		return all;
 	}
 
 	/** Whether every partner {@code finding} names resolved to {@code substances} alone, by the rows its chip site took. */

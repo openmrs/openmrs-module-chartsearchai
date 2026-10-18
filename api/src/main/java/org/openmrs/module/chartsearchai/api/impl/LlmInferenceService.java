@@ -139,16 +139,16 @@ public class LlmInferenceService implements ChartSearchService {
 		long cachedTokens = 0;
 		String outcome = "error";
 		try {
-			PatientChart chart = chartBuildingStrategy.buildChart(patient, question);
-			// Whether this layer's two stamped chart reads happened (issue #247). Declared here
-			// because the injector's pass is what states it; ChartAnswer.getChartReadForSafety() is
-			// canonical for the three answers and for why that pass rather than validate's.
-			ChartReadStatus chartRead = new ChartReadStatus();
+			AssembledChart assembled = assembleChart(patient, question, CancellationSignal.NONE);
+			// Whether this layer's two stamped chart reads happened (issue #247). The injector's pass
+			// is what states it; ChartAnswer.getChartReadForSafety() is canonical for the three answers
+			// and for why that pass rather than validate's.
+			ChartReadStatus chartRead = assembled.chartRead;
 			// The KV seed and scope, as searchStreaming takes them (ADR Decision 164): the chart before injection,
 			// and no scope for a query-scoped slice.
-			String uninjectedRecords = chartTextOrPlaceholder(chart);
-			String kvCacheScope = chart.isQueryScoped() ? null : kvCacheScopeFor(patient);
-			chart = drugReferenceInjector.inject(chart, patient, question, chartRead);
+			String uninjectedRecords = chartTextOrPlaceholder(assembled.uninjected);
+			String kvCacheScope = assembled.uninjected.isQueryScoped() ? null : kvCacheScopeFor(patient);
+			PatientChart chart = assembled.injected;
 			// Resolved once, off the chart that was actually assembled, and carried on the answer —
 			// so the audit row the REST layer writes states the mode instead of re-deriving it
 			// (issue #178). After inject() deliberately: that is the chart the LLM sees.
@@ -199,9 +199,6 @@ public class LlmInferenceService implements ChartSearchService {
 				outcome = "ok";
 				return answer;
 			}
-
-			// Deterministic answers need no model prompt; check before any model pass.
-			ensurePromptFits(chart, question, enumerateFindings);
 
 			long llmStart = System.currentTimeMillis();
 			// The drugs the question proposes that her orders already carry (issue #548), off the
@@ -700,20 +697,18 @@ public class LlmInferenceService implements ChartSearchService {
 		String outcome = "error";
 		try {
 			requireActiveTurn(cancellation);
-			PatientChart chart = chartBuildingStrategy.buildChart(patient, question);
-			requireActiveTurn(cancellation);
-			// Whether this layer's two stamped chart reads happened (issue #247). Declared here
-			// because the injector's pass is what states it; ChartAnswer.getChartReadForSafety() is
-			// canonical for the three answers and for why that pass rather than validate's.
-			ChartReadStatus chartRead = new ChartReadStatus();
+			AssembledChart assembled = assembleChart(patient, question, cancellation);
+			// Whether this layer's two stamped chart reads happened (issue #247). The injector's pass
+			// is what states it; ChartAnswer.getChartReadForSafety() is canonical for the three answers
+			// and for why that pass rather than validate's.
+			ChartReadStatus chartRead = assembled.chartRead;
 			// The chart as warmup builds it, before the question's reference records are appended:
 			// the KV seed, so this query restores the same saved entry a chart-open warmup made and
 			// computes everything the question added on top of it (ADR Decision 157). Seeded off the
 			// injected chart instead, a drug question keys an entry of its own, made from whatever the
 			// slot last held — and the answer depends on that history again.
-			String uninjectedRecords = chartTextOrPlaceholder(chart);
-			chart = drugReferenceInjector.inject(chart, patient, question, chartRead);
-			requireActiveTurn(cancellation);
+			String uninjectedRecords = chartTextOrPlaceholder(assembled.uninjected);
+			PatientChart chart = assembled.injected;
 			// One resolution for BOTH answers this method produces (issue #178). The early-done path
 			// audits the ungrounded answer and the classic path audits the returned one, so a mode
 			// each of them derived separately is two audit-write sites that can disagree — which is
@@ -760,9 +755,6 @@ public class LlmInferenceService implements ChartSearchService {
 				outcome = "ok";
 				return answer;
 			}
-
-			// Deterministic answers need no model prompt; check before any model pass.
-			ensurePromptFits(chart, question, enumerateFindings);
 
 			// Progressive reasoning: stream a fast preview reasoning from the focused top-K chart to
 			// the preliminary channel before the full-chart answer prefills. No-op (returns 0) when the
@@ -1145,20 +1137,68 @@ public class LlmInferenceService implements ChartSearchService {
 		}
 	}
 
-	/**
-	 * Final exact preflight after all deterministic chart and knowledge-reference injection. The
-	 * selector budgets its chart view earlier, but only this layer can measure the complete prompt
-	 * that will reach the model.
-	 */
-	private void ensurePromptFits(PatientChart chart, String question, boolean enumerateFindings) {
-		if (tokenCounter == null || !tokenCounter.isAvailable()) {
-			return;
+	/** How many times {@link #assembleChart} builds a query-scoped slice before it refuses one that
+	 *  still does not fit. Each rebuild reads QueryStore again, so the bound is small. */
+	private static final int MAX_SLICE_ASSEMBLIES = 3;
+
+	/** The chart before and after the injector appended this module's reference records, and the
+	 *  read status that injection pass stated. */
+	private static final class AssembledChart {
+
+		private final PatientChart uninjected;
+
+		private final PatientChart injected;
+
+		private final ChartReadStatus chartRead;
+
+		private AssembledChart(PatientChart uninjected, PatientChart injected, ChartReadStatus chartRead) {
+			this.uninjected = uninjected;
+			this.injected = injected;
+			this.chartRead = chartRead;
 		}
-		int inputTokens = tokenCounter.countPrompt(chartTextOrPlaceholder(chart),
-				chart.getFocusIndices(), question, enumerateFindings, chart.getDrugsAlreadyOrdered());
-		if (inputTokens > tokenCounter.inputBudget()) {
-			throw new ChartTooLargeException("The complete chart, reference material, and question "
-					+ "exceed the configured model input budget.");
+	}
+
+	/**
+	 * Builds the chart, appends this module's reference records, and checks the exact prompt the model
+	 * will read against the input budget. A question the module answers from its own findings needs
+	 * no model prompt and is not counted.
+	 *
+	 * <p>A query-scoped slice is budgeted by the builder BEFORE the injector appends active orders,
+	 * drug references and safety findings, which ADR Decision 57 leaves uncapped. Where they push the
+	 * composed prompt over the budget, the slice is rebuilt with their size reserved, so only its
+	 * optional recency and similarity records give way and every protected and injected record stays.
+	 * The protected tiers and the reservation together exceeding the budget is the builder's
+	 * {@code InsufficientContextException}. A full chart has no optional records, so one that does not
+	 * fit is refused at once.
+	 *
+	 * @throws ChartTooLargeException where the composed prompt still exceeds the input budget
+	 */
+	private AssembledChart assembleChart(Patient patient, String question, CancellationSignal cancellation) {
+		int reservedTokens = 0;
+		for (int assembly = 1;; assembly++) {
+			PatientChart built = chartBuildingStrategy.buildChart(patient, question, reservedTokens);
+			requireActiveTurn(cancellation);
+			ChartReadStatus chartRead = new ChartReadStatus();
+			PatientChart injected = drugReferenceInjector.inject(built, patient, question, chartRead);
+			requireActiveTurn(cancellation);
+			AssembledChart assembled = new AssembledChart(built, injected, chartRead);
+			if (tokenCounter == null || !tokenCounter.isAvailable() || answersFromTheModule(injected)) {
+				return assembled;
+			}
+			int budget = tokenCounter.inputBudget();
+			int composed = tokenCounter.countPrompt(chartTextOrPlaceholder(injected), injected.getFocusIndices(),
+					question, severalFindingsAboutOneDrug(injected), injected.getDrugsAlreadyOrdered());
+			if (composed <= budget) {
+				return assembled;
+			}
+			if (!built.isQueryScoped() || assembly == MAX_SLICE_ASSEMBLIES) {
+				throw new ChartTooLargeException("The complete chart, reference material, and question "
+						+ "exceed the configured model input budget.");
+			}
+			// The slice exactly as the builder counted it, so the difference is what injection added.
+			int slice = tokenCounter.countPrompt(chartTextOrPlaceholder(built), Collections.<Integer>emptyList(),
+					question, false, Collections.<PatientChartSerializer.AlreadyOrderedDrug>emptyList());
+			reservedTokens = Math.max(reservedTokens + composed - budget, composed - slice);
 		}
 	}
 

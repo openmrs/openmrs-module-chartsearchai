@@ -119,7 +119,7 @@
 	<globalProperty>
 		<property>chartsearchai.llm.contextSize</property>
 		<defaultValue>32768</defaultValue>
-		<description>Context window size in tokens for the embedded llama-server (local engine only). The full system prompt + serialized chart + question must fit within this. Larger values let bigger charts pass through full-chart mode but increase the KV cache memory footprint roughly linearly. Default 32768. Increase if you see "Patient chart exceeds the LLM context window" errors and have headroom for a larger KV cache; reduce on memory-constrained hardware. Only applies when chartsearchai.llm.engine is "local".</description>
+		<description>Context window size in tokens for the embedded llama-server (local engine only). The system prompt, serialized chart, this module's reference records and the question must fit within this minus the 4096 tokens reserved for the answer, in either chart mode, or the question is refused before the model is called. The module's own instructions take about 2,200 tokens, so at 8192 a full chart has roughly 1,900 tokens and at 4096 every question the model must answer is refused. Larger values let bigger charts pass through full-chart mode but increase the KV cache memory footprint roughly linearly. Default 32768. Increase if you see "Patient chart exceeds the LLM context window" errors and have headroom for a larger KV cache; reduce on memory-constrained hardware, keeping the reservation above in mind. Only applies when chartsearchai.llm.engine is "local".</description>
 	</globalProperty>
 
 	<globalProperty>

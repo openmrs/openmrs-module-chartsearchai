@@ -16,6 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.nio.file.Path;
 import java.util.Collections;
+import java.util.function.Consumer;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -24,6 +25,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.chartsearchai.api.InsufficientContextException;
+import org.openmrs.module.chartsearchai.api.provider.CancellationSignal;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.AlreadyOrderedDrug;
 import org.openmrs.module.chartsearchai.api.provider.BundledClinicalAnswerProvider;
 import org.openmrs.module.chartsearchai.api.provider.TurnCancellation;
@@ -62,6 +65,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 public class LlmInferenceServiceModuleBudgetContextTest extends BaseModuleContextSensitiveTest {
 
 	@Autowired private ChartBuildingStrategy strategy;
+	@Autowired @Qualifier("chartSearchAi.queryStoreChartBuilder") private QueryStoreChartBuilder chartBuilder;
 	@Autowired @Qualifier("queryStoreService") private QueryStoreServiceImpl queryStore;
 	@Autowired @Qualifier("bootstrapService") private BootstrapServiceImpl bootstrap;
 	@Autowired private DbSessionFactory dbSessionFactory;
@@ -304,6 +308,128 @@ public class LlmInferenceServiceModuleBudgetContextTest extends BaseModuleContex
 		} finally {
 			release.countDown();
 			server.stop(0);
+		}
+	}
+
+	@Test
+	public void blockingScopedSliceGivesUpOptionalRecordsSoTheInjectedReferenceFits() {
+		assertOptionalRecordsGiveWayToInjectedReferences(false);
+	}
+
+	@Test
+	public void streamingScopedSliceGivesUpOptionalRecordsSoTheInjectedReferenceFits() {
+		assertOptionalRecordsGiveWayToInjectedReferences(true);
+	}
+
+	/**
+	 * The scoped builder budgets the slice before the injector appends this module's reference
+	 * records, which ADR Decision 57 leaves uncapped. Here the slice alone fits and the composed
+	 * prompt is one token over: the answer must still go to the model, with optional slice records
+	 * given up and the injected drug reference kept, rather than being refused.
+	 */
+	private void assertOptionalRecordsGiveWayToInjectedReferences(boolean streaming) {
+		Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS, "false");
+		Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_CHART_MODE,
+				ChartSearchAiConstants.CHART_MODE_QUERY_SCOPED);
+		// "now" is a temporal cue, so QueryStore adds her newest records as the optional recency anchor.
+		String question = "Can I give her clarithromycin now?";
+
+		List<Integer> unbounded = new ArrayList<>();
+		List<String> unboundedPrompts = new ArrayList<>();
+		ask(lengthCounted(Integer.MAX_VALUE, unbounded), unboundedPrompts, question, streaming);
+		assertEquals(2, unbounded.size(), "precondition: the slice is counted once, then the composed prompt");
+		int sliceAlone = unbounded.get(0);
+		int composed = unbounded.get(1);
+		assertTrue(unboundedPrompts.get(0).contains("Drug reference — Clarithromycin (ATC J01FA09)"),
+				"precondition: the injector appended the drug reference\n" + unboundedPrompts.get(0));
+		assertTrue(sliceAlone < composed - 1, "precondition: the slice alone fits a budget the composed prompt exceeds");
+
+		int budget = composed - 1;
+		List<Integer> bounded = new ArrayList<>();
+		List<String> prompts = new ArrayList<>();
+		ask(lengthCounted(budget, bounded), prompts, question, streaming);
+
+		assertEquals(1, prompts.size(), "the answer goes to the model instead of being refused");
+		assertTrue(bounded.get(bounded.size() - 1) <= budget, "the prompt the model reads fits: " + bounded);
+		assertTrue(prompts.get(0).contains("Drug reference — Clarithromycin (ATC J01FA09)"),
+				"the injected reference is kept\n" + prompts.get(0));
+		assertTrue(prompts.get(0).length() < unboundedPrompts.get(0).length(),
+				"optional slice records gave way to the reference");
+	}
+
+	/**
+	 * Without a temporal cue this slice carries only protected records, so nothing can give way:
+	 * references that do not fit beside them are the explicit context limit, and no injected record is
+	 * dropped to make room.
+	 */
+	@Test
+	public void aScopedSliceWithNothingOptionalRefusesInjectedReferencesThatDoNotFit() {
+		Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS, "false");
+		Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_CHART_MODE,
+				ChartSearchAiConstants.CHART_MODE_QUERY_SCOPED);
+		String question = "Can I give her clarithromycin?";
+		List<Integer> unbounded = new ArrayList<>();
+		ask(lengthCounted(Integer.MAX_VALUE, unbounded), new ArrayList<>(), question, false);
+		int composed = unbounded.get(unbounded.size() - 1);
+
+		List<String> prompts = new ArrayList<>();
+		assertThrows(InsufficientContextException.class,
+				() -> ask(lengthCounted(composed - 1, new ArrayList<>()), prompts, question, false));
+		assertTrue(prompts.isEmpty(), "no prompt reaches the model");
+	}
+
+	/** Counts a prompt as its characters, plus fixed costs for the two clauses production adds, and
+	 *  records every count in call order. */
+	private static TokenCounter lengthCounted(int budget, List<Integer> counts) {
+		return new TokenCounter() {
+			@Override public boolean isAvailable() { return true; }
+			@Override public int countPrompt(String records, List<Integer> focus, String question,
+					boolean enumerateFindings, List<AlreadyOrderedDrug> drugsAlreadyOrdered) {
+				int count = records.length() + question.length() + (enumerateFindings ? 50 : 0)
+						+ 20 * drugsAlreadyOrdered.size();
+				counts.add(count);
+				return count;
+			}
+			@Override public int inputBudget() { return budget; }
+		};
+	}
+
+	private void ask(TokenCounter counter, List<String> prompts, String question, boolean streaming) {
+		// The builder and the service share one counter in production; the builder is a singleton,
+		// so the one it held is put back.
+		TokenCounter previous = (TokenCounter) ReflectionTestUtils.getField(chartBuilder, "tokenCounter");
+		chartBuilder.setTokenCounter(counter);
+		try {
+			askWith(counter, prompts, question, streaming);
+		} finally {
+			chartBuilder.setTokenCounter(previous);
+		}
+	}
+
+	private void askWith(TokenCounter counter, List<String> prompts, String question, boolean streaming) {
+		LlmInferenceService service = service(counter);
+		service.setLlmProvider(new LlmProvider() {
+			@Override
+			public LlmResponse search(String numberedRecords, List<Integer> focusIndices, String asked,
+					String cacheScope, String cacheSeedRecords, boolean enumerateFindings,
+					LlmEngine.ReferenceRecords referenceRecords, List<AlreadyOrderedDrug> drugsAlreadyOrdered) {
+				prompts.add(numberedRecords);
+				return new LlmResponse("Clarithromycin interacts with her warfarin.", Collections.<Integer>emptyList());
+			}
+
+			@Override
+			public LlmResponse searchStreaming(String numberedRecords, List<Integer> focusIndices, String asked,
+					Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer, String cacheScope,
+					String cacheSeedRecords, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords,
+					List<AlreadyOrderedDrug> drugsAlreadyOrdered, CancellationSignal cancellation) {
+				prompts.add(numberedRecords);
+				return new LlmResponse("Clarithromycin interacts with her warfarin.", Collections.<Integer>emptyList());
+			}
+		});
+		if (streaming) {
+			service.searchStreaming(Context.getPatientService().getPatient(7), question, token -> { });
+		} else {
+			service.search(Context.getPatientService().getPatient(7), question);
 		}
 	}
 

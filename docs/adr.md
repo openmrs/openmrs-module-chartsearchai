@@ -19713,3 +19713,31 @@ does not take, which [Decision 323](#decision-323-a-drug-asked-about-in-place-of
 reason to withhold no rating makes, which this decision answers too. They are now
 `.aSwitchToADrugSheAlreadyTakesIsLeftToTheModelAndOneFromADrugSheDoesNotSaysSo` and `.aDrugGivenInsteadOfOneHeDoesNotTakeSaysSo`;
 a switch to a drug he already takes, from one he takes, stays the model's.
+
+## Decision 329: Two drugs the data lists against each other only below the severity floor are answered with that listing
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It extends [Decision 302](#decision-302-two-drugs-the-interaction-data-relates-in-no-way-are-said-to-be-so-with-which-of-them-she-takes) from two drugs the
+data relates in no way to two it relates only below the floor.
+
+### Context
+
+*"Do her nevirapine and stavudine interact?"* — a pair the data lists rated Unknown, below the floor, so no finding relates
+them — went to the model for every patient on the 3.7.1 standalone: most were told *"The records do not address the
+interaction"*, Amina Wekesa *"Nevirapine and Stavudine do not interact"*, and Richard Brown each drug's partners from the
+reference records.
+
+### The decision
+
+`composeTwoDrugsTheDataDoesNotRelate` reads the rows the data lists between the two in either direction
+(`DrugSafetyValidator.rulesBetween`). With none, it answers as Decision 302 does. With some, and no finding raised from
+them, it states them in place of Decision 302's sentence — *"The interaction data lists Nevirapine against Stavudine, with
+no severity or mechanism on file."*, or *"rated Minor, below the level this module reports as a finding"* — after saying
+which of the two she takes, and closes with `BELOW_FLOOR_SCOPE`: neither "Yes" nor "No". Where a finding relates them the
+answer is another composer's, as before.
+
+Pinned by `TwoDrugsListedBelowTheFloorTest`. `TogetherWithHerOwnMedicationContextTest.aQuestionWhetherHerDrugAndAnotherInteractIsLeftToTheModelWhereNoFindingRelatesThem`
+and `.aQuestionWhetherTwoDrugsNeitherOfThemHersInteractIsLeftToTheModelWhereTheDataDoesNotRelateThem` pinned the model call
+over pairs the data lists only below the floor; they are now `.aQuestionWhetherHerDrugAndAnotherInteractStatesTheListingWhereNoFindingRelatesThem`
+and `.aQuestionWhetherTwoDrugsNeitherOfThemHersInteractStatesTheListingWhereNoFindingRelatesThem`, asserting the listing and
+neither "Yes" nor "No".

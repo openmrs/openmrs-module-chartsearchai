@@ -8286,6 +8286,28 @@ public class DrugSafetyValidator {
 	 *         of her orders' entries is the case this answers for {@code DrugReferenceInjector.composeFromNoPair}
 	 *         (issue #592). At any rating: the question is whether the data relates the two at all.
 	 */
+	/** The rules of {@code rows} that identify one of {@code others}, and of {@code others} that identify one of
+	 *  {@code rows} — every row the data lists between the two, either direction (ADR Decision 329). */
+	static List<DrugReference.Interaction> rulesBetween(List<DrugReference> rows, List<DrugReference> others) {
+		List<DrugReference.Interaction> between = new ArrayList<DrugReference.Interaction>();
+		addRulesIdentifying(rows, others, between);
+		addRulesIdentifying(others, rows, between);
+		return between;
+	}
+
+	private static void addRulesIdentifying(List<DrugReference> rows, List<DrugReference> others,
+			List<DrugReference.Interaction> into) {
+		for (DrugReference row : rows) {
+			for (DrugReference.Interaction rule : row.getInteractions()) {
+				for (DrugReference other : others) {
+					if (identifies(rule, other) && !into.contains(rule)) {
+						into.add(rule);
+					}
+				}
+			}
+		}
+	}
+
 	static boolean anyRuleIdentifiesAny(List<DrugReference> rows, List<DrugReference> others) {
 		for (DrugReference row : rows) {
 			for (DrugReference.Interaction rule : row.getInteractions()) {

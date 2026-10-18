@@ -6174,7 +6174,9 @@ public class DrugReferenceInjector {
 	 * any rating."</em> citing both reference records; then each one not hers against her medications, as Decision 220
 	 * states it; then what the check does not compare. Fail-closed: two drugs exactly, both carrying interaction rows (a row
 	 * listing none says nothing of a pair), each with its reference record in the chart, and no finding relating the two
-	 * nor any contraindication about either; every order of hers identified.
+	 * nor any contraindication about either; every order of hers identified. Where the data does list the two against each
+	 * other and no finding was raised from it — the rows rated below the severity floor — the answer states that listing
+	 * and how it is rated instead, and closes with {@link #BELOW_FLOOR_SCOPE} (ADR Decision 329).
 	 */
 	private String composeTwoDrugsTheDataDoesNotRelate(String question, List<DrugReference> questionDrugs,
 			Set<Object> herSubstances, List<SafetyWarning> findings, List<Integer> numbers,
@@ -6214,9 +6216,14 @@ public class DrugReferenceInjector {
 			}
 			cited.add(record);
 		}
-		if (DrugSafetyValidator.anyRuleIdentifiesAny(asked.get(0).rows, asked.get(1).rows)
-				|| DrugSafetyValidator.anyRuleIdentifiesAny(asked.get(1).rows, asked.get(0).rows)) {
-			return null;
+		// The rows the data lists between them: where there are some, it is the listing that is stated, and only where no
+		// finding was raised from it — rated below the severity floor (ADR Decision 329).
+		List<DrugReference.Interaction> listed = DrugSafetyValidator.rulesBetween(asked.get(0).rows, asked.get(1).rows);
+		for (SafetyWarning finding : findings) {
+			if (!listed.isEmpty() && (isAbout(finding, asked.get(0).substances) && namesAPartnerOf(finding, asked.get(1).substances)
+					|| isAbout(finding, asked.get(1).substances) && namesAPartnerOf(finding, asked.get(0).substances))) {
+				return null;
+			}
 		}
 		Set<Object> both = new HashSet<Object>(asked.get(0).substances);
 		both.addAll(asked.get(1).substances);
@@ -6263,13 +6270,30 @@ public class DrugReferenceInjector {
 			}
 			lines.add(hers.label + OWN_MEDICATION_LEAD + orders + "; " + other.label + " is not.");
 		}
-		lines.add("The interaction data lists no interaction between " + asked.get(0).label + " and " + asked.get(1).label
-				+ " at any rating. [" + cited.get(0) + "] [" + cited.get(1) + "]");
+		if (listed.isEmpty()) {
+			lines.add("The interaction data lists no interaction between " + asked.get(0).label + " and " + asked.get(1).label
+					+ " at any rating. [" + cited.get(0) + "] [" + cited.get(1) + "]");
+		} else {
+			Set<String> ratings = new LinkedHashSet<String>();
+			boolean allUnknown = true;
+			boolean noMechanism = true;
+			for (DrugReference.Interaction rule : listed) {
+				String severity = ChartSearchAiUtils.isBlank(rule.getSeverity()) ? "Unknown" : rule.getSeverity().trim();
+				ratings.add(severity);
+				allUnknown &= "unknown".equalsIgnoreCase(severity);
+				noMechanism &= Boolean.FALSE.equals(rule.mechanismOnFile());
+			}
+			lines.add("The interaction data lists " + asked.get(0).label + " against " + asked.get(1).label + ", "
+					+ (allUnknown ? "with no severity" + (noMechanism ? " or mechanism" : "") + " on file"
+							: "rated " + joinedAsAList(new ArrayList<String>(ratings))
+									+ ", below the level this module reports as a finding")
+					+ ". [" + cited.get(0) + "] [" + cited.get(1) + "]");
+		}
 		if (!notHersLines.isEmpty()) {
 			lines.add("Against this patient's active medications:");
 			lines.addAll(findingLines(findings, numbers, notHersLines, orderRecordNumbers, herOrderRecords, true));
 		}
-		lines.add(SHARED_CLASS_NOT_COMPARED);
+		lines.add(listed.isEmpty() ? SHARED_CLASS_NOT_COMPARED : BELOW_FLOOR_SCOPE);
 		return String.join("\n", lines);
 	}
 

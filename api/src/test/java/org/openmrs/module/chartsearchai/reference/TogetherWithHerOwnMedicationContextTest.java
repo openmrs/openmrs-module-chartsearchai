@@ -421,10 +421,15 @@ public class TogetherWithHerOwnMedicationContextTest extends BaseModuleContextSe
 	}
 
 	@Test
-	public void aQuestionWhetherHerDrugAndAnotherInteractIsLeftToTheModelWhereNoFindingRelatesThem() {
-		// Rifampicin relates to nothing of hers above the floor here, so neither "Yes" nor the proposal's "No" is the module's.
-		assertNull(askOverTheShippedData("Is there any interaction between lamivudine and rifampicin?", "Lamivudine 150mg",
-			"Lamivudine").getModuleAnswer());
+	public void aQuestionWhetherHerDrugAndAnotherInteractStatesTheListingWhereNoFindingRelatesThem() {
+		// Rifampicin relates to nothing of hers above the floor here, so neither "Yes" nor the proposal's "No": what the data
+		// lists between the two, below the floor (ADR Decision 329).
+		String answer = askOverTheShippedData("Is there any interaction between lamivudine and rifampicin?", "Lamivudine 150mg",
+			"Lamivudine").getModuleAnswer();
+		assertTrue(answer != null && answer.replaceAll("\\[\\d+\\]", "[n]").startsWith("Lamivudine is one of this patient's "
+				+ "active medications (Lamivudine 150mg [n]); Rifampicin (rifampin) is not.\nThe interaction data lists Lamivudine "
+				+ "against Rifampicin (rifampin), with no severity or mechanism on file."), "was: " + answer);
+		assertTrue(!answer.contains("Yes —") && !answer.contains("No —"), "was: " + answer);
 	}
 
 	/**
@@ -444,9 +449,14 @@ public class TogetherWithHerOwnMedicationContextTest extends BaseModuleContextSe
 	}
 
 	@Test
-	public void aQuestionWhetherTwoDrugsNeitherOfThemHersInteractIsLeftToTheModelWhereTheDataDoesNotRelateThem() {
-		assertNull(askOverTheShippedData("Is there any interaction between amoxicillin and metformin?", "Lamivudine 150mg",
-			"Lamivudine").getModuleAnswer());
+	public void aQuestionWhetherTwoDrugsNeitherOfThemHersInteractStatesTheListingWhereNoFindingRelatesThem() {
+		// ADR Decision 329: the data lists the pair only below the floor.
+		String answer = askOverTheShippedData("Is there any interaction between amoxicillin and metformin?", "Lamivudine 150mg",
+			"Lamivudine").getModuleAnswer();
+		assertTrue(answer != null && answer.replaceAll("\\[\\d+\\]", "[n]").startsWith("Neither Amoxicillin nor Metformin is "
+				+ "one of this patient's active medications.\nThe interaction data lists Amoxicillin against Metformin, with no "
+				+ "severity or mechanism on file."), "was: " + answer);
+		assertTrue(!answer.contains("Yes —") && !answer.contains("No —"), "was: " + answer);
 	}
 
 	/**

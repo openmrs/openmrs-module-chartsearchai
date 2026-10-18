@@ -7153,9 +7153,12 @@ public class DrugReferenceInjector {
 		List<Integer> relating = new ArrayList<Integer>();
 		for (int i = 0; i < findings.size(); i++) {
 			SafetyWarning finding = findings.get(i);
+			// Or the question-pair arm's finding, whose subject rows are of both drugs, where neither is hers (ADR Decision 331).
+			Set<Object> about = subjectSubstances(finding);
 			if (SafetyWarning.TYPE_INTERACTION.equals(finding.getType()) && !finding.statesOrdersSharingASubstance()
 					&& (isAbout(finding, sides.get(0)) && hasPartnerOf(finding, sides.get(1))
-							|| isAbout(finding, sides.get(1)) && hasPartnerOf(finding, sides.get(0)))) {
+							|| isAbout(finding, sides.get(1)) && hasPartnerOf(finding, sides.get(0))
+							|| !Collections.disjoint(about, sides.get(0)) && !Collections.disjoint(about, sides.get(1)))) {
 				relating.add(i);
 			}
 		}

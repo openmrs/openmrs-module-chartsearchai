@@ -19764,3 +19764,26 @@ proposal's sentence for a proposal — then each other finding about its substan
 interaction or a contraindication keeps the model call.
 
 Pinned by `ProductCarryingHerOwnDrugTest`.
+
+## Decision 331: How severe the interaction between two drugs is, is answered as what the interaction is
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It widens [Decision 264](#decision-264-what-the-interaction-between-two-drugs-is-is-answered-with-the-findings-relating-them-whole)'s question about the
+pair's interaction.
+
+### Context
+
+*"How severe is the interaction between her rifampicin and nevirapine?"* fitted no shape, so the model answered every
+patient on the 3.7.1 standalone, mostly *"No — Nevirapine should not be given"*: a "No" to how severe it is. And Decision
+264's own answer missed two drugs neither of them hers, its findings matched one side at a time while the question-pair
+arm's finding holds both — so *"What is the mechanism of the interaction between simvastatin and clarithromycin?"* went to
+the model for a patient on neither.
+
+### The decision
+
+`QueryScopeRouter.ABOUT_THE_PAIRS_INTERACTION_SHAPES` admits *"How severe (serious, bad, significant…) is the interaction
+between X and Y?"* and *"What is the severity of the interaction between X and Y?"*: the findings relating the two, whole
+and each with its rating, and neither "Yes" nor "No". `composeAboutThePair` also takes a finding whose subjects span both
+drugs.
+
+Pinned by `SeverityOfThePairsInteractionTest`.

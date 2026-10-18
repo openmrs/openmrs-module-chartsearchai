@@ -925,6 +925,12 @@ public final class QueryScopeRouter {
 			"(?:what|which) (?:drug )?interactions? (?:is|are) there between " + HER_D + " and " + HER_D,
 			"how (?:do|does|would|will) " + HER_D + " and " + HER_D + " interact(?: with each other)?",
 			"how (?:do|does|would|will) " + HER_D + " interact with " + HER_D,
+			// "How severe is the interaction between her rifampicin and nevirapine?", "What is the severity of the interaction
+			// between X and Y?" — the findings carry the rating (ADR Decision 331)
+			"how (?:severe|serious|bad|significant|dangerous|major|important) is the (?:drug )?interaction between " + HER_D
+					+ " and " + HER_D,
+			"(?:what|which) is the (?:severity|seriousness|significance|rating) of the (?:drug )?interaction between " + HER_D
+					+ " and " + HER_D,
 			// "Should I separate the doses of ciprofloxacin and her didanosine?" — the mechanism says whether spacing them
 			// helps (ADR Decision 270).
 			"(?:should|do|must|can) (?:i|we) (?:need to )?(?:separate|space|space out|stagger) (?:the )?(?:doses?|dosing"

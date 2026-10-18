@@ -2103,6 +2103,16 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 
 	/** With the property off, one search: the model is asked, the prompt carries no finding, and the interaction
 	 *  extent says the check ran and related the drug to none of her orders at any rating. */
+	/** The module answers with what its check found and no verdict (ADR Decisions 311, 312): a reason to withhold no rating
+	 *  makes never licenses the module's "No", and since Decision 312 it is stated rather than handed to the model. */
+	private void assertTheModuleStatesWhatItFoundWithNoNo(String question, DrugReferenceService reference) {
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider, reference).search(patient, question);
+		assertEquals(0, provider.calls, "the module states what it found: " + answer.getAnswer());
+		assertTrue(answer.getAnswer().startsWith(DrugReferenceInjector.FOUND_LEAD_OPENING), answer.getAnswer());
+		assertFalse(answer.getAnswer().startsWith("No"), "no rating licenses a No: " + answer.getAnswer());
+	}
+
 	private void assertTheCheckRelatedNothing(Patient who, String question, DrugReferenceService reference) {
 		answerFromFindings(false);
 		RecordingProvider recorder = new RecordingProvider();
@@ -2601,7 +2611,7 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	 * Major — is answered by the module, so nothing but the rating separates the two questions.
 	 */
 	@Test
-	public void anUnratedInteractionRuleStillAsksTheModel() throws Exception {
+	public void anUnratedInteractionRuleLicensesNoNo() throws Exception {
 		executeDataSet(WARFARIN_ORDER);
 		DrugReferenceService curated = DrugReferenceTestSupport
 				.curatedFixtureService("chartsearchai-test/drug-reference-answer-from-findings-unrated-rule.json");
@@ -2614,7 +2624,7 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 				&& findings.get(0).text.endsWith(DrugReferenceInjector.STRENGTH_WITHHOLD),
 				"precondition: an unrated interaction withholds paracetamol, finding was: " + findings.get(0).text);
 
-		assertTheModelIsAsked(question, curated);
+		assertTheModuleStatesWhatItFoundWithNoNo(question, curated);
 	}
 
 	/**
@@ -2628,7 +2638,7 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	 * which the module answers over the same two orders.
 	 */
 	@Test
-	public void aClassRelationshipFoldedOntoAMinorRowStillAsksTheModel() throws Exception {
+	public void aClassRelationshipFoldedOntoAMinorRowLicensesNoNo() throws Exception {
 		executeDataSet("AnswerFromFindingsModafinilOrderTestData.xml");
 		DrugReferenceService ddinter = DrugReferenceTestSupport
 				.ddiFixtureService("chartsearchai-test/ddi-folded-minor-class-pair-every-order-resolved.json");
@@ -2642,7 +2652,7 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 				"precondition: a Minor row carrying the N06BA class sentence withholds methylphenidate, finding "
 						+ "was: " + findings.get(0).text);
 
-		assertTheModelIsAsked(question, ddinter);
+		assertTheModuleStatesWhatItFoundWithNoNo(question, ddinter);
 	}
 
 	/**

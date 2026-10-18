@@ -18,6 +18,7 @@ import java.util.Comparator;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -4318,12 +4319,13 @@ public class DrugReferenceInjector {
 
 	/**
 	 * Whether {@code findings} are about the substance {@code asked} names — interactions and contraindications, at least
-	 * one contraindication — none of them {@link #licensesTheModulesNo}, none about a medication she already takes: a
-	 * proposal the module answers with what its check found and no verdict (ADR Decision 311). Fail-closed: any other type
-	 * or subject keeps the model call.
+	 * one stating {@link #STRENGTH_WITHHOLD}: a contraindication (ADR Decision 311), or an interaction folded with a shared
+	 * class that no rating makes a reason to withhold (ADR Decision 312) — none of them {@link #licensesTheModulesNo}, none
+	 * about a medication she already takes: a proposal the module answers with what its check found and no verdict.
+	 * Fail-closed: any other type or subject keeps the model call.
 	 */
 	private static boolean noVerdictAbout(Set<Object> asked, List<SafetyWarning> findings) {
-		boolean contraindication = false;
+		boolean withholds = false;
 		for (SafetyWarning finding : findings) {
 			boolean interaction = SafetyWarning.TYPE_INTERACTION.equals(finding.getType());
 			boolean contra = SafetyWarning.TYPE_CONTRAINDICATION.equals(finding.getType());
@@ -4336,9 +4338,9 @@ public class DrugReferenceInjector {
 					return false;
 				}
 			}
-			contraindication |= contra;
+			withholds |= STRENGTH_WITHHOLD.equals(strengthClause(finding));
 		}
-		return contraindication;
+		return withholds;
 	}
 
 	/**
@@ -4932,6 +4934,7 @@ public class DrugReferenceInjector {
 		for (List<Integer> grid : grids.values()) {
 			merged.addAll(grid.subList(1, grid.size()));
 		}
+		Set<String> herOwnSharing = new HashSet<String>();
 		for (Integer i : order) {
 			if (merged.contains(i)) {
 				continue;
@@ -4940,6 +4943,9 @@ public class DrugReferenceInjector {
 			lines.add(grid != null ? gridLine(findings, numbers, grid, herOrderRecords)
 					: findingLine(findings.get(i), numbers.get(i), orderRecordNumbers, herOrderRecords, true,
 							substances.get(findings.get(i)), saidOnce));
+			if (grid == null && findings.get(i).statesOrdersSharingASubstance()) {
+				herOwnSharing.add(lines.get(lines.size() - 1));
+			}
 		}
 		// A finding the data states alike of the forms of a drug asked about by one name is stated once (ADR Decision 291).
 		if (proposal && askedLabel != null && merged.isEmpty()) {
@@ -4957,9 +4963,22 @@ public class DrugReferenceInjector {
 							? " This module's drug-safety check found a reason to withhold it." : ""));
 		} else if (STRENGTH_WITHHOLD.equals(clauses[leadIndex]) && (lead == Lead.NOT_GIVE && !licensesTheModulesNo(first)
 				|| lead == Lead.GIVE && proposal && !anyLicensesTheModulesNo(findings))) {
-			// No rated reason to withhold, so no claim of one either: what the check found (ADR Decisions 257, 311).
-			// No rated reason to withhold, so no claim of one either: what the check found (ADR Decision 257).
+			// No rated reason to withhold, so no claim of one either: what the check found (ADR Decisions 257, 311). Her own
+			// orders sharing a substance are about her medications and not this drug, so they follow under their own lead
+			// (ADR Decision 312).
+			List<String> aboutHerOwn = new ArrayList<String>();
+			for (Iterator<String> line = lines.iterator(); line.hasNext();) {
+				String each = line.next();
+				if (herOwnSharing.contains(each)) {
+					aboutHerOwn.add(each);
+					line.remove();
+				}
+			}
 			lines.add(0, FOUND_LEAD_OPENING + leadDrug + ":");
+			if (!aboutHerOwn.isEmpty()) {
+				lines.add(ABOUT_HER_OTHER_MEDICATIONS_LEAD);
+				lines.addAll(aboutHerOwn);
+			}
 		} else if (STRENGTH_WITHHOLD.equals(clauses[leadIndex])) {
 			lines.add(0, (lead == Lead.NOT_GIVE ? NEUTRAL_WITHHOLD_LEAD_OPENING : WITHHOLD_LEAD_OPENING) + leadDrug
 					+ WITHHOLD_LEAD_CLOSING);

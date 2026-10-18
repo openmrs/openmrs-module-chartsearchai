@@ -19264,3 +19264,40 @@ citing an allergy finding about ibuprofen, asks *"Can I give 400 mg of ibuprofen
 ibuprofen?"* — a stated dose keeps the model call with the drug's findings raised
 ([Decision 269](#decision-269-a-proposal-stating-a-dose-raises-the-findings-the-proposal-does)); its assertions are
 unchanged.
+
+## Decision 312: A proposal withheld by no rating, an interaction folded with a shared class included, is answered with what the check found
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It widens
+[Decision 311](#decision-311-a-proposal-whose-findings-make-no-verdict-is-answered-with-what-the-check-found) past
+contraindications, keeping [Decision 37](#decision-37-a-safety-answers-call-is-as-strong-as-the-findings-rating)'s rule
+that a call is as strong as the finding's rating.
+
+### Context
+
+Decision 311 answered a proposal with what the check found only where a contraindication was among its findings. An
+interaction whose reason to withhold comes from a shared class folded onto it, and not from its rating, still went to
+the model. On the 3.7.1 standalone "Can he take ketoconazole?" was answered for Karen Sanchez, on metronidazole, *"No —
+Ketoconazole should not be given: it interacts with active order Metronidazole, a Minor problem"* — a "No" over a Minor
+rating.
+
+### The decision
+
+The test in `DrugReferenceInjector.noVerdictAbout` is now whether any finding states the withholding strength clause
+(`STRENGTH_WITHHOLD`), not whether one is a contraindication. Every other condition of Decision 311 holds: each finding
+an interaction or a contraindication about the drug proposed, none `licensesTheModulesNo`, none about a medication she
+already takes. Such a proposal is answered with *"What this module's drug-safety check found about X:"* and its findings,
+no verdict. A rated interaction still makes the "No".
+
+Under that lead's colon every line reads as found about the drug, so a finding that her own orders share a substance —
+about her medications, not the drug proposed — follows under *"Found as well, about this patient's other medications:"*
+(`ABOUT_HER_OTHER_MEDICATIONS_LEAD`). James Thompson, on two metronidazole orders, was otherwise told what was found about
+ketoconazole over *"Metronidazole is in active orders Metronidazole (2 orders) — possible duplicate therapy"*.
+
+Pinned by `UnratedWithholdingProposalTest`. `LlmInferenceServiceAnswerFromFindingsContextTest.anUnratedInteractionRuleLicensesNoNo`
+and `.aClassRelationshipFoldedOntoAMinorRowLicensesNoNo` replace `.anUnratedInteractionRuleStillAsksTheModel` and
+`.aClassRelationshipFoldedOntoAMinorRowStillAsksTheModel`. Their reason — an unrated or folded rule does not license
+the module's "No" — is unchanged; the module, not the model, now states what was found, and they assert it is no "No".
+`TogetherWithHerOwnMedicationContextTest.aNeutralQuestionAboutADrugWithholdingWithoutARatingStatesWhatTheCheckFound`
+asserted that "Can I give her naproxen?" beside her aspirin — a Moderate rule with a drug group folded onto it — stays
+the model's; it now asserts the module states what the check found, with no "No" and no reason to withhold.

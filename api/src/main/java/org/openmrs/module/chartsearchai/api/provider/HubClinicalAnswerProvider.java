@@ -124,6 +124,11 @@ public class HubClinicalAnswerProvider implements ClinicalAnswerProvider {
 							doneSeen), cancellation);
 		}
 		catch (HubTransportException e) {
+			// One problem code covers a missing path, a bad key and a failing gateway, so the status is
+			// what an operator reads; the Hub's own text stays at DEBUG (ADR Decision 102).
+			log.warn("Hub rejected request {} with HTTP {}; enable DEBUG on {} to see the body it sent",
+					request.getRequestId(), e.getStatusCode(), HubClinicalAnswerProvider.class.getName());
+			log.debug("Hub HTTP {} body for request {}: {}", e.getStatusCode(), request.getRequestId(), e.getBody());
 			CompletionStage<TurnResult> settled = settledTerminalResult(request.getMode(),
 					latestAnswer.get(), streamError.get(), doneSeen[0]);
 			if (settled != null) {
@@ -154,7 +159,11 @@ public class HubClinicalAnswerProvider implements ClinicalAnswerProvider {
 			if (cancellation.isCancelled()) {
 				return failed(events, sequence, request.getMode(), PROBLEM_CANCELLED);
 			}
-			log.warn("Hub provider turn failed for request {}", request.getRequestId(), e);
+			// As the tail above: a parser's message can carry the Hub's text, so WARN names the type.
+			Throwable cause = e.getCause() == null ? e : e.getCause();
+			log.warn("Hub provider turn failed for request {} ({}); enable DEBUG on {} for the trace",
+					request.getRequestId(), cause.getClass().getSimpleName(), HubClinicalAnswerProvider.class.getName());
+			log.debug("Hub provider turn failure for request {}", request.getRequestId(), e);
 			return failed(events, sequence, request.getMode(), PROBLEM_PROVIDER_FAILURE);
 		}
 

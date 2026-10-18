@@ -25,7 +25,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
+import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.Test;
+import org.openmrs.module.chartsearchai.LogCapture;
 import org.openmrs.Patient;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.api.conversation.PriorClinicalTurn;
@@ -168,6 +170,58 @@ public class HubClinicalAnswerProviderTest {
 				sink.types());
 		assertTrue(TurnLifecycleValidator
 				.violations(provider.descriptor().getCapabilities(), sink.types()).isEmpty());
+	}
+
+	/**
+	 * A 404 from a URL missing its path, a 401 from a bad key and a 502 from a gateway all reach the
+	 * clinician as one problem code, so the status is what lets an operator tell them apart. The peer's
+	 * own text stays at DEBUG (ADR Decision 102).
+	 */
+	@Test
+	public void aRejectedHubRequestLogsItsStatusAndKeepsThePeersTextOutOfWarn() throws Exception {
+		for (int status : new int[] { 401, 404, 429, 502 }) {
+			ScriptedHubTransport transport = new ScriptedHubTransport();
+			transport.httpStatus = status;
+			transport.errorBody = "{\"detail\":\"Metformin 500 mg twice daily\"}";
+			try (LogCapture capture = LogCapture.on(HubClinicalAnswerProvider.class.getName(), Level.DEBUG)) {
+				TurnResult result = provider(transport, "http://hub.example/v1/chat/completions")
+						.execute(request("product-profile-a"), new CollectingSink(), CancellationSignal.NONE)
+						.toCompletableFuture().get();
+
+				assertEquals(TurnEventType.TURN_ERROR, result.getTerminalState());
+				assertTrue(capture.hasMessageAt(Level.WARN, "HTTP " + status), capture.describeAll().toString());
+				for (String warning : capture.messagesAt(Level.WARN)) {
+					assertFalse(warning.contains("Metformin"), warning);
+				}
+				assertTrue(capture.hasMessageAt(Level.DEBUG, "Metformin"),
+						"the body is still available at DEBUG: " + capture.describeAll());
+			}
+		}
+	}
+
+	/**
+	 * Jackson puts the text it could not parse into its message, so a stream that fails before the
+	 * answer can carry the Hub's words; WARN states the failure's type and the trace waits at DEBUG.
+	 */
+	@Test
+	public void aFailedHubTurnLogsTheFailureTypeAndKeepsThePeersTextOutOfWarn() throws Exception {
+		ScriptedHubTransport transport = new ScriptedHubTransport();
+		transport.failure = new RuntimeException("Hub stream failed: Unrecognized token 'Metformin_500_mg_BID'",
+				new java.io.IOException("Unrecognized token 'Metformin_500_mg_BID'"));
+		transport.cancelOnFailure = false;
+		try (LogCapture capture = LogCapture.on(HubClinicalAnswerProvider.class.getName(), Level.DEBUG)) {
+			TurnResult result = provider(transport, "http://hub.example/v1/chat/completions")
+					.execute(request("product-profile-a"), new CollectingSink(), CancellationSignal.NONE)
+					.toCompletableFuture().get();
+
+			assertEquals("provider_failure", result.getProblemCode());
+			assertTrue(capture.hasMessageAt(Level.WARN, "IOException"), capture.describeAll().toString());
+			for (String warning : capture.messagesAt(Level.WARN)) {
+				assertFalse(warning.contains("Metformin"), warning);
+			}
+			assertFalse(capture.hasThrowableAt(Level.WARN), "a WARN carried the exception and its text");
+			assertTrue(capture.hasThrowableAt(Level.DEBUG), "the trace is still available at DEBUG");
+		}
 	}
 
 	private static HubClinicalAnswerProvider provider(ScriptedHubTransport transport, String endpoint) {

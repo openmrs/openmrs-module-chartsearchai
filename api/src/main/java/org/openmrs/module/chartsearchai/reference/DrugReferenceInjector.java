@@ -7619,8 +7619,14 @@ public class DrugReferenceInjector {
 	static final String NO_ORDER_TO_CONTINUE = " is not one of this patient's active medications, so there is no order of it"
 			+ " to continue.";
 
+	/** What follows a drug's name where the question asks whether to change the dose of her drug and she is not on it
+	 *  (ADR Decision 346). */
+	static final String NO_DOSE_TO_CHANGE = " is not one of this patient's active medications, so there is no dose of it to"
+			+ " change.";
+
 	/** The answer to which interactions stopping a drug she is not on would end (ADR Decision 333), whether to stop it
-	 *  (ADR Decision 335), or whether to continue it (ADR Decision 341), or {@code null}. */
+	 *  (ADR Decision 335), whether to continue it (ADR Decision 341), or whether to change its dose (ADR Decision 346), or
+	 *  {@code null}. */
 	private static String nothingToStop(String question, List<DrugReference> questionDrugs, Set<Object> herSubstances,
 			PatientClinicalContext context) {
 		if (questionDrugs.isEmpty() || context == null || !context.activeDrugOrdersRead()
@@ -7628,7 +7634,8 @@ public class DrugReferenceInjector {
 						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS)
 				|| !QueryScopeRouter.asksWhichInteractionsStoppingItEnds(wordsBesideItsNames(question, questionDrugs))
 						&& !QueryScopeRouter.asksWhetherToStopHerDrug(wordsBesideItsNames(question, questionDrugs))
-						&& !QueryScopeRouter.asksWhetherToContinueHerDrug(wordsBesideItsNames(question, questionDrugs))) {
+						&& !QueryScopeRouter.asksWhetherToContinueHerDrug(wordsBesideItsNames(question, questionDrugs))
+						&& !QueryScopeRouter.asksWhetherToChangeHerDrugsDose(wordsBesideItsNames(question, questionDrugs))) {
 			return null;
 		}
 		List<AskedDrug> asked = askedDrugs(question, questionDrugs, context, false);
@@ -7638,6 +7645,10 @@ public class DrugReferenceInjector {
 		// Whether to continue it, asked of a drug she is not on (ADR Decision 341).
 		if (QueryScopeRouter.asksWhetherToContinueHerDrug(wordsBesideItsNames(question, questionDrugs))) {
 			return asked.get(0).label + NO_ORDER_TO_CONTINUE;
+		}
+		// Whether to change its dose, likewise (ADR Decision 346).
+		if (QueryScopeRouter.asksWhetherToChangeHerDrugsDose(wordsBesideItsNames(question, questionDrugs))) {
+			return asked.get(0).label + NO_DOSE_TO_CHANGE;
 		}
 		// Whether to stop it, asked of a drug she is not on (ADR Decision 335).
 		if (QueryScopeRouter.asksWhetherToStopHerDrug(wordsBesideItsNames(question, questionDrugs))) {

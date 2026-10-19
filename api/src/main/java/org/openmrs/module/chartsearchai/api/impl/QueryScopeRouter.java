@@ -908,7 +908,8 @@ public final class QueryScopeRouter {
 	 * #BESIDE_HER_MEDICATIONS_SHAPES} (ADR Decision 202). Fail-CLOSED as {@link #asksWhetherToGiveADrug} is.
 	 */
 	public static boolean asksAboutADrugBesideHerMedications(List<String> wordsWithTheDrugMarked) {
-		return fitsAShape(wordsWithTheDrugMarked, BESIDE_HER_MEDICATIONS_SHAPES);
+		return fitsAShape(wordsWithTheDrugMarked, BESIDE_HER_MEDICATIONS_SHAPES)
+				|| fitsAShape(wordsWithTheDrugMarked, CHANGE_HER_DRUGS_DOSE_SHAPES);
 	}
 
 	/**
@@ -1184,6 +1185,20 @@ public final class QueryScopeRouter {
 
 	private static final Pattern DOSE_AFTER_THE_DRUG = Pattern.compile("(" + D + ") " + AMOUNT + "(?: " + FREQUENCY + ")?(?= |$)");
 
+	/**
+	 * "Is it safe to increase her simvastatin dose?", "Is it safe to increase her simvastatin to 40 mg?", "Should I reduce
+	 * her simvastatin dose?" — whether to change the dose of her drug (ADR Decision 346): asked about her drug beside her
+	 * medications, and a dose the findings do not weigh.
+	 */
+	private static final List<Pattern> CHANGE_HER_DRUGS_DOSE_SHAPES = shapes("(?:is it (?:safe|ok|okay|alright|appropriate|"
+			+ "fine) to|(?:can|could|may|should) (?:i|we)(?: safely)?) (?:increase|raise|double|reduce|lower|decrease|halve) "
+			+ POSSESSIVE + " " + D + "(?: (?:dose|dosage))?(?: to " + AMOUNT + ")?(?: now)?");
+
+	/** Whether a question asks whether to change the dose of its one drug, named as hers (ADR Decision 346). Fail-CLOSED. */
+	public static boolean asksWhetherToChangeHerDrugsDose(List<String> wordsWithTheDrugMarked) {
+		return fitsAShape(wordsWithTheDrugMarked, CHANGE_HER_DRUGS_DOSE_SHAPES);
+	}
+
 	/** An amount stated in words before the drug — "more lidocaine", "a second dose of neomycin" (ADR Decision 326). */
 	private static final Pattern AMOUNT_IN_WORDS_BEFORE_THE_DRUG = Pattern.compile("(?<=^| )(?:more|extra|additional|"
 			+ "(?:another|a second|a further|an extra|an additional|a repeat) dose of) (" + D + ")");
@@ -1224,7 +1239,8 @@ public final class QueryScopeRouter {
 	 * are raised; the findings weigh no dose, so the model answers such a question.
 	 */
 	public static boolean statesADose(List<String> wordsWithTheDrugMarked) {
-		return wordsWithTheDrugMarked != null && withoutAStatedDose(String.join(" ", wordsWithTheDrugMarked)) != null;
+		return wordsWithTheDrugMarked != null && (withoutAStatedDose(String.join(" ", wordsWithTheDrugMarked)) != null
+				|| asksWhetherToChangeHerDrugsDose(wordsWithTheDrugMarked));
 	}
 
 	private static boolean fitsAShape(List<String> words, List<Pattern> shapes) {

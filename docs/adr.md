@@ -20091,3 +20091,27 @@ her drug it is answered as [Decision 259](#decision-259-whether-to-hold-or-stop-
 drug she is not on, *"X is not one of this patient's active medications, so there is no order of it to stop."*
 
 Pinned by `StoppingHerDrugQuestionTest.whetherOneOfHerOrdersOfItShouldBeStoppedIsWhetherToStopIt`.
+
+## Decision 346: Whether to change the dose of her drug is answered as whether it is safe to continue, the dose said not checked
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It carries [Decision 341](#decision-341-whether-to-continue-her-drug-is-answered-as-whether-it-is-safe-to-continue-and-of-a-drug-she-is-not-on-that-there-is-none-to-continue) to a change of dose,
+which [Decision 322](#decision-322-a-proposal-stating-a-dose-the-data-cannot-check-is-answered-by-the-module-the-dose-said-not-checked) says no finding weighs.
+
+### Context
+
+*"Is it safe to increase her simvastatin dose?"* and *"Is it safe to increase her simvastatin to 40 mg?"* fitted no
+shape, and on the 3.7.1 standalone the model answered all 45 patients of the first: Rita, on nevirapine and no
+simvastatin, was told *"Simvastatin can be given, with one caution"*, a clearance of a drug she does not take, and Sarah
+Taylor *"No — Simvastatin should not be increased: it has unknown severity interactions with prednisone, celecoxib …"*,
+unrated rows made a reason.
+
+### The decision
+
+`QueryScopeRouter.asksWhetherToChangeHerDrugsDose` — *"Is it safe to increase (raise, double, reduce, lower) her X
+(dose)?"*, *"… to 40 mg?"*, *"Can (should) I increase her X (dose)?"* — is a question about her drug beside her
+medications, and states a dose: of her drug it is answered as *"Is her X safe to continue?"* is, then that the dose asked
+about was not checked. Of a drug she is not on: *"X is not one of this patient's active medications, so there is no dose
+of it to change."* (`DrugReferenceInjector.NO_DOSE_TO_CHANGE`).
+
+Pinned by `ChangingHerDrugsDoseTest`.

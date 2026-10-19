@@ -19827,3 +19827,24 @@ to stop, and no interaction among this patient's medications that stopping it wo
 (`DrugReferenceInjector.nothingToStop`).
 
 Pinned by `StoppingADrugWhichInteractionsEndTest`.
+
+## Decision 334: A proposal naming the drug's form is answered with what the check found, the form said not weighed
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient.
+
+### Context
+
+*"Can I give her ketoconazole cream?"* fitted no shape — "cream" stood after the drug — so the model answered every
+patient on the 3.7.1 standalone: Joshua Johnson was told *"Ketoconazole can be given, with one caution"*, Karen Sanchez *"No
+— Ketoconazole should not be given: it interacts with active order Metronidazole, a Minor problem"*.
+
+### The decision
+
+`QueryScopeRouter.fitsAsWritten` reads past a form named right after the drug — cream, ointment, gel, drops, spray,
+patch, injection, tablets and the like — as it reads past a dose ([Decision 269](#decision-269-a-proposal-stating-a-dose-raises-the-findings-the-proposal-does)). The findings are the
+drug's and weigh no form, so no verdict rests on them: an answer that would open with the module's withholding "No"
+opens with *"What this module's drug-safety check found about Ketoconazole:"* instead, and every such answer closes with
+*"This check did not weigh the form asked about (cream)."* (`DrugReferenceInjector.FORM_NOT_WEIGHED_OPENING`).
+
+Pinned by `StatedFormProposalTest`.

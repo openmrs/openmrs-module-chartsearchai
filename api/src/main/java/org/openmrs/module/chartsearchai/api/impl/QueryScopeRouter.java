@@ -1119,6 +1119,29 @@ public final class QueryScopeRouter {
 	private static final Pattern AMOUNT_IN_WORDS_BEFORE_THE_DRUG = Pattern.compile("(?<=^| )(?:more|extra|additional|"
 			+ "(?:another|a second|a further|an extra|an additional|a repeat) dose of) (" + D + ")");
 
+	/** A form named right after the drug — "ketoconazole cream", "chloramphenicol eye drops" (ADR Decision 334). */
+	private static final Pattern FORM_AFTER_THE_DRUG = Pattern.compile("(" + D + ") (cream|ointment|gel|lotion|eye drops|ear "
+			+ "drops|drops|spray|nasal spray|inhaler|patch|patches|suppository|suppositories|pessary|pessaries|injection|"
+			+ "syrup|suspension|tablets?|capsules?)(?= |$)");
+
+	/** {@code joined} without the form named beside its drug, or {@code null} where it names none (ADR Decision 334). */
+	private static String withoutAStatedForm(String joined) {
+		String without = FORM_AFTER_THE_DRUG.matcher(joined).replaceAll("$1");
+		return without.equals(joined) ? null : without;
+	}
+
+	/**
+	 * The form the question names beside its drug — "cream" of "Can I give her ketoconazole cream?" — or {@code null}
+	 * (ADR Decision 334). The shapes read past it; the findings are the drug's and weigh no form, which the answer says.
+	 */
+	public static String statedForm(List<String> wordsWithTheDrugMarked) {
+		if (wordsWithTheDrugMarked == null) {
+			return null;
+		}
+		Matcher form = FORM_AFTER_THE_DRUG.matcher(String.join(" ", wordsWithTheDrugMarked));
+		return form.find() ? form.group(2) : null;
+	}
+
 	/** {@code joined} without the dose stated beside its drug, or {@code null} where it states none (ADR Decisions 269, 326). */
 	private static String withoutAStatedDose(String joined) {
 		String without = DOSE_AFTER_THE_DRUG.matcher(DOSE_BEFORE_THE_DRUG.matcher(
@@ -1160,8 +1183,11 @@ public final class QueryScopeRouter {
 		// A dose stated beside the drug is no part of the question's shape (ADR Decision 269): "Is 1 g of paracetamol safe
 		// for him?" asks what "Is paracetamol safe for him?" asks, of a dose — which the answer then says it did not check.
 		String withoutADose = withoutAStatedDose(joined);
+		// And a form named beside it (ADR Decision 334): "Can I give her ketoconazole cream?".
+		String withoutAForm = withoutAStatedForm(withoutADose != null ? withoutADose : joined);
 		for (Pattern shape : shapes) {
-			if (shape.matcher(joined).matches() || withoutADose != null && shape.matcher(withoutADose).matches()) {
+			if (shape.matcher(joined).matches() || withoutADose != null && shape.matcher(withoutADose).matches()
+					|| withoutAForm != null && shape.matcher(withoutAForm).matches()) {
 				return true;
 			}
 		}

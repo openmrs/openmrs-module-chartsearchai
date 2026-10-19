@@ -1456,6 +1456,18 @@ public class DrugReferenceInjector {
 		if (purpose != null) {
 			moduleAnswer = moduleAnswer + "\n" + PURPOSE_NOT_WEIGHED_OPENING + purpose + ").";
 		}
+		// A form named beside the drug: the findings are the drug's and weigh no form, so no verdict rests on them and the
+		// answer says the form was not weighed (ADR Decision 334).
+		String form = moduleAnswer == null || questionDrugs.isEmpty() ? null
+				: QueryScopeRouter.statedForm(wordsBesideItsNames(question, questionDrugs));
+		if (form != null) {
+			List<AskedDrug> formed = askedDrugs(question, questionDrugs, context, false);
+			String withheld = formed.size() == 1 ? WITHHOLD_LEAD_OPENING + formed.get(0).label + WITHHOLD_LEAD_CLOSING : null;
+			if (withheld != null && moduleAnswer.startsWith(withheld)) {
+				moduleAnswer = FOUND_LEAD_OPENING + formed.get(0).label + ":" + moduleAnswer.substring(withheld.length());
+			}
+			moduleAnswer = moduleAnswer + "\n" + FORM_NOT_WEIGHED_OPENING + form + ").";
+		}
 		// A dose the question states is no part of what the findings weigh, so where the data publishes dose ceilings the
 		// model answers such a question, the dosing record injected (ADR Decision 269). Where it publishes none, no one can
 		// weigh the dose: the module answers as it answers the question without it, and the answer says the dose was not
@@ -7541,6 +7553,9 @@ public class DrugReferenceInjector {
 	/** How the answer to what to monitor with her medications opens (ADR Decision 297): no finding sets monitoring. */
 	static final String SETS_NO_MONITORING_LEAD = "This check does not say what to monitor: it states what it found among"
 			+ " the medications this patient is already taking.";
+
+	/** How an answer to a question naming the drug's form closes, the form and ")." after it (ADR Decision 334). */
+	static final String FORM_NOT_WEIGHED_OPENING = "This check did not weigh the form asked about (";
 
 	/** How an answer to a proposal that said what the drug is for closes, the purpose and ")." after it (ADR Decision 213). */
 	static final String PURPOSE_NOT_WEIGHED_OPENING = "This check did not weigh what the drug is for (";

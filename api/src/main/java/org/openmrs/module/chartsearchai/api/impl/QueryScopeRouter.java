@@ -792,6 +792,23 @@ public final class QueryScopeRouter {
 			"(?:which|what) (?:drug )?interactions? would (?:stopping|discontinuing|removing) " + POSSESSIVE + " " + D
 					+ " (?:remove|end|resolve)");
 
+	/** "Is it safe to stop her nevirapine?", "Can I stop her nevirapine?" — whether to stop her drug (ADR Decision 335). */
+	private static final List<Pattern> STOP_HER_DRUG_SHAPES = shapes(
+			"is it (?:safe|ok|okay|alright|appropriate) to (?:stop|discontinue|hold) " + POSSESSIVE + " " + D + "(?: now)?",
+			"(?:can|could|may) (?:i|we) (?:safely )?(?:stop|discontinue|hold) " + POSSESSIVE + " " + D + "(?: now)?",
+			"(?:should|must|do) (?:i|we) (?:need to )?(?:stop|discontinue|hold) " + POSSESSIVE + " " + D + "(?: now)?");
+
+	/** Whether it asks whether stopping it is safe or allowed — not whether it should be stopped, which ADR Decision 259
+	 *  answers of her own drug as her medication with no lead (ADR Decision 335). */
+	public static boolean asksWhetherItIsSafeToStopHerDrug(List<String> wordsWithTheDrugMarked) {
+		return fitsAShape(wordsWithTheDrugMarked, STOP_HER_DRUG_SHAPES.subList(0, 2));
+	}
+
+	/** Whether a question asks whether to stop its one drug, named as hers (ADR Decision 335). Fail-CLOSED. */
+	public static boolean asksWhetherToStopHerDrug(List<String> wordsWithTheDrugMarked) {
+		return fitsAShape(wordsWithTheDrugMarked, STOP_HER_DRUG_SHAPES);
+	}
+
 	/** Whether a question asks which interactions stopping its one drug would end (ADR Decision 333). Fail-CLOSED. */
 	public static boolean asksWhichInteractionsStoppingItEnds(List<String> wordsWithTheDrugMarked) {
 		return fitsAShape(wordsWithTheDrugMarked, STOPPING_IT_ENDS_SHAPES);
@@ -799,6 +816,10 @@ public final class QueryScopeRouter {
 
 	private static final List<Pattern> BESIDE_HER_MEDICATIONS_SHAPES = shapes(
 			SAFE_WITH_HER_MEDICATIONS,
+			// "Is it safe to stop her nevirapine?" (ADR Decision 335)
+			"is it (?:safe|ok|okay|alright|appropriate) to (?:stop|discontinue|hold) " + POSSESSIVE + " " + D + "(?: now)?",
+			"(?:can|could|may) (?:i|we) (?:safely )?(?:stop|discontinue|hold) " + POSSESSIVE + " " + D + "(?: now)?",
+			"(?:should|must|do) (?:i|we) (?:need to )?(?:stop|discontinue|hold) " + POSSESSIVE + " " + D + "(?: now)?",
 			// "If I stop her rifampicin, which interactions go away?" (ADR Decision 333)
 			"if (?:i|we) (?:stop|discontinue|remove|hold) " + POSSESSIVE + " " + D + " (?:which|what) (?:drug )?interactions? "
 					+ GO_AWAY,

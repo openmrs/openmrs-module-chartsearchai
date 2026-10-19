@@ -762,8 +762,13 @@ public class DrugReferenceInjector {
 		if (unrecognised != null && unrecognised.namesOneOfHerOrders(context)) {
 			unrecognised = null;
 		}
+		// Nor does whether to stop one of her orders named by its own name, answered where nothing was found too — her only
+		// order raises nothing to pair it with (ADR Decision 335).
+		boolean stopOfHerOrderByName = questionDrugs.isEmpty()
+				&& asksAboutOneOfHerOrdersByName(question, context, drugReferenceService) == OneOfHerOrdersAsked.STOPPED;
 		if (nothingResolved && unrepresented.isEmpty() && !screenRelatedNothing && !screenOfNoMedications
-				&& !screenOfOneOrder && !allergyToHerMedications && !duplicateQuestion && listed.stated().isEmpty() && unrecognised == null) {
+				&& !screenOfOneOrder && !allergyToHerMedications && !duplicateQuestion && listed.stated().isEmpty() && unrecognised == null
+				&& !stopOfHerOrderByName) {
 			// The record each of her orders is, though nothing here resolved: it is a fact about her chart, and the
 			// statement after a model's answer naming an order her records directly conflict with cites it (ADR
 			// Decision 210). Every order has its own record here, so the chart's own index is the one to number off.
@@ -1141,13 +1146,16 @@ public class DrugReferenceInjector {
 						orderEntries, context)) != null) {
 			// Two of her orders named by their own names: what the check relates between them (ADR Decision 265).
 			moduleAnswer = twoOrdersByName;
-		} else if (!findings.isEmpty() && context != null && questionDrugs.isEmpty()
+		} else if ((!findings.isEmpty() || asksAboutOneOfHerOrdersByName(question, context, drugReferenceService)
+						== OneOfHerOrdersAsked.STOPPED) && context != null && questionDrugs.isEmpty()
 				&& ChartSearchAiUtils.getBooleanGlobalProperty(
 						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
 						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS)
 				&& context.chartReadForSafety()
 				&& (oneOrderByName = composeOneOfHerOrdersByName(question, findings, findingNumbers, orderRecordNumbers,
-						orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers,
+						!orderRecordNumbers.isEmpty() ? orderRecordNumbers
+								: orderRecordNumbers(findingRecords != null ? findingRecords : new DrugOrderRecords(mappings),
+										context),
 						orderEntries, context)) != null) {
 			// One of her orders named by its own name: her medication, and what the check relates it to (ADR Decision 273).
 			moduleAnswer = oneOrderByName;
@@ -1421,6 +1429,13 @@ public class DrugReferenceInjector {
 		if (moduleAnswer != null && questionDrugs.isEmpty() && QueryScopeRouter.asksWhichDrugsToAvoid(question)) {
 			moduleAnswer = context == null || !context.contraindicationRecordsRead() ? null
 					: LISTS_NO_DRUG_TO_AVOID_LEAD + "\n" + recordedDrugAllergiesLine(context) + "\n" + moduleAnswer;
+		}
+		// Whether to stop her drug: what relates it to her other medications, under a lead saying the check weighs no stopping
+		// (ADR Decision 335).
+		if (moduleAnswer != null && !questionDrugs.isEmpty()
+				&& QueryScopeRouter.asksWhetherItIsSafeToStopHerDrug(wordsBesideItsNames(question, questionDrugs))
+				&& !moduleAnswer.contains(" is not one of this patient's active medications, so there is no order of it to stop")) {
+			moduleAnswer = WEIGHS_NO_STOPPING_LEAD + "\n" + moduleAnswer;
 		}
 		// What to monitor with her medications, likewise: the screen, under a lead saying it sets no monitoring (ADR
 		// Decision 297).
@@ -6790,6 +6805,12 @@ public class DrugReferenceInjector {
 			Set<String> names = new LinkedHashSet<String>(order.getNames());
 			if (order.hasKnownName() && order.getDisplay() != null) {
 				names.add(order.getDisplay());
+				// And the display's first word alone, a brand's name before a form or strength — "Clarithromycine" of
+				// "Clarithromycine Co 500mg", as the question writes it (ADR Decision 335).
+				String first = order.getDisplay().trim().split("\\s+")[0];
+				if (first.length() >= 4 && first.matches("\\p{L}+")) {
+					names.add(first);
+				}
 			}
 			for (String name : names) {
 				String stem = nameBeforeItsStrength(name);
@@ -6870,7 +6891,9 @@ public class DrugReferenceInjector {
 		/** Whether to give it — "Can I give him Zolvimix?" — which adding it again would duplicate. */
 		PROPOSED,
 		/** Whether it interacts with her medications — "Does Zolvimix interact with his medications?". */
-		INTERACTS
+		INTERACTS,
+		/** Whether to stop it — "Can I stop his Klarizom?" (ADR Decision 335). */
+		STOPPED
 	}
 
 	/**
@@ -6885,7 +6908,8 @@ public class DrugReferenceInjector {
 		}
 		List<String> words = wordsMarking(question, named.values());
 		return QueryScopeRouter.asksWhetherToGiveADrug(words) ? OneOfHerOrdersAsked.PROPOSED
-				: QueryScopeRouter.asksWhetherADrugInteractsWithHerMedications(words) ? OneOfHerOrdersAsked.INTERACTS : null;
+				: QueryScopeRouter.asksWhetherADrugInteractsWithHerMedications(words) ? OneOfHerOrdersAsked.INTERACTS
+				: QueryScopeRouter.asksWhetherToStopHerDrug(words) ? OneOfHerOrdersAsked.STOPPED : null;
 	}
 
 	/**
@@ -7060,14 +7084,37 @@ public class DrugReferenceInjector {
 				relating.add(i);
 			}
 		}
-		if (relating.isEmpty()) {
-			return null;
-		}
-		List<String> lines = findingLines(findings, numbers, relating, orderRecordNumbers, herOrderRecords, true);
 		String display = order.getDisplay().trim();
 		Integer number = herOrderRecords.get(display);
 		String name = herOrdersNamedIn(question, context, drugReferenceService).get(order);
 		String label = Character.toUpperCase(name.charAt(0)) + name.substring(1);
+		if (asked == OneOfHerOrdersAsked.STOPPED) {
+			// Whether to stop it: what relates it to her other medications, which stopping it would end, under the lead for
+			// a stop where it asks whether stopping is safe; with no other order, that there is none (ADR Decision 335).
+			boolean others = false;
+			for (PatientClinicalContext.ActiveDrugOrder each : context.getActiveDrugOrders()) {
+				others |= each != order;
+			}
+			String own = label + OWN_MEDICATION_LEAD + " (" + display + (number == null ? "" : " [" + number + "]") + ")";
+			String body;
+			if (!others) {
+				body = own + ", and this patient has no other active medication to check it against.";
+			} else if (relating.isEmpty()) {
+				return null;
+			} else {
+				List<String> stopLines = findingLines(findings, numbers, relating, orderRecordNumbers, herOrderRecords, true);
+				stopLines.add(0, own + ". What the interaction check relates it to:");
+				stopLines.add(BELOW_FLOOR_SCOPE);
+				body = String.join("\n", stopLines);
+			}
+			return QueryScopeRouter.asksWhetherItIsSafeToStopHerDrug(wordsMarking(question,
+					herOrdersNamedIn(question, context, drugReferenceService).values())) ? WEIGHS_NO_STOPPING_LEAD + "\n" + body
+							: body;
+		}
+		if (relating.isEmpty()) {
+			return null;
+		}
+		List<String> lines = findingLines(findings, numbers, relating, orderRecordNumbers, herOrderRecords, true);
 		lines.add(0, asked == OneOfHerOrdersAsked.PROPOSED
 				? label + OWN_MEDICATION_LEAD + " (" + display + (number == null ? "" : " [" + number + "]")
 						+ "), so adding it would duplicate that order. What the interaction check relates it to:"
@@ -7523,12 +7570,17 @@ public class DrugReferenceInjector {
 		if (questionDrugs.isEmpty() || context == null || !context.activeDrugOrdersRead()
 				|| !ChartSearchAiUtils.getBooleanGlobalProperty(ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
 						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS)
-				|| !QueryScopeRouter.asksWhichInteractionsStoppingItEnds(wordsBesideItsNames(question, questionDrugs))) {
+				|| !QueryScopeRouter.asksWhichInteractionsStoppingItEnds(wordsBesideItsNames(question, questionDrugs))
+						&& !QueryScopeRouter.asksWhetherToStopHerDrug(wordsBesideItsNames(question, questionDrugs))) {
 			return null;
 		}
 		List<AskedDrug> asked = askedDrugs(question, questionDrugs, context, false);
 		if (asked.size() != 1 || !Collections.disjoint(asked.get(0).substances, herSubstances)) {
 			return null;
+		}
+		// Whether to stop it, asked of a drug she is not on (ADR Decision 335).
+		if (QueryScopeRouter.asksWhetherToStopHerDrug(wordsBesideItsNames(question, questionDrugs))) {
+			return asked.get(0).label + " is not one of this patient's active medications, so there is no order of it to stop.";
 		}
 		return asked.get(0).label + " is not one of this patient's active medications, so there is no order of it to stop, "
 				+ "and no interaction among this patient's medications that stopping it would end.";
@@ -7549,6 +7601,10 @@ public class DrugReferenceInjector {
 		return spelled.isEmpty() ? "No drug allergies are recorded for this patient."
 				: "Recorded drug allergies: " + String.join("; ", spelled) + ".";
 	}
+
+	/** How the answer to whether to stop her drug opens (ADR Decision 335): no finding weighs stopping a medication. */
+	static final String WEIGHS_NO_STOPPING_LEAD = "This check does not weigh whether to stop a medication: it states what"
+			+ " relates it to this patient's other medications, which stopping it would end.";
 
 	/** How the answer to what to monitor with her medications opens (ADR Decision 297): no finding sets monitoring. */
 	static final String SETS_NO_MONITORING_LEAD = "This check does not say what to monitor: it states what it found among"

@@ -94,8 +94,19 @@ final class UnrecognisedDrugName {
 	 */
 	static UnrecognisedDrugName in(String question, List<DrugReference> entries) {
 		String word = wordInADrugsPlace(question);
-		return word == null ? null : new UnrecognisedDrugName(asWritten(word, question), suggestionsFor(word, entries));
+		if (word == null) {
+			return null;
+		}
+		UnrecognisedDrugName name = new UnrecognisedDrugName(asWritten(word, question), suggestionsFor(word, entries));
+		name.inAStop = QueryScopeRouter.asksWhetherToStopHerDrug(QueryScopeRouter.words(
+				(" " + question.toLowerCase(java.util.Locale.ROOT) + " ").replaceFirst("(?<=[^\\p{L}])" + java.util.regex.Pattern
+						.quote(word) + "(?=[^\\p{L}])", " " + QueryScopeRouter.DRUG_NAME + " ")));
+		return name;
 	}
+
+	/** Whether the word stands in the place of a drug the question asks whether to stop (ADR Decision 335): what was not
+	 *  done is a stop of an order none of hers is named for, not an interaction check. */
+	private boolean inAStop;
 
 	/**
 	 * @return the unrecognised word standing in the OTHER drug's place of a two-drug question whose one drug the data does
@@ -213,8 +224,10 @@ final class UnrecognisedDrugName {
 				List<String> marked = new ArrayList<String>(words.subList(0, i));
 				marked.add(QueryScopeRouter.DRUG_NAME);
 				marked.addAll(words.subList(i + length, words.size()));
+				// Or whether to stop it, named as hers (ADR Decision 335).
 				if (!QueryScopeRouter.asksWhetherToGiveADrug(marked)
-						&& !QueryScopeRouter.asksWhetherADrugInteractsWithHerMedications(marked)) {
+						&& !QueryScopeRouter.asksWhetherADrugInteractsWithHerMedications(marked)
+						&& !QueryScopeRouter.asksWhetherToStopHerDrug(marked)) {
 					continue;
 				}
 				return isAName(span) ? String.join(" ", span) : null;
@@ -319,6 +332,9 @@ final class UnrecognisedDrugName {
 	 * Rifampicin (rifampin)? Ask again with the name it carries."</em> — or without the suggestion where there is none.
 	 */
 	String statement() {
+		if (inAStop) {
+			return "None of this patient's active orders is named \"" + word + "\", so there is no order of it to stop.";
+		}
 		return withSuggestions(new StringBuilder("No interaction check was run: \"").append(word)
 				.append("\" is not a drug name the interaction data recognises."));
 	}

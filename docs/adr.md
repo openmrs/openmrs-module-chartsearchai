@@ -19848,3 +19848,33 @@ opens with *"What this module's drug-safety check found about Ketoconazole:"* in
 *"This check did not weigh the form asked about (cream)."* (`DrugReferenceInjector.FORM_NOT_WEIGHED_OPENING`).
 
 Pinned by `StatedFormProposalTest`.
+
+## Decision 335: Whether to stop her drug is answered with what relates it to her other medications, the stopping itself not weighed
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It extends [Decision 333](#decision-333-which-interactions-stopping-her-drug-would-end-is-answered-with-what-interacts-with-it) to the
+question's yes/no wording.
+
+### Context
+
+*"Is it safe to stop her nevirapine?"* fitted no shape, so the model answered: Karen Sanchez, on no nevirapine, was told
+*"The records do not address whether it is safe to stop Nevirapine"*, never that she is not on it.
+
+### The decision
+
+`QueryScopeRouter.asksWhetherToStopHerDrug` — *"Is it safe (OK) to stop her X?"*, *"Can I stop her X?"* — is among the
+shapes about her own drug beside her medications: of her drug the answer is *"What interacts with her X?"*'s, under
+*"This check does not weigh whether to stop a medication: it states what relates it to this patient's other medications,
+which stopping it would end."* (`DrugReferenceInjector.WEIGHS_NO_STOPPING_LEAD`). *"Should I hold (stop) her X?"* of her
+drug keeps [Decision 259](#decision-259-whether-to-hold-or-stop-her-own-drug-is-answered-as-her-own-medication)'s answer, with no lead. Of a drug she is not on, all of them: *"X is not one of this
+patient's active medications, so there is no order of it to stop."*
+
+A name the data does not recognise, in a drug's place in such a question, is said to name none of her active orders:
+*"None of this patient's active orders is named "klarizom", so there is no order of it to stop."*
+(`UnrecognisedDrugName`), where the model answered *"The records do not address Klarizom"*. And one of her orders named
+by its own name ([Decision 273](#decision-273-one-of-her-orders-named-alone-by-its-own-name-is-answered-as-her-medication)) — including by its display's first word, *"clarithromycine"* of
+*"Clarithromycine Co 500mg"*, a brand the data does not carry (`DrugReferenceInjector.herOrdersNamedIn`) — is answered as
+her drug: what relates it to her other medications, or that she has no other to check it against. Kevin Brown, on that
+order alone, was told *"The records do not address the safety of stopping Clarithromycine"*.
+
+Pinned by `StoppingHerDrugQuestionTest`.

@@ -6580,6 +6580,7 @@ public class DrugReferenceInjector {
 			return null;
 		}
 		List<String> pairLines = new ArrayList<String>();
+		List<Integer> aboutHerOwn = new ArrayList<Integer>();
 		Map<AskedDrug, List<Integer>> ofEach = new LinkedHashMap<AskedDrug, List<Integer>>();
 		for (AskedDrug drug : others) {
 			ofEach.put(drug, new ArrayList<Integer>());
@@ -6616,6 +6617,11 @@ public class DrugReferenceInjector {
 			}
 			if (subject != null) {
 				ofEach.get(subject).add(i);
+			} else if (SafetyWarning.TYPE_CONTRAINDICATION.equals(finding.getType()) && !about.isEmpty()
+					&& unionOf(hers).containsAll(about)) {
+				// A contraindication to a drug of hers the question names — her allergy covering the aspirin she takes — is
+				// about her own medication, stated apart after the rest (ADR Decision 358).
+				aboutHerOwn.add(i);
 			} else if (!Collections.disjoint(touched, unionOf(asked))) {
 				// About a drug asked about, in no way this answer knows how to state.
 				return null;
@@ -6664,6 +6670,12 @@ public class DrugReferenceInjector {
 				return null;
 			}
 			lines.add(composed);
+		}
+		if (!aboutHerOwn.isEmpty()) {
+			lines.add(ABOUT_HER_OTHER_MEDICATIONS_LEAD);
+			for (Integer i : aboutHerOwn) {
+				lines.add(findingLine(findings.get(i), numbers.get(i), orderRecordNumbers, herOrderRecords, true));
+			}
 		}
 		lines.add(BELOW_FLOOR_SCOPE);
 		return String.join("\n", lines);

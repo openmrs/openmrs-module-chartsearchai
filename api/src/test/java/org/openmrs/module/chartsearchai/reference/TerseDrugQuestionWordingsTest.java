@@ -153,6 +153,32 @@ public class TerseDrugQuestionWordingsTest extends BaseModuleContextSensitiveTes
 		}
 	}
 
+	/**
+	 * Several drugs asked about together, one of them hers, where a finding is about her own drug — a contraindication to
+	 * the aspirin she takes — states it under its own lead after the rest (ADR Decision 358): on the 3.7.1 standalone "Can I
+	 * give her ibuprofen, naproxen and aspirin?" went to the model for Agnes Adams and Dorothy Odinga, on aspirin and
+	 * recorded allergic to the NSAID group or to ibuprofen, which answered "No — Ibuprofen and Naproxen should not be given".
+	 */
+	@Test
+	public void severalDrugsTogetherStateAFindingAboutHerOwnDrugApart() {
+		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
+			DrugReferenceTestSupport.activeOrder("order-asa", "Aspirin 81mg", "Aspirin"));
+		LinkedHashSet<String> names = new LinkedHashSet<String>(orders.get(0).getNames());
+		String answer = DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.shippedServiceWithGroups())
+				.injectRecords(DrugReferenceTestSupport.oneRecordChart(), DrugReferenceTestSupport.ctx(45, null, names, null,
+					DrugReferenceTestSupport.set("ibuprofen"), null, orders), "Can I give her ibuprofen, naproxen and aspirin?")
+				.getModuleAnswer();
+		assertNotNull(answer, "the module answers");
+		String[] lines = answer.split("\n");
+		assertEquals("Acetylsalicylic acid (aspirin) is one of this patient's active medications; Ibuprofen and Naproxen are "
+				+ "not.", lines[0], "was: " + answer);
+		int lead = Arrays.asList(lines).indexOf(DrugReferenceInjector.ABOUT_HER_OTHER_MEDICATIONS_LEAD);
+		org.junit.jupiter.api.Assertions.assertTrue(lead > 0 && lines[lead + 1].startsWith("Acetylsalicylic acid (aspirin) is "
+				+ "in the same cross-reactivity group (NSAID) as the patient's allergy to Ibuprofen"), "was: " + answer);
+		org.junit.jupiter.api.Assertions.assertTrue(!answer.contains("No —") || answer.indexOf("No —") < answer.indexOf(
+			DrugReferenceInjector.ABOUT_HER_OTHER_MEDICATIONS_LEAD), "no verdict about her own drug: " + answer);
+	}
+
 	private static String askAllergic(String question, LinkedHashSet<String> names,
 			List<PatientClinicalContext.ActiveDrugOrder> orders) {
 		String answer = DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.shippedServiceWithGroups())

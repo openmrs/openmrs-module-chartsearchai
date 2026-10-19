@@ -20334,3 +20334,25 @@ patients *"The records do not address"* it.
 as any proposal's is.
 
 Pinned by `TerseDrugQuestionWordingsTest.fineToGiveItIsSafeToGiveIt`.
+
+## Decision 358: Several drugs asked about together state a contraindication to one of hers apart
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It completes [Decision 309](#decision-309-three-or-more-drugs-asked-about-together-are-answered-each-she-does-not-take-as-its-proposal)'s answer for a
+finding about her own drug.
+
+### Context
+
+`composeSeveralDrugsTogether` stated a finding about a drug she does not take under that drug, and left to the model one
+about a drug asked about "in no way this answer knows how to state". A contraindication to one of hers was that: Agnes
+Adams and Dorothy Odinga, on aspirin and recorded allergic to the NSAID group or to ibuprofen, asked *"Can I give her
+ibuprofen, naproxen and aspirin?"* on the 3.7.1 standalone, were told by the model *"No — Ibuprofen and Naproxen should
+not be given"*.
+
+### The decision
+
+A contraindication whose subject is a drug of hers the question names is stated after the rest, under
+`ABOUT_HER_OTHER_MEDICATIONS_LEAD`, as a proposal's answer states a finding about her other medications
+([Decision 312](#decision-312-a-proposal-withheld-by-no-rating-an-interaction-folded-with-a-shared-class-included-is-answered-with-what-the-check-found)). Each drug she does not take keeps its own answer.
+
+Pinned by `TerseDrugQuestionWordingsTest.severalDrugsTogetherStateAFindingAboutHerOwnDrugApart`.

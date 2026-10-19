@@ -170,12 +170,27 @@ final class DrugClassTerms {
 		}
 		if (groups != null) {
 			for (CrossReactivityGroup group : groups) {
-				if (group != null && className.equalsIgnoreCase(group.getName())
-						&& !out.contains(group.getName().toLowerCase(Locale.ROOT))) {
-					out.add(group.getName().toLowerCase(Locale.ROOT));
+				if (group != null && className.equalsIgnoreCase(group.getName())) {
+					for (String spelled : spellingsOf(group.getName())) {
+						if (!out.contains(spelled.toLowerCase(Locale.ROOT))) {
+							out.add(spelled.toLowerCase(Locale.ROOT));
+						}
+					}
 				}
 			}
 		}
+		return out;
+	}
+
+	/** A group's name as a question may spell it: the name, and it with or without a closing plural "s" — the rule {@link
+	 *  #groupNamedBy} reads an allergen by (ADR Decision 363). Empty for no name. */
+	private static List<String> spellingsOf(String name) {
+		List<String> out = new ArrayList<String>();
+		if (name == null || name.isEmpty()) {
+			return out;
+		}
+		out.add(name);
+		out.add(name.endsWith("s") ? name.substring(0, name.length() - 1) : name + "s");
 		return out;
 	}
 
@@ -226,9 +241,13 @@ final class DrugClassTerms {
 				// reader — this one and the chip arms that PRINT the name — sees one spelling. A trim
 				// at this reader alone named one family two ways in one response.
 				String name = group == null ? null : group.getName();
-				if (name != null && longerThan(name, bestTerm) && DrugReference.containsWord(prose, name)) {
-					bestTerm = name;
-					bestClass = name;
+				// Its name with or without a closing plural "s", as groupNamedBy reads an allergen: "penicillin" names the
+				// Penicillins group (ADR Decision 363).
+				for (String spelled : spellingsOf(name)) {
+					if (longerThan(spelled, bestTerm) && DrugReference.containsWord(prose, spelled)) {
+						bestTerm = spelled;
+						bestClass = name;
+					}
 				}
 			}
 		}

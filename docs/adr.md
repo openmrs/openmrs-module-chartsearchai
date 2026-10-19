@@ -20430,3 +20430,23 @@ words of *"Is it safe to add X to her Y?"* and *"Is it safe to give her X with Y
 
 Pinned by `TerseDrugQuestionWordingsTest.suitableAndTheSafeWordsBesideTwoDrugsAreTheirSafeForms`.
 
+## Decision 363: A group's name is named in a question with or without its plural "s"
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It reads a question's class by the rule
+[Decision 231](#decision-231-an-allergy-recorded-by-a-drug-groups-name-is-an-allergy-to-the-groups-members) reads a recorded allergen by, so [Decision 347](#decision-347-a-drug-class-proposed-is-answered-with-what-the-module-states-of-the-class-choosing-no-drug-of-it) answers it.
+
+### Context
+
+`DrugClassTerms.groupNamedBy` takes *"Penicillin"* for the Penicillins group in a recorded allergy; `namedIn` took only
+the group's exact name in a question. *"Can I give her penicillin?"* named no class, and on the 3.7.1 standalone every
+patient was told only that *"penicillin"* is not a drug name the data recognises — the three patients recorded allergic
+to a penicillin among them, whose allergy the answer never mentioned.
+
+### The decision
+
+A curated group's name, with or without a closing plural *s*, names that group in a question (`namedIn`,
+`termsOf`): *"Can I give her penicillin?"* is answered as *"Can I give her penicillins?"* is — the class not resolved to a
+substance, her orders in the group, and her recorded drug allergies in it.
+
+Pinned by `DrugClassProposalTest.penicillinSaidAloneIsThePenicillinsGroup`.

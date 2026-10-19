@@ -101,6 +101,21 @@ public class DrugClassProposalTest extends BaseModuleContextSensitiveTest {
 		org.junit.jupiter.api.Assertions.assertTrue(chart.statesADose(), "the dose is said not checked");
 	}
 
+	/**
+	 * "Penicillin" said alone names the class the module carries as the Penicillins group, answered as "penicillins" is
+	 * (ADR Decision 363): on the 3.7.1 standalone "Can I give her penicillin?" was told only that "penicillin" is not a drug
+	 * name the data recognises — to the three patients recorded allergic to a penicillin among them.
+	 */
+	@Test
+	public void penicillinSaidAloneIsThePenicillinsGroup() {
+		String answer = ask("Can I give her penicillin?", DrugReferenceTestSupport.set("amoxicillin"),
+			DrugReferenceTestSupport.activeOrder("order-mtz", "Metronidazole", "Metronidazole"));
+		assertEquals(ask("Can I give her penicillins?", DrugReferenceTestSupport.set("amoxicillin"),
+			DrugReferenceTestSupport.activeOrder("order-mtz", "Metronidazole", "Metronidazole")), answer);
+		assertEquals(true, answer != null && answer.contains("Recorded drug allergies in the drug group this module carries as "
+				+ "Penicillins: "), "the allergy is stated: " + answer);
+	}
+
 	/** A question about the class that proposes none is not this answer's: whether she is on one is ADR Decision 298's. */
 	@Test
 	public void aQuestionProposingNoClassIsNotAnswered() {

@@ -1291,7 +1291,9 @@ public final class QueryScopeRouter {
 	 * answer to such a proposal says so (ADR Decision 213).
 	 */
 	public static String statedPurpose(List<String> wordsWithTheDrugMarked) {
-		if (fitsAShape(wordsWithTheDrugMarked, PROPOSAL_SHAPES) || asksWhetherNotToGiveADrug(wordsWithTheDrugMarked)) {
+		// Nor a question about the drug and her allergies, whose closing words are those allergies (ADR Decision 344).
+		if (fitsAShape(wordsWithTheDrugMarked, PROPOSAL_SHAPES) || asksWhetherNotToGiveADrug(wordsWithTheDrugMarked)
+				|| fitsAShape(wordsWithTheDrugMarked, DRUG_AND_HER_ALLERGIES_SHAPES)) {
 			return null;
 		}
 		List<String> proposal = withoutAPurpose(wordsWithTheDrugMarked);
@@ -1568,10 +1570,12 @@ public final class QueryScopeRouter {
 		return fitsAShape(wordsWithTheDrugMarked, DRUG_AND_HER_ALLERGIES_SHAPES);
 	}
 
-	private static final String HER_ALLERGIES = "(?:" + POSSESSIVE + "|the patient's) (?:recorded |known |drug )?allerg(?:y|ies)";
+	/** Her allergies, or one named by its kind — "his NSAID allergy" (ADR Decision 344). */
+	private static final String HER_ALLERGIES = "(?:" + POSSESSIVE + "|the patient's) (?:recorded |known |drug )?(?:nsaid |"
+			+ "sulfa |sulpha )?allerg(?:y|ies)";
 
 	private static final List<Pattern> DRUG_AND_HER_ALLERGIES_SHAPES = shapes(
-			"is " + HER_D + " (?:safe|ok|okay|appropriate) (?:with|given|for|despite) " + HER_ALLERGIES,
+			"is " + HER_D + " (?:safe|ok|okay|appropriate)(?: for " + PATIENT + ")? (?:with|given|for|despite) " + HER_ALLERGIES,
 			"(?:is|are) " + SUBJECT + " allergic to " + HER_D,
 			"(?:does|do) " + SUBJECT + " have (?:an |any )?allerg(?:y|ies) to " + HER_D,
 			"(?:can|could|may) (?:i give " + PATIENT + "|" + SUBJECT + " (?:take|have)) " + D + " (?:with|given|despite) "

@@ -20051,3 +20051,24 @@ shape, but a drug in the second slot was none — and on the 3.7.1 standalone th
 
 Pinned by `AddingADrugToHerOwnTest`.
 
+## Decision 344: A drug asked about given her allergy of a named kind is answered as given her allergies
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It widens [Decision 327](#decision-327-a-question-about-one-drug-and-her-allergies-is-answered-with-what-the-check-found-between-them)'s grammar.
+
+### Context
+
+*"Is paracetamol safe for him given his NSAID allergy?"* fitted no shape — the allergy named by its kind, and the
+patient after "safe" — and on the 3.7.1 standalone the model answered all 45 patients: most *"The records do not address
+the safety of paracetamol given an NSAID allergy"*, others *"Acetaminophen can be given, with two cautions"*, a
+clearance.
+
+### The decision
+
+*"his NSAID (sulfa) allergy"* is her allergies, and *"Is X safe for him given …"* is Decision 327's shape: the answer is
+the one *"Is X safe given his allergies?"* gets — the findings relating the drug to her recorded allergies, or that none
+relates, or that none is recorded. The closing words of such a question are her allergies, never a purpose the check did
+not weigh (`QueryScopeRouter.statedPurpose`).
+
+Pinned by `DrugAgainstHerAllergiesTest.anAllergyNamedByItsKindIsAnsweredAsHerAllergiesAre`.
+

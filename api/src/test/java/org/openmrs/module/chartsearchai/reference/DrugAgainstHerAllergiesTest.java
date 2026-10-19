@@ -66,6 +66,27 @@ public class DrugAgainstHerAllergiesTest extends BaseModuleContextSensitiveTest 
 			ask("Is his clarithromycin safe with his allergies?", DrugReferenceTestSupport.set("aspirin"), metronidazole));
 	}
 
+	/**
+	 * A question naming the kind of allergy asks what one about her allergies asks (ADR Decision 344): on the 3.7.1
+	 * standalone "Is paracetamol safe for him given his NSAID allergy?" fitted no shape, and the model answered every
+	 * patient — most "The records do not address the safety of paracetamol given an NSAID allergy", others "Acetaminophen
+	 * can be given, with two cautions", a clearance.
+	 */
+	@Test
+	public void anAllergyNamedByItsKindIsAnsweredAsHerAllergiesAre() {
+		PatientClinicalContext.ActiveDrugOrder metronidazole = DrugReferenceTestSupport.activeOrder("order-mtz",
+			"Metronidazole", "Metronidazole");
+		for (Set<String> allergies : Arrays.asList(DrugReferenceTestSupport.set("ibuprofen"), null)) {
+			String expected = ask("Is paracetamol safe given his allergies?", allergies, metronidazole);
+			assertNotNull(expected, "precondition: the module answers " + allergies);
+			for (String question : Arrays.asList("Is paracetamol safe for him given his NSAID allergy?",
+					"Is paracetamol safe given her NSAID allergy?", "Is paracetamol okay for her given her sulfa allergy?",
+					"Is paracetamol safe for him given his allergies?")) {
+				assertEquals(expected, ask(question, allergies, metronidazole), question + " / " + allergies);
+			}
+		}
+	}
+
 	private static String ask(String question, Set<String> allergies, PatientClinicalContext.ActiveDrugOrder... given) {
 		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(given);
 		LinkedHashSet<String> names = new LinkedHashSet<String>();

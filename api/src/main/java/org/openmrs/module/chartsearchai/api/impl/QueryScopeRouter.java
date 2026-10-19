@@ -372,7 +372,8 @@ public final class QueryScopeRouter {
 			// (ADR Decision 180)
 			"would it be (?:safe|ok|okay|appropriate) (?:for " + PATIENT + " )?to (?:(?:give|start|prescribe|administer|add) (?:"
 					+ PATIENT + " )?(?:on )?|take )" + D + "(?: for " + PATIENT + ")?(?: now| today)?",
-			"(?:is it )?(?:ok|okay) to (?:give|start|prescribe|administer|add) (?:" + PATIENT + " )?(?:on )?" + D
+			// and "Safe to give ceftriaxone?" (ADR Decision 350)
+			"(?:is it )?(?:ok|okay|safe) to (?:give|start|prescribe|administer|add) (?:" + PATIENT + " )?(?:on )?" + D
 					+ "(?: (?:to|for) " + PATIENT + ")?(?: now| today)?",
 			"is it (?:safe|ok|okay|appropriate) to add " + D + " to " + POSSESSIVE + " " + MEDICATIONS + "(?: now| today)?",
 			// "Is it safe to give her ibuprofen?", "Is it safe to start her on clarithromycin?", "Is it
@@ -441,7 +442,11 @@ public final class QueryScopeRouter {
 			// and with no preposition, or "of" — "Is there a risk giving her erythromycin?" (ADR Decision 348)
 			"is there (?:any |a )?(?:harm|risk|danger|problem|issue|contraindication) (?:(?:in|with|to|of) )?(?:giving|starting|"
 					+ "prescribing|adding) (?:" + PATIENT + " )?(?:on )?" + D + "(?: (?:to|for) " + PATIENT + ")?",
-			"(?:is there )?any reason to avoid " + D + "(?: (?:for|in) " + PATIENT + ")?");
+			"(?:is there )?any reason to avoid " + D + "(?: (?:for|in) " + PATIENT + ")?",
+			// "Any contraindications to giving her metformin?" — "Is there a contraindication to giving her X?" (ADR Decision
+			// 350)
+			"(?:are there )?any contraindications? (?:to|for|against) (?:giving|starting|prescribing|adding) (?:" + PATIENT
+					+ " )?(?:on )?" + D + "(?: (?:to|for) " + PATIENT + ")?");
 
 	/**
 	 * Whether a question asks whether NOT to give one drug, and nothing else — one of {@link #NEGATED_PROPOSAL_SHAPES}
@@ -487,7 +492,9 @@ public final class QueryScopeRouter {
 					+ D,
 			// "Fluconazole?" — a drug's name asked alone; the model told a patient "Fluconazole can be given, with one
 			// caution" (ADR Decision 349)
-			D);
+			D,
+			// "Check interactions for amoxicillin", "Check for drug interactions with amoxicillin" (ADR Decision 350)
+			"(?:please )?check (?:for )?(?:any )?(?:drug )?interactions (?:for|with|of|on) " + D + "(?: please)?");
 
 	/**
 	 * Which of her medications interact with ONE drug — "Which of her medications interact with rifampicin?", "Which of her

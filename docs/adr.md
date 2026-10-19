@@ -20182,3 +20182,25 @@ word the data does not recognise and nothing else stands no word in a drug's pla
 check"* is a screen of her medications, not a name to report unrecognised.
 
 Pinned by `WhichOfHerMedicationsInteractTest.aDrugsNameAloneIsAskedWhetherItInteracts`.
+
+## Decision 350: Three terse wordings are answered as their fuller forms
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient.
+
+### Context
+
+Three questions fitted no shape, and on the 3.7.1 standalone the model answered all 45 patients of each:
+*"Check interactions for amoxicillin"* listed, to patients on no medication, amoxicillin's Major rows against drugs they
+do not take; *"Any contraindications to giving her metformin?"* told Karen Sanchez *"Metformin can be given, with one
+caution"*; and *"Safe to give ceftriaxone?"* told Brian Lopez *"Ceftriaxone can be given, with one caution"*.
+
+### The decision
+
+*"(Please) check (for) (drug) interactions for (with) X"* is a shape of [Decision 181](#decision-181-a-question-whether-not-to-give-a-drug-or-whether-it-interacts-is-answered-without-an-inverted-no)'s, answered as *"Does X
+interact with her medications?"* is; *"(Are there) any contraindications to giving her X?"* one of
+[Decision 255](#decision-255-whether-a-drug-is-dangerous-harmful-or-a-cause-of-problems-is-answered-with-neither-yes-nor-no)'s, answered as *"Is there a contraindication to giving her X?"* is; and *"Safe to give (start) X?"* a
+proposal, answered as *"Is it safe to give X?"* is.
+
+Pinned by `TerseDrugQuestionWordingsTest`.
+

@@ -20279,3 +20279,21 @@ Such a pair is admitted where the findings about the drug proposed make no verdi
 alone is: the answer names her drug as hers, then states what the check found about the proposal, with no verdict.
 
 Pinned by `TerseDrugQuestionWordingsTest.aDrugBesideHersWhoseFindingsMakeNoVerdictIsAnsweredAsItsProposal`.
+
+## Decision 355: A drug "as well as" one of hers is the two given together
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It widens [Decision 169](#decision-169-a-question-whether-two-drugs-can-be-given-together-states-their-findings-against-her-own-orders)'s together grammar.
+
+### Context
+
+*"Can he have ibuprofen as well as his warfarin?"* fitted no shape, and on the 3.7.1 standalone the model answered all 45
+patients with its own verdict — Karen Sanchez's *"No — Warfarin should not be given with Ibuprofen"*, about a drug she
+does not take — never saying whether warfarin was the patient's.
+
+### The decision
+
+*as well as* joins two drugs in the together shapes as *with* does: the question is answered as *"Can he have ibuprofen
+with his warfarin?"* is.
+
+Pinned by `TerseDrugQuestionWordingsTest.aDrugAsWellAsHersIsTheTwoTogether`.

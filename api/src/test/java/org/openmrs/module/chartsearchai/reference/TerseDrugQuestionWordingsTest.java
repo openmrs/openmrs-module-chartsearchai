@@ -82,6 +82,16 @@ public class TerseDrugQuestionWordingsTest extends BaseModuleContextSensitiveTes
 	}
 
 	/**
+	 * A drug "as well as" one of hers is the two given together (ADR Decision 355): on the 3.7.1 standalone "Can he have
+	 * ibuprofen as well as his warfarin?" fitted no shape, and the model answered every patient.
+	 */
+	@Test
+	public void aDrugAsWellAsHersIsTheTwoTogether() {
+		same("Can he have ibuprofen with his warfarin?", "Can he have ibuprofen as well as his warfarin?",
+			"Can I give him ibuprofen as well as his warfarin?");
+	}
+
+	/**
 	 * A question whose "No" would read backwards, about a drug only an unrated contraindication relates to her, is answered
 	 * with what the check found and no verdict, as its proposal is (ADR Decision 351): on the 3.7.1 standalone "Is there a
 	 * problem with giving aspirin to this patient?" went to the model for the four patients recorded allergic to aspirin

@@ -545,12 +545,13 @@ public final class QueryScopeRouter {
 					+ HER_DS + "(?: (?:to|for) " + PATIENT + ")?(?: now| today)?",
 			// "Can I give her warfarin with ibuprofen?", "Can I give her warfarin and ibuprofen together?"
 			"(?:can|could|may|should) (?:i|we) (?:safely )?(?:give|start|prescribe|administer) (?:" + PATIENT
-					+ " )?(?:on )?" + HER_D + " (?:and|with|alongside) " + HER_DS + "(?: together)?(?: to " + PATIENT
+					+ " )?(?:on )?" + HER_D + " (?:and|with|alongside|as well as) " + HER_DS + "(?: together)?(?: to " + PATIENT
 					+ ")?(?: now| today)?",
 			// "Can she take warfarin and ibuprofen together?", "Can she drink alcohol while on metronidazole?", "Can she have
-			// alcohol with her metronidazole?" (ADR Decision 268)
+			// alcohol with her metronidazole?" (ADR Decision 268), "Can he have ibuprofen as well as his warfarin?" (ADR
+			// Decision 355)
 			"(?:can|could|may|should) (?:she|he|they|the patient|this patient) (?:safely )?(?:take|be given|drink|have) " + HER_D
-					+ " (?:and|with|alongside|while on|while taking) " + HER_DS + "(?: together)?(?: now| today)?",
+					+ " (?:and|with|alongside|as well as|while on|while taking) " + HER_DS + "(?: together)?(?: now| today)?",
 			// "Is it safe to give her warfarin and ibuprofen together?", "Is it safe to take warfarin with ibuprofen?", "Is it OK
 			// to co-prescribe warfarin with her ibuprofen?" (ADR Decision 250)
 			"is it (?:safe|ok|okay|appropriate) (?:for " + PATIENT + " )?to (?:(?:give|start|prescribe|co prescribe|administer) (?:"

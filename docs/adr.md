@@ -20410,3 +20410,23 @@ patient asked.
 *"Is it advisable (wise) to give her X?"* is the proposal shape *"Is it safe to give her X?"* is.
 
 Pinned by `TerseDrugQuestionWordingsTest.advisableToGiveItIsSafeToGiveIt`.
+
+## Decision 362: "Suitable" asks what "safe" asks of a proposal, and the safe words are the same beside two drugs
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It completes [Decision 357](#decision-357-fine-and-alright-ask-what-safe-asks-of-a-proposal) and
+[Decision 361](#decision-361-advisable-and-wise-ask-what-safe-asks-of-a-proposal).
+
+### Context
+
+*"Is clarithromycin suitable for her?"* and *"Is it wise to add fluconazole to his warfarin?"* fitted no shape, and on the
+3.7.1 standalone the model answered all 45 patients of each: Decisions 357 and 361 had added *fine*, *alright*,
+*advisable* and *wise* to the one-drug proposal, not to the two-drug shapes, and no shape had *suitable*.
+
+### The decision
+
+*suitable* is a word of *"Is X safe for her?"* and *"Would X be safe?"*; and *fine*, *alright*, *advisable* and *wise* are
+words of *"Is it safe to add X to her Y?"* and *"Is it safe to give her X with Y?"*.
+
+Pinned by `TerseDrugQuestionWordingsTest.suitableAndTheSafeWordsBesideTwoDrugsAreTheirSafeForms`.
+

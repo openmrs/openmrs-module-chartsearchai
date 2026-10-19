@@ -131,6 +131,18 @@ public class TerseDrugQuestionWordingsTest extends BaseModuleContextSensitiveTes
 	}
 
 	/**
+	 * "Suitable" asks what "safe" asks of a proposal, and the words "safe" admits in a proposal are admitted beside two
+	 * drugs too (ADR Decision 362): on the 3.7.1 standalone "Is clarithromycin suitable for her?" and "Is it wise to add
+	 * fluconazole to his warfarin?" fitted no shape, and the model answered all 45 patients of each.
+	 */
+	@Test
+	public void suitableAndTheSafeWordsBesideTwoDrugsAreTheirSafeForms() {
+		same("Is ibuprofen safe for her?", "Is ibuprofen suitable for her?");
+		same("Is it safe to add fluconazole to his warfarin?", "Is it wise to add fluconazole to his warfarin?",
+			"Is it advisable to add fluconazole to his warfarin?", "Is it fine to give him fluconazole with his warfarin?");
+	}
+
+	/**
 	 * A question whose "No" would read backwards, about a drug only an unrated contraindication relates to her, is answered
 	 * with what the check found and no verdict, as its proposal is (ADR Decision 351): on the 3.7.1 standalone "Is there a
 	 * problem with giving aspirin to this patient?" went to the model for the four patients recorded allergic to aspirin

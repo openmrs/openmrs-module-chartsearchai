@@ -383,10 +383,10 @@ public final class QueryScopeRouter {
 			// "Is it fine (alright) to give him paracetamol?" too (ADR Decision 357), and "advisable" (wise) (ADR Decision 361)
 			"is it (?:safe|ok|okay|appropriate|fine|alright|advisable|wise) (?:for " + PATIENT + " )?to (?:(?:give|start|prescribe|"
 					+ "administer|add) (?:" + PATIENT + " )?(?:on )?|take )" + D + "(?: for " + PATIENT + ")?(?: now| today)?",
-			// "Is ibuprofen safe for her?", "Is ibuprofen appropriate for this patient?"
-			"is " + D + " (?:safe|ok|okay|appropriate)(?: for " + PATIENT + ")?(?: now| today)?",
+			// "Is ibuprofen safe for her?", "Is ibuprofen appropriate for this patient?", "suitable" (ADR Decision 362)
+			"is " + D + " (?:safe|ok|okay|appropriate|suitable)(?: for " + PATIENT + ")?(?: now| today)?",
 			// "Would ibuprofen be appropriate for her?"
-			"(?:would|will) " + D + " be (?:safe|ok|okay|appropriate)(?: for " + PATIENT + ")?",
+			"(?:would|will) " + D + " be (?:safe|ok|okay|appropriate|suitable)(?: for " + PATIENT + ")?",
 			// "Is ibuprofen safe to add?", "Is ibuprofen safe to give her?" — the drug before "safe to", the
 			// fourth shape's word order with the third's verbs (ADR Decision 134). No purpose, no second drug.
 			"is " + D + " (?:safe|ok|okay|appropriate) to (?:give|start|prescribe|administer|add|use)(?: (?:to |for )?"
@@ -557,7 +557,8 @@ public final class QueryScopeRouter {
 					+ " (?:and|with|alongside|as well as|while on|while taking) " + HER_DS + "(?: together)?(?: now| today)?",
 			// "Is it safe to give her warfarin and ibuprofen together?", "Is it safe to take warfarin with ibuprofen?", "Is it OK
 			// to co-prescribe warfarin with her ibuprofen?" (ADR Decision 250)
-			"is it (?:safe|ok|okay|appropriate) (?:for " + PATIENT + " )?to (?:(?:give|start|prescribe|co prescribe|administer) (?:"
+			"is it (?:safe|ok|okay|appropriate|fine|alright|advisable|wise) (?:for " + PATIENT + " )?to (?:(?:give|start|prescribe|"
+					+ "co prescribe|administer) (?:"
 					+ PATIENT + " )?(?:on )?|take )" + HER_D + " (?:and|with|alongside) " + HER_DS + "(?: together)?(?: for "
 					+ PATIENT + ")?(?: now| today)?",
 			// "Are warfarin and ibuprofen safe together?", "Is warfarin safe with ibuprofen?"
@@ -579,7 +580,7 @@ public final class QueryScopeRouter {
 			// with it (ADR Decision 343)
 			"(?:can|could|may|should) (?:i|we) (?:safely )?add " + HER_D + " to " + HER_DS + "(?: for " + PATIENT
 					+ ")?(?: now| today)?",
-			"is it (?:safe|ok|okay|appropriate) to add " + HER_D + " to " + HER_DS + "(?: for " + PATIENT + ")?(?: now| today)?");
+			"is it (?:safe|ok|okay|appropriate|fine|alright|advisable|wise) to add " + HER_D + " to " + HER_DS + "(?: for " + PATIENT + ")?(?: now| today)?");
 
 	/**
 	 * Whether a question asks whether two drugs may be given together and nothing else — one of

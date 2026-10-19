@@ -563,6 +563,23 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	}
 
 	/**
+	 * A risk in giving it asked with no preposition, or with "of", is the same question (ADR Decision 348): on the 3.7.1
+	 * standalone "Is there a risk giving her erythromycin?" fitted no shape, and the model told Karen Sanchez, among others,
+	 * "Erythromycin can be given, with one caution" — a clearance.
+	 */
+	@Test
+	public void aRiskInGivingItAskedWithoutAPrepositionIsTheSameQuestion() {
+		for (String question : new String[] { "Is there a risk giving her ibuprofen?", "Is there any risk of giving her "
+				+ "ibuprofen?", "Is there any harm giving her ibuprofen?" }) {
+			RecordingProvider provider = new RecordingProvider();
+			ChartAnswer answer = serviceWith(provider).search(patient, question);
+			assertEquals(0, provider.calls, question + " — " + answer.getAnswer());
+			assertTrue(answer.getAnswer().startsWith(DrugReferenceInjector.NEUTRAL_WITHHOLD_LEAD_OPENING + "Ibuprofen.\n"),
+					question + " — " + answer.getAnswer());
+		}
+	}
+
+	/**
 	 * "As well", "too" and "also" propose the drug beside her medications, which is what every proposal is screened against
 	 * (ADR Decision 244). On the 3.7.1 standalone Carol Brown, on lisinopril among six orders, asked "Can I start her on
 	 * enalapril as well?", reached the model, and read "Enalapril can be started, with several cautions" — a second ACE

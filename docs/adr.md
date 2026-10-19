@@ -20143,3 +20143,21 @@ class — *"a statin 20 mg"* — is said not checked, as one beside a drug is. *
 vaccine?"* names no class this module carries, and keeps the model's answer.
 
 Pinned by `DrugClassProposalTest`.
+
+## Decision 348: A risk in giving a drug, asked with no preposition, is the same question
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It widens [Decision 255](#decision-255-whether-a-drug-is-dangerous-harmful-or-a-cause-of-problems-is-answered-with-neither-yes-nor-no)'s shape.
+
+### Context
+
+*"Is there a risk giving her erythromycin?"* fitted no shape — Decision 255's *"Is there any harm in giving her X?"*
+wanted *in*, *with* or *to* before *giving* — and on the 3.7.1 standalone the model answered all 29 patients asked, with
+clearances such as Karen Sanchez's *"Erythromycin can be given, with one caution"*.
+
+### The decision
+
+The preposition is optional, and *of* is one: *"Is there a risk giving her X?"* and *"Is there any risk of giving her
+X?"* are answered as *"Is there any harm in giving her X?"* is, with no *Yes* or *No*.
+
+Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aRiskInGivingItAskedWithoutAPrepositionIsTheSameQuestion`.

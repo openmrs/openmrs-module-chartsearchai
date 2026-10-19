@@ -438,8 +438,9 @@ public final class QueryScopeRouter {
 			"is " + D + " (?:dangerous|risky|unsafe|harmful|a problem|problematic)(?: (?:for|in) " + PATIENT + ")?(?: now| today)?",
 			"(?:could|would|will|might|can) " + D + " cause (?:any )?(?:problems?|issues?|harm)(?: (?:for|in) " + PATIENT + ")?",
 			"(?:could|would|will|might) giving (?:" + PATIENT + " )?" + D + " cause (?:any )?(?:problems?|issues?|harm)",
-			"is there (?:any |a )?(?:harm|risk|danger|problem|issue|contraindication) (?:in|with|to) (?:giving|starting|prescribing"
-					+ "|adding) (?:" + PATIENT + " )?(?:on )?" + D + "(?: (?:to|for) " + PATIENT + ")?",
+			// and with no preposition, or "of" — "Is there a risk giving her erythromycin?" (ADR Decision 348)
+			"is there (?:any |a )?(?:harm|risk|danger|problem|issue|contraindication) (?:(?:in|with|to|of) )?(?:giving|starting|"
+					+ "prescribing|adding) (?:" + PATIENT + " )?(?:on )?" + D + "(?: (?:to|for) " + PATIENT + ")?",
 			"(?:is there )?any reason to avoid " + D + "(?: (?:for|in) " + PATIENT + ")?");
 
 	/**

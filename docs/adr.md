@@ -20395,3 +20395,18 @@ neither *Yes* nor *No*, as *"Will X increase her Y levels?"* is.
 
 Pinned by `TerseDrugQuestionWordingsTest.whetherOneDrugInterferesWithTheOtherIsWhetherItChangesIt`.
 
+## Decision 361: "Advisable" and "wise" ask what "safe" asks of a proposal
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It widens [Decision 357](#decision-357-fine-and-alright-ask-what-safe-asks-of-a-proposal)'s words.
+
+### Context
+
+*"Is it advisable to give her clarithromycin?"* fitted no shape, and on the 3.7.1 standalone the model answered every
+patient asked.
+
+### The decision
+
+*"Is it advisable (wise) to give her X?"* is the proposal shape *"Is it safe to give her X?"* is.
+
+Pinned by `TerseDrugQuestionWordingsTest.advisableToGiveItIsSafeToGiveIt`.

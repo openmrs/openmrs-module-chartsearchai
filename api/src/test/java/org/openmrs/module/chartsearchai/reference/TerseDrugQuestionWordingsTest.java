@@ -123,6 +123,13 @@ public class TerseDrugQuestionWordingsTest extends BaseModuleContextSensitiveTes
 			"Does clarithromycin interfere with simvastatin?");
 	}
 
+	/** "Advisable" and "wise" ask what "safe" asks of a proposal (ADR Decision 361): on the 3.7.1 standalone "Is it advisable
+	 *  to give her clarithromycin?" fitted no shape, and the model answered every patient asked. */
+	@Test
+	public void advisableToGiveItIsSafeToGiveIt() {
+		same("Is it safe to give her ibuprofen?", "Is it advisable to give her ibuprofen?", "Is it wise to give her ibuprofen?");
+	}
+
 	/**
 	 * A question whose "No" would read backwards, about a drug only an unrated contraindication relates to her, is answered
 	 * with what the check found and no verdict, as its proposal is (ADR Decision 351): on the 3.7.1 standalone "Is there a

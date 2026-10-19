@@ -20297,3 +20297,24 @@ does not take — never saying whether warfarin was the patient's.
 with his warfarin?"* is.
 
 Pinned by `TerseDrugQuestionWordingsTest.aDrugAsWellAsHersIsTheTwoTogether`.
+
+## Decision 356: Drugs listed with commas are the drugs listed with "and"
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It widens [Decision 263](#decision-263-one-drug-asked-about-beside-several-of-hers-is-answered-for-it-saying-which-are-hers)'s list of drugs given
+together.
+
+### Context
+
+`QueryScopeRouter.words` drops punctuation, so *"Can I give her ibuprofen, naproxen and aspirin?"* reached the together
+shape as three drug names with no joining word after the first, which it required. On the 3.7.1 standalone the model
+answered all 45 patients with its own verdict; *"Can I give her ibuprofen and naproxen and aspirin?"* was the module's.
+
+### The decision
+
+In *"Can I give her X, Y and Z?"* the first joining word is optional where the list ends in *and*: the question is
+answered as *"Can I give her X and Y and Z?"* is. Never two names with nothing between them: `UnrecognisedDrugName` marks
+an unrecognised word in a drug's place, and *"Can I give her ibuprofen or not?"* would then read as two drugs.
+
+Pinned by `TerseDrugQuestionWordingsTest.drugsListedWithCommasAreTheDrugsListedWithAnd`.
+

@@ -92,6 +92,17 @@ public class TerseDrugQuestionWordingsTest extends BaseModuleContextSensitiveTes
 	}
 
 	/**
+	 * Drugs listed with commas are the drugs listed with "and" (ADR Decision 356): on the 3.7.1 standalone "Can I give her
+	 * ibuprofen, naproxen and aspirin?" fitted no shape — the tokenizer drops the comma — and the model answered every
+	 * patient with its own verdict.
+	 */
+	@Test
+	public void drugsListedWithCommasAreTheDrugsListedWithAnd() {
+		same("Can I give her ibuprofen and naproxen and aspirin?", "Can I give her ibuprofen, naproxen and aspirin?",
+			"Can I give her ibuprofen, naproxen, and aspirin together?");
+	}
+
+	/**
 	 * A question whose "No" would read backwards, about a drug only an unrated contraindication relates to her, is answered
 	 * with what the check found and no verdict, as its proposal is (ADR Decision 351): on the 3.7.1 standalone "Is there a
 	 * problem with giving aspirin to this patient?" went to the model for the four patients recorded allergic to aspirin

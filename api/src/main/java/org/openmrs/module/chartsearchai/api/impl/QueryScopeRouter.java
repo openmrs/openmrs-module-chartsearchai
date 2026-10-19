@@ -543,10 +543,12 @@ public final class QueryScopeRouter {
 					+ PATIENT + ")?(?: now| today)?",
 			"(?:can|could|may|should) " + HER_D + " be (?:safely )?(?:given|started|prescribed|administered|taken|used) (?:with|alongside) "
 					+ HER_DS + "(?: (?:to|for) " + PATIENT + ")?(?: now| today)?",
-			// "Can I give her warfarin with ibuprofen?", "Can I give her warfarin and ibuprofen together?"
+			// "Can I give her warfarin with ibuprofen?", "Can I give her warfarin and ibuprofen together?", and the first joining
+			// word optional where the list ends in "and", a list's commas being no words — "ibuprofen, naproxen and aspirin"
+			// (ADR Decision 356); never two names with nothing between, which an unrecognised word beside a drug would make
 			"(?:can|could|may|should) (?:i|we) (?:safely )?(?:give|start|prescribe|administer) (?:" + PATIENT
-					+ " )?(?:on )?" + HER_D + " (?:and|with|alongside|as well as) " + HER_DS + "(?: together)?(?: to " + PATIENT
-					+ ")?(?: now| today)?",
+					+ " )?(?:on )?" + HER_D + " (?:(?:and|with|alongside|as well as) " + HER_DS + "|(?:" + HER_D + " )+and " + HER_D
+					+ ")(?: together)?(?: to " + PATIENT + ")?(?: now| today)?",
 			// "Can she take warfarin and ibuprofen together?", "Can she drink alcohol while on metronidazole?", "Can she have
 			// alcohol with her metronidazole?" (ADR Decision 268), "Can he have ibuprofen as well as his warfarin?" (ADR
 			// Decision 355)

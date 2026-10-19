@@ -20072,3 +20072,22 @@ not weigh (`QueryScopeRouter.statedPurpose`).
 
 Pinned by `DrugAgainstHerAllergiesTest.anAllergyNamedByItsKindIsAnsweredAsHerAllergiesAre`.
 
+## Decision 345: Whether one of her orders of a drug should be stopped is whether to stop her drug
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It gives [Decision 335](#decision-335-whether-to-stop-her-drug-is-answered-with-what-relates-it-to-her-other-medications-the-stopping-itself-not-weighed)'s stop grammar another
+wording.
+
+### Context
+
+*"Should one of his metronidazole orders be stopped?"* fitted no shape, and on the 3.7.1 standalone the model answered
+all 45 patients: Mogan Kamwara, on no metronidazole, was told *"Metronidazole can be given, with one caution"*, and 16
+others *"The records do not address Metronidazole orders"*.
+
+### The decision
+
+*"Should one of her X orders be stopped (discontinued, held)?"* is a stop shape of the *"Should I stop her X?"* family: of
+her drug it is answered as [Decision 259](#decision-259-whether-to-hold-or-stop-her-own-drug-is-answered-as-her-own-medication) answers that — her two orders of it, and what the check found — and of a
+drug she is not on, *"X is not one of this patient's active medications, so there is no order of it to stop."*
+
+Pinned by `StoppingHerDrugQuestionTest.whetherOneOfHerOrdersOfItShouldBeStoppedIsWhetherToStopIt`.

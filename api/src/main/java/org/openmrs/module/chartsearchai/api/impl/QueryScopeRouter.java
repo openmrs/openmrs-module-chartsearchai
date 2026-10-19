@@ -809,11 +809,16 @@ public final class QueryScopeRouter {
 			"(?:which|what) (?:drug )?interactions? would (?:stopping|discontinuing|removing) " + POSSESSIVE + " " + D
 					+ " (?:remove|end|resolve)");
 
+	/** "Should one of his metronidazole orders be stopped?" — whether to stop his drug (ADR Decision 345). */
+	private static final String ONE_OF_HER_D_ORDERS_STOPPED = "(?:should|must) one of " + POSSESSIVE + " " + D
+			+ " orders be (?:stopped|discontinued|held)(?: now)?";
+
 	/** "Is it safe to stop her nevirapine?", "Can I stop her nevirapine?" — whether to stop her drug (ADR Decision 335). */
 	private static final List<Pattern> STOP_HER_DRUG_SHAPES = shapes(
 			"is it (?:safe|ok|okay|alright|appropriate) to (?:stop|discontinue|hold) " + POSSESSIVE + " " + D + "(?: now)?",
 			"(?:can|could|may) (?:i|we) (?:safely )?(?:stop|discontinue|hold) " + POSSESSIVE + " " + D + "(?: now)?",
-			"(?:should|must|do) (?:i|we) (?:need to )?(?:stop|discontinue|hold) " + POSSESSIVE + " " + D + "(?: now)?");
+			"(?:should|must|do) (?:i|we) (?:need to )?(?:stop|discontinue|hold) " + POSSESSIVE + " " + D + "(?: now)?",
+			ONE_OF_HER_D_ORDERS_STOPPED);
 
 	/** Whether it asks whether stopping it is safe or allowed — not whether it should be stopped, which ADR Decision 259
 	 *  answers of her own drug as her medication with no lead (ADR Decision 335). */
@@ -859,6 +864,7 @@ public final class QueryScopeRouter {
 			"is it (?:safe|ok|okay|alright|appropriate) to (?:stop|discontinue|hold) " + POSSESSIVE + " " + D + "(?: now)?",
 			"(?:can|could|may) (?:i|we) (?:safely )?(?:stop|discontinue|hold) " + POSSESSIVE + " " + D + "(?: now)?",
 			"(?:should|must|do) (?:i|we) (?:need to )?(?:stop|discontinue|hold) " + POSSESSIVE + " " + D + "(?: now)?",
+			ONE_OF_HER_D_ORDERS_STOPPED,
 			// "If I stop her rifampicin, which interactions go away?" (ADR Decision 333)
 			"if (?:i|we) (?:stop|discontinue|remove|hold) " + POSSESSIVE + " " + D + " (?:which|what) (?:drug )?interactions? "
 					+ GO_AWAY,

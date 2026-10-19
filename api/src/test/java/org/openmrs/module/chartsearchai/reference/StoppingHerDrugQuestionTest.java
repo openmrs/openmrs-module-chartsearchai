@@ -64,6 +64,28 @@ public class StoppingHerDrugQuestionTest extends BaseModuleContextSensitiveTest 
 		}
 	}
 
+	/**
+	 * Whether one of her orders of a drug should be stopped is whether to stop her drug (ADR Decision 345): on the 3.7.1
+	 * standalone "Should one of his metronidazole orders be stopped?" fitted no shape, and the model answered every patient
+	 * — Mogan Kamwara, on no metronidazole, was told "Metronidazole can be given, with one caution", and 16 others
+	 * "The records do not address Metronidazole orders".
+	 */
+	@Test
+	public void whetherOneOfHerOrdersOfItShouldBeStoppedIsWhetherToStopIt() {
+		List<String> questions = Arrays.asList("Should one of his metronidazole orders be stopped?",
+			"Should one of her metronidazole orders be discontinued?");
+		PatientClinicalContext.ActiveDrugOrder[] two = {
+				DrugReferenceTestSupport.activeOrder("order-mtz-1", "Metronidazole", "Metronidazole"),
+				DrugReferenceTestSupport.activeOrder("order-mtz-2", "Metronidazole", "Metronidazole") };
+		String stop = ask("Should I stop his metronidazole?", two);
+		assertNotNull(stop, "precondition: the module answers whether to stop her drug");
+		for (String question : questions) {
+			assertEquals(mask(stop), mask(ask(question, two)), question);
+			assertEquals("Metronidazole is not one of this patient's active medications, so there is no order of it to stop.",
+				ask(question, DrugReferenceTestSupport.activeOrder("order-nvp", "Nevirapine 200mg", "Nevirapine")), question);
+		}
+	}
+
 	/** A name the data does not recognise, called hers, in the same question: said so, never left to the model (ADR
 	 *  Decision 335) — the model answered "Can I stop his klarizom?" for patients on no Klarizom "The records do not address
 	 *  Klarizom". */

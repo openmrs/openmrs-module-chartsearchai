@@ -19787,3 +19787,21 @@ and each with its rating, and neither "Yes" nor "No". `composeAboutThePair` also
 drugs.
 
 Pinned by `SeverityOfThePairsInteractionTest`.
+
+## Decision 332: Whether one drug is compatible with another, or can be combined with it, is asked as whether it is safe with it
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient.
+
+### Context
+
+*"Is warfarin compatible with his amiodarone?"*, *"Can metronidazole be combined with his warfarin?"* and *"Is
+ciprofloxacin compatible with his warfarin?"* fitted none of the two-drug shapes, so the model answered every patient on
+the 3.7.1 standalone — mostly patients on neither drug — with *"No — Warfarin should not be given"*.
+
+### The decision
+
+`QueryScopeRouter.TOGETHER_SHAPES` admits *"Is X compatible with (her) Y?"*, *"Are X and Y compatible?"*, *"Can X be
+combined with (her) Y?"* and *"Can I combine X with Y?"*, answered as *"Is X safe with (her) Y?"* is.
+
+Pinned by `CompatibleOrCombinedTogetherTest`.

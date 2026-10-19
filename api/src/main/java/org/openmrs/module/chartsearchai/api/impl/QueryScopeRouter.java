@@ -536,7 +536,15 @@ public final class QueryScopeRouter {
 			// "Are warfarin and ibuprofen safe together?", "Is warfarin safe with ibuprofen?"
 			"are " + HER_D + " and " + HER_D + " (?:safe|ok|okay|appropriate)(?: to (?:give|take|use))?(?: together)?(?: for "
 					+ PATIENT + ")?",
-			"is " + HER_D + " (?:safe|ok|okay|appropriate) (?:with|alongside) " + HER_DS + "(?: for " + PATIENT + ")?");
+			"is " + HER_D + " (?:safe|ok|okay|appropriate) (?:with|alongside) " + HER_DS + "(?: for " + PATIENT + ")?",
+			// "Is warfarin compatible with his amiodarone?", "Are warfarin and amiodarone compatible?", "Can metronidazole be
+			// combined with his warfarin?", "Can I combine X with Y?" — asked as whether one is safe with the other (ADR
+			// Decision 332)
+			"is " + HER_D + " compatible with " + HER_DS + "(?: for " + PATIENT + ")?",
+			"are " + HER_D + " and " + HER_D + " compatible(?: (?:together|with each other|for " + PATIENT + "))?",
+			"(?:can|could|may|should) " + HER_D + " be (?:safely )?combined with " + HER_DS + "(?: (?:in|for) " + PATIENT + ")?",
+			"(?:can|could|may|should) (?:i|we) (?:safely )?combine " + HER_D + " (?:and|with) " + HER_DS + "(?: (?:in|for) "
+					+ PATIENT + ")?");
 
 	/**
 	 * Whether a question asks whether two drugs may be given together and nothing else — one of

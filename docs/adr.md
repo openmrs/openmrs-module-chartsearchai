@@ -20241,3 +20241,22 @@ every patient with its own verdict — Joshua Johnson's *"No — Simvastatin sho
 each drug said hers or not, what the data relates between them, and each not hers against her medications.
 
 Pinned by `TerseDrugQuestionWordingsTest.aDrugGivenToAPatientOnAnotherIsTheTwoTogether`.
+
+## Decision 353: A drug safe "in combination with" her medications is one safe with them
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It widens [Decision 299](#decision-299-whether-a-drug-is-safe-with-her-medications-or-causes-problems-if-started-is-answered-as-its-proposal)'s shape.
+
+### Context
+
+*"Is clarithromycin safe in combination with her current regimen?"* fitted no shape — `SAFE_WITH_HER_MEDICATIONS` wanted
+*with* or *alongside* — and on the 3.7.1 standalone the model answered all 45 patients, Karen Sanchez with
+*"Clarithromycin can be given, with one caution"*, a clearance.
+
+### The decision
+
+*in combination with* and *together with* are among that shape's words: the question is answered as *"Is X safe with her
+current medications?"* is.
+
+Pinned by `TerseDrugQuestionWordingsTest.aDrugSafeInCombinationWithHerMedicationsIsOneSafeWithThem`.
+

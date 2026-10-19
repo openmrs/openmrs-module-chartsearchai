@@ -782,7 +782,9 @@ public final class QueryScopeRouter {
 	private static final List<Pattern> ANY_INTERACTIONS_WITH_HER_D_SHAPES = shapes(ANY_INTERACTIONS_WITH_HER_D);
 
 	/** "Is lidocaine safe with her other medications?", "Is ibuprofen okay with her current meds?" */
-	private static final String SAFE_WITH_HER_MEDICATIONS = "is " + HER_D + " (?:safe|ok|okay|appropriate) (?:with|alongside) "
+	private static final String SAFE_WITH_HER_MEDICATIONS = "is " + HER_D + " (?:safe|ok|okay|appropriate) (?:with|alongside|"
+			// "in combination with her current regimen" (ADR Decision 353)
+			+ "in combination with|together with) "
 			+ "(?:any of )?" + POSSESSIVE + " (?:other )?" + MEDICATIONS;
 
 	/** "Is dolutegravir safe with her TB preventive therapy?" — one drug beside a group of her medications (ADR Decision

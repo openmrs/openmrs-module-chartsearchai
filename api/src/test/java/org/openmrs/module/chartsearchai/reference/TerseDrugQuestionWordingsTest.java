@@ -71,6 +71,17 @@ public class TerseDrugQuestionWordingsTest extends BaseModuleContextSensitiveTes
 	}
 
 	/**
+	 * A drug safe "in combination with" her medications is one safe with them (ADR Decision 353): on the 3.7.1 standalone
+	 * "Is clarithromycin safe in combination with her current regimen?" fitted no shape, and the model told Karen Sanchez
+	 * "Clarithromycin can be given, with one caution", a clearance.
+	 */
+	@Test
+	public void aDrugSafeInCombinationWithHerMedicationsIsOneSafeWithThem() {
+		same("Is ibuprofen safe with her current medications?", "Is ibuprofen safe in combination with her current regimen?",
+			"Is ibuprofen safe together with her current medications?");
+	}
+
+	/**
 	 * A question whose "No" would read backwards, about a drug only an unrated contraindication relates to her, is answered
 	 * with what the check found and no verdict, as its proposal is (ADR Decision 351): on the 3.7.1 standalone "Is there a
 	 * problem with giving aspirin to this patient?" went to the model for the four patients recorded allergic to aspirin

@@ -19926,3 +19926,24 @@ starts, then its findings — never a verdict. The findings are those `aboutHerO
 `aboutHerOwnSubstance` whatever the question; with none the model answers, as before.
 
 Pinned by `SwitchFromADrugSheIsNotOnTest.aSwitchToADrugSheIsScheduledToStartFromOneSheDoesNotSaysBothAndAnswersIt`.
+
+## Decision 338: "Any interactions with his X?" asks whether X interacts with his medications
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It widens [Decision 181](#decision-181-a-question-whether-not-to-give-a-drug-or-whether-it-interacts-is-answered-without-an-inverted-no)'s grammar, so
+[Decision 320](#decision-320-whether-a-drug-interacts-with-her-medications-over-rows-below-the-floor-or-no-order-at-all-is-answered-with-what-the-data-lists) answers the wording.
+
+### Context
+
+*"Any interactions with his lisinopril?"* fitted none of `INTERACTS_WITH_HER_MEDICATIONS_SHAPES`. Where the check related
+lisinopril to an order of hers the found-finding arm answered it; where the data listed lisinopril against her orders only
+below the severity floor, or she had no order, the model did. On the 3.7.1 standalone 21 of 45 patients got the model's
+answer, among them Susan Hall, on no medication: *"Yes — interactions with Lisinopril are recorded: ketoconazole (Major);
+leflunomide (Major) …"* — drugs she does not take.
+
+### The decision
+
+`any (drug) interaction(s) with (her) X`, after an optional *"Are there"* or *"Is there"*, is a question whether X
+interacts with her medications, answered word for word as *"Does her X interact with her medications?"* is.
+
+Pinned by `WhichOfHerMedicationsInteractTest.anyInteractionsWithTheDrugIsAnsweredAsWhetherItInteracts`.

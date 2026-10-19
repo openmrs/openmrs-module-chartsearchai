@@ -96,6 +96,38 @@ public class WhichOfHerMedicationsInteractTest extends BaseModuleContextSensitiv
 		}
 	}
 
+	/**
+	 * "Any interactions with his lisinopril?" asks what "Does lisinopril interact with his medications?" asks (ADR Decision
+	 * 338): on the 3.7.1 standalone it fitted no shape, so wherever the data listed lisinopril against his orders only
+	 * below the severity floor, or he had no order, the model answered — telling Susan Hall, on no medication, "Yes —
+	 * interactions with Lisinopril are recorded: ketoconazole (Major); leflunomide (Major) …", drugs she does not take.
+	 */
+	@Test
+	public void anyInteractionsWithTheDrugIsAnsweredAsWhetherItInteracts() {
+		List<PatientClinicalContext.ActiveDrugOrder> aspirin = Arrays.asList(
+			DrugReferenceTestSupport.activeOrder("order-asa", "Aspirin 81mg", "Aspirin"));
+		List<PatientClinicalContext.ActiveDrugOrder> none = Arrays.<PatientClinicalContext.ActiveDrugOrder> asList();
+		String belowFloor = mask(ask("Does rifampicin interact with her medications?", aspirin));
+		String noOrders = mask(ask("Does rifampicin interact with her medications?", none));
+		assertNotNull(belowFloor, "precondition");
+		assertNotNull(noOrders, "precondition");
+		for (String question : Arrays.asList("Any interactions with rifampicin?", "Any drug interactions with rifampicin?",
+				"Are there any interactions with rifampicin?")) {
+			assertEquals(belowFloor, mask(ask(question, aspirin)), question);
+			assertEquals(noOrders, mask(ask(question, none)), question + " / no orders");
+		}
+		// Named as his, it is answered as "Does his rifampicin interact with his medications?" is: said not to be his.
+		String hisBelowFloor = mask(ask("Does his rifampicin interact with his medications?", aspirin));
+		assertEquals("Rifampicin (rifampin)" + DrugReferenceInjector.NOT_HER_MEDICATION + "\n" + belowFloor, hisBelowFloor,
+			"precondition");
+		String hisNoOrders = mask(ask("Does his rifampicin interact with his medications?", none));
+		for (String question : Arrays.asList("Any interactions with his rifampicin?",
+				"Are there any interactions with her rifampicin?")) {
+			assertEquals(hisBelowFloor, mask(ask(question, aspirin)), question);
+			assertEquals(hisNoOrders, mask(ask(question, none)), question + " / no orders");
+		}
+	}
+
 	private static String mask(String answer) {
 		return answer == null ? null : answer.replaceAll("\\[\\d+\\]", "[n]");
 	}

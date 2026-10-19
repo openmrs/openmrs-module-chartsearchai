@@ -764,8 +764,9 @@ public class DrugReferenceInjector {
 		}
 		// Nor does whether to stop one of her orders named by its own name, answered where nothing was found too — her only
 		// order raises nothing to pair it with (ADR Decision 335).
+		// And one of her orders named by its own name, proposed or asked whether it interacts (ADR Decision 336).
 		boolean stopOfHerOrderByName = questionDrugs.isEmpty()
-				&& asksAboutOneOfHerOrdersByName(question, context, drugReferenceService) == OneOfHerOrdersAsked.STOPPED;
+				&& asksAboutOneOfHerOrdersByName(question, context, drugReferenceService) != null;
 		if (nothingResolved && unrepresented.isEmpty() && !screenRelatedNothing && !screenOfNoMedications
 				&& !screenOfOneOrder && !allergyToHerMedications && !duplicateQuestion && listed.stated().isEmpty() && unrecognised == null
 				&& !stopOfHerOrderByName) {
@@ -1146,8 +1147,8 @@ public class DrugReferenceInjector {
 						orderEntries, context)) != null) {
 			// Two of her orders named by their own names: what the check relates between them (ADR Decision 265).
 			moduleAnswer = twoOrdersByName;
-		} else if ((!findings.isEmpty() || asksAboutOneOfHerOrdersByName(question, context, drugReferenceService)
-						== OneOfHerOrdersAsked.STOPPED) && context != null && questionDrugs.isEmpty()
+		} else if ((!findings.isEmpty() || asksAboutOneOfHerOrdersByName(question, context, drugReferenceService) != null)
+				&& context != null && questionDrugs.isEmpty()
 				&& ChartSearchAiUtils.getBooleanGlobalProperty(
 						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
 						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS)
@@ -7112,7 +7113,28 @@ public class DrugReferenceInjector {
 							: body;
 		}
 		if (relating.isEmpty()) {
-			return null;
+			// No finding relates it to another of her orders: where she has no other, her medication, that there is nothing
+			// to check it against, and any contraindication about it — never the model's "No" of a drug she takes (ADR
+			// Decision 336).
+			boolean others = false;
+			for (PatientClinicalContext.ActiveDrugOrder each : context.getActiveDrugOrders()) {
+				others |= each != order;
+			}
+			if (others) {
+				return null;
+			}
+			List<String> alone = new ArrayList<String>();
+			alone.add(label + OWN_MEDICATION_LEAD + " (" + display + (number == null ? "" : " [" + number + "]") + ")"
+					+ (asked == OneOfHerOrdersAsked.PROPOSED ? ", so adding it would duplicate that order, and" : ", and")
+					+ " this patient has no other active medication to check it against.");
+			for (int i = 0; i < findings.size(); i++) {
+				SafetyWarning finding = findings.get(i);
+				if (SafetyWarning.TYPE_CONTRAINDICATION.equals(finding.getType())
+						&& !Collections.disjoint(subjectSubstances(finding, orderEntries), ofIt)) {
+					alone.add(findingLine(finding, numbers.get(i), orderRecordNumbers, herOrderRecords, true));
+				}
+			}
+			return String.join("\n", alone);
 		}
 		List<String> lines = findingLines(findings, numbers, relating, orderRecordNumbers, herOrderRecords, true);
 		lines.add(0, asked == OneOfHerOrdersAsked.PROPOSED

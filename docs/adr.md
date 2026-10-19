@@ -19878,3 +19878,27 @@ her drug: what relates it to her other medications, or that she has no other to 
 order alone, was told *"The records do not address the safety of stopping Clarithromycine"*.
 
 Pinned by `StoppingHerDrugQuestionTest`.
+
+## Decision 336: Her only order, named by a brand the data does not carry, proposed or asked whether it interacts, is answered as hers
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It completes [Decision 273](#decision-273-one-of-her-orders-named-alone-by-its-own-name-is-answered-as-her-medication) for an order
+with nothing to relate it to.
+
+### Context
+
+Decision 273 answered a question naming one of her orders by its own name only where a finding related that order to
+another of hers; with none — her only order — the injection returned early, and the model answered. On the 3.7.1
+standalone Kevin Brown, on Clarithromycine Co 500mg alone, was told *"No — Clarithromycine should not be given due to a
+drug allergen"* for *"Can I give him clarithromycine?"*, and *"No — Clarithromycin should not be given"* for *"Does
+clarithromycine interact with his medications?"*: a drug he takes, refused as though proposed.
+
+### The decision
+
+Such a question does not return early, and `composeOneOfHerOrdersByName` answers it, where she has no other active
+order, as her medication: *"Clarithromycine is one of this patient's active medications (Clarithromycine Co 500mg),
+so adding it would duplicate that order, and this patient has no other active medication to check it against."* — or,
+asked whether it interacts, without the duplicate — then each contraindication the check raised about it. Never "Yes" or
+"No". With other orders and no finding relating it to them, the model answers, as before.
+
+Pinned by `HerOrderNamedByItsBrandAloneTest`.

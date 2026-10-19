@@ -102,6 +102,26 @@ public class TerseDrugQuestionWordingsTest extends BaseModuleContextSensitiveTes
 		}
 	}
 
+	/**
+	 * A drug proposed beside one of hers, whose findings make no verdict — an unrated contraindication among them — is
+	 * answered as its proposal alone is, after her drug is named (ADR Decision 354): on the 3.7.1 standalone "Can I
+	 * prescribe ibuprofen alongside her lisinopril?" went to the model for Joshua Johnson, on lisinopril and recorded
+	 * allergic to aspirin, which answered "No, Ibuprofen should not be prescribed".
+	 */
+	@Test
+	public void aDrugBesideHersWhoseFindingsMakeNoVerdictIsAnsweredAsItsProposal() {
+		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
+			DrugReferenceTestSupport.activeOrder("order-lis", "Lisinopril 10 mg", "Lisinopril"));
+		LinkedHashSet<String> names = new LinkedHashSet<String>(orders.get(0).getNames());
+		String alone = askAllergic("Can I give her ibuprofen?", names, orders);
+		assertNotNull(alone, "precondition: the module answers the proposal alone");
+		for (String question : Arrays.asList("Can I prescribe ibuprofen alongside her lisinopril?",
+				"Can I give her ibuprofen with her lisinopril?")) {
+			assertEquals("Lisinopril is one of this patient's active medications.\n" + alone,
+				askAllergic(question, names, orders), question);
+		}
+	}
+
 	private static String askAllergic(String question, LinkedHashSet<String> names,
 			List<PatientClinicalContext.ActiveDrugOrder> orders) {
 		String answer = DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.shippedServiceWithGroups())

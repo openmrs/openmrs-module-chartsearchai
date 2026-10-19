@@ -6108,6 +6108,11 @@ public class DrugReferenceInjector {
 		if (changes && withholdsWithoutARating(proposed.substances, notHerOwnOrdersSharingASubstance(ofIt))) {
 			return proposed;
 		}
+		// And a proposal whose findings make no verdict, answered with what the check found, as alone it is (ADR Decisions
+		// 311, 354).
+		if (!interact && !changes && noVerdictAbout(proposed.substances, notHerOwnOrdersSharingASubstance(ofIt))) {
+			return proposed;
+		}
 		return cautionsOnlyAbout(proposed.substances, notHerOwnOrdersSharingASubstance(ofIt)) ? proposed : null;
 	}
 

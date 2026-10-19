@@ -20260,3 +20260,22 @@ current medications?"* is.
 
 Pinned by `TerseDrugQuestionWordingsTest.aDrugSafeInCombinationWithHerMedicationsIsOneSafeWithThem`.
 
+## Decision 354: A drug proposed beside one of hers, whose findings make no verdict, is answered as its proposal alone is
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It carries [Decision 311](#decision-311-a-proposal-whose-findings-make-no-verdict-is-answered-with-what-the-check-found)'s answer to
+[Decision 306](#decision-306-a-drug-proposed-beside-one-of-hers-related-to-her-orders-only-without-a-rating-is-answered-as-its-proposal)'s pair.
+
+### Context
+
+`theOneOfTwoDrugsNotHers` admitted a drug proposed beside one of hers where a finding was a rated reason to withhold it,
+or where every one was a caution about it. One whose findings make no verdict — an unrated contraindication among them —
+was left to the model: Joshua Johnson, on lisinopril and recorded allergic to aspirin, asked *"Can I prescribe ibuprofen
+alongside her lisinopril?"* on the 3.7.1 standalone, was told *"No, Ibuprofen should not be prescribed"*.
+
+### The decision
+
+Such a pair is admitted where the findings about the drug proposed make no verdict (`noVerdictAbout`), as a proposal
+alone is: the answer names her drug as hers, then states what the check found about the proposal, with no verdict.
+
+Pinned by `TerseDrugQuestionWordingsTest.aDrugBesideHersWhoseFindingsMakeNoVerdictIsAnsweredAsItsProposal`.

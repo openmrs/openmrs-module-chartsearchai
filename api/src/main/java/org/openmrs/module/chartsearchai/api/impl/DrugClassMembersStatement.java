@@ -21,7 +21,7 @@ import org.openmrs.module.chartsearchai.reference.DrugSafetyValidator;
  * Like {@link ListedDrugStatement} it APPENDS: no marker, no chip, no prompt change, and never a word about whether the
  * class may be given. It is not the class note, whose citable words name no member (ADR Decision 67).
  */
-final class DrugClassMembersStatement {
+public final class DrugClassMembersStatement {
 
 	private DrugClassMembersStatement() {
 	}
@@ -37,7 +37,9 @@ final class DrugClassMembersStatement {
 		return (DrugSafetyValidator.endSentence(answer.trim()) + " " + statement(group, orders)).trim();
 	}
 
-	static String statement(String group, List<String> orders) {
+	/** The sentence naming {@code orders} under the ATC {@code group}, or that none of her orders is there — also the
+	 *  module's own answer to a class proposed (ADR Decision 347). */
+	public static String statement(String group, List<String> orders) {
 		if (orders.isEmpty()) {
 			return "None of this patient's active medication orders is in that class (ATC group " + group + ").";
 		}

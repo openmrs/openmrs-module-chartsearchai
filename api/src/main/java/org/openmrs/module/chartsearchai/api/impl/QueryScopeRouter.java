@@ -1298,6 +1298,48 @@ public final class QueryScopeRouter {
 	 * untold until its shape was admitted. A miss there costs the statement, never a refusal. ADR Decision
 	 * 129.
 	 */
+	/** What may stand before a drug class named in a drug's place — "a PPI", "an NSAID", "any statin". */
+	private static final Set<String> CLASS_ARTICLES = new HashSet<String>(Arrays.asList("a", "an", "any", "some", "another"));
+
+	/**
+	 * Whether {@code question} proposes giving her a drug of a class, named by one of {@code classTerms} where a drug's name
+	 * would stand — "Can I give her a PPI?", "Can I give him an NSAID for his back pain?" (ADR Decision 347): with the
+	 * term, and any article before it, marked as the drug, the question is one {@link #asksWhetherToGiveADrug} admits.
+	 */
+	public static boolean proposesADrugClass(String question, List<String> classTerms) {
+		return classProposalWords(question, classTerms) != null;
+	}
+
+	/** Whether a question {@link #proposesADrugClass} states a dose beside the class — "a statin 20 mg" — which no finding
+	 *  weighs, as {@link #statesADose} says of one beside a drug (ADR Decision 347). */
+	public static boolean statesADoseOfADrugClass(String question, List<String> classTerms) {
+		List<String> marked = classProposalWords(question, classTerms);
+		return marked != null && statesADose(marked);
+	}
+
+	/** {@code question}'s words with the class term marked as the drug, where so marked it proposes the drug; else null. */
+	private static List<String> classProposalWords(String question, List<String> classTerms) {
+		List<String> words = words(question);
+		for (String term : classTerms) {
+			List<String> named = words(term);
+			for (int i = 0; !named.isEmpty() && i + named.size() <= words.size(); i++) {
+				if (!words.subList(i, i + named.size()).equals(named)) {
+					continue;
+				}
+				List<String> marked = new ArrayList<String>(words.subList(0, i));
+				if (!marked.isEmpty() && CLASS_ARTICLES.contains(marked.get(marked.size() - 1))) {
+					marked.remove(marked.size() - 1);
+				}
+				marked.add(DRUG_NAME);
+				marked.addAll(words.subList(i + named.size(), words.size()));
+				if (asksWhetherToGiveADrug(marked)) {
+					return marked;
+				}
+			}
+		}
+		return null;
+	}
+
 	public static boolean asksWhetherToGiveADrug(List<String> wordsWithTheDrugMarked) {
 		if (fitsAShape(wordsWithTheDrugMarked, PROPOSAL_SHAPES) || asksWhetherNotToGiveADrug(wordsWithTheDrugMarked)) {
 			return true;

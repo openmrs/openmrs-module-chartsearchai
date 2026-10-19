@@ -9,9 +9,11 @@
  */
 package org.openmrs.module.chartsearchai.reference;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -149,6 +151,32 @@ final class DrugClassTerms {
 	}
 
 	private DrugClassTerms() {
+	}
+
+	/**
+	 * The words a question names {@code className} by — the code table's terms for it and, where a curated group carries
+	 * that name, the group's own name — lower-cased, for marking the class where a drug's name would stand (ADR Decision
+	 * 347). Empty for a class this module does not name.
+	 */
+	static List<String> termsOf(String className, List<CrossReactivityGroup> groups) {
+		List<String> out = new ArrayList<String>();
+		if (className == null) {
+			return out;
+		}
+		for (Map.Entry<String, String> term : TERMS.entrySet()) {
+			if (term.getValue().equals(className)) {
+				out.add(term.getKey());
+			}
+		}
+		if (groups != null) {
+			for (CrossReactivityGroup group : groups) {
+				if (group != null && className.equalsIgnoreCase(group.getName())
+						&& !out.contains(group.getName().toLowerCase(Locale.ROOT))) {
+					out.add(group.getName().toLowerCase(Locale.ROOT));
+				}
+			}
+		}
+		return out;
 	}
 
 	/** The ATC group {@code className} IS ({@link #ATC_GROUP_OF_CLASS}), or {@code null} where no group is that class. */

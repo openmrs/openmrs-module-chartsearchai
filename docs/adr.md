@@ -20115,3 +20115,31 @@ about was not checked. Of a drug she is not on: *"X is not one of this patient's
 of it to change."* (`DrugReferenceInjector.NO_DOSE_TO_CHANGE`).
 
 Pinned by `ChangingHerDrugsDoseTest`.
+
+## Decision 347: A drug class proposed is answered with what the module states of the class, choosing no drug of it
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It answers what [Decision 166](#decision-166-a-question-naming-a-drug-class-is-told-so-in-the-answer-itself) appended to the
+model's answer, and keeps issue #354's rule that a class is never resolved to a substance.
+
+### Context
+
+*"Can I give her a PPI?"* and *"Can I give him an NSAID for his back pain?"* went to the model for all 45 patients on
+the 3.7.1 standalone, the class sentence appended after. The model's own sentence was the defect: James Thompson, on
+metronidazole, was told *"No — Omeprazole / sodium bicarbonate should not be given"*, a drug nobody named; Brian Lopez,
+on omeprazole, *"The records do not address the safety of giving a PPI"*; and Sarah Taylor, on three NSAIDs, *"The
+records do not address the suitability of giving an NSAID"*, with nothing after it, NSAID being no ATC group
+([Decision 275](#decision-275-which-of-her-orders-are-in-a-drug-class-the-question-names-is-said-where-the-classs-atc-group-is-the-class)).
+
+### The decision
+
+A question proposing a class this module names, the class where a drug's name would stand
+(`QueryScopeRouter.proposesADrugClass`), is answered by the module where her orders and allergy records were read:
+`drugClassStatement`; then her orders in the class — the ATC group the class IS, in `DrugClassMembersStatement`'s
+sentence, or the drug group this module carries by that name, in [Decision 298](#decision-298-whether-she-is-on-any-drug-of-a-group-this-module-carries-is-answered-with-her-orders-in-it)'s words; then her recorded drug
+allergies in it, each as the chart spells it, else that none is in it, or that none is recorded. A class that is neither
+gets the first sentence alone. No drug of the class is named as one to give or withhold. A dose stated beside the
+class — *"a statin 20 mg"* — is said not checked, as one beside a drug is. *"Can I give her a live
+vaccine?"* names no class this module carries, and keeps the model's answer.
+
+Pinned by `DrugClassProposalTest`.

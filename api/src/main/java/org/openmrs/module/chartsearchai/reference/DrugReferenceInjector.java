@@ -37,6 +37,7 @@ import java.util.regex.Pattern;
 import org.openmrs.Patient;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
+import org.openmrs.module.chartsearchai.api.impl.DrugClassMembersStatement;
 import org.openmrs.module.chartsearchai.api.impl.QueryScopeRouter;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
@@ -1329,6 +1330,17 @@ public class DrugReferenceInjector {
 								+ carried + ": " + DrugSafetyValidator.joinPartners(inIt) + ".";
 			}
 		}
+		// A drug class proposed: the module chooses no drug of it and rates none — it states that the class was not resolved
+		// to a substance, her orders in it and her recorded drug allergies in it (ADR Decision 347).
+		if (moduleAnswer == null && namedClass != null && questionDrugs.isEmpty() && context != null
+				&& ChartSearchAiUtils.getBooleanGlobalProperty(
+						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
+						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS)
+				&& context.chartReadForSafety() && context.contraindicationRecordsRead()
+				&& QueryScopeRouter.proposesADrugClass(question,
+					DrugClassTerms.termsOf(namedClass, drugReferenceService.getCrossReactivityGroups()))) {
+			moduleAnswer = composeClassProposal(namedClass, askedGroup, orderEntries, context);
+		}
 		// Whether she is allergic to any of her medications: what her allergy findings say of them (ADR Decision 295).
 		if (moduleAnswer == null && allergyToHerMedications
 				&& ChartSearchAiUtils.getBooleanGlobalProperty(
@@ -1501,7 +1513,10 @@ public class DrugReferenceInjector {
 		// And whether the question states a dose of the drug it asks about, which the findings never weigh (ADR Decision
 		// 274), so LlmInferenceService says after the answer that it was not checked.
 		injected.markStatesADose(!questionDrugs.isEmpty()
-				&& QueryScopeRouter.statesADose(wordsBesideItsNames(question, questionDrugs)));
+				&& QueryScopeRouter.statesADose(wordsBesideItsNames(question, questionDrugs))
+				// or beside a class proposed (ADR Decision 347)
+				|| namedClass != null && QueryScopeRouter.statesADoseOfADrugClass(question,
+					DrugClassTerms.termsOf(namedClass, drugReferenceService.getCrossReactivityGroups())));
 		// And, where the question names a class whose ATC group IS that class, which of her orders the data files there —
 		// none only where every order of hers was read and identified (ADR Decision 275).
 		String classGroup = DrugClassTerms.atcGroupOf(namedClass);
@@ -7656,6 +7671,74 @@ public class DrugReferenceInjector {
 		}
 		return asked.get(0).label + " is not one of this patient's active medications, so there is no order of it to stop, "
 				+ "and no interaction among this patient's medications that stopping it would end.";
+	}
+
+	/**
+	 * The module's answer to a drug class proposed (ADR Decision 347): {@link #drugClassStatement}, then her orders in the
+	 * class — the ATC group it IS ({@link DrugClassTerms#atcGroupOf}), in {@code DrugClassMembersStatement}'s words, or the
+	 * drug group this module carries by its name, in ADR Decision 298's — and then her recorded drug allergies in it,
+	 * each as the chart spells it, or that none is, or that none is recorded. For a class neither an ATC group nor a group
+	 * this module carries, the first sentence alone. Never a drug chosen from the class, nor a word on giving one: the
+	 * model told a patient on metronidazole "No — Omeprazole / sodium bicarbonate should not be given". {@code null} where
+	 * her orders were not all read.
+	 */
+	private String composeClassProposal(String namedClass, CrossReactivityGroup group, List<DrugReference> orderEntries,
+			PatientClinicalContext context) {
+		String atc = DrugClassTerms.atcGroupOf(namedClass);
+		String ordersLine;
+		String where;
+		Predicate<Set<String>> allergenInIt;
+		if (atc != null) {
+			List<String> orders = ordersFiledUnder(atc, orderEntries, context);
+			if (orders == null) {
+				return null;
+			}
+			ordersLine = DrugClassMembersStatement.statement(atc, orders);
+			where = "in that class (ATC group " + atc + ")";
+			allergenInIt = codes -> {
+				for (String code : codes) {
+					if (code.startsWith(atc)) {
+						return true;
+					}
+				}
+				return false;
+			};
+		} else if (group != null) {
+			List<String> orders = ordersFiledUnder(group::containsAnyCodeForDuplicateTherapy, orderEntries, context);
+			if (orders == null) {
+				return null;
+			}
+			where = "in the drug group this module carries as " + group.getName();
+			ordersLine = orders.isEmpty() ? "None of this patient's active medication orders is " + where + "."
+					: "Already among this patient's active medication orders " + where + ": "
+							+ DrugSafetyValidator.joinPartners(orders) + ".";
+			allergenInIt = group::containsAnyCode;
+		} else {
+			return drugClassStatement(namedClass);
+		}
+		boolean anyDrugAllergy = false;
+		List<String> inIt = new ArrayList<String>();
+		for (String token : context.getAllergyTokens()) {
+			if (context.getNonDrugAllergyTokens().contains(token)) {
+				continue;
+			}
+			anyDrugAllergy = true;
+			List<DrugReference> implied = drugReferenceService.findImpliedSubstances(token);
+			// An allergy recorded by the group's own name is to its members (ADR Decision 231).
+			boolean in = implied.isEmpty() && group != null
+					&& DrugClassTerms.groupNamedBy(token, drugReferenceService.getCrossReactivityGroups()) == group;
+			for (DrugReference row : implied) {
+				in |= allergenInIt.test(row.normalizedAtcCodes());
+			}
+			String spelled = context.allergySpelling(token);
+			if (in && !inIt.contains(spelled)) {
+				inIt.add(spelled);
+			}
+		}
+		String allergyLine = !anyDrugAllergy ? "No drug allergies are recorded for this patient."
+				: inIt.isEmpty() ? "None of this patient's recorded drug allergies is " + where + "."
+						: "Recorded drug allergies " + where + ": " + String.join("; ", inIt) + ".";
+		return drugClassStatement(namedClass) + "\n" + ordersLine + "\n" + allergyLine;
 	}
 
 	/** How the answer to which drugs to avoid in her opens (ADR Decision 324): no finding lists drugs to avoid. */

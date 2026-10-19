@@ -556,7 +556,12 @@ public final class QueryScopeRouter {
 			"are " + HER_D + " and " + HER_D + " compatible(?: (?:together|with each other|for " + PATIENT + "))?",
 			"(?:can|could|may|should) " + HER_D + " be (?:safely )?combined with " + HER_DS + "(?: (?:in|for) " + PATIENT + ")?",
 			"(?:can|could|may|should) (?:i|we) (?:safely )?combine " + HER_D + " (?:and|with) " + HER_DS + "(?: (?:in|for) "
-					+ PATIENT + ")?");
+					+ PATIENT + ")?",
+			// "Can I add fluconazole to her cotrimoxazole?", "Is it safe to add fluconazole to her cotrimoxazole?" — given
+			// with it (ADR Decision 343)
+			"(?:can|could|may|should) (?:i|we) (?:safely )?add " + HER_D + " to " + HER_DS + "(?: for " + PATIENT
+					+ ")?(?: now| today)?",
+			"is it (?:safe|ok|okay|appropriate) to add " + HER_D + " to " + HER_DS + "(?: for " + PATIENT + ")?(?: now| today)?");
 
 	/**
 	 * Whether a question asks whether two drugs may be given together and nothing else — one of

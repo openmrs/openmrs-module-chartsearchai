@@ -20032,3 +20032,22 @@ active medications."* ([Decision 315](#decision-315-a-drug-the-question-names-as
 
 Pinned by `RestartingHerDrugQuestionTest`.
 
+## Decision 343: A drug added to one of hers is answered as that drug given with hers
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It gives [Decision 169](#decision-169-a-question-whether-two-drugs-can-be-given-together-states-their-findings-against-her-own-orders)'s together grammar the
+verb *add*.
+
+### Context
+
+*"Can I add fluconazole to her cotrimoxazole?"* fitted no shape — *"Can I add X to her medications?"* is a proposal
+shape, but a drug in the second slot was none — and on the 3.7.1 standalone the model answered all 45 patients, most with
+*"Fluconazole can be added, with one caution"*, a clearance, whether or not she takes cotrimoxazole.
+
+### The decision
+
+*"Can (should) I add X to her Y?"* and *"Is it safe to add X to her Y?"* are together shapes, answered word for word as
+*"Can I give her X with her Y?"* is — of her Y, of a Y she is not on, and where she has no order.
+
+Pinned by `AddingADrugToHerOwnTest`.
+

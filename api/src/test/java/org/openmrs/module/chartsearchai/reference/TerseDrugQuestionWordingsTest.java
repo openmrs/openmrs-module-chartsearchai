@@ -60,6 +60,17 @@ public class TerseDrugQuestionWordingsTest extends BaseModuleContextSensitiveTes
 	}
 
 	/**
+	 * A drug given "to a patient on" another is the two given together (ADR Decision 352): on the 3.7.1 standalone "Can I
+	 * give clarithromycin to a patient on simvastatin?" fitted no shape, and the model told Joshua Johnson "No — Simvastatin
+	 * should not be given", the other drug's verdict.
+	 */
+	@Test
+	public void aDrugGivenToAPatientOnAnotherIsTheTwoTogether() {
+		same("Can I give her clarithromycin with simvastatin?", "Can I give clarithromycin to a patient on simvastatin?",
+			"Can I give clarithromycin to a patient taking simvastatin?");
+	}
+
+	/**
 	 * A question whose "No" would read backwards, about a drug only an unrated contraindication relates to her, is answered
 	 * with what the check found and no verdict, as its proposal is (ADR Decision 351): on the 3.7.1 standalone "Is there a
 	 * problem with giving aspirin to this patient?" went to the model for the four patients recorded allergic to aspirin

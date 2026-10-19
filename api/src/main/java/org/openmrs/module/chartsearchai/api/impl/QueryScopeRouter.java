@@ -568,6 +568,9 @@ public final class QueryScopeRouter {
 			"(?:can|could|may|should) " + HER_D + " be (?:safely )?combined with " + HER_DS + "(?: (?:in|for) " + PATIENT + ")?",
 			"(?:can|could|may|should) (?:i|we) (?:safely )?combine " + HER_D + " (?:and|with) " + HER_DS + "(?: (?:in|for) "
 					+ PATIENT + ")?",
+			// "Can I give clarithromycin to a patient on simvastatin?" — given with it (ADR Decision 352)
+			"(?:can|could|may|should) (?:i|we) (?:safely )?(?:give|start|prescribe|administer) " + HER_D + " to (?:a|the|this) "
+					+ "patient (?:on|taking|who takes|who is (?:on|taking)) " + HER_DS + "(?: now| today)?",
 			// "Can I add fluconazole to her cotrimoxazole?", "Is it safe to add fluconazole to her cotrimoxazole?" — given
 			// with it (ADR Decision 343)
 			"(?:can|could|may|should) (?:i|we) (?:safely )?add " + HER_D + " to " + HER_DS + "(?: for " + PATIENT

@@ -20224,3 +20224,20 @@ Such a question is answered as its proposal is: under *"What this module's drug-
 verdict. A question with no verdict to read backwards is the one this answer suits best.
 
 Pinned by `TerseDrugQuestionWordingsTest.aNegatedQuestionAboutAnUnratedContraindicationStatesWhatTheCheckFound`.
+
+## Decision 352: A drug given to "a patient on" another is the two given together
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It widens [Decision 169](#decision-169-a-question-whether-two-drugs-can-be-given-together-states-their-findings-against-her-own-orders)'s together grammar.
+
+### Context
+
+*"Can I give clarithromycin to a patient on simvastatin?"* fitted no shape, and on the 3.7.1 standalone the model answered
+every patient with its own verdict — Joshua Johnson's *"No — Simvastatin should not be given"* about the other drug.
+
+### The decision
+
+*"Can I give X to a (the, this) patient on (taking) Y?"* is a together shape, answered as *"Can I give her X with Y?"* is:
+each drug said hers or not, what the data relates between them, and each not hers against her medications.
+
+Pinned by `TerseDrugQuestionWordingsTest.aDrugGivenToAPatientOnAnotherIsTheTwoTogether`.

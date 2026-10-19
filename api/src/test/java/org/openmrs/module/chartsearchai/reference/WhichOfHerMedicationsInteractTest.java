@@ -128,6 +128,28 @@ public class WhichOfHerMedicationsInteractTest extends BaseModuleContextSensitiv
 		}
 	}
 
+	/**
+	 * "Any problems with her metronidazole?" is answered as "Does her metronidazole interact with her medications?" is
+	 * (ADR Decision 339): the drug named as hers fitted Decision 237's shape, which reached only an answer from a finding,
+	 * so wherever the data listed it only below the severity floor, or she had no order, the model answered — Provenance
+	 * Probe, on no medication, was told "Metronidazole has several major interactions: … warfarin, … busulfan".
+	 */
+	@Test
+	public void anyProblemsWithTheDrugIsAnsweredAsWhetherItInteracts() {
+		List<PatientClinicalContext.ActiveDrugOrder> aspirin = Arrays.asList(
+			DrugReferenceTestSupport.activeOrder("order-asa", "Aspirin 81mg", "Aspirin"));
+		List<PatientClinicalContext.ActiveDrugOrder> none = Arrays.<PatientClinicalContext.ActiveDrugOrder> asList();
+		String hisBelowFloor = mask(ask("Does his rifampicin interact with his medications?", aspirin));
+		String hisNoOrders = mask(ask("Does his rifampicin interact with his medications?", none));
+		for (String question : Arrays.asList("Any problems with his rifampicin?", "Are there any issues with her rifampicin?",
+				"Any concerns with her rifampicin?")) {
+			assertEquals(hisBelowFloor, mask(ask(question, aspirin)), question);
+			assertEquals(hisNoOrders, mask(ask(question, none)), question + " / no orders");
+		}
+		String belowFloor = mask(ask("Does rifampicin interact with her medications?", aspirin));
+		assertEquals(belowFloor, mask(ask("Any problems with rifampicin?", aspirin)), "Any problems with rifampicin?");
+	}
+
 	private static String mask(String answer) {
 		return answer == null ? null : answer.replaceAll("\\[\\d+\\]", "[n]");
 	}

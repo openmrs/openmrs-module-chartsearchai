@@ -19947,3 +19947,25 @@ leflunomide (Major) …"* — drugs she does not take.
 interacts with her medications, answered word for word as *"Does her X interact with her medications?"* is.
 
 Pinned by `WhichOfHerMedicationsInteractTest.anyInteractionsWithTheDrugIsAnsweredAsWhetherItInteracts`.
+
+## Decision 339: "Any problems with her X?" is answered as whether X interacts with her medications
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It carries [Decision 338](#decision-338-any-interactions-with-his-x-asks-whether-x-interacts-with-his-medications) to the other nouns of
+[Decision 237](#decision-237-any-interactions-with-her-x-about-her-own-drug-is-answered-as-hers)'s shape.
+
+### Context
+
+*"Any problems with her metronidazole?"* fitted Decision 237's shape, read only where a finding was raised, so wherever
+the data listed metronidazole against her orders only below the severity floor, or she had no order, the model answered:
+on the 3.7.1 standalone 22 of 45 patients, among them Provenance Probe, on no medication, told *"Metronidazole has
+several major interactions: … warfarin, … busulfan"*.
+
+### The decision
+
+Decision 338's shape takes *problems*, *issues* and *concerns* beside *interactions*: the question is answered word for
+word as *"Does her X interact with her medications?"* is, whose scope line says that anything beyond drug interactions is
+not covered.
+
+Pinned by `WhichOfHerMedicationsInteractTest.anyProblemsWithTheDrugIsAnsweredAsWhetherItInteracts`.
+

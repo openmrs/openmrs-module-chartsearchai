@@ -473,8 +473,10 @@ public final class QueryScopeRouter {
 					+ "(?:takes|is taking|is on)",
 			"(?:does|do) (?:she|he|they|the patient|this patient) have any (?:drug )?interactions? with " + D,
 			// "Any interactions with his lisinopril?", "Are there any drug interactions with rifampicin?" — the model told a
-			// patient on no medication "interactions with Lisinopril are recorded: ketoconazole (Major) …" (ADR Decision 338)
-			"(?:(?:are|is) there )?any (?:drug )?interactions? with (?:" + POSSESSIVE + " )?" + D);
+			// patient on no medication "interactions with Lisinopril are recorded: ketoconazole (Major) …" (ADR Decision 338);
+			// and "Any problems with her metronidazole?", answered from the same check (ADR Decision 339)
+			"(?:(?:are|is) there )?any (?:drug )?(?:interactions?|problems?|issues?|concerns?) with (?:" + POSSESSIVE + " )?"
+					+ D);
 
 	/**
 	 * Which of her medications interact with ONE drug — "Which of her medications interact with rifampicin?", "Which of her

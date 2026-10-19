@@ -299,6 +299,84 @@ public class DrugSafetyStatusTest extends BaseModuleContextSensitiveTest {
 		assertTrue(result.getIssues().contains("no_applicable_check"));
 	}
 
+	// The order-driven contraindication arm runs with nothing in play (issue #143), so a question
+	// about her own medications or allergies can put one of her orders beside her recorded allergy.
+	// Before the decision moved below the arms, that pass came back limited with no_applicable_check
+	// beside the very chip it raised (dkayiwa, #585 review).
+	@Test
+	public void anOrderCheckedAgainstHerRecordedAllergyIsNotNoApplicableCheck() {
+		DrugSafetyValidator.SafetyCheckResult result = herMedicationsWithARecordedAllergy("ibuprofen");
+		assertFalse(result.getWarnings().isEmpty(), "precondition: the allergy chip about her own order is raised");
+		assertFalse(result.getIssues().contains("no_applicable_check"), result.getIssues().toString());
+	}
+
+	@Test
+	public void anOrderComparedWithHerAllergiesAndClearedWasStillChecked() {
+		DrugSafetyValidator.SafetyCheckResult result = herMedicationsWithARecordedAllergy("penicillin");
+		assertTrue(result.getWarnings().isEmpty(), "precondition: a penicillin allergy clears her ibuprofen order");
+		assertFalse(result.getIssues().contains("no_applicable_check"), result.getIssues().toString());
+	}
+
+	private DrugSafetyValidator.SafetyCheckResult herMedicationsWithARecordedAllergy(String allergen) {
+		DrugReferenceTestSupport.nameTheConcept(88, "Other non-coded drug");
+		Context.getAdministrationService().executeSQL("update drug_order set drug_inventory_id = null,"
+				+ " drug_non_coded = 'Ibuprofen' where order_id = 111", false);
+		Context.flushSession();
+		Context.clearSession();
+		patient = Context.getPatientService().getPatient(7);
+		DrugReferenceTestSupport.recordFreeTextAllergy(patient, 88, allergen);
+		patient = Context.getPatientService().getPatient(7);
+		// An empty answer, as in the review's reproduction: the question alone puts her orders in scope.
+		return validator.validateWithStatus("", "What are her current medications?", patient,
+				Collections.emptyList(), new PairChipExtent.Sink());
+	}
+
+	// The infant ibuprofen band publishes a per-kg ceiling and no daily one, so without a weight the
+	// dose check is switched off by the missing weight, not by missing rules.
+	@Test
+	public void aPerKgOnlyBandWithoutAWeightIsReportedAsWeightUnavailable() {
+		set(ChartSearchAiConstants.GP_DRUG_SAFETY_WEIGHT_CONCEPT_UUID, ChartSearchAiConstants.DRUG_SAFETY_WEIGHT_CONCEPT_DISABLED);
+		patient.setBirthdate(new java.util.Date());
+		Context.getPatientService().savePatient(patient);
+		Context.flushSession();
+		Context.clearSession();
+		patient = Context.getPatientService().getPatient(7);
+		assertEquals(0, (int) patient.getAge());
+		assertEquals(null, PatientClinicalContextBuilder.build(patient).getWeightKg());
+		DrugSafetyValidator.SafetyCheckResult result = validator.validateWithStatus("Ibuprofen 100 mg every 8 hours.",
+				"Can I give her ibuprofen?", patient, Collections.emptyList(), new PairChipExtent.Sink());
+		assertEquals("limited", result.getStatus());
+		assertTrue(result.getIssues().contains("weight_unavailable"), result.getIssues().toString());
+		assertFalse(result.getIssues().contains("no_actionable_dose_reference"), result.getIssues().toString());
+	}
+
+	// The two exits where a check that never ran would otherwise look like a clean one.
+	@Test
+	public void aDisabledAnswerCheckIsUnavailableNotClean() {
+		set(ChartSearchAiConstants.GP_DRUG_SAFETY_VALIDATE_ANSWERS, "false");
+		DrugSafetyValidator.SafetyCheckResult result = validate(patient);
+		assertEquals("unavailable", result.getStatus());
+		assertTrue(result.getIssues().contains("check_disabled"), result.getIssues().toString());
+		assertTrue(result.getWarnings().isEmpty());
+	}
+
+	@Test
+	public void aPassThatThrewIsUnavailableNotClean() {
+		DrugSafetyValidator throwing = DrugReferenceTestSupport.validator(new DrugReferenceService() {
+
+			@Override
+			public PatientClinicalContext withReferenceNames(PatientClinicalContext context,
+					List<DrugReference> orderEntries) {
+				throw new IllegalStateException("the reference dataset is unreadable");
+			}
+		});
+		DrugSafetyValidator.SafetyCheckResult result = throwing.validateWithStatus("Ibuprofen 200 mg twice daily.",
+				"Can I take ibuprofen?", patient, Collections.emptyList(), new PairChipExtent.Sink());
+		assertEquals("unavailable", result.getStatus());
+		assertTrue(result.getIssues().contains("execution_failed"), result.getIssues().toString());
+		assertTrue(result.getWarnings().isEmpty());
+	}
+
 	@Test
 	public void unknownWeightCannotCompleteAPublishedWeightBasedDoseCheck() {
 		set(ChartSearchAiConstants.GP_DRUG_SAFETY_WEIGHT_CONCEPT_UUID, ChartSearchAiConstants.DRUG_SAFETY_WEIGHT_CONCEPT_DISABLED);

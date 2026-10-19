@@ -983,14 +983,11 @@ public class DrugSafetyValidator {
 		// exist. This bean is a Spring singleton, so a field memo is one unsynchronized structure shared
 		// by every concurrent request.
 		Map<Object, List<DrugReference>> resolvedRows = resolvedSubstanceRows(inPlay, orderEntries);
+		boolean screeningOrders = warnInteractions && QueryScopeRouter.isInteractionScreening(question)
+				&& context.getActiveDrugOrders().size() > 1;
 		if (coverage != null) {
-			boolean screeningOrders = warnInteractions && QueryScopeRouter.isInteractionScreening(question)
-					&& context.getActiveDrugOrders().size() > 1;
 			if (!warnDose || !warnInteractions || !warnContra) {
 				coverage.limited("checks_partially_disabled");
-			}
-			if (resolvedRows.isEmpty() || (inPlay.isEmpty() && !screeningOrders)) {
-				coverage.limited("no_applicable_check");
 			}
 			for (PatientClinicalContext.ActiveDrugOrder order : context.getActiveDrugOrders()) {
 				if (orderEntries.stream().noneMatch(ref -> resolvesFrom(ref, order, bridgedOrders))) {
@@ -1248,6 +1245,10 @@ public class DrugSafetyValidator {
 		// pairs are her own orders on both sides — but because they are a lookup OVER her medication
 		// list rather than a finding AGAINST her records, they are the two that grow quadratically, and
 		// they are the two a cap can truncate (maxPairChips, #131).
+		// Whether the order-driven arm below compared any of her orders with her records: the one arm that
+		// runs with nothing in play, so the no_applicable_check decision at the end of this pass has to wait
+		// for its answer rather than be read off inPlay here.
+		boolean ordersScreened = false;
 		if (warnContra && hasContraindicationRecords(context)) {
 			// The corpus is parsed HERE only where the arm can actually reach a chip. Asking the
 			// precondition at the call site as well as inside the arm is one predicate and two callers,
@@ -1262,7 +1263,7 @@ public class DrugSafetyValidator {
 			if (attribution == null) {
 				attribution = attributionTexts(answer, mappings);
 			}
-			addActiveOrderContraindications(contraindications, inPlay, context, orderEntries,
+			ordersScreened = addActiveOrderContraindications(contraindications, inPlay, context, orderEntries,
 					recordedAllergens, SubjectMatter.of(scope, question, answer,
 							attribution.citedChartRecords, attribution.referenceMaterial),
 					allergicSubstanceSupplier, bridgedOrders);
@@ -1374,6 +1375,15 @@ public class DrugSafetyValidator {
 		// asked it for a screen and "no pairs" is a direct answer to that; ADR Decision 65 carries it.
 		if (pairExtent == null && questionDrugScreened && hasActiveMedicationRecords(context)) {
 			pairExtent = PairChipExtent.of(questionDrugPairs, questionDrugPairs, questionDrugBelowFloor);
+		}
+		// Decided AFTER every arm, not off inPlay before any ran: the order-driven contraindication arm
+		// runs with nothing in play by design (issue #143), so a question about her medications or her
+		// allergies can raise an allergy chip about one of her orders, and the same pass must not then
+		// say no applicable check ran. It is the arm's own answer that counts, whether or not it found
+		// anything: an order compared with her recorded allergies and cleared was checked.
+		if (coverage != null && !ordersScreened
+				&& (resolvedRows.isEmpty() || (inPlay.isEmpty() && !screeningOrders))) {
+			coverage.limited("no_applicable_check");
 		}
 		// A screen asked only about her interactions draws her contraindications apart: they are findings about her
 		// medications, not what was asked (ADR Decision 190). In place, so every position the passes number is kept.
@@ -4159,12 +4169,14 @@ public class DrugSafetyValidator {
 		}
 	}
 
-	private void addContraindications(ContraindicationChips chips, DrugReference ref,
+	/** @return whether any matched rule of {@code ref} was evaluated, i.e. passed the subject-matter gate. */
+	private boolean addContraindications(ContraindicationChips chips, DrugReference ref,
 			PatientClinicalContext context, SubjectMatter askedAbout,
 			Supplier<Set<Object>> allergicSubstances, boolean subjectIsACurrentMedication) {
 		if (context == null) {
-			return;
+			return false;
 		}
+		boolean evaluated = false;
 		// The row this response names ref's substance by (issue #206), which is not necessarily the row the
 		// RULE is authored on. Both readings are needed and they are different questions: the rule is a
 		// fact about the row that publishes it — which is what selfNamedAllergyRule and
@@ -4281,6 +4293,7 @@ public class DrugSafetyValidator {
 			if (askedAbout != null && !askedAbout.names(c)) {
 				continue;
 			}
+			evaluated = true;
 			// Resolved after the match rather than above the loop: the shipped ddinter source emits no
 			// contraindications at all, so hoisting would fold a substance's rows for every drug in play of
 			// every request, for a loop that then does nothing. SubstanceSubjects memoises per substance, so
@@ -4349,6 +4362,7 @@ public class DrugSafetyValidator {
 							uncorroborated, subjectIsACurrentMedication,
 							matchedContraindicationRecords(c, context)));
 		}
+		return evaluated;
 	}
 
 	/**
@@ -11949,13 +11963,16 @@ public class DrugSafetyValidator {
 	 * bound). A combination product naming several used to be on that list and is not since issues
 	 * #193/#195.
 	 */
-	private void addActiveOrderContraindications(ContraindicationChips chips, Set<DrugReference> inPlay,
+	private boolean addActiveOrderContraindications(ContraindicationChips chips, Set<DrugReference> inPlay,
 			PatientClinicalContext context, List<DrugReference> orderEntries,
 			List<RecordedAllergen> recordedAllergens, SubjectMatter askedAbout,
 			Supplier<Set<Object>> allergicSubstances, BridgedOrders bridged) {
 		if (!hasContraindicationRecords(context)) {
-			return;
+			return false;
 		}
+		// Whether any of her orders was compared with her records at all, which is what the caller's
+		// no_applicable_check decision reads and a different question from whether a chip was raised.
+		boolean screened = false;
 		// The recorded allergies THIS response is about, resolved once per pass rather than once per
 		// order: it is a function of the response and of the patient's allergy list, neither of which
 		// varies inside the loop. A per-call local and never a field, for issue #172's reason — this
@@ -12015,6 +12032,7 @@ public class DrugSafetyValidator {
 			if (askedAbout.names(ref)) {
 				addContraindications(chips, ref, context, null, allergicSubstances, currentMedication);
 				addAllergyContraindications(chips, ref, recordedAllergens, currentMedication);
+				screened = true;
 				continue;
 			}
 			if (allergensAskedAbout == null) {
@@ -12026,9 +12044,15 @@ public class DrugSafetyValidator {
 			// strength of the question's wording — hedging a clause a recorded allergy really does
 			// support. The narrowing below is about which allergy records may SPEAK in this response;
 			// this is about what the chart holds, and the two are different questions.
-			addContraindications(chips, ref, context, askedAbout, allergicSubstances, currentMedication);
+			// Screened where a rule of this order passed the subject-matter gate, or a recorded allergy the
+			// response is about was there to compare it with; an order every gate turned away was not.
+			if (addContraindications(chips, ref, context, askedAbout, allergicSubstances, currentMedication)
+					| !allergensAskedAbout.isEmpty()) {
+				screened = true;
+			}
 			addAllergyContraindications(chips, ref, allergensAskedAbout, currentMedication);
 		}
+		return screened;
 	}
 
 	/**
@@ -14488,7 +14512,13 @@ public class DrugSafetyValidator {
 		// data can never answer.
 		if (!anyActionableBand(rows, context)) {
 			if (coverage != null) {
-				coverage.limited("no_actionable_dose_reference");
+				// A band whose only ceiling is per-kg is actionable once a weight is known, so for a patient
+				// without one the check is switched off by the missing weight, not by missing rules.
+				Double weightKg = context.getWeightKg();
+				boolean perKgBandWithoutWeight = (weightKg == null || weightKg <= 0) && rows.stream()
+						.map(row -> row.bandForAge(context.getAgeYears()))
+						.anyMatch(band -> band != null && band.getMgPerKgMax() > 0);
+				coverage.limited(perKgBandWithoutWeight ? "weight_unavailable" : "no_actionable_dose_reference");
 			}
 			return;
 		}

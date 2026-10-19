@@ -19986,3 +19986,29 @@ answered it for 26 of 45 patients: 18 were told *"No records of ddis are recorde
 The cue also matches the plural *ddis* in any case: no drug is named "ddIs". The singular stays case-sensitive.
 
 Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.theAbbreviationsPluralAsksForAScreenInAnyCase`.
+
+## Decision 341: Whether to continue her drug is answered as whether it is safe to continue, and of a drug she is not on, that there is none to continue
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It gives [Decision 301](#decision-301-whether-her-own-drug-is-safe-and-what-interacts-with-it-is-answered-as-her-own-medication)'s *"Is her X safe to
+continue?"* its other wordings, and [Decision 335](#decision-335-whether-to-stop-her-drug-is-answered-with-what-relates-it-to-her-other-medications-the-stopping-itself-not-weighed)'s answer of a drug she is not on.
+
+### Context
+
+*"Can I continue her Advil?"* and *"Is it okay to continue her aspirin?"* fitted no shape, and on the 3.7.1 standalone
+the model answered all 45 patients of each: Kevin Brown, on clarithromycin and no ibuprofen, was told *"Ibuprofen can be
+given, with one caution: it has an Unknown severity interaction with clarithromycin"* — a clearance, and an unrated row
+called a caution — and Edward Robinson, on nevirapine and no aspirin, *"No — aspirin should not be continued: it has an
+Unknown severity interaction with Nevirapine"*. *"Is her aspirin safe to continue?"* itself went to the model where she
+was not on aspirin and nothing rated related it to her orders.
+
+### The decision
+
+`QueryScopeRouter.asksWhetherToContinueHerDrug` — *"Is it safe (OK) to continue her X?"*, *"Can (should) I continue
+her X?"*, *"Can I keep giving her X?"*, *"Can she keep taking her X?"*, and *"Is her X safe to continue?"* — is among the
+shapes about her own drug beside her medications: of her drug every wording is answered as *"Is her X safe to
+continue?"* is. Of a drug she is not on, all of them: *"X is not one of this patient's active medications, so there is
+no order of it to continue."* (`DrugReferenceInjector.NO_ORDER_TO_CONTINUE`), whether or not she has other orders.
+
+Pinned by `ContinuingHerDrugQuestionTest`.
+

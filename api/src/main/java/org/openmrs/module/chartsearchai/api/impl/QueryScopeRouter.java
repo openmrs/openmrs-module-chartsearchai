@@ -821,6 +821,28 @@ public final class QueryScopeRouter {
 		return fitsAShape(wordsWithTheDrugMarked, STOPPING_IT_ENDS_SHAPES);
 	}
 
+	/** "Is it okay to continue her aspirin?" (ADR Decision 341). */
+	private static final String CONTINUE_HER_D = "is it (?:safe|ok|okay|alright|appropriate|fine) to (?:continue|keep (?:giving"
+			+ "|taking)) " + POSSESSIVE + " " + D + "(?: now)?";
+
+	/** "Can I continue her Advil?", "Can I keep giving her aspirin?" (ADR Decision 341). */
+	private static final String CONTINUE_HER_D_AS_I = "(?:can|could|may|should) (?:i|we) (?:safely )?(?:continue|keep giving)"
+			+ " " + POSSESSIVE + " " + D + "(?: now)?";
+
+	/** "Can she keep taking her aspirin?" (ADR Decision 341). */
+	private static final String CONTINUE_HER_D_AS_SHE = "(?:can|could|may|should) (?:she|he|they|the patient|this patient) "
+			+ "(?:continue|keep taking) " + POSSESSIVE + " " + D + "(?: now)?";
+
+	/** Whether to continue her drug, "Is her aspirin safe to continue?" among them (ADR Decisions 301, 341). */
+	private static final List<Pattern> CONTINUE_HER_DRUG_SHAPES = shapes(CONTINUE_HER_D, CONTINUE_HER_D_AS_I,
+			CONTINUE_HER_D_AS_SHE, "is " + POSSESSIVE + " " + D + " (?:safe|ok|okay|appropriate)(?: for " + PATIENT + ")? to "
+					+ "(?:continue|keep taking)(?: now)?");
+
+	/** Whether a question asks whether to continue its one drug, named as hers (ADR Decision 341). Fail-CLOSED. */
+	public static boolean asksWhetherToContinueHerDrug(List<String> wordsWithTheDrugMarked) {
+		return fitsAShape(wordsWithTheDrugMarked, CONTINUE_HER_DRUG_SHAPES);
+	}
+
 	private static final List<Pattern> BESIDE_HER_MEDICATIONS_SHAPES = shapes(
 			SAFE_WITH_HER_MEDICATIONS,
 			// "Is it safe to stop her nevirapine?" (ADR Decision 335)
@@ -838,6 +860,9 @@ public final class QueryScopeRouter {
 			// and "What interacts with her ibuprofen?" (ADR Decision 301)
 			"is " + POSSESSIVE + " " + D + " (?:safe|ok|okay|appropriate)(?: for " + PATIENT + ")?(?: to (?:continue|keep"
 					+ " taking|take|use))?(?: now)?",
+			// "Can I continue her Advil?", "Is it okay to continue her aspirin?", "Can she keep taking her aspirin?" — what "Is
+			// her aspirin safe to continue?" asks (ADR Decision 341)
+			CONTINUE_HER_D, CONTINUE_HER_D_AS_I, CONTINUE_HER_D_AS_SHE,
 			"what (?:drugs |medications |medicines |meds )?(?:interacts?|interferes?) with " + POSSESSIVE + " " + D,
 			// "Which of her medications interact with lopinavir/ritonavir?", "What other meds of hers interact with X?"
 			"(?:which|what) (?:of )?" + POSSESSIVE + " (?:other )?" + MEDICATIONS + " (?:interact|interacts) with " + D,

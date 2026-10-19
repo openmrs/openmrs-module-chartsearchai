@@ -103,6 +103,16 @@ public class TerseDrugQuestionWordingsTest extends BaseModuleContextSensitiveTes
 	}
 
 	/**
+	 * "Fine" and "alright" ask what "safe" asks of a proposal (ADR Decision 357): on the 3.7.1 standalone "Is it fine to
+	 * give him paracetamol for a fever?" fitted no shape, and the model answered every patient "The records do not address".
+	 */
+	@Test
+	public void fineToGiveItIsSafeToGiveIt() {
+		same("Is it safe to give him paracetamol for a fever?", "Is it fine to give him paracetamol for a fever?",
+			"Is it alright to give him paracetamol for a fever?");
+	}
+
+	/**
 	 * A question whose "No" would read backwards, about a drug only an unrated contraindication relates to her, is answered
 	 * with what the check found and no verdict, as its proposal is (ADR Decision 351): on the 3.7.1 standalone "Is there a
 	 * problem with giving aspirin to this patient?" went to the model for the four patients recorded allergic to aspirin

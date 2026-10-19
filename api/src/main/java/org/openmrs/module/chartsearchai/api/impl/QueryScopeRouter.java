@@ -380,8 +380,9 @@ public final class QueryScopeRouter {
 			// safe to add prednisone for her?" — the patient after the drug too (issue #548), the
 			// allowance the first and fourth shapes make, as a reordering of "Is it safe for her to add
 			// prednisone?", which this shape already admits.
-			"is it (?:safe|ok|okay|appropriate) (?:for " + PATIENT + " )?to (?:(?:give|start|prescribe|administer|add) (?:"
-					+ PATIENT + " )?(?:on )?|take )" + D + "(?: for " + PATIENT + ")?(?: now| today)?",
+			// "Is it fine (alright) to give him paracetamol?" too (ADR Decision 357)
+			"is it (?:safe|ok|okay|appropriate|fine|alright) (?:for " + PATIENT + " )?to (?:(?:give|start|prescribe|administer|add)"
+					+ " (?:" + PATIENT + " )?(?:on )?|take )" + D + "(?: for " + PATIENT + ")?(?: now| today)?",
 			// "Is ibuprofen safe for her?", "Is ibuprofen appropriate for this patient?"
 			"is " + D + " (?:safe|ok|okay|appropriate)(?: for " + PATIENT + ")?(?: now| today)?",
 			// "Would ibuprofen be appropriate for her?"

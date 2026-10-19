@@ -20318,3 +20318,19 @@ an unrecognised word in a drug's place, and *"Can I give her ibuprofen or not?"*
 
 Pinned by `TerseDrugQuestionWordingsTest.drugsListedWithCommasAreTheDrugsListedWithAnd`.
 
+## Decision 357: "Fine" and "alright" ask what "safe" asks of a proposal
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient.
+
+### Context
+
+*"Is it fine to give him paracetamol for a fever?"* fitted no shape, and on the 3.7.1 standalone the model answered all 45
+patients *"The records do not address"* it.
+
+### The decision
+
+*"Is it fine (alright) to give him X?"* is the proposal shape *"Is it safe to give him X?"* is, its purpose stated after
+as any proposal's is.
+
+Pinned by `TerseDrugQuestionWordingsTest.fineToGiveItIsSafeToGiveIt`.

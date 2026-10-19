@@ -1069,7 +1069,13 @@ public final class QueryScopeRouter {
 		return fitsAShape(wordsWithTheDrugsMarked, ABOUT_THE_PAIRS_INTERACTION_SHAPES);
 	}
 
+	/** "Will clarithromycin interfere with her simvastatin?" — what {@link #DOES_ONE_CHANGE_THE_OTHER} asks, of no named
+	 *  effect; the model answered it "No — Simvastatin should not be given" (ADR Decision 360). */
+	private static final String DOES_ONE_INTERFERE_WITH_THE_OTHER = "(?:does|do|will|would|can|could|might) " + HER_D
+			+ " interfere with " + HER_D;
+
 	private static final List<Pattern> ONE_DRUG_CHANGES_THE_OTHER_SHAPES = shapes(DOES_ONE_CHANGE_THE_OTHER,
+			DOES_ONE_INTERFERE_WITH_THE_OTHER,
 			AVOID_ONE_WITH_THE_OTHER, WHAT_COMBINING_THEM_DOES, DOSE_BECAUSE_OF_THE_OTHER, STOP_OR_KEEP_ONE_FOR_THE_OTHER,
 			MONITORING_ON_BOTH, DANGEROUS_TOGETHER, DOSE_SAFE_WITH_THE_OTHER);
 

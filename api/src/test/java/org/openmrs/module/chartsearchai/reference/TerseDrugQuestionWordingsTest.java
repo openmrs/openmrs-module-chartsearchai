@@ -113,6 +113,17 @@ public class TerseDrugQuestionWordingsTest extends BaseModuleContextSensitiveTes
 	}
 
 	/**
+	 * Whether one drug will interfere with another asks what whether it changes the other's effect asks (ADR Decision 360):
+	 * on the 3.7.1 standalone "Will clarithromycin interfere with her simvastatin?" fitted no shape, and the model told 13
+	 * patients "No — Simvastatin should not be given", a "No" that reads as "it will not interfere".
+	 */
+	@Test
+	public void whetherOneDrugInterferesWithTheOtherIsWhetherItChangesIt() {
+		same("Will clarithromycin increase her simvastatin levels?", "Will clarithromycin interfere with her simvastatin?",
+			"Does clarithromycin interfere with simvastatin?");
+	}
+
+	/**
 	 * A question whose "No" would read backwards, about a drug only an unrated contraindication relates to her, is answered
 	 * with what the check found and no verdict, as its proposal is (ADR Decision 351): on the 3.7.1 standalone "Is there a
 	 * problem with giving aspirin to this patient?" went to the model for the four patients recorded allergic to aspirin

@@ -20377,3 +20377,21 @@ found about X:"*, with no verdict — the answer that suits a question whose *No
 
 Pinned by `TerseDrugQuestionWordingsTest.whetherADrugIsContraindicatedWithHersMakingNoVerdictStatesWhatTheCheckFound`.
 
+## Decision 360: Whether one drug will interfere with another asks whether it changes it
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It widens [Decision 249](#decision-249-whether-one-drug-changes-an-effect-of-the-other-is-answered-with-the-finding-and-neither-yes-nor-no)'s shape.
+
+### Context
+
+*"Will clarithromycin interfere with her simvastatin?"* fitted no shape, and on the 3.7.1 standalone the model answered
+all 45 patients, 13 of them *"No — Simvastatin should not be given"*: a *No* that reads as *it will not interfere*, about
+the other drug.
+
+### The decision
+
+*"Does (will) X interfere with Y?"* is one of `ONE_DRUG_CHANGES_THE_OTHER_SHAPES`: answered with what relates the pair and
+neither *Yes* nor *No*, as *"Will X increase her Y levels?"* is.
+
+Pinned by `TerseDrugQuestionWordingsTest.whetherOneDrugInterferesWithTheOtherIsWhetherItChangesIt`.
+

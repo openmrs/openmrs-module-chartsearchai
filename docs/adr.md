@@ -20450,3 +20450,24 @@ A curated group's name, with or without a closing plural *s*, names that group i
 substance, her orders in the group, and her recorded drug allergies in it.
 
 Pinned by `DrugClassProposalTest.penicillinSaidAloneIsThePenicillinsGroup`.
+
+## Decision 364: A condition named by a substance is a purpose
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It narrows [Decision 213](#decision-213-a-proposal-that-says-what-the-drug-is-for-is-answered-as-the-proposal-and-the-answer-says-the-purpose-was-not-weighed)'s factor exclusion.
+
+### Context
+
+`QueryScopeRouter.withoutAPurpose` keeps the model call for a purpose carrying a factor the findings do not weigh
+(`OTHER_FACTOR`), *alcohol* among them — *"Is X safe for her with alcohol?"* asks about alcohol beside the drug. *"Can I
+give him diazepam for alcohol withdrawal?"* names a condition, not alcohol taken, yet was refused on that word, and on the
+3.7.1 standalone the model answered every patient — Mogan Kamwara with *"Diazepam can be given, with one caution"*, a
+clearance.
+
+### The decision
+
+*alcohol withdrawal*, *dependence*, *use disorder*, *abuse* and *detox(ification)* are conditions a purpose may name
+(`CONDITION_NAMED_BY_A_SUBSTANCE`): the purpose is set aside as any is, and the answer says what the drug is for was not
+weighed.
+
+Pinned by `TerseDrugQuestionWordingsTest.aConditionNamedByASubstanceIsAPurpose`.

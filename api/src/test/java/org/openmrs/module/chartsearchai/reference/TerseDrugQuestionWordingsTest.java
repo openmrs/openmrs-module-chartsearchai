@@ -143,6 +143,22 @@ public class TerseDrugQuestionWordingsTest extends BaseModuleContextSensitiveTes
 	}
 
 	/**
+	 * A condition named by a substance — "for alcohol withdrawal" — is a purpose the proposal grammar sets aside, though the
+	 * substance alone is a factor the findings do not weigh (ADR Decision 364): on the 3.7.1 standalone "Can I give him
+	 * diazepam for alcohol withdrawal?" fitted no shape, and the model answered every patient — Mogan Kamwara "Diazepam can
+	 * be given, with one caution", a clearance.
+	 */
+	@Test
+	public void aConditionNamedByASubstanceIsAPurpose() {
+		for (List<PatientClinicalContext.ActiveDrugOrder> orders : PATIENTS) {
+			String forAnxiety = ask("Can I give him diazepam for anxiety?", orders);
+			assertNotNull(forAnxiety, "precondition: the module answers " + orders);
+			assertEquals(forAnxiety.replace("(anxiety)", "(alcohol withdrawal)"),
+				ask("Can I give him diazepam for alcohol withdrawal?", orders), String.valueOf(orders));
+		}
+	}
+
+	/**
 	 * A question whose "No" would read backwards, about a drug only an unrated contraindication relates to her, is answered
 	 * with what the check found and no verdict, as its proposal is (ADR Decision 351): on the 3.7.1 standalone "Is there a
 	 * problem with giving aspirin to this patient?" went to the model for the four patients recorded allergic to aspirin

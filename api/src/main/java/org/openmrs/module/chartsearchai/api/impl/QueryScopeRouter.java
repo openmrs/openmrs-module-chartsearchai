@@ -1452,13 +1452,21 @@ public final class QueryScopeRouter {
 		if (String.join(" ", purpose).matches(PATIENT)) {
 			return null;
 		}
-		for (String word : purpose) {
+		// A condition named by a substance — "alcohol withdrawal" — is what the drug is for, not a factor beside it (ADR
+		// Decision 364).
+		String named = CONDITION_NAMED_BY_A_SUBSTANCE.matcher(String.join(" ", purpose)).replaceAll("condition");
+		for (String word : named.split(" ")) {
 			if (DRUG_NAME.equals(word) || NOT_A_PURPOSE.contains(word) || OTHER_FACTOR.matcher(word).find()) {
 				return null;
 			}
 		}
 		return new ArrayList<String>(words.subList(0, at));
 	}
+
+	/** A condition a substance names — "alcohol withdrawal", "alcohol dependence" — which a purpose may state though the
+	 *  substance alone is a factor the findings do not weigh ({@link #OTHER_FACTOR}; ADR Decision 364). */
+	private static final Pattern CONDITION_NAMED_BY_A_SUBSTANCE = Pattern.compile("\\balcohol (?:withdrawal|dependence|"
+			+ "use disorder|abuse|detox|detoxification)\\b");
 
 	/** The subjects a closing statement of what she has opens with. */
 	private static final Set<String> STATEMENT_SUBJECTS = new HashSet<String>(Arrays.asList("she", "he", "they"));

@@ -224,6 +224,11 @@ final class UnrecognisedDrugName {
 				List<String> marked = new ArrayList<String>(words.subList(0, i));
 				marked.add(QueryScopeRouter.DRUG_NAME);
 				marked.addAll(words.subList(i + length, words.size()));
+				// A question that is the span and nothing else names no drug's place: "Interaction check" fits the shape of a
+				// drug's name asked alone, which is a shape only of a name the data recognises (ADR Decision 349).
+				if (marked.size() == 1) {
+					continue;
+				}
 				// Or whether to stop it, named as hers (ADR Decision 335).
 				if (!QueryScopeRouter.asksWhetherToGiveADrug(marked)
 						&& !QueryScopeRouter.asksWhetherADrugInteractsWithHerMedications(marked)

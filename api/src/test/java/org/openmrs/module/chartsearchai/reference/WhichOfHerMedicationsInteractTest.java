@@ -150,6 +150,28 @@ public class WhichOfHerMedicationsInteractTest extends BaseModuleContextSensitiv
 		assertEquals(belowFloor, mask(ask("Any problems with rifampicin?", aspirin)), "Any problems with rifampicin?");
 	}
 
+	/**
+	 * A drug's name asked alone is asked whether it interacts with her medications (ADR Decision 349): on the 3.7.1
+	 * standalone "Fluconazole?" fitted no shape, and the model told Mogan Kamwara "Fluconazole can be given, with one
+	 * caution", a clearance, and David Williams "Fluconazole is a drug referenced in the chart".
+	 */
+	@Test
+	public void aDrugsNameAloneIsAskedWhetherItInteracts() {
+		List<List<PatientClinicalContext.ActiveDrugOrder>> patients = Arrays.asList(
+			Arrays.asList(DrugReferenceTestSupport.activeOrder("order-asa", "Aspirin 81mg", "Aspirin")),
+			Arrays.asList(DrugReferenceTestSupport.activeOrder("order-nvp", "Nevirapine 200mg", "Nevirapine")),
+			Arrays.asList(DrugReferenceTestSupport.activeOrder("order-rif", "Rifampicin 150mg", "Rifampicin"),
+				DrugReferenceTestSupport.activeOrder("order-nvp", "Nevirapine 200mg", "Nevirapine")),
+			Arrays.<PatientClinicalContext.ActiveDrugOrder> asList());
+		for (List<PatientClinicalContext.ActiveDrugOrder> orders : patients) {
+			String expected = mask(ask("Does rifampicin interact with her medications?", orders));
+			assertNotNull(expected, "precondition: the module answers " + orders);
+			for (String question : Arrays.asList("Rifampicin?", "rifampicin", "Rifampicin ?")) {
+				assertEquals(expected, mask(ask(question, orders)), question + " / " + orders);
+			}
+		}
+	}
+
 	private static String mask(String answer) {
 		return answer == null ? null : answer.replaceAll("\\[\\d+\\]", "[n]");
 	}

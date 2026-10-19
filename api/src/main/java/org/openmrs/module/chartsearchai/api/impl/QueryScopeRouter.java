@@ -484,7 +484,10 @@ public final class QueryScopeRouter {
 			// patient on no medication "interactions with Lisinopril are recorded: ketoconazole (Major) …" (ADR Decision 338);
 			// and "Any problems with her metronidazole?", answered from the same check (ADR Decision 339)
 			"(?:(?:are|is) there )?any (?:drug )?(?:interactions?|problems?|issues?|concerns?) with (?:" + POSSESSIVE + " )?"
-					+ D);
+					+ D,
+			// "Fluconazole?" — a drug's name asked alone; the model told a patient "Fluconazole can be given, with one
+			// caution" (ADR Decision 349)
+			D);
 
 	/**
 	 * Which of her medications interact with ONE drug — "Which of her medications interact with rifampicin?", "Which of her

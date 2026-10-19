@@ -20161,3 +20161,24 @@ The preposition is optional, and *of* is one: *"Is there a risk giving her X?"* 
 X?"* are answered as *"Is there any harm in giving her X?"* is, with no *Yes* or *No*.
 
 Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aRiskInGivingItAskedWithoutAPrepositionIsTheSameQuestion`.
+
+## Decision 349: A drug's name asked alone is asked whether it interacts with her medications
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It adds a shape to [Decision 181](#decision-181-a-question-whether-not-to-give-a-drug-or-whether-it-interacts-is-answered-without-an-inverted-no)'s grammar.
+
+### Context
+
+*"Fluconazole?"* fitted no shape, and on the 3.7.1 standalone the model answered: Mogan Kamwara was told *"Fluconazole
+can be given, with one caution"*, a clearance, and David Williams *"Fluconazole is a drug referenced in the chart"*.
+
+### The decision
+
+A question that is a drug's name and nothing else is one of `INTERACTS_WITH_HER_MEDICATIONS_SHAPES`: answered word for
+word as *"Does X interact with her medications?"* is — what relates it to her orders, the rows listed below the
+severity floor, that she has no order, or, of her own drug, its findings as her medication. Asked of a drug's name alone,
+that is the narrowest question the module can answer without choosing one for the clinician. A question that is a
+word the data does not recognise and nothing else stands no word in a drug's place (`UnrecognisedDrugName`): *"Interaction
+check"* is a screen of her medications, not a name to report unrecognised.
+
+Pinned by `WhichOfHerMedicationsInteractTest.aDrugsNameAloneIsAskedWhetherItInteracts`.

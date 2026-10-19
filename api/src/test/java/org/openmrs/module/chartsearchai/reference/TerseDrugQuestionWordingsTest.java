@@ -179,6 +179,30 @@ public class TerseDrugQuestionWordingsTest extends BaseModuleContextSensitiveTes
 			DrugReferenceInjector.ABOUT_HER_OTHER_MEDICATIONS_LEAD), "no verdict about her own drug: " + answer);
 	}
 
+	/**
+	 * Whether a drug is contraindicated with one of hers, its findings making no verdict, is answered as it given with hers
+	 * is (ADR Decision 359): on the 3.7.1 standalone "Is naproxen contraindicated with her aspirin?" went to the model for
+	 * the three patients on aspirin recorded allergic to the NSAID group or to ibuprofen, which answered "No — Naproxen
+	 * should not be given" — a "No" that reads as "not contraindicated".
+	 */
+	@Test
+	public void whetherADrugIsContraindicatedWithHersMakingNoVerdictStatesWhatTheCheckFound() {
+		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
+			DrugReferenceTestSupport.activeOrder("order-asa", "Aspirin 81mg", "Aspirin"));
+		LinkedHashSet<String> names = new LinkedHashSet<String>(orders.get(0).getNames());
+		String expected = askAllergicTo("ibuprofen", "Can I give her naproxen with her aspirin?", names, orders);
+		assertNotNull(expected, "precondition: the module answers the pair");
+		assertEquals(expected, askAllergicTo("ibuprofen", "Is naproxen contraindicated with her aspirin?", names, orders));
+	}
+
+	private static String askAllergicTo(String allergen, String question, LinkedHashSet<String> names,
+			List<PatientClinicalContext.ActiveDrugOrder> orders) {
+		String answer = DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.shippedServiceWithGroups())
+				.injectRecords(DrugReferenceTestSupport.oneRecordChart(), DrugReferenceTestSupport.ctx(45, null, names, null,
+					DrugReferenceTestSupport.set(allergen), null, orders), question).getModuleAnswer();
+		return answer == null ? null : answer.replaceAll("\\[\\d+\\]", "[n]");
+	}
+
 	private static String askAllergic(String question, LinkedHashSet<String> names,
 			List<PatientClinicalContext.ActiveDrugOrder> orders) {
 		String answer = DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.shippedServiceWithGroups())

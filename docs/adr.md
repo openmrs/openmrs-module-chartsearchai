@@ -20356,3 +20356,24 @@ A contraindication whose subject is a drug of hers the question names is stated 
 ([Decision 312](#decision-312-a-proposal-withheld-by-no-rating-an-interaction-folded-with-a-shared-class-included-is-answered-with-what-the-check-found)). Each drug she does not take keeps its own answer.
 
 Pinned by `TerseDrugQuestionWordingsTest.severalDrugsTogetherStateAFindingAboutHerOwnDrugApart`.
+
+## Decision 359: Whether a drug is contraindicated with one of hers, its findings making no verdict, states what the check found
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It carries [Decision 354](#decision-354-a-drug-proposed-beside-one-of-hers-whose-findings-make-no-verdict-is-answered-as-its-proposal-alone-is) to the pair questions
+whose *No* would read backwards.
+
+### Context
+
+Decision 354 admitted a drug proposed beside one of hers whose findings make no verdict, but not where the question asks
+whether one changes, endangers or is contraindicated with the other (`asksWhetherOneDrugChangesTheOther`). *"Is naproxen
+contraindicated with her aspirin?"*, asked of the three patients on aspirin recorded allergic to the NSAID group or to
+ibuprofen on the 3.7.1 standalone, went to the model, which answered *"No — Naproxen should not be given"*.
+
+### The decision
+
+Such a question is admitted too: answered as the drug given with hers is, under *"What this module's drug-safety check
+found about X:"*, with no verdict — the answer that suits a question whose *No* would read backwards.
+
+Pinned by `TerseDrugQuestionWordingsTest.whetherADrugIsContraindicatedWithHersMakingNoVerdictStatesWhatTheCheckFound`.
+

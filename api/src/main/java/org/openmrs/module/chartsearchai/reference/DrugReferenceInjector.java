@@ -6109,8 +6109,8 @@ public class DrugReferenceInjector {
 			return proposed;
 		}
 		// And a proposal whose findings make no verdict, answered with what the check found, as alone it is (ADR Decisions
-		// 311, 354).
-		if (!interact && !changes && noVerdictAbout(proposed.substances, notHerOwnOrdersSharingASubstance(ofIt))) {
+		// 311, 354) — and a question whose "No" would read backwards, which no verdict suits best (ADR Decision 359).
+		if (!interact && noVerdictAbout(proposed.substances, notHerOwnOrdersSharingASubstance(ofIt))) {
 			return proposed;
 		}
 		return cautionsOnlyAbout(proposed.substances, notHerOwnOrdersSharingASubstance(ofIt)) ? proposed : null;

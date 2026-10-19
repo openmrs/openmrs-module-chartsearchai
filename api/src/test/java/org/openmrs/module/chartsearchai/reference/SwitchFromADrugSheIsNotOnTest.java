@@ -76,6 +76,31 @@ public class SwitchFromADrugSheIsNotOnTest extends BaseModuleContextSensitiveTes
 	}
 
 	/**
+	 * Where her only order of the drug asked about has not started and she is not on the one it would replace, the answer
+	 * says both — the order scheduled, with when it starts — and answers the new drug as its proposal is from its findings
+	 * (ADR Decision 337): on the 3.7.1 standalone Dora DdiScheduled, her rifampicin scheduled and on nevirapine, was told by
+	 * the model only "Nevirapine is related to a Major finding regarding Rifampicin", with no verdict.
+	 */
+	@Test
+	public void aSwitchToADrugSheIsScheduledToStartFromOneSheDoesNotSaysBothAndAnswersIt() {
+		java.util.Date start = new java.util.Date(System.currentTimeMillis() + 10L * 24 * 60 * 60 * 1000);
+		PatientClinicalContext.ActiveDrugOrder rifampicin = DrugReferenceTestSupport.notStartedOrder("order-rif",
+			"Rifampicin 150mg", start);
+		PatientClinicalContext.ActiveDrugOrder nevirapine = DrugReferenceTestSupport.activeOrder("order-nvp",
+			"Nevirapine 200mg", "Nevirapine");
+		// The finding names the order's start where the question does not propose the drug alone, as here.
+		String alone = ask("Which of her medications interact with rifampicin?", rifampicin, nevirapine);
+		assertNotNull(alone, "precondition: the module answers the drug alone");
+		assertTrue(alone.startsWith("Rifampicin (rifampin)" + DrugReferenceInjector.NOT_YET_STARTED_LEAD
+				+ "Rifampicin 150mg [") && alone.contains(" interacts with active order Nevirapine"),
+			"precondition: its scheduled order and its finding: " + alone);
+		String answer = ask("Can I give her rifampicin instead of rifapentine?", rifampicin, nevirapine);
+		assertNotNull(answer, "the module answers");
+		assertEquals(mask("Rifapentine is not one of this patient's active medications, so this switch replaces no order "
+				+ "of it.\n" + alone), mask(answer));
+	}
+
+	/**
 	 * A switch whose new drug a contraindication relates to her, no rating making a reason to withhold it, is answered with
 	 * what the check found and no verdict, as its proposal is (ADR Decision 328): on the 3.7.1 standalone George Anderson,
 	 * on acetaminophen and recorded allergic to ibuprofen, was told by the model "No — Ibuprofen should not be given".

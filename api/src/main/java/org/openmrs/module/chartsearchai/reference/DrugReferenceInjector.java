@@ -5544,13 +5544,23 @@ public class DrugReferenceInjector {
 		for (DrugReference companion : companions) {
 			ofItsOrder.add(companion.substanceGroupKey());
 		}
-		List<Integer> about = new ArrayList<Integer>();
 		if (asked.size() != 1 || !herSubstances.containsAll(asked)
 				|| !questionProposes(question, questionDrugs) && !asksWhetherItInteracts(question, questionDrugs)
 						&& !asksWhetherSheIsOnIt(question, questionDrugs)
 						&& !asksAboutItBesideHerMedications(question, questionDrugs)) {
-			return about;
+			return new ArrayList<Integer>();
 		}
+		return aboutHerOwnSubstance(findings, ofItsOrder, itsOwnOrders);
+	}
+
+	/**
+	 * {@link #aboutHerOwnMedication}'s findings, whatever the question: every one whose subject is among {@code ofItsOrder}
+	 * and that is not about another of her medications, where one is an interaction relating it to another of her orders or
+	 * a contraindication about it, and each states a clause {@link #strengthRank} reads; none otherwise.
+	 */
+	private static List<Integer> aboutHerOwnSubstance(List<SafetyWarning> findings, Set<Object> ofItsOrder,
+			Set<String> itsOwnOrders) {
+		List<Integer> about = new ArrayList<Integer>();
 		boolean interaction = false;
 		boolean contraindication = false;
 		for (int i = 0; i < findings.size(); i++) {
@@ -6099,7 +6109,8 @@ public class DrugReferenceInjector {
 	 *
 	 * <p>Fail-closed: a switch shape ({@code QueryScopeRouter.asksWhetherToSwitchADrug}) naming two substances, the first
 	 * hers and the second not; and the new drug's findings against her other medications answerable as a proposal's are
-	 * ({@link #licensesTheModulesNo}, or cautions about it alone), or none.
+	 * ({@link #licensesTheModulesNo}, or cautions about it alone), or none. A new drug she is only scheduled to start, from
+	 * one she is not on, is answered as that drug alone is ({@link #composeAboutHerOwnMedication}, ADR Decision 337).
 	 */
 	private String composeSwitch(String question, List<DrugReference> questionDrugs, Set<Object> herSubstances,
 			List<SafetyWarning> findings, List<Integer> numbers, Map<String, Integer> orderRecordNumbers,
@@ -6126,9 +6137,26 @@ public class DrugReferenceInjector {
 		// said (ADR Decision 323).
 		if (to.isHers(herSubstances) && Collections.disjoint(from.substances, herSubstances)) {
 			String herOrders = herStartedOrdersOf(to, orderEntries, context, herOrderRecords);
-			return herOrders.isEmpty() ? null : from.label
-					+ " is not one of this patient's active medications, so this switch replaces no order of it.\n" + to.label
-					+ " is already one of this patient's active medications" + herOrders + ".";
+			// Where none of her orders of it has started, the answer is the one asked of it alone: that it is scheduled, with
+			// when each starts, and its findings (ADR Decision 337).
+			if (!herOrders.isEmpty()) {
+				return from.label + " is not one of this patient's active medications, so this switch replaces no order of "
+						+ "it.\n" + to.label + " is already one of this patient's active medications" + herOrders + ".";
+			}
+			String scheduled = to.substances.size() == 1
+					? herScheduledOrdersOf(to.row, orderEntries, context, herOrderRecords) : "";
+			if (scheduled.isEmpty()) {
+				return null;
+			}
+			Set<String> itsOwnOrders = itsOwnOrderDisplays(Collections.singletonList(to.row), orderEntries, context);
+			List<Integer> about = aboutHerOwnSubstance(findings,
+				new HashSet<Object>(Collections.singleton(to.row.substanceGroupKey())), itsOwnOrders);
+			if (about.isEmpty()) {
+				return null;
+			}
+			return from.label + " is not one of this patient's active medications, so this switch replaces no order of it.\n"
+					+ composeAboutHerOwnMedication(findings, numbers, about, orderRecordNumbers, herOrderRecords, itsOwnOrders,
+						"", scheduled, null, Collections.<String> emptyList());
 		}
 		if (!Collections.disjoint(to.substances, herSubstances)) {
 			return null;

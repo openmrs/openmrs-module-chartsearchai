@@ -19902,3 +19902,27 @@ asked whether it interacts, without the duplicate — then each contraindication
 "No". With other orders and no finding relating it to them, the model answers, as before.
 
 Pinned by `HerOrderNamedByItsBrandAloneTest`.
+
+## Decision 337: A switch to a drug she is only scheduled to start, from one she is not on, is answered as that drug alone
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It carries [Decision 323](#decision-323-a-drug-asked-about-in-place-of-one-she-is-not-on-says-she-is-not-on-it-and-is-answered-as-its-proposal)'s switch to a new drug
+whose only order of hers has not started.
+
+### Context
+
+Decision 323 said *"Efavirenz is already one of this patient's active medications"* where she takes the new drug, and
+handed the model the switch where her orders of it had not started — a scheduled order is no active medication to name.
+On the 3.7.1 standalone Dora DdiScheduled, on nevirapine with rifampicin scheduled to start, asked *"Can I give her
+rifampicin instead of rifapentine?"*, was told only *"Nevirapine is related to a Major finding regarding Rifampicin"*:
+no answer to the switch, and not that rifampicin is already ordered.
+
+### The decision
+
+The answer opens *"Rifapentine is not one of this patient's active medications, so this switch replaces no order of
+it."*, then is the one [Decision 202](#decision-202-a-question-whether-she-is-on-her-own-drug-or-whether-it-is-safe-with-her-other-medications-is-answered-as-her-own-medication-and-the-answer-names-the-order)
+gives the drug asked about on its own: that it is not yet one of her active medications, with when each order of it
+starts, then its findings — never a verdict. The findings are those `aboutHerOwnMedication` selects, now
+`aboutHerOwnSubstance` whatever the question; with none the model answers, as before.
+
+Pinned by `SwitchFromADrugSheIsNotOnTest.aSwitchToADrugSheIsScheduledToStartFromOneSheDoesNotSaysBothAndAnswersIt`.

@@ -136,9 +136,11 @@ public final class QueryScopeRouter {
 	 * pairs no screen ran and the model answered <em>"No drug-drug interactions are recorded."</em> CASE-SENSITIVE,
 	 * and that is load-bearing: "ddI" is didanosine's own abbreviation, and a question about her ddI is not a request
 	 * to screen. {@link #words} lower-cases, so the screen shapes below spell it {@code ddis?}; only this cue decides
-	 * whether a screen runs.
+	 * whether a screen runs. The PLURAL in any case: no drug is named "ddIs", and <em>"any ddis"</em> typed in lower case
+	 * ran no screen, so the model told a patient whose orders relate in seven interactions "No records of ddis are
+	 * recorded." (ADR Decision 340).
 	 */
-	private static final Pattern DDI_CUES = Pattern.compile("\\bDDI[sS]?\\b");
+	private static final Pattern DDI_CUES = Pattern.compile("\\bDDI[sS]?\\b|(?i:\\bddis\\b)");
 
 	/**
 	 * The NOUN, which in a question put to a patient's chart asks after her drugs' interactions whether or not the

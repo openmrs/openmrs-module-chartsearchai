@@ -2836,6 +2836,25 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		}
 	}
 
+	/**
+	 * The plural abbreviation asks for a screen in any case (ADR Decision 340): on the 3.7.1 standalone <em>"any
+	 * ddis"</em> ran no screen, the cue being case-sensitive for didanosine's "ddI", and the model told Brian Lopez, for whom
+	 * "Interactions?" states seven interactions, one Major, <em>"No records of ddis are recorded."</em> No drug is named
+	 * "ddIs".
+	 */
+	@Test
+	public void theAbbreviationsPluralAsksForAScreenInAnyCase() throws Exception {
+		executeDataSet(WARFARIN_ORDER);
+		for (String question : new String[] { "any ddis", "Any ddis?", "any Ddis with her meds?", "check for ddis" }) {
+			RecordingProvider provider = new RecordingProvider();
+			ChartAnswer answer = serviceWith(provider).search(patient, question);
+
+			assertEquals(0, provider.calls, question + " — the module answers: " + answer.getAnswer());
+			assertTrue(answer.getAnswer().startsWith("1 interaction among this patient's active medications:\n"),
+					question + " — the screen's count leads: " + answer.getAnswer());
+		}
+	}
+
 	/** A question about her SOCIAL interactions is not a request to screen her medications, though it names the noun a
 	 *  bare screen request does. */
 	@Test

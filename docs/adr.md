@@ -19969,3 +19969,20 @@ not covered.
 
 Pinned by `WhichOfHerMedicationsInteractTest.anyProblemsWithTheDrugIsAnsweredAsWhetherItInteracts`.
 
+## Decision 340: The plural "ddis" asks for a screen in any case
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient.
+
+### Context
+
+`QueryScopeRouter.DDI_CUES` is case-sensitive, because *"ddI"* is didanosine's abbreviation and a question about her ddI
+is no screen request. *"any ddis"* typed in lower case therefore ran no screen, and on the 3.7.1 standalone the model
+answered it for 26 of 45 patients: 18 were told *"No records of ddis are recorded."* — Brian Lopez among them, for whom
+*"Interactions?"* states seven interactions, one Major — and others *"Yes — the patient's name is Dora DdiScheduled."*
+
+### The decision
+
+The cue also matches the plural *ddis* in any case: no drug is named "ddIs". The singular stays case-sensitive.
+
+Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.theAbbreviationsPluralAsksForAScreenInAnyCase`.

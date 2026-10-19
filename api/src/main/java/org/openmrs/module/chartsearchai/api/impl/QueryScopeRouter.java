@@ -350,6 +350,11 @@ public final class QueryScopeRouter {
 			// ibuprofen to her?"
 			"(?:can|could|may|should) (?:i|we) (?:also )?(?:safely )?(?:give|start|prescribe|administer|add) (?:"
 					+ PATIENT + " )?(?:on )?" + D + "(?: (?:to|for) " + PATIENT + ")?(?: now| today)?",
+			// "Can I restart her simvastatin?", "Is it safe to resume her simvastatin?" — giving it again (ADR Decision 342)
+			"(?:can|could|may|should) (?:i|we) (?:safely )?(?:restart|resume) (?:" + PATIENT + " (?:on )?|" + POSSESSIVE + " )?"
+					+ D + "(?: now| today)?",
+			"is it (?:safe|ok|okay|appropriate) to (?:restart|resume) (?:" + PATIENT + " (?:on )?|" + POSSESSIVE + " )?" + D
+					+ "(?: now| today)?",
 			// "Can I add ibuprofen to her medications?" (ADR Decision 180)
 			"(?:can|could|may|should) (?:i|we) (?:also )?(?:safely )?add " + D + " to " + POSSESSIVE + " " + MEDICATIONS
 					+ "(?: now| today)?",

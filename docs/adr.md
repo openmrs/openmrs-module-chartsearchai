@@ -20012,3 +20012,23 @@ no order of it to continue."* (`DrugReferenceInjector.NO_ORDER_TO_CONTINUE`), wh
 
 Pinned by `ContinuingHerDrugQuestionTest`.
 
+## Decision 342: Whether to restart her drug is answered as its proposal
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient.
+
+### Context
+
+*"Can I restart her simvastatin?"* fitted no shape, and on the 3.7.1 standalone the model answered all 45 patients:
+Karen Sanchez, on metronidazole and no simvastatin, was told *"Simvastatin can be given, with one caution"*, a clearance,
+and Margaret King *"No — Simvastatin should not be restarted: it has an Unknown severity interaction with
+Dexamethasone"*, an unrated row made a reason to withhold it.
+
+### The decision
+
+Restarting a drug is giving it again: *"Can (should) I restart (resume) her X?"* and *"Is it safe to restart her X?"* are
+proposal shapes, answered as *"Can I give her X?"* is — of a drug she is not on, after *"X is not one of this patient's
+active medications."* ([Decision 315](#decision-315-a-drug-the-question-names-as-hers-and-she-is-not-on-it-is-said-so-before-whatever-the-module-answers)), and with any ended order of it stated as [Decision 321](#decision-321-a-question-about-a-drug-her-chart-holds-only-as-an-ended-order-is-answered-from-its-findings) states it.
+
+Pinned by `RestartingHerDrugQuestionTest`.
+

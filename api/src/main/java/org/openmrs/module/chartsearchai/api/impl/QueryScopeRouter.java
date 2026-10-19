@@ -779,8 +779,33 @@ public final class QueryScopeRouter {
 		return fitsAShape(wordsWithTheDrugMarked, SAFE_WITH_HER_MEDICATIONS_SHAPES);
 	}
 
+	/** "If I stop her rifampicin, which interactions go away?" — which interactions stopping her drug would end (ADR
+	 *  Decision 333): of her own drug, what interacts with it. */
+	private static final String GO_AWAY = "(?:go away|would go away|will go away|resolve|would resolve|end|would end|stop|"
+			+ "disappear|are removed|would be removed)";
+
+	private static final List<Pattern> STOPPING_IT_ENDS_SHAPES = shapes(
+			"if (?:i|we) (?:stop|discontinue|remove|hold) " + POSSESSIVE + " " + D + " (?:which|what) (?:drug )?interactions? "
+					+ GO_AWAY,
+			"(?:which|what) (?:drug )?interactions? " + GO_AWAY + " if (?:i|we) (?:stop|discontinue|remove|hold) " + POSSESSIVE
+					+ " " + D,
+			"(?:which|what) (?:drug )?interactions? would (?:stopping|discontinuing|removing) " + POSSESSIVE + " " + D
+					+ " (?:remove|end|resolve)");
+
+	/** Whether a question asks which interactions stopping its one drug would end (ADR Decision 333). Fail-CLOSED. */
+	public static boolean asksWhichInteractionsStoppingItEnds(List<String> wordsWithTheDrugMarked) {
+		return fitsAShape(wordsWithTheDrugMarked, STOPPING_IT_ENDS_SHAPES);
+	}
+
 	private static final List<Pattern> BESIDE_HER_MEDICATIONS_SHAPES = shapes(
 			SAFE_WITH_HER_MEDICATIONS,
+			// "If I stop her rifampicin, which interactions go away?" (ADR Decision 333)
+			"if (?:i|we) (?:stop|discontinue|remove|hold) " + POSSESSIVE + " " + D + " (?:which|what) (?:drug )?interactions? "
+					+ GO_AWAY,
+			"(?:which|what) (?:drug )?interactions? " + GO_AWAY + " if (?:i|we) (?:stop|discontinue|remove|hold) " + POSSESSIVE
+					+ " " + D,
+			"(?:which|what) (?:drug )?interactions? would (?:stopping|discontinuing|removing) " + POSSESSIVE + " " + D
+					+ " (?:remove|end|resolve)",
 			// "Is her amiodarone safe?", "Is her ibuprofen safe to continue?" — her drug named as hers, whether it is safe,
 			// and "What interacts with her ibuprofen?" (ADR Decision 301)
 			"is " + POSSESSIVE + " " + D + " (?:safe|ok|okay|appropriate)(?: for " + PATIENT + ")?(?: to (?:continue|keep"

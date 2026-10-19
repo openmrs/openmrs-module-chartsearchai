@@ -1008,7 +1008,12 @@ public class DrugReferenceInjector {
 				: composeProductCarryingHerDrug(question, questionDrugs, screenedSubstances, findings, findingNumbers,
 						orderRecordNumbers,
 						orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers, context);
-		if (againstHerAllergies != null) {
+		// Which interactions stopping a drug she is not on would end: none, and there is no order of it to stop (ADR
+		// Decision 333). Of her own drug the question is what interacts with it, answered below.
+		String nothingToStop = nothingToStop(question, questionDrugs, screenedSubstances, context);
+		if (nothingToStop != null) {
+			moduleAnswer = nothingToStop;
+		} else if (againstHerAllergies != null) {
 			moduleAnswer = againstHerAllergies;
 		} else if (productCarryingHers != null) {
 			moduleAnswer = productCarryingHers;
@@ -7498,6 +7503,23 @@ public class DrugReferenceInjector {
 		lines.addAll(already);
 		lines.addAll(others);
 		return String.join("\n", lines);
+	}
+
+	/** The answer to which interactions stopping a drug she is not on would end (ADR Decision 333), or {@code null}. */
+	private static String nothingToStop(String question, List<DrugReference> questionDrugs, Set<Object> herSubstances,
+			PatientClinicalContext context) {
+		if (questionDrugs.isEmpty() || context == null || !context.activeDrugOrdersRead()
+				|| !ChartSearchAiUtils.getBooleanGlobalProperty(ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
+						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS)
+				|| !QueryScopeRouter.asksWhichInteractionsStoppingItEnds(wordsBesideItsNames(question, questionDrugs))) {
+			return null;
+		}
+		List<AskedDrug> asked = askedDrugs(question, questionDrugs, context, false);
+		if (asked.size() != 1 || !Collections.disjoint(asked.get(0).substances, herSubstances)) {
+			return null;
+		}
+		return asked.get(0).label + " is not one of this patient's active medications, so there is no order of it to stop, "
+				+ "and no interaction among this patient's medications that stopping it would end.";
 	}
 
 	/** How the answer to which drugs to avoid in her opens (ADR Decision 324): no finding lists drugs to avoid. */

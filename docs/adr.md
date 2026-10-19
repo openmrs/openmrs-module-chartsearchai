@@ -19805,3 +19805,25 @@ the 3.7.1 standalone — mostly patients on neither drug — with *"No — Warfa
 combined with (her) Y?"* and *"Can I combine X with Y?"*, answered as *"Is X safe with (her) Y?"* is.
 
 Pinned by `CompatibleOrCombinedTogetherTest`.
+
+## Decision 333: Which interactions stopping her drug would end is answered with what interacts with it
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient.
+
+### Context
+
+*"If I stop her rifampicin, which interactions go away?"* fitted no shape, so the model answered every patient on the
+3.7.1 standalone — Priya, on no rifampicin, was told *"Stopping Rifampicin removes the Major interaction with
+Simvastatin"*, and others the reference record's partners.
+
+### The decision
+
+`QueryScopeRouter.asksWhichInteractionsStoppingItEnds` — *"If I stop her X, which interactions go away?"*, *"Which
+interactions go away if I stop her X?"*, *"What interactions would stopping her X remove?"* — is among the shapes asking
+about her own drug beside her medications ([Decision 301](#decision-301-whether-her-own-drug-is-safe-and-what-interacts-with-it-is-answered-as-her-own-medication)): of her drug it is answered as *"What interacts
+with her X?"* is. Of a drug she is not on, *"X is not one of this patient's active medications, so there is no order of it
+to stop, and no interaction among this patient's medications that stopping it would end."*
+(`DrugReferenceInjector.nothingToStop`).
+
+Pinned by `StoppingADrugWhichInteractionsEndTest`.

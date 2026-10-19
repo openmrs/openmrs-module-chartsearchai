@@ -20204,3 +20204,23 @@ proposal, answered as *"Is it safe to give X?"* is.
 
 Pinned by `TerseDrugQuestionWordingsTest`.
 
+## Decision 351: A question whose "No" would read backwards, about an unrated contraindication, states what the check found
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It carries [Decision 311](#decision-311-a-proposal-whose-findings-make-no-verdict-is-answered-with-what-the-check-found)'s answer to the
+questions [Decision 255](#decision-255-whether-a-drug-is-dangerous-harmful-or-a-cause-of-problems-is-answered-with-neither-yes-nor-no) keeps from a *Yes* or *No*.
+
+### Context
+
+Decision 311 answered a proposal whose findings make no verdict — a contraindication among them and no rated reason to
+withhold — with what the check found, and Decision 314 a question whether the drug interacts. A question whose *No*
+would read backwards (`Lead.NOT_GIVE`) was left to the model: *"Is there a problem with giving aspirin to this
+patient?"*, asked of the four patients recorded allergic to aspirin or its group on the 3.7.1 standalone, was answered
+*"No — aspirin should not be given"*.
+
+### The decision
+
+Such a question is answered as its proposal is: under *"What this module's drug-safety check found about X:"*, with no
+verdict. A question with no verdict to read backwards is the one this answer suits best.
+
+Pinned by `TerseDrugQuestionWordingsTest.aNegatedQuestionAboutAnUnratedContraindicationStatesWhatTheCheckFound`.

@@ -59,6 +59,35 @@ public class TerseDrugQuestionWordingsTest extends BaseModuleContextSensitiveTes
 		same("Is it safe to give ibuprofen?", "Safe to give ibuprofen?", "Safe to start ibuprofen?");
 	}
 
+	/**
+	 * A question whose "No" would read backwards, about a drug only an unrated contraindication relates to her, is answered
+	 * with what the check found and no verdict, as its proposal is (ADR Decision 351): on the 3.7.1 standalone "Is there a
+	 * problem with giving aspirin to this patient?" went to the model for the four patients recorded allergic to aspirin
+	 * or to its group, which answered "No — aspirin should not be given", a "No" that reads as "no problem".
+	 */
+	@Test
+	public void aNegatedQuestionAboutAnUnratedContraindicationStatesWhatTheCheckFound() {
+		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
+			DrugReferenceTestSupport.activeOrder("order-lis", "Lisinopril 10 mg", "Lisinopril"));
+		LinkedHashSet<String> names = new LinkedHashSet<String>(orders.get(0).getNames());
+		String expected = askAllergic("Can I give her aspirin?", names, orders);
+		assertNotNull(expected, "precondition: the module answers the proposal");
+		org.junit.jupiter.api.Assertions.assertTrue(expected.startsWith(DrugReferenceInjector.FOUND_LEAD_OPENING),
+			"precondition: with no verdict — " + expected);
+		for (String question : Arrays.asList("Is there a problem with giving aspirin to this patient?",
+				"Is there any harm in giving her aspirin?", "Is aspirin dangerous for her?")) {
+			assertEquals(expected, askAllergic(question, names, orders), question);
+		}
+	}
+
+	private static String askAllergic(String question, LinkedHashSet<String> names,
+			List<PatientClinicalContext.ActiveDrugOrder> orders) {
+		String answer = DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.shippedServiceWithGroups())
+				.injectRecords(DrugReferenceTestSupport.oneRecordChart(), DrugReferenceTestSupport.ctx(45, null, names, null,
+					DrugReferenceTestSupport.set("aspirin"), null, orders), question).getModuleAnswer();
+		return answer == null ? null : answer.replaceAll("\\[\\d+\\]", "[n]");
+	}
+
 	private static void same(String fuller, String... terse) {
 		for (List<PatientClinicalContext.ActiveDrugOrder> orders : PATIENTS) {
 			String expected = ask(fuller, orders);

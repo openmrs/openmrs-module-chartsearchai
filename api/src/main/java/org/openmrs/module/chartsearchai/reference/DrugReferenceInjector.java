@@ -4407,9 +4407,9 @@ public class DrugReferenceInjector {
 		// A proposal whose findings make no verdict — a contraindication among them, none a rated reason to withhold — is
 		// answered with what the check found and no verdict (ADR Decision 311): the model invented severities for them.
 		// Whether it interacts with her medications likewise, answered "Yes" and no reason to withhold claimed (ADR
-		// Decision 314).
+		// Decision 314). And a question whose "No" would read backwards, which no verdict suits best (ADR Decision 351).
 		Lead lead = Lead.of(question, questionDrugs);
-		if ((lead == Lead.GIVE || lead == Lead.INTERACTS)
+		if ((lead == Lead.GIVE || lead == Lead.INTERACTS || lead == Lead.NOT_GIVE)
 				&& noVerdictAbout(asked, notHerOwnOrdersSharingASubstance(findings))) {
 			return true;
 		}

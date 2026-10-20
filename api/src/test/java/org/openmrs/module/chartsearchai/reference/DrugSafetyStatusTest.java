@@ -118,29 +118,45 @@ public class DrugSafetyStatusTest extends BaseModuleContextSensitiveTest {
 	}
 
 	@Test
-	public void partialCheckIsLimited() throws IOException {
+	public void aPartlyDisabledCheckIsLimited() {
 		set(ChartSearchAiConstants.GP_DRUG_SAFETY_WARN_ON_CONTRAINDICATIONS, "false");
 		DrugSafetyValidator.SafetyCheckResult result = validate(patient);
-		assertEquals(fixtureCase("drug-safety.partial-check-is-limited")
-				.path("expected_status").asText(), result.getStatus());
+		assertEquals("limited", result.getStatus());
 		assertTrue(result.getIssues().contains("checks_partially_disabled"));
 	}
 
+	// The fixture case states an incomplete medication mapping over a loaded package, which is an active
+	// order the reference data cannot resolve.
 	@Test
-	public void missingPatientIsUnavailable() throws IOException {
-		assertEquals(fixtureCase("drug_safety.missing-package-is-unavailable")
-				.path("expected_status").asText(), validate(null).getStatus());
+	public void partialCheckIsLimited() throws IOException {
+		JsonNode fixture = fixtureCase("drug-safety.partial-check-is-limited");
+		assertFalse(fixture.path("mapping_complete").asBoolean(), "the case this scenario stands for");
+		assertTrue(fixture.path("execution_complete").asBoolean(), "the case this scenario stands for");
+		DrugSafetyValidator.SafetyCheckResult result = withAnUnmappedActiveOrder();
+		assertFalse(referenceService.getLoadStatus().isInert());
+		assertEquals(fixture.path("expected_status").asText(), result.getStatus());
+		assertTrue(result.getIssues().contains("mapping_incomplete"), result.getIssues().toString());
 	}
 
 	@Test
-	public void enabledChecksWithARealPatientButNoRequiredPackageAreUnavailable() {
+	public void missingPatientIsUnavailable() {
+		DrugSafetyValidator.SafetyCheckResult result = validate(null);
+		assertEquals("unavailable", result.getStatus());
+		assertEquals(Collections.singletonList("patient_context_unavailable"), result.getIssues());
+	}
+
+	// The fixture case states no reference package, which is a load that produced no entries.
+	@Test
+	public void enabledChecksWithARealPatientButNoRequiredPackageAreUnavailable() throws IOException {
+		JsonNode fixture = fixtureCase("drug_safety.missing-package-is-unavailable");
+		assertTrue(fixture.path("source_package").isNull(), "the case this scenario stands for");
 		set(ChartSearchAiConstants.GP_DRUG_REFERENCE_SOURCE_FORMAT, ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_ATC);
 		referenceService = new DrugReferenceService();
 		validator = DrugReferenceTestSupport.validator(referenceService);
 		assertTrue(referenceService.getLoadStatus().isLoaded());
 		assertTrue(referenceService.getLoadStatus().isInert());
 		DrugSafetyValidator.SafetyCheckResult result = validate(patient);
-		assertEquals("unavailable", result.getStatus());
+		assertEquals(fixture.path("expected_status").asText(), result.getStatus());
 		assertTrue(result.getIssues().contains("source_unavailable"));
 	}
 
@@ -317,6 +333,13 @@ public class DrugSafetyStatusTest extends BaseModuleContextSensitiveTest {
 
 	@Test
 	public void anUnmappedActiveOrderLeavesSupportedInteractionWarningsVisible() {
+		DrugSafetyValidator.SafetyCheckResult result = withAnUnmappedActiveOrder();
+		assertEquals("limited", result.getStatus());
+		assertTrue(result.getIssues().contains("mapping_incomplete"));
+		assertTrue(result.getWarnings().stream().anyMatch(w -> SafetyWarning.TYPE_INTERACTION.equals(w.getType())));
+	}
+
+	private DrugSafetyValidator.SafetyCheckResult withAnUnmappedActiveOrder() {
 		DrugReferenceTestSupport.nameTheConcept(88, "Other non-coded drug");
 		Context.getAdministrationService().executeSQL("update drug_order set drug_inventory_id = null,"
 				+ " drug_non_coded = 'Warfarin' where order_id = 111", false);
@@ -326,10 +349,7 @@ public class DrugSafetyStatusTest extends BaseModuleContextSensitiveTest {
 		PatientClinicalContext context = PatientClinicalContextBuilder.build(patient);
 		assertFalse(context.getActiveDrugOrders().isEmpty());
 		assertTrue(referenceService.findForActiveOrders(context).isEmpty());
-		DrugSafetyValidator.SafetyCheckResult result = validate(patient);
-		assertEquals("limited", result.getStatus());
-		assertTrue(result.getIssues().contains("mapping_incomplete"));
-		assertTrue(result.getWarnings().stream().anyMatch(w -> SafetyWarning.TYPE_INTERACTION.equals(w.getType())));
+		return validate(patient);
 	}
 
 	@Test

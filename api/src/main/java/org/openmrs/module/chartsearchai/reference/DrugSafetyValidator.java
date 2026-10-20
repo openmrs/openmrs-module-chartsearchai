@@ -14548,10 +14548,9 @@ public class DrugSafetyValidator {
 			if (coverage != null) {
 				// A band whose only ceiling is per-kg is actionable once a weight is known, so for a patient
 				// without one the check is switched off by the missing weight, not by missing rules.
-				Double weightKg = context.getWeightKg();
-				boolean perKgBandWithoutWeight = (weightKg == null || weightKg <= 0) && rows.stream()
+				boolean perKgBandWithoutWeight = rows.stream()
 						.map(row -> row.bandForAge(context.getAgeYears()))
-						.anyMatch(band -> band != null && band.getMgPerKgMax() > 0);
+						.anyMatch(band -> band != null && perKgCeilingWantsAWeight(band, context));
 				coverage.limited(perKgBandWithoutWeight ? "weight_unavailable" : "no_actionable_dose_reference");
 			}
 			return;
@@ -14566,11 +14565,11 @@ public class DrugSafetyValidator {
 				if (band == null) {
 					continue;
 				}
-				if (band.getMaxDailyDoseMg() > 0 && parseDailyDoseMg(doses) == null) {
+				if (dailyCeilingApplies(band) && parseDailyDoseMg(doses) == null) {
 					coverage.limited("dose_not_assessable");
 				}
-				if (band.getMgPerKgMax() > 0) {
-					if (context.getWeightKg() == null || context.getWeightKg() <= 0) {
+				if (perKgCeilingPublished(band)) {
+					if (perKgCeilingWantsAWeight(band, context)) {
 						coverage.limited("weight_unavailable");
 					}
 					if (parseMaxPerDoseMg(doses) == null) {
@@ -14614,7 +14613,7 @@ public class DrugSafetyValidator {
 	 *         <p>The patient-INDEPENDENT half of this question — does the band publish a ceiling at all? —
 	 *         is named separately as {@link #publishesACeiling}, because a load-time reader can decide
 	 *         that half and no more (see {@link DrugReferenceLoad.Arm#DOSE_CEILINGS}). It is not asked
-	 *         here: {@code dailyArm || weightArm} below already implies it, so a guard would be a branch
+	 *         here: {@code dailyCeilingApplies || perKgCeilingApplies} below already implies it, so a guard would be a branch
 	 *         no input can reach. The shared premise is that a band with neither ceiling is useless to
 	 *         both readers, and it is stated rather than enforced twice.
 	 */
@@ -14624,10 +14623,29 @@ public class DrugSafetyValidator {
 		if (band == null) {
 			return null;
 		}
+		return dailyCeilingApplies(band) || perKgCeilingApplies(band, context) ? band : null;
+	}
+
+	/** The daily leg of {@link #actionableBand}: the band publishes a daily ceiling. */
+	private static boolean dailyCeilingApplies(DrugReference.AgeBand band) {
+		return band.getMaxDailyDoseMg() > 0;
+	}
+
+	/** Whether the band publishes a per-kg ceiling, which the per-kg leg can use only with a weight. */
+	private static boolean perKgCeilingPublished(DrugReference.AgeBand band) {
+		return band.getMgPerKgMax() > 0;
+	}
+
+	/** The per-kg leg of {@link #actionableBand}: a per-kg ceiling and a known weight to scale it by. */
+	private static boolean perKgCeilingApplies(DrugReference.AgeBand band, PatientClinicalContext context) {
 		Double weightKg = context != null ? context.getWeightKg() : null;
-		boolean dailyArm = band.getMaxDailyDoseMg() > 0;
-		boolean weightArm = weightKg != null && weightKg > 0 && band.getMgPerKgMax() > 0;
-		return dailyArm || weightArm ? band : null;
+		return perKgCeilingPublished(band) && weightKg != null && weightKg > 0;
+	}
+
+	/** A per-kg ceiling the per-kg leg cannot use for want of the patient's weight: what the safety status
+	 *  reports as {@code weight_unavailable}, asked through the same two legs {@link #actionableBand} is. */
+	private static boolean perKgCeilingWantsAWeight(DrugReference.AgeBand band, PatientClinicalContext context) {
+		return perKgCeilingPublished(band) && !perKgCeilingApplies(band, context);
 	}
 
 	/**
@@ -14645,13 +14663,13 @@ public class DrugSafetyValidator {
 	 *
 	 *         <p><b>{@link #actionableBand} does not call this</b>, and a reader looking for the arm's
 	 *         own use of it will not find one: {@code publishesACeiling} is strictly weaker than that
-	 *         method's {@code dailyArm || weightArm}, so a guard there could only return null on inputs
+	 *         method's {@code dailyCeilingApplies || perKgCeilingApplies}, so a guard there could only return null on inputs
 	 *         that already did. The shared premise is stated in that method's javadoc instead of being
 	 *         enforced by a branch no input reaches. So this has exactly one production caller, the
 	 *         load-time report, and it is that report's cases which pin it.
 	 */
 	static boolean publishesACeiling(DrugReference.AgeBand band) {
-		return band.getMaxDailyDoseMg() > 0 || band.getMgPerKgMax() > 0;
+		return dailyCeilingApplies(band) || perKgCeilingPublished(band);
 	}
 
 	/**

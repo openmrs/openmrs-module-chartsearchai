@@ -116,6 +116,27 @@ public class DrugClassProposalTest extends BaseModuleContextSensitiveTest {
 				+ "Penicillins: "), "the allergy is stated: " + answer);
 	}
 
+	/**
+	 * Whether she is allergic to a class is answered with her recorded drug allergies in it (ADR Decision 367): on the 3.7.1
+	 * standalone "Is he allergic to penicillin?" went to the model for every patient, which told four "The records do not
+	 * address penicillin allergy" — Agnes Adams and James Thompson among them, whose allergy records were read.
+	 */
+	@Test
+	public void whetherSheIsAllergicToAClassIsAnsweredWithHerAllergiesInIt() {
+		PatientClinicalContext.ActiveDrugOrder metronidazole = DrugReferenceTestSupport.activeOrder("order-mtz",
+			"Metronidazole", "Metronidazole");
+		for (String question : Arrays.asList("Is he allergic to penicillin?", "Is she allergic to penicillins?",
+				"Does she have a penicillin allergy?", "Does he have any allergy to penicillins?")) {
+			String allergic = ask(question, DrugReferenceTestSupport.set("amoxicillin"), metronidazole);
+			assertNotNull(allergic, question + " — the module answers");
+			assertEquals("recorded drug allergies in the drug group this module carries as penicillins: amoxicillin.",
+				allergic.toLowerCase(), question);
+			assertEquals("None of this patient's recorded drug allergies is in the drug group this module carries as "
+					+ "Penicillins.", ask(question, DrugReferenceTestSupport.set("clarithromycin"), metronidazole), question);
+			assertEquals("No drug allergies are recorded for this patient.", ask(question, null, metronidazole), question);
+		}
+	}
+
 	/** A question about the class that proposes none is not this answer's: whether she is on one is ADR Decision 298's. */
 	@Test
 	public void aQuestionProposingNoClassIsNotAnswered() {

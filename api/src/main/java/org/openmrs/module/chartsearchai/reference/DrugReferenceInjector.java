@@ -1356,7 +1356,17 @@ public class DrugReferenceInjector {
 				&& context.chartReadForSafety() && context.contraindicationRecordsRead()
 				&& QueryScopeRouter.proposesADrugClass(question,
 					DrugClassTerms.termsOf(namedClass, drugReferenceService.getCrossReactivityGroups()))) {
-			moduleAnswer = composeClassProposal(namedClass, askedGroup, orderEntries, context);
+			moduleAnswer = composeClassProposal(namedClass, askedGroup, orderEntries, context, false);
+		}
+		// Whether she is allergic to a class: her recorded drug allergies in it (ADR Decision 367).
+		if (moduleAnswer == null && namedClass != null && questionDrugs.isEmpty() && context != null
+				&& ChartSearchAiUtils.getBooleanGlobalProperty(
+						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
+						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS)
+				&& context.chartReadForSafety() && context.contraindicationRecordsRead()
+				&& QueryScopeRouter.asksWhetherAllergicToADrugClass(question,
+					DrugClassTerms.termsOf(namedClass, drugReferenceService.getCrossReactivityGroups()))) {
+			moduleAnswer = composeClassProposal(namedClass, askedGroup, orderEntries, context, true);
 		}
 		// Her drug allergies, asked for: listed from her allergy records, as the chart spells each (ADR Decision 366).
 		if (moduleAnswer == null && herDrugAllergiesAsked) {
@@ -7721,7 +7731,7 @@ public class DrugReferenceInjector {
 	 * her orders were not all read.
 	 */
 	private String composeClassProposal(String namedClass, CrossReactivityGroup group, List<DrugReference> orderEntries,
-			PatientClinicalContext context) {
+			PatientClinicalContext context, boolean allergiesAlone) {
 		String atc = DrugClassTerms.atcGroupOf(namedClass);
 		String ordersLine;
 		String where;
@@ -7752,7 +7762,7 @@ public class DrugReferenceInjector {
 							+ DrugSafetyValidator.joinPartners(orders) + ".";
 			allergenInIt = group::containsAnyCode;
 		} else {
-			return drugClassStatement(namedClass);
+			return allergiesAlone ? null : drugClassStatement(namedClass);
 		}
 		boolean anyDrugAllergy = false;
 		List<String> inIt = new ArrayList<String>();
@@ -7776,7 +7786,8 @@ public class DrugReferenceInjector {
 		String allergyLine = !anyDrugAllergy ? "No drug allergies are recorded for this patient."
 				: inIt.isEmpty() ? "None of this patient's recorded drug allergies is " + where + "."
 						: "Recorded drug allergies " + where + ": " + String.join("; ", inIt) + ".";
-		return drugClassStatement(namedClass) + "\n" + ordersLine + "\n" + allergyLine;
+		// Asked whether she is allergic to it, the allergy line answers alone (ADR Decision 367).
+		return allergiesAlone ? allergyLine : drugClassStatement(namedClass) + "\n" + ordersLine + "\n" + allergyLine;
 	}
 
 	/** How the answer to which drugs to avoid in her opens (ADR Decision 324): no finding lists drugs to avoid. */

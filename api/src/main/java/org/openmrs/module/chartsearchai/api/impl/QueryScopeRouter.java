@@ -1337,6 +1337,19 @@ public final class QueryScopeRouter {
 		return classProposalWords(question, classTerms) != null;
 	}
 
+	/** "Is he allergic to penicillin?", "Does she have a penicillin allergy?" — a drug class where a drug's name would
+	 *  stand (ADR Decision 367). */
+	private static final List<Pattern> ALLERGIC_TO_A_CLASS_SHAPES = shapes(
+			"(?:is|are) " + SUBJECT + " allergic to " + D,
+			"(?:does|do) " + SUBJECT + " have (?:an |any )?(?:allergy|allergies) to " + D,
+			"(?:does|do) " + SUBJECT + " have (?:an |any )?" + D + " allerg(?:y|ies)");
+
+	/** Whether {@code question} asks whether she is allergic to a drug class named by one of {@code classTerms} (ADR
+	 *  Decision 367), the term marked as {@link #proposesADrugClass} marks it. Fail-CLOSED. */
+	public static boolean asksWhetherAllergicToADrugClass(String question, List<String> classTerms) {
+		return classWordsFitting(question, classTerms, ALLERGIC_TO_A_CLASS_SHAPES) != null;
+	}
+
 	/** Whether a question {@link #proposesADrugClass} states a dose beside the class — "a statin 20 mg" — which no finding
 	 *  weighs, as {@link #statesADose} says of one beside a drug (ADR Decision 347). */
 	public static boolean statesADoseOfADrugClass(String question, List<String> classTerms) {
@@ -1346,6 +1359,12 @@ public final class QueryScopeRouter {
 
 	/** {@code question}'s words with the class term marked as the drug, where so marked it proposes the drug; else null. */
 	private static List<String> classProposalWords(String question, List<String> classTerms) {
+		return classWordsFitting(question, classTerms, null);
+	}
+
+	/** {@code question}'s words with the class term (and any article before it) marked as the drug, where so marked they
+	 *  fit {@code shapes} — or, {@code shapes} null, propose the drug ({@link #asksWhetherToGiveADrug}); else null. */
+	private static List<String> classWordsFitting(String question, List<String> classTerms, List<Pattern> shapes) {
 		List<String> words = words(question);
 		for (String term : classTerms) {
 			List<String> named = words(term);
@@ -1359,7 +1378,7 @@ public final class QueryScopeRouter {
 				}
 				marked.add(DRUG_NAME);
 				marked.addAll(words.subList(i + named.size(), words.size()));
-				if (asksWhetherToGiveADrug(marked)) {
+				if (shapes == null ? asksWhetherToGiveADrug(marked) : fitsAShape(marked, shapes)) {
 					return marked;
 				}
 			}

@@ -20515,3 +20515,23 @@ recorded. Her allergies unqualified stay the model's (`AllergyToHerMedicationsQu
 her food and environmental allergies answer them too, and the line states drug allergies only.
 
 Pinned by `HerDrugAllergiesListedTest`.
+
+## Decision 367: Whether she is allergic to a drug class is answered with her recorded drug allergies in it
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It answers with [Decision 347](#decision-347-a-drug-class-proposed-is-answered-with-what-the-module-states-of-the-class-choosing-no-drug-of-it)'s allergy line.
+
+### Context
+
+*"Is he allergic to penicillin?"* names a class ([Decision 363](#decision-363-a-groups-name-is-named-in-a-question-with-or-without-its-plural-s)), and no answer the module composes took it: on the
+3.7.1 standalone the model answered all 45 patients, four of them *"The records do not address penicillin allergy"* —
+Agnes Adams and James Thompson among them, whose allergy records were read.
+
+### The decision
+
+*"Is she allergic to X?"*, *"Does she have an allergy to X?"* and *"Does she have an X allergy?"*, X a class this module
+names (`QueryScopeRouter.asksWhetherAllergicToADrugClass`), are answered by the module, where her allergy records were
+read, with Decision 347's allergy line alone: her recorded drug allergies in the class, that none of them is in it, or
+that none is recorded. A class that is neither an ATC group nor a group this module carries keeps the model's answer.
+
+Pinned by `DrugClassProposalTest.whetherSheIsAllergicToAClassIsAnsweredWithHerAllergiesInIt`.

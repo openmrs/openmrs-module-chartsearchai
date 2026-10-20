@@ -77,6 +77,25 @@ public class CombinationNamedAsHersTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/** Her isoniazid / rifapentine, her only order (ADR Decision 372): on the 3.7.1 standalone Michelle Lewis and Steven
+	 *  White were told by the model "The records do not address the safety of Isoniazid / Rifapentine". */
+	@Test
+	public void herIsoniazidRifapentineHerOnlyOrderHasNothingToBeCheckedAgainst() {
+		List<PatientClinicalContext.ActiveDrugOrder> alone = Arrays.asList(DrugReferenceTestSupport.activeOrder("order-3hp",
+			"Isoniazid / Rifapentine", "Isoniazid", "Rifapentine"));
+		LinkedHashSet<String> names = new LinkedHashSet<String>(alone.get(0).getNames());
+		for (String question : Arrays.asList("Is her isoniazid / rifapentine safe?",
+				"What interacts with her isoniazid / rifapentine?")) {
+			String answer = DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.shippedServiceWithGroups())
+					.injectRecords(DrugReferenceTestSupport.oneRecordChart(),
+						DrugReferenceTestSupport.ctx(45, null, names, null, null, null, alone), question).getModuleAnswer();
+			assertNotNull(answer, question + " — the module answers");
+			assertTrue(answer.replaceAll("\\[\\d+\\]", "[n]").endsWith(" is one of this patient's active medications "
+					+ "(Isoniazid / Rifapentine [n]), and this patient has no other active medication to check it against."),
+				question + " — was: " + answer);
+		}
+	}
+
 	private static String ask(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

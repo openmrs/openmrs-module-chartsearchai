@@ -20946,3 +20946,25 @@ would not say that nothing was checked. Kept from Decision 183: no screen of her
 Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aWordWithNoNearDrugNameTakesTheChartAnswerWithTheUncheckedStatementAfterIt`,
 `.searchStreaming_aWordWithNoNearDrugNameCarriesTheUncheckedStatementOnBothAnswers` for the streaming path and its early
 done, and by the cases of Decisions 183, 250, 335, 374 and 382 that now assert the chart answer.
+
+## Decision 385: A live vaccine is a class the module names and resolves to no substance
+
+**Status: Accepted** (October 2026) — the owner's approval of 2026-10-20. It adds a term to Decision 379's vocabulary.
+
+### Context
+
+*"Can I give her a live vaccine?"* went to the model for every patient on the 3.7.1 standalone: *"The records do not address
+the safety of a live vaccine"*, to Sarah Taylor on five corticosteroids. The shipped knowledge base, read on 2026-10-20 with
+`DrugReferenceService.findImpliedByQuery`, carries some live vaccines by name — yellow fever, rotavirus and oral polio, each
+rated Major against prednisone, dexamethasone, methylprednisolone, hydrocortisone and methotrexate — under no ATC code, and
+carries no measles, MMR, BCG or varicella vaccine at all. So the class has no group to name her orders in, and which
+vaccines are live is knowledge the data does not hold.
+
+### The decision
+
+*Live vaccine* is a term `DrugClassTerms` carries, with no ATC group. A proposal of one is answered with the class note
+alone (`DrugReferenceInjector.drugClassStatement`), which asks for the vaccine by name; *"Can I give her yellow fever
+vaccine?"* is then checked, and Sarah is told *"No"* for its Major interaction with four of her corticosteroid orders.
+The module lists none of her medications as immunosuppressants, which would be clinical knowledge it does not hold.
+
+Pinned by `DrugClassProposalTest.aLiveVaccineProposedIsAClassResolvedToNoSubstance`.

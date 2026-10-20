@@ -100,6 +100,18 @@ public class DrugClassProposalTest extends BaseModuleContextSensitiveTest {
 					"ciprofloxacin"));
 	}
 
+	/** A live vaccine proposed is a class the module names and resolves to no substance (ADR Decision 385): the data carries
+	 *  some live vaccines by name, under no ATC code, so the class has no group, and the answer asks for the vaccine by
+	 *  name — which is checked. On the 3.7.1 standalone "Can I give her a live vaccine?" went to the model for every
+	 *  patient: "The records do not address the safety of a live vaccine", to Sarah Taylor on five corticosteroids. */
+	@Test
+	public void aLiveVaccineProposedIsAClassResolvedToNoSubstance() {
+		for (String question : Arrays.asList("Can I give her a live vaccine?", "Is it safe to give him live vaccines?")) {
+			assertEquals(DrugReferenceInjector.drugClassStatement("live vaccine"), ask(question, null,
+				DrugReferenceTestSupport.activeOrder("order-pred", "Prednisone Co 5mg", "Prednisone")), question);
+		}
+	}
+
 	/** A dose stated beside the class is said not checked, as one beside a drug is (ADR Decision 322): "Is it safe to
 	 *  give her a statin 20 mg?" was answered on the 3.7.1 standalone with no word of the dose. */
 	@Test

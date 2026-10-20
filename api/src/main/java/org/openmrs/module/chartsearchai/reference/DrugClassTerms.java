@@ -140,6 +140,10 @@ final class DrugClassTerms {
 		terms.put("steroids", "steroid");
 		terms.put("corticosteroid", "corticosteroid");
 		terms.put("corticosteroids", "corticosteroid");
+		// ADR Decision 385: "Can I give her a live vaccine?" went to the model. The data carries some live vaccines by name and
+		// under no ATC code, so the class has no group: the answer asks for the vaccine by name, which is checked.
+		terms.put("live vaccine", "live vaccine");
+		terms.put("live vaccines", "live vaccine");
 		TERMS = Collections.unmodifiableMap(terms);
 	}
 

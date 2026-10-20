@@ -250,8 +250,10 @@ public class ConversationServiceImpl implements ConversationService {
 		audit.setReferenceSliceRecords(slice == null ? null : slice.getRecords());
 		audit.setReferenceSliceChars(slice == null ? null : slice.getCharacters());
 		audit.setResponseTimeMs(responseTimeMs);
-		audit.setInputTokens(number(answer, "inputTokens"));
-		audit.setOutputTokens(number(answer, "outputTokens"));
+		// The bundled answer's counts are on the ChartAnswer it was built from, as saveAuditLog reads
+		// them; only a relayed answer states them in its payload.
+		audit.setInputTokens(source != null ? measured(source.getInputTokens()) : number(answer, "inputTokens"));
+		audit.setOutputTokens(source != null ? measured(source.getOutputTokens()) : number(answer, "outputTokens"));
 		audit.setProviderId(conversation.getProviderId());
 		audit.setProviderMode(conversation.getProviderMode());
 		audit.setConversationUuid(conversation.getUuid());
@@ -289,8 +291,12 @@ public class ConversationServiceImpl implements ConversationService {
 			return null;
 		}
 		Object value = answer.getPayload().get(field);
-		// Zero is no measurement, as saveAuditLog files it: a module-composed answer reports 0/0.
-		return value instanceof Number && ((Number) value).intValue() > 0 ? ((Number) value).intValue() : null;
+		return value instanceof Number ? measured(((Number) value).intValue()) : null;
+	}
+
+	/** Zero is no measurement, as saveAuditLog files it: a module-composed answer reports 0/0. */
+	private static Integer measured(int tokens) {
+		return tokens > 0 ? tokens : null;
 	}
 
 	private static boolean isChecked(AnswerEnvelope answer) {

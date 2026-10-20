@@ -324,6 +324,30 @@ public class ConversationServicePersistenceTest extends BaseModuleContextSensiti
 		assertEquals(320, audit.getReferenceSliceChars());
 	}
 
+	// The bundled answer carries its token counts on the ChartAnswer it was built from, as /search's audit
+	// reads them; its wire payload does not repeat them.
+	@Test
+	public void aBundledTurnAuditsTheTokenCountsOfTheAnswerItWasBuiltFrom() {
+		ClinicalConversation conversation = conversationService.openOrCreate(patient, "bundled",
+				ProviderMode.QUERY_SCOPED);
+		ClinicalConversationTurn turn = conversationService.startTurn(conversation, "bundled-tokens", "Question");
+		ChartAnswer source = new ChartAnswer("Answer", Collections.emptyList(), 12, 3, 0,
+				Collections.emptyList(), "fullChart", new ReferenceSlice(7, 320));
+		conversationService.finishTurn(turn, TurnResult.done("bundled", ProviderMode.QUERY_SCOPED,
+				AnswerEnvelope.fromPayload(Collections.singletonMap("answer", "Answer"), source)), 5L);
+		ChartSearchAuditLog audit = turn.getAuditLog();
+		assertEquals(12, audit.getInputTokens());
+		assertEquals(3, audit.getOutputTokens());
+
+		ClinicalConversationTurn composed = conversationService.startTurn(conversation, "module-composed", "Question");
+		ChartAnswer noModelCall = new ChartAnswer("Answer", Collections.emptyList(), 0, 0, 0,
+				Collections.emptyList(), "fullChart", new ReferenceSlice(0, 0));
+		conversationService.finishTurn(composed, TurnResult.done("bundled", ProviderMode.QUERY_SCOPED,
+				AnswerEnvelope.fromPayload(Collections.singletonMap("answer", "Answer"), noModelCall)), 5L);
+		assertNull(composed.getAuditLog().getInputTokens());
+		assertNull(composed.getAuditLog().getOutputTokens());
+	}
+
 	@Test
 	public void failedOptionalTailAuditsTheCheckedAnswerAlreadyDisplayed() {
 		ClinicalConversation conversation = conversationService.openOrCreate(patient, "hub",

@@ -47,11 +47,11 @@ The standalone download above includes the backend module, frontend ESM, and the
 A live demo runs at **https://chartsearchai.openmrs.org**, so you can try Chart Search AI without installing anything.
 
 1. Open https://chartsearchai.openmrs.org and log in (default credentials: `admin` / `Admin123`).
-2. Click the magnifying-glass icon in the top header and search for a patient by name, then open a chart from the result list.
+2. Type a patient's name into the search field in the top header, then open a chart from the result list.
 
    The demo carries whatever demo data the server was last seeded with, and that population changes — so this walkthrough deliberately names no patient. Pick one whose chart actually has records (Medications, Vitals, Conditions), since the AI answers only from what the chart contains; on a chart with nothing in it the correct answer is that there are no records, which is not much of a demo. Common demo-data surnames (`Williams`, `Smith`) are a reasonable place to start.
 
-   ![Patient search overlay with a name typed and a matching patient in the result list](docs/images/ai-chart-search-patient-search.png)
+   ![Search field in the top header with a name typed and a matching patient in the result list](docs/images/ai-chart-search-patient-search.png)
 
 3. Click the floating blue AI sparkle icon in the bottom-right corner of the chart (tooltip: *Ask AI about this patient*). A chat panel slides in.
 4. Type a clinical question — e.g. *What medications is this patient on?*, *Any allergies?*, *Last 3 blood pressure readings* — and press **Send**, or click the microphone for voice input.
@@ -63,6 +63,7 @@ A live demo runs at **https://chartsearchai.openmrs.org**, so you can try Chart 
 
 Notes:
 
+- The search field in the header is the [O3 omnibar](https://github.com/pbiondich/openmrs-esm-omnibar-app), a prototype deployed on the demo for the community to try in place of the magnifying-glass icon. Ctrl K (⌘K on Mac) focuses it from anywhere. Inside a chart it also looks up the chart's own values (`weight`, `cd4`), and pressing Enter lists every value under **Query results**.
 - The AI button is only rendered for users with the **AI Query Patient Data** privilege.
 - The launch surface is configurable via the frontend `chatLaunchMode` setting: `floating` (the bottom-right circular button used above), `workspace` (an icon in the top-right workspace strip that opens the chat as a docked workspace), or `both` (default).
 - Answers take seconds to minutes. The demo's engine and model are whatever its operators have configured (`chartsearchai.llm.engine`), so treat its latency as indicative of that deployment, not of the module.

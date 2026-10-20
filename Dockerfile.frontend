@@ -1,8 +1,13 @@
-# Build the Chart Search AI ESM from source
-FROM --platform=$BUILDPLATFORM node:24-alpine AS chartsearchai-esm
+# The toolchain every ESM built from source below shares, and the version stamp each one runs.
+FROM --platform=$BUILDPLATFORM node:24-alpine AS esm-builder
 
 RUN apk add --no-cache git
 RUN corepack enable
+COPY stamp-esm-version.mjs /stamp-esm-version.mjs
+
+# Build the Chart Search AI ESM from source
+FROM esm-builder AS chartsearchai-esm
+
 ARG CACHE_BUST
 RUN git clone --depth 1 https://github.com/openmrs/openmrs-esm-chartsearchai.git /esm
 
@@ -33,13 +38,22 @@ RUN yarn install --immutable
 # build-docker.yml sets to the run id; a local build without it takes the time. Both
 # identifiers carry a letter, so a sha that is all digits with a leading zero stays valid semver.
 # The build-spa stage asserts the assembled path carries it.
-RUN node -e 'const fs=require("fs"); \
-  const p=JSON.parse(fs.readFileSync("package.json","utf8")); \
-  const sha=fs.readFileSync("ESM_SHA","utf8").trim().slice(0,12); \
-  const build=(process.env.CACHE_BUST||"").replace(/[^0-9A-Za-z]/g,"")||String(Date.now()); \
-  p.version=p.version.split("-")[0]+"-git"+sha+".r"+build; \
-  fs.writeFileSync("package.json",JSON.stringify(p,null,2)+"\n"); \
-  console.log("ESM version",p.version);'
+RUN node /stamp-esm-version.mjs
+RUN yarn build && yarn pack
+
+# Build the O3 omnibar from source: a prototype (Paul Biondich's) that is not published to npm,
+# deployed here so the community can try it beside Chart Search AI. It tracks the repo's main,
+# as the stage above tracks the Chart Search AI ESM's. Its version never moves either (0.1.0),
+# so it takes the same stamp, for the same reason.
+FROM esm-builder AS omnibar-esm
+
+ARG CACHE_BUST
+RUN git clone --depth 1 https://github.com/pbiondich/openmrs-esm-omnibar-app.git /esm
+
+WORKDIR /esm
+RUN git rev-parse HEAD > /esm/ESM_SHA
+RUN yarn install --immutable
+RUN node /stamp-esm-version.mjs
 RUN yarn build && yarn pack
 
 FROM --platform=$BUILDPLATFORM node:24-alpine AS build-spa
@@ -48,9 +62,18 @@ RUN npm install --legacy-peer-deps --global openmrs@next
 
 COPY spa-build-config.json /app/spa-build-config.json
 COPY --from=chartsearchai-esm /esm/package.tgz /chartsearch/package.tgz
+COPY --from=omnibar-esm /esm/package.tgz /omnibar/package.tgz
 WORKDIR /app
 
 RUN openmrs assemble --mode config --config spa-build-config.json
+
+# The frontend config the final stage's SPA_CONFIG_URLS names. Here rather than there so that
+# precompress-spa.mjs below gives it the same siblings as every other assembled .json.
+COPY config-chartsearchai.json /app/dist/config-chartsearchai.json
+
+# Which omnibar commit this build serves, as chartsearchai-esm.sha does for the ESM. Nothing
+# compares its mtime; the omnibar assertion below reads its sha.
+COPY --from=omnibar-esm /esm/ESM_SHA /app/dist/omnibar-esm.sha
 
 # Served as a plain file so the post-deploy gate can ask what it is looking at.
 #
@@ -109,6 +132,16 @@ RUN node -e 'const {existsSync,statSync,readFileSync}=require("fs"); \
   if(!existsSync(entry+".br")){console.error("precompress wrote no .br for the entry bundle, so nothing here verified what a browser is served");process.exit(1);} \
   console.log("entry .br present, so precompress ran over this assembly");'
 
+# The omnibar's path must carry its own build's stamp, for the CDN reason the chartsearchai-esm
+# stage gives. Only that half of the check above applies: the gate reads the Chart Search AI ESM
+# alone, so no provenance comparison depends on the omnibar's mtimes.
+RUN node -e 'const {readFileSync}=require("fs"); \
+  const spec=(JSON.parse(readFileSync("/app/dist/importmap.json","utf8")).imports||{})["@openmrs/esm-omnibar-app"]; \
+  if(!spec){console.error("importmap does not name the omnibar");process.exit(1);} \
+  const tag=new RegExp("-git"+readFileSync("/app/dist/omnibar-esm.sha","utf8").trim().slice(0,12)+"\\.r[0-9A-Za-z]+/"); \
+  if(!tag.test(spec)){console.error("importmap names the omnibar at",spec,"which does not carry",String(tag),"so a CDN may serve an earlier build at that path");process.exit(1);} \
+  console.log("omnibar at",spec);'
+
 # Use the official O3 frontend image as the base — it has the correct
 # index.html (with SPA bootstrap), nginx config, and env var substitution.
 FROM openmrs/openmrs-reference-application-3-frontend:nightly
@@ -141,6 +174,12 @@ RUN find /usr/share/nginx/html \( -name '*.gz' -o -name '*.br' \) -delete
 
 COPY --from=build-spa /app/dist /usr/share/nginx/html
 
+# The base's startup.sh writes this into index.html's configUrls at container start; unset, it
+# leaves them empty, and neither this repo's docker-compose.yml nor the demo's sets it. A
+# deployment that does set SPA_CONFIG_URLS replaces this, so it must list this file itself to
+# keep the omnibar in place of the patient search icon.
+ENV SPA_CONFIG_URLS=/openmrs/spa/config-chartsearchai.json
+
 # Guard the two files that decide whether the ESM is loaded at all.
 #
 # The .gz halves are checked by content. The .br halves are checked by mtime
@@ -150,11 +189,15 @@ COPY --from=build-spa /app/dist /usr/share/nginx/html
 # while one that came from the assembly matches.
 #
 # This fails the build on the shape described above: against the image
-# published before this commit, both greps exit 1.
+# published before this commit, both greps exit 1. The omnibar is held to the
+# same two files; against the image published before it was added, its greps
+# exit 1.
 RUN set -eux; \
     cd /usr/share/nginx/html; \
     gzip -cd importmap.json.gz | grep -q '@openmrs/esm-chartsearchai-app'; \
     gzip -cd routes.registry.json.gz | grep -q 'chartsearchai'; \
+    gzip -cd importmap.json.gz | grep -q '@openmrs/esm-omnibar-app'; \
+    gzip -cd routes.registry.json.gz | grep -q '@openmrs/esm-omnibar-app'; \
     for f in importmap.json routes.registry.json; do \
       test -f "$f.br"; \
       test "$(stat -c %Y "$f.br")" = "$(stat -c %Y "$f")"; \

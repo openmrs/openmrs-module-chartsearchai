@@ -19,6 +19,7 @@
     "@openmrs/esm-implementer-tools-app": "next",
     "@openmrs/esm-laboratory-app": "next",
     "@openmrs/esm-login-app": "next",
+    "@openmrs/esm-omnibar-app": "file:///omnibar/package.tgz",
     "@openmrs/esm-openconceptlab-app": "next",
     "@openmrs/esm-patient-allergies-app": "next",
     "@openmrs/esm-patient-attachments-app": "next",

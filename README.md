@@ -1184,8 +1184,9 @@ and preserves the returned validation, temporal-check, evidence, safety and In-D
 payloads. There is no automatic fallback to bundled inference. Interrupted review
 or In-Depth stages after an answer has arrived are settled explicitly when the
 transport fails, is cancelled, or ends normally without completing those stages.
-A stream ending without a terminal Hub event remains an explicit incomplete-stream
-error; interrupted optional-stage outcomes are emitted before that error.
+A stream that ends or fails without a terminal Hub event is an explicit
+incomplete-stream error either way, its interrupted optional-stage outcomes emitted
+before that error; only a cancelled turn keeps the answer it had as its outcome.
 Terminal Hub events close the response immediately. The response-header wait is limited
 to 30 seconds and can be cancelled; this deadline stops applying once headers arrive.
 Unexpected transport failures after an answer are logged; user cancellation stays quiet.

@@ -629,6 +629,8 @@ public class BundledClinicalAnswerProviderTest {
 		ProviderDescriptor descriptor = provider.descriptor();
 		assertFalse(descriptor.isReady());
 		assertTrue(descriptor.getUnavailableReason().contains("unreachable"));
+		// GET /providers shows this reason to every clinician, and an endpoint URL can carry a key.
+		assertFalse(descriptor.getUnavailableReason().contains("engine.invalid"), descriptor.getUnavailableReason());
 	}
 
 	@Test

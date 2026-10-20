@@ -141,7 +141,9 @@ public class BundledClinicalAnswerProvider implements ClinicalAnswerProvider {
 				return ChartSearchAiConstants.GP_LLM_REMOTE_MODEL_NAME + " is not set";
 			}
 			if (!engineReachable(endpoint)) {
-				return "remote engine unreachable: " + endpoint;
+				// Public on GET /providers, so the reason names the setting and never its value: an
+				// endpoint URL can carry a key in its query string.
+				return "Remote engine unreachable. Check " + ChartSearchAiConstants.GP_LLM_REMOTE_ENDPOINT_URL + ".";
 			}
 			return null;
 		}

@@ -2606,7 +2606,10 @@ public class DrugSafetyValidator {
 					// And about a drug named as hers, by whatever name — her own order, a brand the data does not carry
 					// (ADR Decision 374).
 					|| question != null && QueryScopeRouter.asksAboutADrugNamedAsHersByAnyName(question);
-			this.coversRecordedAllergies = QueryScopeRouter.asksAboutAllergies(question);
+			// Not her whole allergy list where the question names the one thing it asks whether she is allergic to: a
+			// recorded allergy is then what it is about only where the question names it (ADR Decision 386).
+			this.coversRecordedAllergies = QueryScopeRouter.asksAboutAllergies(question)
+					&& !QueryScopeRouter.asksWhetherAllergicToOneNamedThing(question);
 			this.coversRecordedConditions = QueryScopeRouter.asksAboutConditions(question);
 		}
 

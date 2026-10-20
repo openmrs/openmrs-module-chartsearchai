@@ -20968,3 +20968,27 @@ vaccine?"* is then checked, and Sarah is told *"No"* for its Major interaction w
 The module lists none of her medications as immunosuppressants, which would be clinical knowledge it does not hold.
 
 Pinned by `DrugClassProposalTest.aLiveVaccineProposedIsAClassResolvedToNoSubstance`.
+
+## Decision 386: Whether she is allergic to one thing the question names is answered about that thing alone
+
+**Status: Accepted** (October 2026) — the owner's instruction of 2026-10-20 that an answer carry nothing unrelated to what was
+asked. It narrows Decision 124's statement and Decision 79's allergy widening for one question shape.
+
+### Context
+
+*"Is she allergic to oranges?"* was answered for Sarah Taylor *"No allergy to oranges is recorded."*, then *"Current orders
+that directly conflict with the patient's records:"* naming her dexamethasone and hydrocortisone orders, with ten chips about
+her corticosteroid allergies beside it. Both followed from the question asking about her allergies, which Decision 124 reads
+as asking for every order her records conflict with, and `DrugSafetyValidator.SubjectMatter` as putting her whole allergy
+list in scope. A question about one named allergen asks neither.
+
+### The decision
+
+`QueryScopeRouter.asksWhetherAllergicToOneNamedThing` — *"Is she allergic to X?"*, *"Does she have an allergy to X?"*, *"Does
+she have an X allergy?"*, where X names something and not her allergies or medications as a whole — turns off both:
+`ConflictingOrderStatement` states no conflicting orders, and `SubjectMatter` does not cover her recorded allergies, so a chip
+about an allergy stands only where the question names it (*"Is she allergic to aspirin?"* keeps the chip about her aspirin
+allergy and order). *"Does she have any allergies?"*, *"Is she allergic to anything?"* and *"Is she allergic to any of her
+medications?"* keep Decision 124's statement.
+
+Pinned by `AllergyQuestionConflictingOrderContextTest.search_whetherSheIsAllergicToOneNamedThingIsAnsweredAboutThatThingAlone`.

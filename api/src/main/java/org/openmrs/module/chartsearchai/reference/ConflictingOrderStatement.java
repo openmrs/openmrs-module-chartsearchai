@@ -335,9 +335,11 @@ public final class ConflictingOrderStatement {
 	 * own prescription is an answer to what was asked rather than an alert beside it.
 	 */
 	static boolean asksOnlyForAllergies(String question) {
+		// Not where it asks whether she is allergic to one thing it names: that thing is what it is about (ADR Decision 386).
 		return question != null && QueryScopeRouter.asksAboutAllergies(question)
 				&& !QueryScopeRouter.asksAboutMedications(question)
-				&& !QueryScopeRouter.asksForADrugSafetyReading(question);
+				&& !QueryScopeRouter.asksForADrugSafetyReading(question)
+				&& !QueryScopeRouter.asksWhetherAllergicToOneNamedThing(question);
 	}
 
 	/**

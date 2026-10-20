@@ -154,6 +154,29 @@ public class AllergyQuestionConflictingOrderContextTest extends BaseModuleContex
 				"attached for the finding the line states");
 	}
 
+	/**
+	 * Whether she is allergic to one named thing is answered about that thing alone (ADR Decision 386): no list of her
+	 * orders that conflict with her other allergies, and no chip about an allergy the question does not name. On the 3.7.1
+	 * standalone "Is she allergic to oranges?" was answered for Sarah Taylor "No allergy to oranges is recorded." followed
+	 * by two orders conflicting with her steroid allergies and ten chips about them — none of it what was asked.
+	 */
+	@Test
+	public void search_whetherSheIsAllergicToOneNamedThingIsAnsweredAboutThatThingAlone() throws IOException {
+		String modelAnswer = "No allergy to oranges is recorded.";
+		ChartAnswer oranges = serviceAnswering(modelAnswer).search(patient, "Is she allergic to oranges?");
+		assertEquals(modelAnswer, oranges.getAnswer(), "the answer about oranges, and nothing else");
+		for (SafetyWarning chip : oranges.getSafetyWarnings()) {
+			assertFalse(SafetyWarning.TYPE_CONTRAINDICATION.equals(chip.getType()),
+				"no chip about an allergy the question does not name: " + chip.getDetail());
+		}
+		// The allergen named is what it is about: her aspirin allergy, and her aspirin order beside it, stand.
+		ChartAnswer aspirin = serviceAnswering(MODEL_ANSWER).search(patient, "Is she allergic to aspirin?");
+		assertNotNull(theAspirinChip(aspirin), "the chip about the allergen the question names");
+		// And a question for her allergies as a whole keeps its statement (ADR Decision 124).
+		assertTrue(serviceAnswering(MODEL_ANSWER).search(patient, ALLERGY_QUESTION).getAnswer().contains(HEADING),
+			"precondition: the general allergy question still lists her conflicting order");
+	}
+
 	@Test
 	public void search_anAllergyQuestionStatesTheConflictingOrderInTheAnswer() throws IOException {
 		ChartAnswer answer = serviceAnswering(MODEL_ANSWER).search(patient, ALLERGY_QUESTION);

@@ -1395,6 +1395,41 @@ public final class QueryScopeRouter {
 			"(?:does|do) " + SUBJECT + " have (?:an |any )?(?:allergy|allergies) to " + D,
 			"(?:does|do) " + SUBJECT + " have (?:an |any )?" + D + " allerg(?:y|ies)");
 
+	/** "Is she allergic to oranges?", "Does she have an allergy to latex?", "Does she have a peanut allergy?" — whether she
+	 *  is allergic to one thing the question names, a named thing in the group (ADR Decision 386). */
+	private static final List<Pattern> ALLERGIC_TO_ONE_NAMED_THING_SHAPES = shapes(
+			"(?:is|are) " + SUBJECT + " (?:known to be )?allergic to (?<thing>[\\p{L}\\p{N}][\\p{L}\\p{N}'-]*(?: [\\p{L}\\p{N}'-]+){0,3})",
+			"(?:does|do) " + SUBJECT + " have (?:an |any )?(?:known )?(?:allergy|allergies) to (?<thing>[\\p{L}\\p{N}][\\p{L}\\p{N}'-]*"
+					+ "(?: [\\p{L}\\p{N}'-]+){0,3})",
+			"(?:does|do) " + SUBJECT + " have (?:an |any )?(?<thing>[\\p{L}\\p{N}][\\p{L}\\p{N}'-]*(?: [\\p{L}\\p{N}'-]+){0,2}) "
+					+ "allerg(?:y|ies)");
+
+	/** What a question names in an allergen's place without naming one: her allergies or her medications as a whole. */
+	private static final Pattern ALLERGIC_TO_NOTHING_NAMED = Pattern.compile("(?:any|anything|something|any of )?"
+			+ "(?:(?:her|his|their|the patient's|this patient's) )?(?:other )?(?:medications?|meds|medicines?|drugs?|"
+			+ "current medications?|prescriptions?)?|any|anything|something|anything else|known");
+
+	/**
+	 * Whether {@code question} asks whether she is allergic to ONE thing it names — a food, a substance, a drug or a
+	 * class — and nothing else (ADR Decision 386): such a question is about that thing, so neither the orders her other
+	 * allergies conflict with nor a chip about an allergy it does not name answers it. Not <em>"Is she allergic to
+	 * anything?"</em> nor <em>"Is she allergic to any of her medications?"</em>, which ask about her allergies or her
+	 * medications as a whole. A closed grammar, fail-CLOSED.
+	 */
+	public static boolean asksWhetherAllergicToOneNamedThing(String question) {
+		if (question == null || question.indexOf('?') != question.lastIndexOf('?')) {
+			return false;
+		}
+		String joined = String.join(" ", words(question));
+		for (Pattern shape : ALLERGIC_TO_ONE_NAMED_THING_SHAPES) {
+			Matcher m = shape.matcher(joined);
+			if (m.matches()) {
+				return !ALLERGIC_TO_NOTHING_NAMED.matcher(m.group("thing")).matches();
+			}
+		}
+		return false;
+	}
+
 	/** Whether {@code question} asks whether she is allergic to a drug class named by one of {@code classTerms} (ADR
 	 *  Decision 367), the term marked as {@link #proposesADrugClass} marks it. Fail-CLOSED. */
 	public static boolean asksWhetherAllergicToADrugClass(String question, List<String> classTerms) {

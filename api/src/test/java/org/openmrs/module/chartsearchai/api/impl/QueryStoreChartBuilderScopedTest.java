@@ -470,8 +470,9 @@ public class QueryStoreChartBuilderScopedTest {
 
 	@Test
 	public void buildScoped_shouldSendTheExpandedQueryToSimilaritySearch() {
-		// Wiring lock: the lab-abbreviation expansion must actually reach searchByPatient — a pure
-		// expandLabPanelAbbreviations unit test cannot catch a builder that forgets to call it.
+		// Wiring lock: QueryStore's getContextSlice interprets the raw question, so its lab-abbreviation
+		// expansion must reach the similarity search; a builder that stopped asking for interpretation
+		// would send the unexpanded "BMP".
 		builder.buildScoped(patient(1), "Give me the results of the last BMP.");
 
 		assertTrue(queryStore.lastSearchQuery != null

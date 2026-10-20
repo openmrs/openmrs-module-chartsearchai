@@ -1094,7 +1094,9 @@ provider, mode, conversation and request attribution into the audit record. The 
 search mode and reference-slice measurements come from the bundled answer itself;
 relayed answers without these measurements record unknown mode and null counts.
 If an optional tail fails after a checked answer was shown, the audit retains that
-answer and its accounting.
+answer and its accounting. A turn that fails after any other answer reached the client
+records that answer on the audit row only; the turn keeps no answer, so it is never
+replayed.
 
 Checked or edited answers can be reused for a follow-up while In-Depth is still
 running. Failed and needs-review answers remain inspectable in storage but are

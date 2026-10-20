@@ -1008,8 +1008,9 @@ endpoints or enable a Hub connection.
 text needed for display, conversation replay and audit. `TurnLifecycleValidator`
 checks event order and advertised capabilities. `TurnCancellation` closes bound
 resources, and `TurnPreemptionRegistry` cancels the previous turn when another
-starts in the same conversation. Their existing tests include the shared
-`api/src/test/resources/conformance/dual-provider-conformance.v1.json` fixture.
+starts in the same conversation. Tests read cases of the shared dual-provider
+conformance fixture; `api/src/test/resources/conformance/dual-provider-conformance.v1.json`
+carries only the cases this module's tests read, each copied unchanged.
 
 ## License
 

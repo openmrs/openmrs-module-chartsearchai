@@ -27,10 +27,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
 /**
- * Red-first conformance adapter for the {@code provider_lifecycle} family of
- * {@code conformance/dual-provider-conformance.v1.json}, a versioned copy of the
- * dual-provider conformance fixture shared across the ChartSearchAI, ESM, and
- * med-agent-hub repositories. Every provider implementation must emit turn events
+ * Conformance adapter for the {@code provider_lifecycle} family of
+ * {@code conformance/dual-provider-conformance.v1.json}, which carries the cases of the shared
+ * dual-provider conformance fixture that this module's tests read, each copied unchanged. Every
+ * provider implementation must emit turn events
  * that {@link TurnLifecycleValidator} accepts against its advertised capabilities.
  */
 public class TurnLifecycleConformanceTest {

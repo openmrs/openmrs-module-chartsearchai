@@ -20535,3 +20535,26 @@ read, with Decision 347's allergy line alone: her recorded drug allergies in the
 that none is recorded. A class that is neither an ATC group nor a group this module carries keeps the model's answer.
 
 Pinned by `DrugClassProposalTest.whetherSheIsAllergicToAClassIsAnsweredWithHerAllergiesInIt`.
+
+## Decision 368: "Blood thinner" is the class ATC group B01A is, and whether she is on one is answered with her orders in it
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It adds a class to [Decision 275](#decision-275-which-of-her-orders-are-in-a-drug-class-the-question-names-is-said-where-the-classs-atc-group-is-the-class)'s table and
+carries [Decision 298](#decision-298-whether-she-is-on-any-drug-of-a-group-this-module-carries-is-answered-with-her-orders-in-it)'s answer to a class an ATC group is.
+
+### Context
+
+*"Is she on any blood thinners?"* named no class the module carries, and on the 3.7.1 standalone the model answered every
+patient: Sarah Taylor, on heparin, was told *"No blood thinner is recorded"*, and Kenneth Hernandez *"Yes — the patient
+is on Salicylic acid"*.
+
+### The decision
+
+*blood thinner(s)* and *antithrombotic(s)* name the class `blood thinner`, whose ATC group is B01A — the antithrombotic
+agents: the anticoagulants and the platelet inhibitors, low-dose aspirin among them, with the thrombolytics and the
+prostacyclin analogues WHO files there. *"Is she on any X?"* of a class an ATC group is, as of a group this module
+carries, is answered with her orders in it: *"Yes — 2 of this patient's active medication orders are in the ATC group B01A
+(blood thinner): Warfarin 5mg and Aspirin 81mg."*, or that none of them is. The statins, ACE inhibitors and proton pump
+inhibitors are answered so too.
+
+Pinned by `OnADrugGroupQuestionTest.whetherSheIsOnABloodThinnerIsAnsweredWithHerOrdersInItsAtcGroup`.

@@ -62,6 +62,24 @@ public class OnADrugGroupQuestionTest extends BaseModuleContextSensitiveTest {
 			DrugReferenceTestSupport.activeOrder("order-metformin", "Metformin", "Metformin")));
 	}
 
+	/**
+	 * Whether she is on a blood thinner is answered with her orders in the ATC group that class IS, B01A (ADR Decision 368):
+	 * on the 3.7.1 standalone "Is she on any blood thinners?" went to the model for every patient, which told Sarah Taylor,
+	 * on heparin, "No blood thinner is recorded", and Kenneth Hernandez "Yes — the patient is on Salicylic acid".
+	 */
+	@Test
+	public void whetherSheIsOnABloodThinnerIsAnsweredWithHerOrdersInItsAtcGroup() {
+		for (String question : Arrays.asList("Is she on any blood thinners?", "Is he on a blood thinner?")) {
+			assertEquals("Yes — 2 of this patient's active medication orders are in the ATC group B01A (blood thinner): "
+					+ "Warfarin 5mg and Aspirin 81mg.", ask(question,
+						DrugReferenceTestSupport.activeOrder("order-war", "Warfarin 5mg", "Warfarin"),
+						DrugReferenceTestSupport.activeOrder("order-asa", "Aspirin 81mg", "Aspirin"),
+						DrugReferenceTestSupport.activeOrder("order-met", "Metformin", "Metformin")), question);
+			assertEquals("None of this patient's active medication orders is in the ATC group B01A (blood thinner).",
+				ask(question, DrugReferenceTestSupport.activeOrder("order-sal", "Salicylic acid", "Salicylic acid")), question);
+		}
+	}
+
 	private static String ask(String question, PatientClinicalContext.ActiveDrugOrder... orders) {
 		Set<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : orders) {

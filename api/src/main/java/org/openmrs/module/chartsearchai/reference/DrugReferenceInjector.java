@@ -1333,14 +1333,19 @@ public class DrugReferenceInjector {
 		// Whether she is on any drug of a group this module carries: her orders in it (ADR Decision 298).
 		CrossReactivityGroup askedGroup = namedClass == null ? null
 				: DrugClassTerms.groupNamedBy(namedClass, drugReferenceService.getCrossReactivityGroups());
-		if (moduleAnswer == null && askedGroup != null && questionDrugs.isEmpty()
+		// Or of a class an ATC group IS, by that group (ADR Decision 368).
+		String askedAtcGroup = namedClass == null ? null : DrugClassTerms.atcGroupOf(namedClass);
+		if (moduleAnswer == null && (askedGroup != null || askedAtcGroup != null) && questionDrugs.isEmpty()
 				&& QueryScopeRouter.asksWhetherSheIsOnADrugClass(question)
 				&& ChartSearchAiUtils.getBooleanGlobalProperty(
 						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
 						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS)) {
-			List<String> inIt = ordersFiledUnder(askedGroup::containsAnyCodeForDuplicateTherapy, orderEntries, context);
+			List<String> inIt = askedGroup != null
+					? ordersFiledUnder(askedGroup::containsAnyCodeForDuplicateTherapy, orderEntries, context)
+					: ordersFiledUnder(askedAtcGroup, orderEntries, context);
 			if (inIt != null) {
-				String carried = " in the drug group this module carries as " + askedGroup.getName();
+				String carried = askedGroup != null ? " in the drug group this module carries as " + askedGroup.getName()
+						: " in the ATC group " + askedAtcGroup + " (" + namedClass + ")";
 				moduleAnswer = inIt.isEmpty() ? "None of this patient's active medication orders is" + carried + "."
 						: "Yes — " + (inIt.size() == 1 ? "one of this patient's active medication orders is"
 								: inIt.size() + " of this patient's active medication orders are")

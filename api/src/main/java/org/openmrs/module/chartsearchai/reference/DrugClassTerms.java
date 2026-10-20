@@ -128,6 +128,11 @@ final class DrugClassTerms {
 		terms.put("ppis", "proton pump inhibitor");
 		terms.put("proton pump inhibitor", "proton pump inhibitor");
 		terms.put("proton pump inhibitors", "proton pump inhibitor");
+		// ADR Decision 368: "Is she on any blood thinners?" told a patient on heparin that none is recorded.
+		terms.put("blood thinner", "blood thinner");
+		terms.put("blood thinners", "blood thinner");
+		terms.put("antithrombotic", "blood thinner");
+		terms.put("antithrombotics", "blood thinner");
 		TERMS = Collections.unmodifiableMap(terms);
 	}
 
@@ -147,6 +152,9 @@ final class DrugClassTerms {
 		groups.put("statin", "C10AA");
 		groups.put("ACE inhibitor", "C09AA");
 		groups.put("proton pump inhibitor", "A02BC");
+		// B01A, the antithrombotic agents: the anticoagulants and the platelet inhibitors, low-dose aspirin among them,
+		// with the thrombolytics and the prostacyclin analogues WHO files there (ADR Decision 368).
+		groups.put("blood thinner", "B01A");
 		ATC_GROUP_OF_CLASS = Collections.unmodifiableMap(groups);
 	}
 

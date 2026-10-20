@@ -11,6 +11,7 @@ package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Arrays;
@@ -21,6 +22,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 
 /**
@@ -44,7 +46,7 @@ public class TwoUnrecognisedDrugNamesTest extends BaseModuleContextSensitiveTest
 	@Test
 	public void twoWordsNamedAsHisThatNoOrderOfHisCarriesAreSaidNotChecked() {
 		String answer = ask("Does his klarizom interact with his zolvimix?");
-		assertNotNull(answer, "the module answers");
+		assertNotNull(answer, "stated");
 		String[] lines = answer.split("\n");
 		assertEquals("None of this patient's active orders is named \"klarizom\" or \"zolvimix\".", lines[0], answer);
 		assertTrue(lines[1].startsWith("No interaction check was run for \"klarizom\" and \"zolvimix\": neither is a drug "
@@ -55,7 +57,7 @@ public class TwoUnrecognisedDrugNamesTest extends BaseModuleContextSensitiveTest
 	public void twoWordsInATwoDrugQuestionAreSaidNotChecked() {
 		for (String question : Arrays.asList("Is Zolvimix safe with Klarizom?", "Is klarizom safe with zolvimix?")) {
 			String answer = ask(question);
-			assertNotNull(answer, question + " — the module answers");
+			assertNotNull(answer, question + " — stated");
 			assertTrue(answer.toLowerCase().startsWith("no interaction check was run for \"")
 					&& answer.contains("\": neither is a drug name the interaction data recognises."), question + " — was: "
 							+ answer);
@@ -63,13 +65,17 @@ public class TwoUnrecognisedDrugNamesTest extends BaseModuleContextSensitiveTest
 		}
 	}
 
+	/** What is stated of the two words: neither has a near name in the data, so they may be no drugs at all — the chart
+	 *  answer, and this after it, never the module's answer (ADR Decision 384). */
 	private static String ask(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {
 			names.addAll(order.getNames());
 		}
-		return DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.shippedServiceWithGroups())
+		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.shippedServiceWithGroups())
 				.injectRecords(DrugReferenceTestSupport.oneRecordChart(),
-					DrugReferenceTestSupport.ctx(45, null, names, null, null, null, ORDERS), question).getModuleAnswer();
+					DrugReferenceTestSupport.ctx(45, null, names, null, null, null, ORDERS), question);
+		assertNull(chart.getModuleAnswer(), question + " — the chart answer: " + chart.getModuleAnswer());
+		return chart.getUncheckedWordStatement();
 	}
 }

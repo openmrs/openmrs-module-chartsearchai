@@ -1436,8 +1436,15 @@ public class DrugReferenceInjector {
 					orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers,
 					context, unidentified.size());
 		}
+		// A word with no near name in the data may be no drug at all — "Can I give her oranges?" — so the question takes the
+		// chart answer, and the statement follows it (ADR Decision 384); a near name keeps the module's "Did you mean".
+		String uncheckedWord = null;
 		if (moduleAnswer == null && unrecognised != null) {
-			moduleAnswer = unrecognised.statement();
+			if (unrecognised.hasSuggestions()) {
+				moduleAnswer = unrecognised.statement();
+			} else {
+				uncheckedWord = unrecognised.statement();
+			}
 		}
 		// A two-drug question whose one drug the data recognises and whose other it does not: said so, of the pair (ADR
 		// Decision 250), where nothing above answered it.
@@ -1447,8 +1454,10 @@ public class DrugReferenceInjector {
 			List<AskedDrug> named = askedDrugs(question, questionDrugs, context, false);
 			UnrecognisedDrugName beside = named.size() == 1
 					? UnrecognisedDrugName.besideANamedDrug(question, questionDrugs, drugReferenceService.getAll(), context) : null;
-			if (beside != null) {
+			if (beside != null && beside.hasSuggestions()) {
 				moduleAnswer = beside.statementFor(named.get(0).label);
+			} else if (beside != null) {
+				uncheckedWord = beside.statementFor(named.get(0).label);
 			}
 		}
 		// What the validator drew apart as about her other medications follows the answer it decided nothing of (ADR Decision
@@ -1591,6 +1600,8 @@ public class DrugReferenceInjector {
 		injected.markListedDrugsWithNoActiveOrder(listed.stated());
 		// And whether the question states a dose of the drug it asks about, which the findings never weigh (ADR Decision
 		// 274), so LlmInferenceService says after the answer that it was not checked.
+		// And a word in its drug place the data has no near name for, stated after the chart answer (ADR Decision 384).
+		injected.markUncheckedWordStatement(moduleAnswer == null ? uncheckedWord : null);
 		injected.markStatesADose(!questionDrugs.isEmpty()
 				&& QueryScopeRouter.statesADose(wordsBesideItsNames(question, questionDrugs))
 				// or beside a class proposed (ADR Decision 347)

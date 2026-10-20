@@ -20915,3 +20915,33 @@ of her medications the question names, in one of `asksWhetherADrugIsSafeWithHerM
 findings are stated as her own drug's, under Decision 313's lead.
 
 Pinned by `GroupOfHerMedicationsNamedTest.herOwnDrugWithFindingsBesideANamedGroupIsAnsweredAsHerOwnUnderTheGroupLead`.
+
+## Decision 384: A word in a drug question's place that the drug data has no near name for takes the chart answer, with the unchecked statement after it
+
+**Status: Accepted** (October 2026) — the owner's instruction of 2026-10-20 to send non-drug words to the normal chart
+answer from every phrase that routes a question to the drug-safety subsystem, the statement that no interaction check was
+run kept after that answer. It narrows
+[Decision 183](#decision-183-a-drug-name-the-data-does-not-recognise-is-said-to-be-unrecognised-with-the-names-it-carries-and-never-guessed)
+and the decisions that carried it to a word beside a drug (250), in a stop (335), named as hers (308, 374) and in pairs
+(382).
+
+### Context
+
+*"Can i give her oranges?"* was answered by the module alone, for Sarah Taylor: *"No interaction check was run: "oranges" is
+not a drug name the interaction data recognises."* — true, and no answer to a question about her. The word stands where a
+drug question names its drug, so every one of those decisions read it as a drug the data does not carry. The module cannot
+tell a food from a brand it does not carry ("klarizom") without knowledge it does not hold; what it can tell is whether the
+data finds a near name for the word — a misspelling ("rifampcin": "Did you mean Rifampicin?") or a family the word begins
+("insulin").
+
+### The decision
+
+Where the data finds a near name, the module's answer stands as before, with its suggestions. Where it finds none, the word
+may be no drug at all: the injector states no answer (`UnrecognisedDrugName.hasSuggestions`), stamps the statement on the
+chart (`PatientChart.getUncheckedWordStatement`), and the question takes the chart answer every other question gets, the
+statement on a line after it (`UncheckedWordStatement`, on both of `LlmInferenceService`'s model paths and the early answer
+too). The statement stays because a brand the data does not carry is as likely as a food, and the model's answer alone
+would not say that nothing was checked. Kept from Decision 183: no screen of her own orders beside such a word, so no chip.
+
+Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aWordWithNoNearDrugNameTakesTheChartAnswerWithTheUncheckedStatementAfterIt`,
+and by the cases of Decisions 183, 250, 335, 374 and 382 that now assert the chart answer.

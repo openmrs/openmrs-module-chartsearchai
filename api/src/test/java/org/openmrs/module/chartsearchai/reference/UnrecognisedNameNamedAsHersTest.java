@@ -11,6 +11,7 @@ package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Arrays;
@@ -21,6 +22,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 
 /**
@@ -45,14 +47,31 @@ public class UnrecognisedNameNamedAsHersTest extends BaseModuleContextSensitiveT
 			DrugReferenceTestSupport.activeOrder("order-asa", "Acetylsalicylic acid", "Acetylsalicylic acid"));
 		for (String word : Arrays.asList("klarizom", "clarithromycine")) {
 			String question = "Can I give him fluconazole with his " + word + "?";
-			String answer = ask(question, orders);
-			assertNotNull(answer, question + " — the module answers");
+			PatientChart chart = askChart(question, orders);
+			// "klarizom" has no near name in the data, so it follows the chart answer; "clarithromycine" has one, and is
+			// the module's answer (ADR Decision 384).
+			boolean nearName = "clarithromycine".equals(word);
+			String answer = nearName ? chart.getModuleAnswer() : chart.getUncheckedWordStatement();
+			assertNotNull(answer, question + " — stated");
+			if (!nearName) {
+				assertNull(chart.getModuleAnswer(), question + " — the chart answer: " + chart.getModuleAnswer());
+			}
 			String[] lines = answer.split("\n");
 			assertEquals("None of this patient's active orders is named \"" + word + "\".", lines[0],
 				question + " — was: " + answer);
 			assertTrue(lines[1].startsWith("No interaction check was run for \"" + word + "\" and Fluconazole: \"" + word
 					+ "\" is not a drug name the interaction data recognises."), question + " — was: " + answer);
 		}
+	}
+
+	private static PatientChart askChart(String question, List<PatientClinicalContext.ActiveDrugOrder> orders) {
+		LinkedHashSet<String> names = new LinkedHashSet<String>();
+		for (PatientClinicalContext.ActiveDrugOrder order : orders) {
+			names.addAll(order.getNames());
+		}
+		return DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.shippedServiceWithGroups()).injectRecords(
+			DrugReferenceTestSupport.oneRecordChart(), DrugReferenceTestSupport.ctx(45, null, names, null, null, null, orders),
+			question);
 	}
 
 	private static String ask(String question, List<PatientClinicalContext.ActiveDrugOrder> orders) {

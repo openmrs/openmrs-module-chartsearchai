@@ -353,6 +353,10 @@ public class LlmInferenceService implements ChartSearchService {
 					chart.getOrdersInTheNamedClass());
 			// And which drug the data's name in the answer is, where the question named it otherwise (ADR Decision 277).
 			completedAnswer = NameAsAskedStatement.withNamesAsAskedStated(completedAnswer, chart.getNamedAsAsked());
+			// And that no interaction check was run for a word in its drug place the data has no near name for (ADR
+			// Decision 384).
+			completedAnswer = UncheckedWordStatement.withUncheckedWordStated(completedAnswer,
+					chart.getUncheckedWordStatement());
 			// And, on a question asking only for her allergies, which of her own orders conflict with them
 			// (ADR Decision 124), or after a model's answer that names such an order (ADR Decision 210) — last, so it
 			// follows every sentence the module appends, and it marks the chips it states, which is why the chips it
@@ -812,14 +816,15 @@ public class LlmInferenceService implements ChartSearchService {
 			// The listed-drug sentence (issue #515) is on this answer too: the chart stamped it before the
 			// model was asked, so unlike the ended-order sentence it owes the chips nothing.
 			ungroundedAnswerConsumer.accept(new ChartAnswer(
-					NameAsAskedStatement.withNamesAsAskedStated(DrugClassMembersStatement.withMembersStated(
+					UncheckedWordStatement.withUncheckedWordStated(NameAsAskedStatement.withNamesAsAskedStated(
+							DrugClassMembersStatement.withMembersStated(
 							DrugClassStatement.withDrugClassStated(DoseStatement.withDoseNotChecked(
 									ListedDrugStatement.withListedDrugsStated(OwnOrderFindingStatement
 											.withUnstatedOwnOrderFindings(response.getAnswer(), cited, chart.getMappings(),
 												chart.getProposalOwnOrderFindingLines()),
 										chart.getListedDrugsWithNoActiveOrder()), chart.statesADose(), doseCeilingCoverage),
 								unresolvedDrugClass, cited), chart.getNamedClassAtcGroup(), chart.getOrdersInTheNamedClass()),
-						chart.getNamedAsAsked()),
+						chart.getNamedAsAsked()), chart.getUncheckedWordStatement()),
 					// ADR Decision 170: the records the own-order statement cites, as the module's, on this answer too.
 					withReferencesTheModuleStated(cited, OwnOrderFindingStatement.citedRecords(response.getAnswer(), cited,
 							chart.getMappings(), chart.getProposalOwnOrderFindingLines()), chart.getMappings()),
@@ -957,6 +962,10 @@ public class LlmInferenceService implements ChartSearchService {
 					chart.getOrdersInTheNamedClass());
 			// And which drug the data's name in the answer is, where the question named it otherwise (ADR Decision 277).
 			completedAnswer = NameAsAskedStatement.withNamesAsAskedStated(completedAnswer, chart.getNamedAsAsked());
+			// And that no interaction check was run for a word in its drug place the data has no near name for (ADR
+			// Decision 384).
+			completedAnswer = UncheckedWordStatement.withUncheckedWordStated(completedAnswer,
+					chart.getUncheckedWordStatement());
 			// And, on a question asking only for her allergies, which of her own orders conflict with them
 			// (ADR Decision 124), or after a model's answer that names such an order (ADR Decision 210) — last, so it
 			// follows every sentence the module appends, and it marks the chips it states, which is why the chips it

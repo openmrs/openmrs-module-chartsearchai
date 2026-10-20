@@ -555,6 +555,9 @@ public class PatientChartSerializer {
 		/** @see #statesADose() */
 		private boolean statesADose;
 
+		/** @see #getUncheckedWordStatement() */
+		private String uncheckedWordStatement;
+
 		/** @see #getNamedClassAtcGroup() */
 		private String namedClassAtcGroup;
 
@@ -710,6 +713,21 @@ public class PatientChartSerializer {
 		 *  {@code DrugReferenceInjector} is the only caller. */
 		public void markStatesADose(boolean statesADose) {
 			this.statesADose = statesADose;
+		}
+
+		/** Records that no interaction check was run for a word in the question's drug place that the drug data neither
+		 *  recognises nor finds a near name for — ADR Decision 384, and {@code DrugReferenceInjector} is the only caller. */
+		public void markUncheckedWordStatement(String statement) {
+			this.uncheckedWordStatement = statement;
+		}
+
+		/**
+		 * The statement that no interaction check was run for a word standing in the question's drug place which the drug
+		 * data neither recognises nor finds a near name for — ADR Decision 384 — or {@code null}. The question took the chart
+		 * answer; {@code LlmInferenceService} states this after it.
+		 */
+		public String getUncheckedWordStatement() {
+			return uncheckedWordStatement;
 		}
 
 		/**

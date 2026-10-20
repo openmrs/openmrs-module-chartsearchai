@@ -238,6 +238,12 @@ final class UnrecognisedDrugName {
 		return null;
 	}
 
+	/** Whether the data finds a near name for the word — or, of two, for either (ADR Decision 384): a word it finds none for
+	 *  may be no drug at all ("oranges"), and the question takes the chart answer, this statement after it. */
+	boolean hasSuggestions() {
+		return !suggestions.isEmpty() || !secondSuggestions.isEmpty();
+	}
+
 	/** Whether the unrecognised word names one of her active orders — her drug, checked through the order whatever the data
 	 *  calls it, so never said to be unrecognised (ADR Decisions 250, 265). */
 	boolean namesOneOfHerOrders(PatientClinicalContext context) {

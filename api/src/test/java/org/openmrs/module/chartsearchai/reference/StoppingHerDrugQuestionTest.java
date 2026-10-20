@@ -11,6 +11,7 @@ package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 import java.util.Arrays;
 import java.util.LinkedHashSet;
@@ -20,6 +21,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 
 /**
@@ -86,15 +88,15 @@ public class StoppingHerDrugQuestionTest extends BaseModuleContextSensitiveTest 
 		}
 	}
 
-	/** A name the data does not recognise, called hers, in the same question: said so, never left to the model (ADR
-	 *  Decision 335) — the model answered "Can I stop his klarizom?" for patients on no Klarizom "The records do not address
-	 *  Klarizom". */
+	/** A name the data does not recognise, called hers, in the same question: said so (ADR Decision 335) — after the chart
+	 *  answer, since the data has no near name for it and it may be no drug at all (ADR Decision 384). */
 	@Test
 	public void anUnrecognisedNameSheIsNotOnIsSaidSo() {
-		String answer = ask("Can I stop his klarizom?",
+		PatientChart chart = askChart("Can I stop his klarizom?",
 			DrugReferenceTestSupport.activeOrder("order-mtz", "Metronidazole", "Metronidazole"));
-		assertNotNull(answer, "the module answers");
-		assertEquals("None of this patient's active orders is named \"klarizom\", so there is no order of it to stop.", answer);
+		assertNull(chart.getModuleAnswer(), "the chart answer: " + chart.getModuleAnswer());
+		assertEquals("None of this patient's active orders is named \"klarizom\", so there is no order of it to stop.",
+			chart.getUncheckedWordStatement());
 	}
 
 	/** One of her orders named by its own name, a name the data does not carry: what relates it to her other medications, under
@@ -125,5 +127,15 @@ public class StoppingHerDrugQuestionTest extends BaseModuleContextSensitiveTest 
 		return DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.shippedServiceWithGroups()).injectRecords(
 			DrugReferenceTestSupport.oneRecordChart(), DrugReferenceTestSupport.ctx(45, null, names, null, null, null, orders),
 			question).getModuleAnswer();
+	}
+	private static PatientChart askChart(String question, PatientClinicalContext.ActiveDrugOrder... given) {
+		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(given);
+		LinkedHashSet<String> names = new LinkedHashSet<String>();
+		for (PatientClinicalContext.ActiveDrugOrder order : orders) {
+			names.addAll(order.getNames());
+		}
+		return DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.shippedServiceWithGroups()).injectRecords(
+			DrugReferenceTestSupport.oneRecordChart(), DrugReferenceTestSupport.ctx(45, null, names, null, null, null, orders),
+			question);
 	}
 }

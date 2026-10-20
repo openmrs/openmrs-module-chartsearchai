@@ -11,6 +11,7 @@ package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Arrays;
@@ -21,6 +22,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 
 /**
@@ -84,10 +86,13 @@ public class HerOrderNamedByItsBrandAloneTest extends BaseModuleContextSensitive
 			"Metronidazole", "Metronidazole"));
 		LinkedHashSet<String> names = new LinkedHashSet<String>(orders.get(0).getNames());
 		for (String question : Arrays.asList("Is his klarizom safe?", "What interacts with his klarizom?")) {
-			String answer = DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.shippedServiceWithGroups())
+			PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.shippedServiceWithGroups())
 					.injectRecords(DrugReferenceTestSupport.oneRecordChart(), DrugReferenceTestSupport.ctx(45, null, names, null,
-						null, null, orders), question).getModuleAnswer();
-			assertNotNull(answer, question + " — the module answers");
+						null, null, orders), question);
+			// No near name in the data, so it may be no drug at all: the chart answer, this after it (ADR Decision 384).
+			assertNull(chart.getModuleAnswer(), question + " — the chart answer: " + chart.getModuleAnswer());
+			String answer = chart.getUncheckedWordStatement();
+			assertNotNull(answer, question + " — stated after the chart answer");
 			String[] lines = answer.split("\n");
 			assertEquals("None of this patient's active orders is named \"klarizom\".", lines[0], question + " — was: " + answer);
 			assertTrue(lines[1].startsWith("No interaction check was run: \"klarizom\" is not a drug name the interaction data "

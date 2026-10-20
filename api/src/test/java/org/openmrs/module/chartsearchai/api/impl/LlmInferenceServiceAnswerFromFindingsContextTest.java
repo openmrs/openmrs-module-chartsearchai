@@ -2959,12 +2959,15 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		for (String[] c : cases) {
 			RecordingProvider provider = new RecordingProvider();
 			ChartAnswer answer = serviceWith(provider, shipped()).search(patient, c[0]);
-			assertEquals(0, provider.calls, c[0] + " — " + answer.getAnswer());
-			assertTrue(answer.getAnswer().startsWith("No interaction check was run: " + c[1]
-					+ " is not a drug name the interaction data recognises."), c[0] + " — " + answer.getAnswer());
+			String statement = "No interaction check was run: " + c[1] + " is not a drug name the interaction data recognises.";
 			if (c[2] == null) {
+				// No near name: perhaps no drug at all, so the chart answer, the statement after it (ADR Decision 384).
+				assertEquals(1, provider.calls, c[0] + " — the chart answer: " + answer.getAnswer());
+				assertTrue(answer.getAnswer().endsWith("\n" + statement), c[0] + " — " + answer.getAnswer());
 				assertFalse(answer.getAnswer().contains("Did you mean"), answer.getAnswer());
 			} else {
+				assertEquals(0, provider.calls, c[0] + " — " + answer.getAnswer());
+				assertTrue(answer.getAnswer().startsWith(statement), c[0] + " — " + answer.getAnswer());
 				assertTrue(answer.getAnswer().contains(c[2]), answer.getAnswer());
 			}
 			assertTrue(answer.getSafetyWarnings().isEmpty(), "no check ran, so no chip: " + answer.getSafetyWarnings());
@@ -2992,15 +2995,36 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		for (String[] c : cases) {
 			RecordingProvider provider = new RecordingProvider();
 			ChartAnswer answer = serviceWith(provider, shipped()).search(patient, c[0]);
-			assertEquals(0, provider.calls, c[0] + " — " + answer.getAnswer());
-			assertTrue(answer.getAnswer().startsWith("No interaction check was run for \"" + c[1] + "\" and Warfarin: \""
-					+ c[1] + "\" is not a drug name the interaction data recognises."), c[0] + " — " + answer.getAnswer());
+			String statement = "No interaction check was run for \"" + c[1] + "\" and Warfarin: \"" + c[1]
+					+ "\" is not a drug name the interaction data recognises.";
 			if (c[2] == null) {
+				// No near name: the chart answer, the statement after it (ADR Decision 384).
+				assertEquals(1, provider.calls, c[0] + " — the chart answer: " + answer.getAnswer());
+				assertTrue(answer.getAnswer().endsWith("\n" + statement), c[0] + " — " + answer.getAnswer());
 				assertFalse(answer.getAnswer().contains("Did you mean"), answer.getAnswer());
 			} else {
+				assertEquals(0, provider.calls, c[0] + " — " + answer.getAnswer());
+				assertTrue(answer.getAnswer().startsWith(statement), c[0] + " — " + answer.getAnswer());
 				assertTrue(answer.getAnswer().contains(c[2]), answer.getAnswer());
 			}
 		}
+	}
+
+	/**
+	 * A word in a drug question's drug place that the drug data neither recognises nor finds a near name for may be no drug
+	 * at all, so the question takes the chart answer, and the module states after it that no interaction check was run
+	 * (ADR Decision 384). On the 3.7.1 standalone "Can i give her oranges?" was answered by the module alone, "No interaction
+	 * check was run: "oranges" is not a drug name the interaction data recognises.", with no answer from her chart.
+	 */
+	@Test
+	public void aWordWithNoNearDrugNameTakesTheChartAnswerWithTheUncheckedStatementAfterIt() {
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider, shipped()).search(patient, "Can i give her oranges?");
+		assertEquals(1, provider.calls, "the chart answer: " + answer.getAnswer());
+		assertEquals("The model's answer [1].\nNo interaction check was run: \"oranges\" is not a drug name the interaction "
+				+ "data recognises.", answer.getAnswer().replaceAll("\\[\\d+\\]", "[1]"));
+		assertFalse(answer.isAnsweredByTheModule(), "the model's answer, the module's line after it");
+		assertTrue(answer.getSafetyWarnings().isEmpty(), "no check ran, so no chip: " + answer.getSafetyWarnings());
 	}
 
 	/** The unrecognised name is quoted as the question wrote it, hyphen and all (ADR Decision 245): on the 3.7.1 standalone
@@ -3010,7 +3034,8 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	@Test
 	public void anUnrecognisedNameIsQuotedAsTheQuestionWroteItHyphenIncluded() {
 		ChartAnswer answer = serviceWith(new RecordingProvider(), shipped()).search(patient, "Can I give her co-zorblatine?");
-		assertTrue(answer.getAnswer().startsWith("No interaction check was run: \"co-zorblatine\" is not a drug name the "
+		// No near name, so after the chart answer (ADR Decision 384), quoted as written.
+		assertTrue(answer.getAnswer().endsWith("\nNo interaction check was run: \"co-zorblatine\" is not a drug name the "
 				+ "interaction data recognises."), answer.getAnswer());
 	}
 
@@ -3054,7 +3079,9 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		assertFalse(findingsInThePromptFor(SCREEN).isEmpty(), "precondition: her own orders interact");
 		for (String question : new String[] { "Does metformn interact with her medications?", "Can I give her ddI?" }) {
 			ChartAnswer answer = serviceWith(new RecordingProvider(), shipped()).search(patient, question);
-			assertTrue(answer.getAnswer().startsWith("No interaction check was run: "), question + " — " + answer.getAnswer());
+			// "metformn" has a near name and is the module's answer; "ddI" has none, so it follows the chart answer (ADR
+			// Decision 384). Either way, no screen of her own orders.
+			assertTrue(answer.getAnswer().contains("No interaction check was run: "), question + " — " + answer.getAnswer());
 			assertTrue(answer.getSafetyWarnings().isEmpty(), question + " — no chip: " + answer.getSafetyWarnings());
 		}
 	}
@@ -3066,7 +3093,10 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	public void aCombinationNameIsNeverSuggestedForAWordItBeginsWith() {
 		for (String question : new String[] { "Can I give her hyoscine butylbromide?", "Can I give her hyoscine?" }) {
 			ChartAnswer answer = serviceWith(new RecordingProvider(), shipped()).search(patient, question);
-			assertTrue(answer.getAnswer().startsWith("No interaction check was run: "), question + " — " + answer.getAnswer());
+			// "hyoscine butylbromide" has no near name, so it follows the chart answer (ADR Decision 384); "hyoscine" has
+			// one, Scopolamine, and is the module's answer. Neither is ever given the combination's ingredient.
+			assertTrue(answer.getAnswer().contains("No interaction check was run: \"" + question.substring(15,
+				question.length() - 1) + "\""), question + " — " + answer.getAnswer());
 			assertFalse(answer.getAnswer().contains("Acetaminophen"), question + " — " + answer.getAnswer());
 		}
 	}

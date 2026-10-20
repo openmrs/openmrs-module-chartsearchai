@@ -20619,3 +20619,30 @@ A contraindication to a drug the question names that she is not on is stated aft
 is answered as before.
 
 Pinned by `TwoDrugsListedBelowTheFloorTest.aContraindicationAboutADrugAskedAboutIsStatedApart`.
+
+## Decision 372: Her combination order named whole is answered as her own medication
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It carries [Decision 193](#decision-193-a-safety-question-about-a-drug-she-already-takes-is-answered-by-the-module-as-her-own-medication) and
+[Decision 292](#decision-292-a-question-about-her-own-drug-taken-only-in-a-combination-is-answered-for-that-combination) from one substance of her combination to the combination named whole.
+
+### Context
+
+`aboutHerOwnMedication` answered a question about her own drug only where it resolved ONE substance — *"Is her
+sulfamethoxazole safe?"* — so *"Is her sulfamethoxazole / trimethoprim safe?"*, *"What interacts with her cotrimoxazole?"*
+and *"Can I stop her isoniazid / rifapentine?"* went to the model for every patient on that combination: on the 3.7.1
+standalone Rhoda was told *"Sulfamethoxazole / Trimethoprim can be given, with several cautions"*, a drug she takes cleared
+as though proposed.
+
+### The decision
+
+A product the question names whole ([Decision 217](#decision-217-a-proposal-naming-one-combination-product-is-answered-as-the-proposal-it-is)), every substance of it hers, is her own medication: the answer
+names it as asked, with her orders of its substances, then the findings about each substance against her other
+medications, each line naming its substance — as *"Is her X safe?"*, *"What interacts with her X?"* and, under
+[Decision 335](#decision-335-whether-to-stop-her-drug-is-answered-with-what-relates-it-to-her-other-medications-the-stopping-itself-not-weighed)'s lead, *"Can I stop her X?"* answer one substance.
+
+Where it is her only order, the answer is [Decision 316](#decision-316-a-question-about-her-own-drug-her-only-medication-says-there-is-no-other-to-check-it-against)'s, named as asked — *"Sulfamethoxazole / trimethoprim is one
+of this patient's active medications (Cotrimoxazole 960mg), and this patient has no other active medication to check it
+against."* — Amina Wekesa, on cotrimoxazole alone, had been told by the model that the records do not address it.
+
+Pinned by `CombinationNamedAsHersTest`.

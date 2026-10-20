@@ -1089,7 +1089,13 @@ public class DrugReferenceInjector {
 				companions);
 			Map<String, Integer> herRecords = orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context)
 					: orderRecordNumbers;
-			String herOrders = herStartedOrdersOf(questionDrugs.get(0), orderEntries, context, herRecords);
+			// A product named whole — her combination order — is named as asked, with her orders of each of its substances
+			// (ADR Decision 372).
+			AskedDrug asProduct = namesOneProduct(question, questionDrugs) ? askedDrugs(question, questionDrugs, context, true)
+					.get(0) : null;
+			boolean product = asProduct != null && asProduct.substances.size() > 1;
+			String herOrders = product ? herStartedOrdersOf(asProduct, orderEntries, context, herRecords)
+					: herStartedOrdersOf(questionDrugs.get(0), orderEntries, context, herRecords);
 			List<String> companionLabels = new ArrayList<String>();
 			for (DrugReference companion : companions) {
 				companionLabels.add(DrugSafetyValidator.interactionSubject(Collections.singletonList(companion), context)
@@ -1098,7 +1104,9 @@ public class DrugReferenceInjector {
 			moduleAnswer = composeAboutHerOwnMedication(findings, findingNumbers, about, orderRecordNumbers, herRecords,
 					itsOwnOrders, herOrders,
 					herOrders.isEmpty() ? herScheduledOrdersOf(questionDrugs.get(0), orderEntries, context, herRecords) : "",
-					companions.isEmpty() ? null : DrugSafetyValidator.interactionSubject(questionDrugs, context).displayLabel(),
+					product ? asProduct.label
+							: companions.isEmpty() ? null : DrugSafetyValidator.interactionSubject(questionDrugs, context)
+									.displayLabel(),
 					companionLabels);
 		} else if (context != null
 				&& ChartSearchAiUtils.getBooleanGlobalProperty(
@@ -3387,22 +3395,22 @@ public class DrugReferenceInjector {
 		return named.isEmpty() ? "" : " (" + DrugSafetyValidator.joinPartners(named) + ")";
 	}
 
-	/** The displays of her orders of the one substance {@code questionDrugs} resolve, started or not; empty where they
-	 *  resolve none or several (ADR Decision 206). */
+	/** The displays of her orders of each substance {@code questionDrugs} resolve, started or not (ADR Decision 206) — one
+	 *  substance, or each of a product's the question names whole (ADR Decision 372); every caller asks it of a question
+	 *  that resolves one drug. */
 	private Set<String> itsOwnOrderDisplays(List<DrugReference> questionDrugs, List<DrugReference> orderEntries,
 			PatientClinicalContext context) {
-		Set<Object> asked = new LinkedHashSet<Object>();
-		for (DrugReference entry : questionDrugs) {
-			asked.add(entry.substanceGroupKey());
-		}
 		Set<String> displays = new LinkedHashSet<String>();
-		if (asked.size() != 1) {
-			return displays;
-		}
-		for (PatientClinicalContext.ActiveDrugOrder order : DrugSafetyValidator.ordersOfSubstance(drugReferenceService,
-				questionDrugs.get(0), orderEntries, context)) {
-			if (order.getDisplay() != null) {
-				displays.add(order.getDisplay().trim());
+		Set<Object> seen = new HashSet<Object>();
+		for (DrugReference entry : questionDrugs) {
+			if (!seen.add(entry.substanceGroupKey())) {
+				continue;
+			}
+			for (PatientClinicalContext.ActiveDrugOrder order : DrugSafetyValidator.ordersOfSubstance(drugReferenceService,
+					entry, orderEntries, context)) {
+				if (order.getDisplay() != null) {
+					displays.add(order.getDisplay().trim());
+				}
 			}
 		}
 		return displays;
@@ -5595,7 +5603,8 @@ public class DrugReferenceInjector {
 		for (DrugReference companion : companions) {
 			ofItsOrder.add(companion.substanceGroupKey());
 		}
-		if (asked.size() != 1 || !herSubstances.containsAll(asked)
+		// One substance, or one product named whole whose substances are hers — her combination order (ADR Decision 372).
+		if (asked.size() != 1 && !namesOneProduct(question, questionDrugs) || !herSubstances.containsAll(asked)
 				|| !questionProposes(question, questionDrugs) && !asksWhetherItInteracts(question, questionDrugs)
 						&& !asksWhetherSheIsOnIt(question, questionDrugs)
 						&& !asksAboutItBesideHerMedications(question, questionDrugs)) {
@@ -5860,15 +5869,19 @@ public class DrugReferenceInjector {
 			List<RecordMapping> mappings, List<DrugReference> orderEntries, PatientClinicalContext context,
 			boolean contraindicationsChecked, int unidentified, Map<String, Integer> orderRecordNumbers,
 			Map<String, Integer> herOrderRecords) {
-		if (extent == null || extent.getFound() != 0 || extent.getBelowFloor() == null || !extent.getBelowFloor().isEmpty()
-				|| !contraindicationsChecked || unidentified != 0) {
+		// No pair found; whether any was listed below the floor matters only where she has another order to list it against,
+		// asked below — a product's below-floor rows are not read at all (ADR Decision 372).
+		if (extent == null || extent.getFound() != 0 || !contraindicationsChecked || unidentified != 0) {
 			return null;
 		}
 		Set<Object> asked = new LinkedHashSet<Object>();
 		for (DrugReference entry : questionDrugs) {
 			asked.add(entry.substanceGroupKey());
 		}
-		if (asked.size() != 1 || !herSubstances.containsAll(asked)
+		// One substance, or her combination named whole (ADR Decision 372).
+		AskedDrug asProduct = asked.size() > 1 && namesOneProduct(question, questionDrugs)
+				? askedDrugs(question, questionDrugs, context, true).get(0) : null;
+		if (asked.size() != 1 && asProduct == null || !herSubstances.containsAll(asked)
 				|| !questionProposes(question, questionDrugs) && !asksWhetherItInteracts(question, questionDrugs)
 						&& !asksWhetherSheIsOnIt(question, questionDrugs)
 						&& !asksAboutItBesideHerMedications(question, questionDrugs)) {
@@ -5886,9 +5899,12 @@ public class DrugReferenceInjector {
 			}
 			lines.add(i);
 		}
-		String herOrders = herStartedOrdersOf(questionDrugs.get(0), orderEntries, context, herOrderRecords);
-		List<PatientClinicalContext.ActiveDrugOrder> ofIt = DrugSafetyValidator.ordersOfSubstance(drugReferenceService,
-				questionDrugs.get(0), orderEntries, context);
+		String herOrders = asProduct != null ? herStartedOrdersOf(asProduct, orderEntries, context, herOrderRecords)
+				: herStartedOrdersOf(questionDrugs.get(0), orderEntries, context, herOrderRecords);
+		List<PatientClinicalContext.ActiveDrugOrder> ofIt = new ArrayList<PatientClinicalContext.ActiveDrugOrder>();
+		for (DrugReference entry : asProduct != null ? questionDrugs : questionDrugs.subList(0, 1)) {
+			ofIt.addAll(DrugSafetyValidator.ordersOfSubstance(drugReferenceService, entry, orderEntries, context));
+		}
 		int others = 0;
 		for (PatientClinicalContext.ActiveDrugOrder order : context.getActiveDrugOrders()) {
 			if (ofIt.contains(order)) {
@@ -5916,7 +5932,8 @@ public class DrugReferenceInjector {
 		// that her orders carry it twice beside it — and with none, said alone, never a clearance (ADR Decision 316): the
 		// model, asked instead, answered "The drug can be given, with one caution".
 		if (others == 0) {
-			StringBuilder alone = new StringBuilder(DrugSafetyValidator.interactionSubject(questionDrugs, context).displayLabel() + OWN_MEDICATION_LEAD + herOrders
+			StringBuilder alone = new StringBuilder((asProduct != null ? asProduct.label
+					: DrugSafetyValidator.interactionSubject(questionDrugs, context).displayLabel()) + OWN_MEDICATION_LEAD + herOrders
 					+ ", and this patient has no other active medication to check it against.");
 			for (Integer i : lines) {
 				alone.append("\n").append(findingLine(findings.get(i), findingNumbers.get(i), orderRecordNumbers,
@@ -5924,7 +5941,8 @@ public class DrugReferenceInjector {
 			}
 			return alone.toString();
 		}
-		if (!carriesInteractions || DrugSafetyValidator.anyRuleIdentifiesAny(otherEntries, questionDrugs)) {
+		if (extent.getBelowFloor() == null || !extent.getBelowFloor().isEmpty() || !carriesInteractions
+				|| DrugSafetyValidator.anyRuleIdentifiesAny(otherEntries, questionDrugs)) {
 			return null;
 		}
 		List<String> rowIds = rowIds(questionDrugs);

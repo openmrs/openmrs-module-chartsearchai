@@ -83,6 +83,9 @@ public class QueryStoreChartBuilderBudgetTest {
 
 		int promptCountCalls;
 
+		/** The count that fails, 1-based, as a llama-server without the count route fails each one. */
+		int failingCount;
+
 		@Override
 		public boolean isAvailable() {
 			return available;
@@ -101,6 +104,9 @@ public class QueryStoreChartBuilderBudgetTest {
 		public int countPrompt(String numberedRecords, List<Integer> focusIndices, String question,
 				boolean enumerateFindings, List<AlreadyOrderedDrug> drugsAlreadyOrdered) {
 			promptCountCalls++;
+			if (failingCount > 0 && promptCountCalls >= failingCount) {
+				throw new org.openmrs.api.APIException("Local chat input token count returned HTTP 404");
+			}
 			return count(numberedRecords) + promptOverhead;
 		}
 	}
@@ -274,6 +280,29 @@ public class QueryStoreChartBuilderBudgetTest {
 
 		assertTrue(mappedUuids(chart).contains("cond-active"),
 				"with no counter available, behavior must be unchanged from before this feature");
+	}
+
+	// TokenCounter.countPrompt may throw where the engine cannot answer a count; that is no count, as an
+	// unavailable counter is, and never a failed answer.
+	@Test
+	public void aCountThatFailsSkipsEnforcementRatherThanFailingTheAnswer() {
+		for (int failing : new int[] { 1, 2 }) {
+			tokenCounter.failingCount = failing;
+			tokenCounter.promptCountCalls = 0;
+			tokenCounter.budget = 50;
+			List<QueryDocument> chart = new ArrayList<QueryDocument>();
+			chart.add(condition("cond-active", words(5), LocalDate.of(2026, 6, 1), "ACTIVE"));
+			for (int i = 0; i < 10; i++) {
+				chart.add(doc("obs", "sim-" + i, words(20), LocalDate.of(2026, 5, 1).minusDays(i)));
+			}
+			queryStore.stubChart = new ArrayList<QueryDocument>(chart);
+			queryStore.stubHits = new ArrayList<QueryDocument>(chart.subList(1, chart.size()));
+
+			PatientChart result = builder.buildScoped(patient(), "shoes?");
+
+			assertTrue(mappedUuids(result).containsAll(similarityIds(10)),
+					"count " + failing + " failing must leave the selected records as they were: " + mappedUuids(result));
+		}
 	}
 
 	@Test

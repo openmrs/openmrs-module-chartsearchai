@@ -426,6 +426,24 @@ class QueryStoreChartBuilder {
 		if (counter == null || !counter.isAvailable()) {
 			return records;
 		}
+		try {
+			return budgetedRecords(counter, patient, question, records, orderCurrency);
+		}
+		catch (InsufficientContextException e) {
+			throw e;
+		}
+		catch (RuntimeException e) {
+			// A count the engine could not answer is no count, as an unavailable counter is
+			// (TokenCounter.countPrompt): the slice goes unbudgeted rather than failing the answer.
+			log.warn("Could not count the context slice for patient [uuid={}]; it is not budgeted: {}",
+					patient.getUuid(), e.getMessage());
+			return records;
+		}
+	}
+
+	/** {@link #applyContextBudget} once a counter is available; a failed count propagates to it. */
+	private List<ContextSliceRecord> budgetedRecords(TokenCounter counter, Patient patient, String question,
+			List<ContextSliceRecord> records, OrderCurrency orderCurrency) {
 		int budget = counter.inputBudget();
 
 		if (counter.countPrompt(renderedTextOf(patient, records, orderCurrency),

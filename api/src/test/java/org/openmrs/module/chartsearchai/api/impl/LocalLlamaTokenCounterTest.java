@@ -34,12 +34,23 @@ import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 public class LocalLlamaTokenCounterTest extends BaseModuleContextSensitiveTest {
 
 	@Test
-	public void availabilityMatchesTheConfiguredEngine() {
-		assertTrue(LocalLlamaTokenCounter.supportsExactCount(null));
-		assertTrue(LocalLlamaTokenCounter.supportsExactCount("local"));
-		assertTrue(LocalLlamaTokenCounter.supportsExactCount(" LOCAL "));
-		assertFalse(LocalLlamaTokenCounter.supportsExactCount("remote"));
-		assertFalse(LocalLlamaTokenCounter.supportsExactCount(" REMOTE "));
+	public void isAvailableExactlyWhenTheConfiguredEngineIsLocal() {
+		LocalLlmEngine engine = new LocalLlmEngine();
+		LlmProvider provider = new LlmProvider();
+		ReflectionTestUtils.setField(provider, "localEngine", engine);
+		ReflectionTestUtils.setField(provider, "remoteEngine", new RemoteLlmEngine());
+		LocalLlamaTokenCounter counter = new LocalLlamaTokenCounter();
+		counter.setLocalLlmEngine(engine);
+		ReflectionTestUtils.setField(counter, "llmProvider", provider);
+		for (String local : Arrays.asList(null, "local", " LOCAL ")) {
+			Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_LLM_ENGINE, local);
+			assertTrue(counter.isAvailable(), String.valueOf(local));
+		}
+		for (String remote : Arrays.asList("remote", " REMOTE ")) {
+			Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_LLM_ENGINE, remote);
+			assertFalse(counter.isAvailable(), remote);
+		}
+		engine.shutdown();
 	}
 
 	@Test

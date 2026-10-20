@@ -11,7 +11,6 @@ package org.openmrs.module.chartsearchai.api.impl;
 
 import java.util.List;
 
-import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.AlreadyOrderedDrug;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,7 +18,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * {@link TokenCounter} for {@link LocalLlmEngine}, available exactly when
- * {@code chartsearchai.llm.engine} resolves to local (the same default {@link LlmProvider} uses).
+ * {@link LlmProvider} answers with the local engine.
  * A remote engine has no assumed input-token route — an arbitrary OpenAI-compatible
  * endpoint (vLLM, Ollama, a cloud provider) is not guaranteed to expose one — so
  * {@link #isAvailable()} is false in that case and callers must skip proactive budget
@@ -41,14 +40,7 @@ public class LocalLlamaTokenCounter implements TokenCounter {
 
 	@Override
 	public boolean isAvailable() {
-		String engineType = Context.getAdministrationService()
-				.getGlobalProperty(ChartSearchAiConstants.GP_LLM_ENGINE);
-		return supportsExactCount(engineType);
-	}
-
-	static boolean supportsExactCount(String engineType) {
-		return engineType == null
-				|| !ChartSearchAiConstants.LLM_ENGINE_REMOTE.equalsIgnoreCase(engineType.trim());
+		return llmProvider.getActiveEngine() == localLlmEngine;
 	}
 
 	@Override

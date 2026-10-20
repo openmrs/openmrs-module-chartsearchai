@@ -79,6 +79,33 @@ public class LocalLlmEngineTest {
 		assertEquals("patient chart and question", messages.get(1).get("content").asText());
 	}
 
+	@Test
+	public void requestChatInputTokenCount_refusesAFailedOrUnusableReply() throws Exception {
+		AtomicReference<Integer> status = new AtomicReference<>();
+		AtomicReference<String> reply = new AtomicReference<>();
+		tokenizeServer = HttpServer.create(new InetSocketAddress(LlamaServerEndpoint.LOOPBACK_HOST, 0), 0);
+		tokenizeServer.createContext("/v1/messages/count_tokens", exchange -> {
+			byte[] response = reply.get().getBytes(StandardCharsets.UTF_8);
+			exchange.sendResponseHeaders(status.get(), response.length);
+			try (OutputStream output = exchange.getResponseBody()) {
+				output.write(response);
+			}
+		});
+		tokenizeServer.start();
+		LlamaServerEndpoint endpoint = LlamaServerEndpoint.open(tokenizeServer.getAddress().getPort());
+		String[][] cases = {
+				{ "500", "{\"input_tokens\":41}" },
+				{ "200", "{}" },
+				{ "200", "{\"tokens\":[1,2,3]}" },
+				{ "200", "{\"input_tokens\":-1}" } };
+		for (String[] c : cases) {
+			status.set(Integer.valueOf(c[0]));
+			reply.set(c[1]);
+			assertThrows(APIException.class, () -> LocalLlmEngine.requestChatInputTokenCount(
+					engine.getHttpClient(), endpoint, "system", "user"), c[0] + " " + c[1]);
+		}
+	}
+
 	private static String expectedAuthorization(LlamaServerEndpoint endpoint) {
 		ProcessBuilder child = new ProcessBuilder("llama-server");
 		endpoint.handOverTo(child);

@@ -46,6 +46,7 @@ The standalone download above includes the backend module, frontend ESM, and the
 - [Bundled provider integration](#bundled-provider-integration)
 - [Conversation persistence](#conversation-persistence)
 - [Med Agent Hub adapter](#med-agent-hub-adapter)
+- [Conversation endpoints](#conversation-endpoints)
 - [License](#license)
 
 ## Try it on the demo server
@@ -1206,7 +1207,7 @@ Hub, and only while `hub` is listed in `chartsearchai.providers.enabled`.
 The conversation endpoint can select this adapter explicitly. The existing search
 endpoints remain bundled; enabling Hub does not silently redirect them.
 
-### Conversation endpoints
+## Conversation endpoints
 
 All paths below are under `/ws/rest/v1/chartsearchai`. Requests require the query
 privilege; patient-specific requests also require access to the selected patient. Conversations belong to the current

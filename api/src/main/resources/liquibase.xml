@@ -138,6 +138,7 @@
 	</changeSet>
 
 	<changeSet id="chartsearchai-010" author="openmrs">
+		<validCheckSum>9:4072678082e4f5a4fecbde940616d4dd</validCheckSum>
 		<comment>
 			Provider-neutral clinical conversations. A conversation is bound to one provider and
 			mode; selecting another provider or mode creates a new header while preserving history.
@@ -260,6 +261,14 @@
 				indexName="idx_chartsearchai_conversation_turn_request">
 			<column name="request_id"/>
 		</createIndex>
+	</changeSet>
+
+	<changeSet id="chartsearchai-011" author="openmrs">
+		<preConditions onFail="MARK_RAN">
+			<columnExists tableName="chartsearchai_conversation" columnName="title"/>
+		</preConditions>
+		<comment>Drop chartsearchai_conversation.title where an earlier 010 created it.</comment>
+		<dropColumn tableName="chartsearchai_conversation" columnName="title"/>
 	</changeSet>
 
 </databaseChangeLog>

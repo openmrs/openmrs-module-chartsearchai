@@ -21020,3 +21020,24 @@ on the surface a client asks for (Decision 79).
 
 Pinned by `AllergyQuestionConflictingOrderContextTest.search_aQuestionAboutOneDrugCarriesNothingAboutHerOtherMedicationsAlone`
 and `UnrelatedFindingsLeftOutTest`.
+
+## Decision 388: That a recorded allergy was not checked is said only after a question an allergy check bears on
+
+**Status: Accepted** (October 2026) — the owner's instruction of 2026-10-20 that an answer carry nothing unrelated to what was
+asked. It scopes Decision 223's closing line.
+
+### Context
+
+*"Not checked: a recorded allergy the drug data does not identify — Dexibuprofen."* closed every module answer for the two
+patients with such an allergy over the full run of 2026-10-20 — 1,316 answers to 658 questions, *"Is she on more than one
+steroid?"* and *"Can I stop her amlodipine?"* among them. The line says what the allergy check did not compare, and those
+questions ask nothing that check answers.
+
+### The decision
+
+The line closes an answer only where an allergy check bears on the question (`DrugReferenceInjector.anAllergyCheckBearsOn`):
+it asks about her allergies, whether to give a drug — one, two together, one instead of another, a class — whether a drug
+is safe, or for a screen of her medications not only for their interactions. Not whether she is on a drug of a class,
+whether to stop, continue or change the dose of one, nor only what interacts.
+
+Pinned by `UnidentifiedActiveOrdersAnswerTest.anUncheckedAllergyIsSaidOnlyAfterAQuestionItsCheckBearsOn`.

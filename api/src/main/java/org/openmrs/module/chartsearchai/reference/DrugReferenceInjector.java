@@ -1506,8 +1506,9 @@ public class DrugReferenceInjector {
 			moduleAnswer = moduleAnswer + "\n" + unidentifiedOrdersLine(unidentified, questionDrugs.isEmpty());
 		}
 		// And a recorded drug allergy the data does not identify was compared with nothing: said so, never left to read as
-		// checked (ADR Decision 223).
-		if (moduleAnswer != null && context != null) {
+		// checked (ADR Decision 223) — after a question that check bears on, and no other (ADR Decision 388).
+		if (moduleAnswer != null && context != null
+				&& anAllergyCheckBearsOn(question, questionDrugs, namedClass, drugReferenceService)) {
 			List<String> unchecked = new ArrayList<String>();
 			// Each as the chart spells it (ADR Decision 227).
 			for (String allergen : DrugSafetyValidator.unresolvedDrugAllergens(drugReferenceService, context)) {
@@ -5491,6 +5492,31 @@ public class DrugReferenceInjector {
 	 * by semicolons, because a display can carry a comma of its own ("Polio vaccination, oral", on the demo). It
 	 * states what the module did NOT check; the lines above it are what it did.
 	 */
+	/**
+	 * Whether a check of her allergies bears on {@code question} (ADR Decision 388): it asks about her allergies, whether to
+	 * give a drug — one, two together, one instead of another, a drug class — whether a drug is safe, or for a screen of
+	 * her medications not only for their interactions. Not whether she is on a drug of a class, whether to stop, continue
+	 * or change the dose of a drug, nor only what interacts: the closing line of Decision 223 says what that check did not
+	 * compare, and is no answer to a question it does not bear on.
+	 */
+	private static boolean anAllergyCheckBearsOn(String question, List<DrugReference> questionDrugs, String namedClass,
+			DrugReferenceService service) {
+		if (QueryScopeRouter.asksAboutAllergies(question)) {
+			return true;
+		}
+		if (questionDrugs.isEmpty()) {
+			if (namedClass != null && service != null) {
+				return QueryScopeRouter.proposesADrugClass(question,
+					DrugClassTerms.termsOf(namedClass, service.getCrossReactivityGroups()));
+			}
+			return QueryScopeRouter.isInteractionScreening(question) && !QueryScopeRouter.asksOnlyAboutInteractions(question);
+		}
+		List<String> words = wordsBesideItsNames(question, questionDrugs);
+		return questionProposes(question, questionDrugs) || QueryScopeRouter.asksWhetherADrugIsSafeWithHerMedications(words)
+				|| QueryScopeRouter.asksWhetherToGiveDrugsTogether(words) || QueryScopeRouter.asksWhetherToSwitchADrug(words)
+				|| QueryScopeRouter.asksWhetherToGiveADrugInsteadOfAnother(words);
+	}
+
 	/**
 	 * The closing line of a composed answer beside recorded drug allergies the drug data does not identify (ADR Decision
 	 * 223): <em>"Not checked: a recorded allergy the drug data does not identify — penicillins. Whether it covers Amoxicillin

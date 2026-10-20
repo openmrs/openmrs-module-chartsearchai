@@ -101,6 +101,30 @@ public class UnidentifiedActiveOrdersAnswerTest extends BaseModuleContextSensiti
 				+ "Amoxicillin is not established.", lines[lines.length - 1], "was: " + answer);
 	}
 
+	/**
+	 * That allergy is said unchecked only after a question its check bears on — whether to give a drug, whether one is
+	 * safe, her allergies, a screen of her medications — and not after one it does not (ADR Decision 388). On the 3.7.1
+	 * standalone "Not checked: a recorded allergy the drug data does not identify — Dexibuprofen." closed every module
+	 * answer for Provenance Probe: "Is she on more than one steroid?", "Can I stop her amlodipine?", "What interacts with
+	 * her amlodipine?" among them.
+	 */
+	@Test
+	public void anUncheckedAllergyIsSaidOnlyAfterAQuestionItsCheckBearsOn() {
+		String unchecked = "recorded allergy the drug data does not identify";
+		for (String question : java.util.Arrays.asList("Can I give her amoxicillin?", "Is amoxicillin safe for her?",
+				"Is her nevirapine safe?")) {
+			String answer = askBesideAnAllergy("Cephalosporins", question).getModuleAnswer();
+			assertNotNull(answer, question + " — the module answers");
+			assertTrue(answer.contains(unchecked), question + " — was: " + answer);
+		}
+		for (String question : java.util.Arrays.asList("Is she on more than one steroid?", "Can I stop her nevirapine?",
+				"What interacts with her nevirapine?", "Does amoxicillin interact with her nevirapine?")) {
+			String answer = askBesideAnAllergy("Cephalosporins", question).getModuleAnswer();
+			assertNotNull(answer, question + " — the module answers");
+			assertTrue(!answer.contains(unchecked), question + " — nothing about an allergy it does not ask of: " + answer);
+		}
+	}
+
 	@Test
 	public void aRecordedAllergyTheDataIdentifiesIsNotSaidToBeUnchecked() {
 		String answer = askBesideAnAllergy("Aspirin", "Can I give her amoxicillin?").getModuleAnswer();

@@ -348,6 +348,34 @@ public class ConversationServicePersistenceTest extends BaseModuleContextSensiti
 		assertEquals(8, stored.getAuditLog().getOutputTokens());
 	}
 
+	// A stream that fails after an unchecked answer reached the client keeps that answer on the audit
+	// row, as /search/stream does, and never on the turn, so it cannot become later clinical context.
+	@Test
+	public void aFailureAfterAnUncheckedAnswerAuditsTheDeliveredAnswerOnly() {
+		ClinicalConversation conversation = conversationService.openOrCreate(patient, "hub",
+				ProviderMode.QUERY_SCOPED);
+		ClinicalConversationTurn turn = conversationService.startTurn(conversation, "delivered-then-failed",
+				"Question");
+		Map<String, Object> payload = new LinkedHashMap<>();
+		payload.put("answer", "The unchecked answer already shown [1].");
+		payload.put("references", Collections.singletonList(Collections.singletonMap("label", "Visit")));
+		payload.put("inputTokens", 31);
+		payload.put("outputTokens", 9);
+		conversationService.finishTurn(turn, TurnResult.error("hub", ProviderMode.QUERY_SCOPED,
+				"provider_stream_interrupted", AnswerEnvelope.fromPayload(payload)), 50L);
+		Context.flushSession();
+		Context.clearSession();
+		ClinicalConversationTurn stored = conversationDAO.getTurnByUuid(turn.getUuid());
+		assertEquals("turn_error", stored.getTerminalState());
+		assertNull(stored.getAnswerText());
+		assertNull(stored.getProviderPayload());
+		assertEquals("The unchecked answer already shown [1].", stored.getAuditLog().getAnswer());
+		assertEquals(1, stored.getAuditLog().getReferenceCount());
+		assertEquals(31, stored.getAuditLog().getInputTokens());
+		assertEquals(9, stored.getAuditLog().getOutputTokens());
+		assertEquals(0, conversationService.priorClinicalTurns(stored.getConversation()).size());
+	}
+
 	@Test
 	public void finishingAnInflightTurnDoesNotReopenTheClosedConversation() {
 		assertClosedConversationSurvivesInflightWrite(false);

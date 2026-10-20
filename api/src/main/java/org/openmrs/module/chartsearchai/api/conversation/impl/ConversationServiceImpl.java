@@ -239,7 +239,9 @@ public class ConversationServiceImpl implements ConversationService {
 		audit.setUser(conversation.getUser());
 		audit.setPatient(conversation.getPatient());
 		audit.setQuestion(turn.getQuestion());
-		AnswerEnvelope answer = result.getAnswer() == null ? retainedAnswer(turn) : result.getAnswer();
+		// A failed turn audits what its client was last sent, else the checked answer the turn retained.
+		AnswerEnvelope answer = result.getAnswer() != null ? result.getAnswer()
+				: result.getDeliveredAnswer() != null ? result.getDeliveredAnswer() : retainedAnswer(turn);
 		audit.setAnswer(answer == null ? "" : answer.getText());
 		audit.setReferenceCount(referenceCount(answer));
 		ChartAnswer source = answer == null ? null : answer.getSource();

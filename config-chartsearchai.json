@@ -1,0 +1,7 @@
+{
+  "@openmrs/esm-primary-navigation-app": {
+    "extensionSlots": {
+      "top-nav-actions-slot": { "remove": ["patient-search-icon"] }
+    }
+  }
+}

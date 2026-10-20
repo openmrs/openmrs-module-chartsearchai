@@ -1548,6 +1548,12 @@ public class DrugReferenceInjector {
 				&& QueryScopeRouter.statesADose(wordsBesideItsNames(question, questionDrugs)) && aDoseCanBeWeighed()) {
 			moduleAnswer = null;
 		}
+		// A word taken into a product's name that no drug answers was not checked, and the answer says so (ADR Decision 373).
+		if (moduleAnswer != null) {
+			for (String word : unrecognisedWordsInAProduct(question, questionDrugs)) {
+				moduleAnswer = moduleAnswer + "\n" + notCheckedInTheProduct(word);
+			}
+		}
 		if (moduleAnswer != null) {
 			injected.markModuleAnswer(moduleAnswer);
 		}
@@ -4667,6 +4673,22 @@ public class DrugReferenceInjector {
 	 */
 	private static boolean[] joinedNames(String folded, boolean[] named, int from) {
 		boolean[] joined = named.clone();
+		// A word joined by "&" to a written name, leftward, is part of that product's name (ADR Decision 373).
+		for (int k = from; k < folded.length(); k++) {
+			if (!named[k] || k > from && named[k - 1]) {
+				continue;
+			}
+			int start = k;
+			Matcher m = WORD_JOINED_BY_AN_AMPERSAND.matcher(folded.substring(from, start));
+			while (m.find() && !named[from + m.start(1)]) {
+				int wordStart = from + m.start(1);
+				for (int g = wordStart; g < start; g++) {
+					joined[g] = true;
+				}
+				start = wordStart;
+				m = WORD_JOINED_BY_AN_AMPERSAND.matcher(folded.substring(from, start));
+			}
+		}
 		for (int k = from + 1; k < folded.length(); k++) {
 			if (named[k] || !named[k - 1]) {
 				continue;
@@ -4868,7 +4890,48 @@ public class DrugReferenceInjector {
 	}
 
 	/** What may stand between two names of one product's written name: a hyphen, a dash or a slash, spaced or not. */
-	private static final String JOINING_A_PRODUCTS_NAMES = " -/\u2013";
+	private static final String JOINING_A_PRODUCTS_NAMES = " -/\u2013&";
+
+	/** A word joined by "&" to a product's written name, which the data does not recognise — "eucalyptus" of "eucalyptus &
+	 *  diphenhydramine & phenylephrine": part of that name, never a drug of its own (ADR Decision 373). */
+	private static final Pattern WORD_JOINED_BY_AN_AMPERSAND = Pattern.compile("(\\p{L}{3,})\\s*&\\s*$");
+
+	/** What the answer says of such a word (ADR Decision 373): it was not checked. */
+	static String notCheckedInTheProduct(String word) {
+		return "Not checked: \"" + word + "\", in the product the question names, is not a drug name the interaction data "
+				+ "recognises.";
+	}
+
+	/** The words {@link #joinedNames} took into a product's name that no drug answers (ADR Decision 373), in the
+	 *  question's order. */
+	static List<String> unrecognisedWordsInAProduct(String question, List<DrugReference> entries) {
+		List<String> words = new ArrayList<String>();
+		if (question == null || entries == null || entries.isEmpty()) {
+			return words;
+		}
+		String folded = DrugReference.foldedLower(question);
+		boolean[] named = namedCharacters(folded, entries);
+		for (int k = 0; k < folded.length(); k++) {
+			if (!named[k] || k > 0 && named[k - 1]) {
+				continue;
+			}
+			// Leftward from the start of each name, every word "&" joins to it that is no name itself.
+			List<String> before = new ArrayList<String>();
+			int start = k;
+			Matcher m = WORD_JOINED_BY_AN_AMPERSAND.matcher(folded.substring(0, start));
+			while (m.find() && !named[m.start(1)]) {
+				before.add(0, m.group(1));
+				start = m.start(1);
+				m = WORD_JOINED_BY_AN_AMPERSAND.matcher(folded.substring(0, start));
+			}
+			for (String word : before) {
+				if (!words.contains(word)) {
+					words.add(word);
+				}
+			}
+		}
+		return words;
+	}
 
 	/**
 	 * Whether {@code question} names its drugs as ONE written name — a single drug, or one combination product whose

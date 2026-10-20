@@ -20646,3 +20646,27 @@ of this patient's active medications (Cotrimoxazole 960mg), and this patient has
 against."* — Amina Wekesa, on cotrimoxazole alone, had been told by the model that the records do not address it.
 
 Pinned by `CombinationNamedAsHersTest`.
+
+## Decision 373: A product's names joined by "&" are one product, and a word the data does not recognise joined so is part of its name, said not checked
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It widens [Decision 217](#decision-217-a-proposal-naming-one-combination-product-is-answered-as-the-proposal-it-is)'s joining marks and
+carries [Decision 372](#decision-372-her-combination-order-named-whole-is-answered-as-her-own-medication) to such a product.
+
+### Context
+
+Karen Thompson's order is recorded as *"Eucalyptus & Diphenhydramine & Phenylephrine"*. *"Is her eucalyptus &
+diphenhydramine & phenylephrine safe?"* fitted no shape for any patient — *&* joined no product's names, and
+*eucalyptus* is no drug the data recognises — and on the 3.7.1 standalone the model answered all 45: Karen
+*"The records do not address the safety of Eucalyptus & Diphenhydramine & Phenylephrine"*, and Joshua Johnson, on
+lisinopril, *"Diphenhydramine can be given, with one caution"*.
+
+### The decision
+
+*&* joins two written names into one product's as a hyphen or a slash does. A word *&* joins to such a name that is no
+name itself is part of that product's written name, never a drug of its own (`DrugReferenceInjector.joinedNames`); the
+product is answered from the substances the data recognises in it — as her own medication where they are hers, else as
+the question asks of a drug she is not on — and the answer closes, for each such word, *"Not checked: "eucalyptus", in the
+product the question names, is not a drug name the interaction data recognises."*
+
+Pinned by `ProductJoinedByAmpersandTest`.

@@ -401,6 +401,47 @@ public class DrugSafetyStatusTest extends BaseModuleContextSensitiveTest {
 		assertFalse(result.getIssues().contains("no_applicable_check"), result.getIssues().toString());
 	}
 
+	// Two of her orders named by names the reference data does not carry open the screen of her orders (ADR
+	// Decisions 265, 382), which then relates them; the status must not call that pass no applicable check.
+	@Test
+	public void twoOfHerOrdersNamedByTheirOwnNamesAreAnApplicableCheck() throws Exception {
+		DrugSafetyValidator.SafetyCheckResult result = herTwoBrandNamedOrdersWith("Does Brufenix interact with Coumadinix?");
+		assertTrue(result.getWarnings().stream().anyMatch(w -> SafetyWarning.TYPE_INTERACTION.equals(w.getType())),
+				"precondition: the screen relates her two orders: " + result.getWarnings());
+		assertFalse(result.getIssues().contains("no_applicable_check"), result.getIssues().toString());
+	}
+
+	// One of her orders named by its own name in a drug's place opens the same screen (ADR Decision 273).
+	@Test
+	public void oneOfHerOrdersNamedByItsOwnNameIsAnApplicableCheck() throws Exception {
+		DrugSafetyValidator.SafetyCheckResult result = herTwoBrandNamedOrdersWith("Can I give her Brufenix?");
+		assertTrue(result.getWarnings().stream().anyMatch(w -> SafetyWarning.TYPE_INTERACTION.equals(w.getType())),
+				"precondition: the screen relates her named order to her other one: " + result.getWarnings());
+		assertFalse(result.getIssues().contains("no_applicable_check"), result.getIssues().toString());
+	}
+
+	/** Her ibuprofen and warfarin orders, each recorded by a brand name the reference data does not carry, her
+	 *  ibuprofen resolved through its own concept. */
+	private DrugSafetyValidator.SafetyCheckResult herTwoBrandNamedOrdersWith(String question) throws Exception {
+		executeDataSet("AnswerFromFindingsWarfarinOrderTestData.xml");
+		DrugReferenceTestSupport.nameTheConcept(88, "Ibuprofen");
+		Context.getAdministrationService().executeSQL("update concept_name set locale = 'en' where concept_id = 9469", false);
+		Context.getAdministrationService().executeSQL("update drug_order set drug_inventory_id = null,"
+				+ " drug_non_coded = 'Brufenix' where order_id = 111", false);
+		Context.getAdministrationService().executeSQL("update drug_order set drug_inventory_id = null,"
+				+ " drug_non_coded = 'Coumadinix' where order_id = 9469", false);
+		Context.flushSession();
+		Context.clearSession();
+		patient = Context.getPatientService().getPatient(7);
+		PatientClinicalContext context = PatientClinicalContextBuilder.build(patient);
+		assertEquals(2, context.getActiveDrugOrders().size(), context.getActiveDrugOrders().toString());
+		// The curated dataset carries ibuprofen and not warfarin; its ibuprofen rule names warfarin as the partner.
+		assertEquals(Collections.singletonList("Ibuprofen"),
+				DrugReferenceTestSupport.names(referenceService.findForActiveOrders(context)));
+		assertTrue(referenceService.findImpliedByQuery(question).isEmpty(), "precondition: the question names no entry");
+		return validator.validateWithStatus("", question, patient, Collections.emptyList(), new PairChipExtent.Sink());
+	}
+
 	private DrugSafetyValidator.SafetyCheckResult herTwoOrdersWith(String answer, String question) throws Exception {
 		executeDataSet("AnswerFromFindingsWarfarinOrderTestData.xml");
 		DrugReferenceTestSupport.nameTheConcept(88, "Other non-coded drug");

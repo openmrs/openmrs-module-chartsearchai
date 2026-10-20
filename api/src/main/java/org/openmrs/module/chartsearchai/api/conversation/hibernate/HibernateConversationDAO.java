@@ -54,7 +54,10 @@ public class HibernateConversationDAO implements ConversationDAO {
 				.get(ClinicalConversation.class, conversationId);
 		if (conversation != null) {
 			// get() hands back an instance this session already holds without re-reading it; refresh
-			// under the lock so startTurn checks the committed status, not one loaded earlier.
+			// under the lock so startTurn checks the committed status, not one loaded earlier. Flushed
+			// first, because a refresh overwrites what this transaction changed and has not written,
+			// which would reopen a conversation it has just closed.
+			sessionFactory.getCurrentSession().flush();
 			sessionFactory.getCurrentSession().refresh(conversation, LockOptions.UPGRADE);
 		}
 		return conversation;

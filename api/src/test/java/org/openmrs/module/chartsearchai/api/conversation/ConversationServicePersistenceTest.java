@@ -371,6 +371,25 @@ public class ConversationServicePersistenceTest extends BaseModuleContextSensiti
 				.setParameter("requestId", "finished-once").uniqueResult()).longValue());
 	}
 
+	// A close this transaction has made and not yet flushed is part of what the lock must read: refreshing
+	// over it would put the conversation back to active.
+	@Test
+	public void startingATurnOnAConversationThisTransactionClosedIsRejected() {
+		ClinicalConversation first = conversationService.openOrCreate(patient, "hub", ProviderMode.QUERY_SCOPED);
+		Context.flushSession();
+		ClinicalConversation second = conversationService.startNew(patient, "hub", ProviderMode.QUERY_SCOPED);
+		assertEquals(ClinicalConversation.STATUS_CLOSED, first.getStatus(), "precondition: closed in this session");
+
+		assertThrows(IllegalArgumentException.class,
+				() -> conversationService.startTurn(first, "after-close", "Question"));
+		Context.flushSession();
+		Context.clearSession();
+		assertEquals(ClinicalConversation.STATUS_CLOSED,
+				conversationDAO.getConversationByUuid(first.getUuid()).getStatus());
+		assertEquals(ClinicalConversation.STATUS_ACTIVE,
+				conversationDAO.getConversationByUuid(second.getUuid()).getStatus());
+	}
+
 	@Test
 	public void failedOptionalTailAuditsTheCheckedAnswerAlreadyDisplayed() {
 		ClinicalConversation conversation = conversationService.openOrCreate(patient, "hub",

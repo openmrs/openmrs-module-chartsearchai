@@ -14,29 +14,33 @@ import java.util.List;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.AlreadyOrderedDrug;
 
 /**
- * An exact token count from the LLM engine actually serving this deployment — mirrors
- * med-agent-hub's {@code TokenCounter} protocol (server/context_sources.py), which likewise
- * delegates counting to the configured engine's own tokenizer rather than approximating in the
- * application layer. Deliberately narrow: the mandatory-first budget policy that consumes this
- * (in the chart-context consumer) is application-owned and cannot be
- * delegated, but WHAT a given piece of text costs in tokens is the engine's own fact, not a
- * guess this module should make on its behalf.
+ * An exact token count from the LLM engine actually serving this deployment. Counting is delegated
+ * to the engine's own tokenizer and chat template rather than approximated here: which records a
+ * budget admits is this module's policy, but what a given prompt costs in tokens is the engine's
+ * fact.
  */
 public interface TokenCounter {
 
 	/**
-	 * False when no engine currently configured for this deployment can answer a token-count
-	 * query (e.g. a remote OpenAI-compatible endpoint with no {@code /tokenize} route). Callers
-	 * must skip budget enforcement rather than fabricate an approximate count in that case —
-	 * matching the hub's "never guess" rule for token counting specifically.
+	 * Whether the engine this deployment answers with is one this counter can ask. False for an
+	 * engine with no assumed count route (a remote OpenAI-compatible endpoint is not guaranteed to
+	 * expose one); a caller then skips budget enforcement rather than estimate a count. True does
+	 * not promise that a count will succeed: see {@link #countPrompt}.
 	 */
 	boolean isAvailable();
 
-	/** Exact count of the same assembled answer messages sent for inference, including all clauses. */
+	/**
+	 * Exact count of the same assembled answer messages sent for inference, including all clauses.
+	 *
+	 * @throws RuntimeException an {@link IllegalStateException} or
+	 *         {@link org.openmrs.api.APIException} when the engine cannot be started (no model
+	 *         configured, no server binary) or does not answer the count (a {@code llama-server}
+	 *         build without the count route, an error reply or a malformed one); a caller treats
+	 *         that as no count, as it does an unavailable counter
+	 */
 	int countPrompt(String numberedRecords, List<Integer> focusIndices, String question,
 			boolean enumerateFindings, List<AlreadyOrderedDrug> drugsAlreadyOrdered);
 
-	/** The current input budget: the engine's configured context window minus its output
-	 *  reservation — mirrors med-agent-hub's {@code ContextBudget.input_limit}. */
+	/** The current input budget: the engine's configured context window minus its output reservation. */
 	int inputBudget();
 }

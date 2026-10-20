@@ -20579,3 +20579,23 @@ medications."* ([Decision 315](#decision-315-a-drug-the-question-names-as-hers-a
 
 Pinned by `WhichOfHerMedicationsInteractTest.whatInteractsWithHerDrugSheIsNotOnSaysSoAndWhichOfHersInteract`.
 
+## Decision 370: Two drugs the data does not relate at a reported rating state a finding about one of hers apart
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It completes [Decision 302](#decision-302-two-drugs-the-interaction-data-relates-in-no-way-are-said-to-be-so-with-which-of-them-she-takes) and
+[Decision 329](#decision-329-two-drugs-the-data-lists-against-each-other-only-below-the-severity-floor-are-answered-with-that-listing).
+
+### Context
+
+`composeTwoDrugsTheDataDoesNotRelate` left to the model any pair one of whose drugs a finding related to anything but the
+other — so *"Does her lamivudine interact with her nevirapine?"*, of Mogan Kamwara, on stavudine too, whose lamivudine is
+in stavudine's ATC class, went to the model, which answered *"Yes, Lamivudine interacts with Nevirapine: Unknown severity
+interaction (DDInter 2.0; no mechanism description on file) and."*.
+
+### The decision
+
+A finding about a drug of hers the question names, relating it to neither of the two — a third order of hers, or her
+allergy — is stated after the rest, under `ABOUT_HER_OTHER_MEDICATIONS_LEAD`; what the data lists between the two is
+answered as before.
+
+Pinned by `TwoDrugsListedBelowTheFloorTest.aFindingRelatingOneOfHersToAThirdOrderIsStatedApart`.

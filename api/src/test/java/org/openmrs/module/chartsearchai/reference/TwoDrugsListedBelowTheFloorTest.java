@@ -65,6 +65,32 @@ public class TwoDrugsListedBelowTheFloorTest extends BaseModuleContextSensitiveT
 		return answer == null ? null : answer.replaceAll("\\[\\d+\\]", "[n]");
 	}
 
+	/**
+	 * Two of hers the data lists only below the floor, one of them related by a finding to a third order of hers, is answered
+	 * as without that order, the finding stated apart (ADR Decision 370): on the 3.7.1 standalone "Does her lamivudine
+	 * interact with her nevirapine?" went to the model for Mogan Kamwara, on stavudine too, whose answer ended "Unknown
+	 * severity interaction (DDInter 2.0; no mechanism description on file) and.".
+	 */
+	@Test
+	public void aFindingRelatingOneOfHersToAThirdOrderIsStatedApart() {
+		PatientClinicalContext.ActiveDrugOrder lamivudine = DrugReferenceTestSupport.activeOrder("order-3tc", "Lamivudine 150mg",
+			"Lamivudine");
+		PatientClinicalContext.ActiveDrugOrder nevirapine = DrugReferenceTestSupport.activeOrder("order-nvp", "Nevirapine 200mg",
+			"Nevirapine");
+		String two = ask("Does her lamivudine interact with her nevirapine?", lamivudine, nevirapine);
+		assertNotNull(two, "precondition: answered of the two alone");
+		String[] twoLines = two.replaceAll("\\[\\d+\\]", "[n]").split("\n");
+		String answer = ask("Does her lamivudine interact with her nevirapine?", lamivudine, nevirapine,
+			DrugReferenceTestSupport.activeOrder("order-d4t", "Stavudine 30mg", "Stavudine"));
+		assertNotNull(answer, "the module answers");
+		String[] lines = answer.replaceAll("\\[\\d+\\]", "[n]").split("\n");
+		assertEquals(twoLines[0], lines[0], "was: " + answer);
+		assertEquals(twoLines[1], lines[1], "was: " + answer);
+		assertEquals(DrugReferenceInjector.ABOUT_HER_OTHER_MEDICATIONS_LEAD, lines[2], "was: " + answer);
+		assertTrue(lines[3].contains("Stavudine"), "the finding relating lamivudine to stavudine: " + answer);
+		assertEquals(DrugReferenceInjector.BELOW_FLOOR_SCOPE, lines[lines.length - 1], "was: " + answer);
+	}
+
 	private static String ask(String question, PatientClinicalContext.ActiveDrugOrder... given) {
 		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(given);
 		LinkedHashSet<String> names = new LinkedHashSet<String>();

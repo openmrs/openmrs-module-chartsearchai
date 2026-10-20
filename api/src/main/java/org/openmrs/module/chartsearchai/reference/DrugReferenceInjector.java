@@ -6353,24 +6353,35 @@ public class DrugReferenceInjector {
 		Set<Object> both = new HashSet<Object>(asked.get(0).substances);
 		both.addAll(asked.get(1).substances);
 		List<Integer> notHersLines = new ArrayList<Integer>();
+		List<Integer> herOwnLines = new ArrayList<Integer>();
 		for (int i = 0; i < findings.size(); i++) {
 			SafetyWarning finding = findings.get(i);
 			Set<Object> about = subjectSubstances(finding);
 			if (Collections.disjoint(about, both) && !hasPartnerOf(finding, both)) {
 				continue;
 			}
-			if (!SafetyWarning.TYPE_INTERACTION.equals(finding.getType()) || finding.statesOrdersSharingASubstance()
-					|| about.size() != 1) {
-				return null;
-			}
 			boolean ofOneNotHers = false;
-			for (AskedDrug drug : asked) {
-				ofOneNotHers |= !drug.isHers(herSubstances) && drug.substances.containsAll(about);
+			if (SafetyWarning.TYPE_INTERACTION.equals(finding.getType()) && !finding.statesOrdersSharingASubstance()
+					&& about.size() == 1) {
+				for (AskedDrug drug : asked) {
+					ofOneNotHers |= !drug.isHers(herSubstances) && drug.substances.containsAll(about);
+				}
 			}
-			if (!ofOneNotHers) {
+			if (ofOneNotHers) {
+				notHersLines.add(i);
+				continue;
+			}
+			// A finding about a drug of hers the question names, relating it to none of the two — a third order of hers,
+			// or her allergy — is about her medications, stated apart after the rest (ADR Decision 370).
+			boolean ofOneOfHers = false;
+			for (AskedDrug drug : asked) {
+				ofOneOfHers |= drug.isHers(herSubstances)
+						&& (!Collections.disjoint(drug.substances, about) || hasPartnerOf(finding, drug.substances));
+			}
+			if (!ofOneOfHers) {
 				return null;
 			}
-			notHersLines.add(i);
+			herOwnLines.add(i);
 		}
 		List<String> lines = new ArrayList<String>();
 		boolean first = asked.get(0).isHers(herSubstances);
@@ -6417,6 +6428,10 @@ public class DrugReferenceInjector {
 		if (!notHersLines.isEmpty()) {
 			lines.add("Against this patient's active medications:");
 			lines.addAll(findingLines(findings, numbers, notHersLines, orderRecordNumbers, herOrderRecords, true));
+		}
+		if (!herOwnLines.isEmpty()) {
+			lines.add(ABOUT_HER_OTHER_MEDICATIONS_LEAD);
+			lines.addAll(findingLines(findings, numbers, herOwnLines, orderRecordNumbers, herOrderRecords, true));
 		}
 		lines.add(listed.isEmpty() ? SHARED_CLASS_NOT_COMPARED : BELOW_FLOOR_SCOPE);
 		return String.join("\n", lines);

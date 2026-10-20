@@ -125,6 +125,15 @@ public class TurnLifecycleConformanceTest {
 	}
 
 	@Test
+	public void aHeartbeatAfterTheTerminalEventIsRejectedByTheTerminalRuleAlone() {
+		// A heartbeat skips the stage-order check, so this sequence breaks no rule except the
+		// one that nothing may follow the terminal event.
+		assertEquals(Arrays.asList("no events may follow the terminal event"),
+				TurnLifecycleValidator.violations(FULL_CAPABILITIES,
+						events("turn_started", "answer_done", "turn_done", "heartbeat")));
+	}
+
+	@Test
 	public void turnDoneRequiresAnswerDoneButTurnErrorDoesNot() {
 		assertFalse(TurnLifecycleValidator
 				.violations(FULL_CAPABILITIES, events("turn_started", "turn_done")).isEmpty(),

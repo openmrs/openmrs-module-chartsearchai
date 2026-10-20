@@ -1444,7 +1444,7 @@ public class ChartSearchAiRestController {
 		Context.requirePrivilege(ChartSearchAiConstants.PRIV_QUERY_PATIENT_DATA);
 
 		String patientUuid = body == null ? null : body.get("patient");
-		String question = body == null ? null : body.get("question");
+		String question = body == null ? null : asTyped(body.get("question"));
 		if (patientUuid == null || patientUuid.trim().isEmpty()) {
 			writeJsonError(response, HttpServletResponse.SC_BAD_REQUEST, "patient is required");
 			return;
@@ -2139,8 +2139,9 @@ public class ChartSearchAiRestController {
 	/**
 	 * The question as the clinician typed it. OpenMRS core HTML-escapes the strings of a request body
 	 * before a controller reads them, so a typed {@code &} arrives as {@code &amp;amp;} and every reading
-	 * of the question downstream would read the entity instead (ADR Decision 375). Both endpoints read
-	 * the question through this one method, before any length check or validation sees it.
+	 * of the question downstream would read the entity instead (ADR Decision 375). Every endpoint taking a
+	 * question ({@code /search}, {@code /search/stream}, {@code /chat/stream}) reads it through this one
+	 * method, before any length check or validation sees it.
 	 */
 	static String asTyped(String question) {
 		return question == null ? null : HtmlUtils.htmlUnescape(question);

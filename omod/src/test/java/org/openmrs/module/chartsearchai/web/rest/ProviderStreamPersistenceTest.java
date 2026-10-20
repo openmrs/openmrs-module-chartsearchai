@@ -281,6 +281,38 @@ public class ProviderStreamPersistenceTest extends BaseModuleWebContextSensitive
 		return controller;
 	}
 
+	// ADR Decision 375 on the chat endpoint: core HTML-escapes the posted question, and every reading of it, the
+	// length check, the stored turn and what the provider is sent, must see the question as typed. Typed, this
+	// one is under the length limit; escaped, its 200 ampersands put it over.
+	@Test
+	public void theChatQuestionIsReadAsTypedEverywhereItIsRead() throws Exception {
+		ChartSearchAiRestController controller = requestController();
+		Patient patient = Context.getPatientService().getPatient(2);
+		peerStatus = 200;
+		peerBody = "event: done\ndata: {\"answer\":\"Recorded.\",\"references\":[]}\n\n";
+		StringBuilder typed = new StringBuilder("Is her eucalyptus & diphenhydramine safe?");
+		StringBuilder posted = new StringBuilder("Is her eucalyptus &amp; diphenhydramine safe?");
+		for (int i = 0; i < 200; i++) {
+			typed.append(" &");
+			posted.append(" &amp;");
+		}
+		assertTrue(typed.length() < 1000 && posted.length() > 1000, "precondition: only the escaped form is too long");
+		Map<String, String> body = requestBody(patient);
+		body.put("question", posted.toString());
+		MockHttpServletResponse response = new MockHttpServletResponse();
+
+		controller.chatStream(body, response);
+
+		assertEquals(200, response.getStatus(), response.getContentAsString());
+		assertEquals(1, peerRequests.get(), response.getContentAsString());
+		JsonNode messages = receivedRequest.path("messages");
+		assertEquals(typed.toString(), messages.get(messages.size() - 1).path("content").asText());
+		Context.flushSession();
+		Context.clearSession();
+		List<ClinicalConversationTurn> turns = conversations.getTurns(conversations.getLatestActiveConversation(patient));
+		assertEquals(typed.toString(), turns.get(turns.size() - 1).getQuestion());
+	}
+
 	@Test
 	public void actualHttpProviderFailureIsTerminalInDatabaseAndHistory() throws Exception {
 		ChartSearchAiRestController controller = requestController();

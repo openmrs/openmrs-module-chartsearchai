@@ -43,6 +43,7 @@ The standalone download above includes the backend module, frontend ESM, and the
 - [Provider integration contract](#provider-integration-contract)
 - [Local token counting](#local-token-counting)
 - [Safety-check execution status](#safety-check-execution-status)
+- [Conversation persistence](#conversation-persistence)
 - [License](#license)
 
 ## Try it on the demo server
@@ -1084,7 +1085,7 @@ warning callers and standing chart alerts retain their interfaces and behaviour:
 status on provider answers and rendering it in the frontend belong to the subsequent
 integration contributions.
 
-### Conversation persistence
+## Conversation persistence
 
 `ConversationService` stores conversation headers and ordered turns for the
 current OpenMRS user and patient. Reusing a conversation requires the same provider

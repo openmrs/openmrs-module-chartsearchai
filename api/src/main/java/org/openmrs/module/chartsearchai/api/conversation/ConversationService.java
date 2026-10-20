@@ -34,7 +34,7 @@ public interface ConversationService {
 
 	/**
 	 * Always closes any active conversation for the current user/patient and opens a fresh empty
-	 * one for the given provider/mode. Used by {@code POST /chat/new}.
+	 * one for the given provider/mode, for a client that asks for a new conversation.
 	 */
 	ClinicalConversation startNew(Patient patient, String providerId, ProviderMode mode);
 

@@ -376,6 +376,24 @@ public class ConversationServicePersistenceTest extends BaseModuleContextSensiti
 		assertEquals(0, conversationService.priorClinicalTurns(stored.getConversation()).size());
 	}
 
+	// An answer the module composed without a model call reports 0/0 tokens; /search files that as
+	// no measurement, so the conversation path files the same row.
+	@Test
+	public void aZeroTokenCountIsAuditedAsNoMeasurement() {
+		ClinicalConversation conversation = conversationService.openOrCreate(patient, "bundled",
+				ProviderMode.QUERY_SCOPED);
+		ClinicalConversationTurn turn = conversationService.startTurn(conversation, "module-answer", "Question");
+		Map<String, Object> payload = new LinkedHashMap<>();
+		payload.put("answer", "Answered from the module's findings.");
+		payload.put("inputTokens", 0);
+		payload.put("outputTokens", 0);
+		conversationService.finishTurn(turn, TurnResult.done("bundled", ProviderMode.QUERY_SCOPED,
+				AnswerEnvelope.fromPayload(payload)), 5L);
+		ChartSearchAuditLog audit = turn.getAuditLog();
+		assertNull(audit.getInputTokens());
+		assertNull(audit.getOutputTokens());
+	}
+
 	@Test
 	public void finishingAnInflightTurnDoesNotReopenTheClosedConversation() {
 		assertClosedConversationSurvivesInflightWrite(false);

@@ -289,7 +289,8 @@ public class ConversationServiceImpl implements ConversationService {
 			return null;
 		}
 		Object value = answer.getPayload().get(field);
-		return value instanceof Number ? ((Number) value).intValue() : null;
+		// Zero is no measurement, as saveAuditLog files it: a module-composed answer reports 0/0.
+		return value instanceof Number && ((Number) value).intValue() > 0 ? ((Number) value).intValue() : null;
 	}
 
 	private static boolean isChecked(AnswerEnvelope answer) {

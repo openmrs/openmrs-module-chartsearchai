@@ -1050,17 +1050,36 @@ It does not certify that a medication is safe. It covers only drugs recognized b
 the loaded reference data: an unrecognized drug is not checked, and an answer
 naming one beside a recognized drug can still report `checked`.
 
-Limitation codes state the cause: `source_data_partially_invalid` and
-`cross_reactivity_data_partially_invalid` identify degraded reference files;
-`checks_partially_disabled` identifies configuration; `no_applicable_check` means
-this answer triggered no applicable check. `condition_rules_unavailable`,
-`interaction_reference_unavailable` and `no_actionable_dose_reference` describe
-missing usable rules. `dose_not_assessable` means the answer supplied no dose and
-schedule that could be assessed; `weight_unavailable` means a weight-based check
-lacked the patient's weight. Neither code claims missing allergy or condition data.
+Limitation codes state the cause. `unavailable` carries one of:
+
+- `check_disabled`: answer checking is switched off, or every one of its three sub-checks
+  (dose, interactions, contraindications) is;
+- `patient_context_unavailable`: no patient, or the patient's orders, allergies or conditions
+  could not be read;
+- `source_unavailable`: no reference data is loaded, or the load produced no entries;
+- `execution_failed`: the check itself failed, so its warnings are not a result.
+
+`limited` carries one or more of:
+
+- `source_data_partially_invalid` and `cross_reactivity_data_partially_invalid`: the drug
+  reference file or the cross-reactivity groups file loaded with a finding the loader did not
+  repair (`GET /chartsearchai/drugreferencestatus` lists them). The finding concerns the loaded
+  file, not necessarily a drug this answer screened, and the shipped DDInter data has such
+  findings, so a default install reports `limited`;
+- `checks_partially_disabled`: one or two sub-checks are switched off;
+- `mapping_incomplete`: an active order could not be read or resolved to a reference entry;
+- `no_applicable_check`: this answer triggered no applicable check;
+- `condition_rules_unavailable`, `interaction_reference_unavailable` and
+  `no_actionable_dose_reference`: the loaded data has no usable rules of that kind for a drug
+  the check covered;
+- `dose_not_assessable`: the answer supplied no dose and schedule that could be assessed;
+- `weight_unavailable`: a weight-based check lacked the patient's weight.
+
+Neither of the last two claims missing allergy or condition data.
 
 This Java API is the safety-status foundation for provider integration. Existing
-warning callers and standing chart alerts retain their interfaces. Publishing the
+warning callers and standing chart alerts retain their interfaces and behaviour:
+`validate` still screens a question with no patient and computes no status. Publishing the
 status on provider answers and rendering it in the frontend belong to the subsequent
 integration contributions.
 

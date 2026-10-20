@@ -1531,6 +1531,7 @@ public class ChartSearchAiRestController {
 		ClinicalConversation conversation = null;
 		TurnCancellation cancellation = null;
 		ClinicalConversationTurn startedTurn = null;
+		final DeliveredAnswer delivered = new DeliveredAnswer();
 		ProviderMode resolvedMode = mode;
 		boolean persisted = false;
 		long startNs = System.nanoTime();
@@ -1589,8 +1590,10 @@ public class ChartSearchAiRestController {
 									terminalEvent.compareAndSet(null, event);
 									return;
 								}
+								TurnEvent outgoing = withModuleStatements(event);
+								delivered.record(outgoing);
 								try {
-									writeTurnEventOrThrow(out, withModuleStatements(event), activeConversation, turn, textChannels);
+									writeTurnEventOrThrow(out, outgoing, activeConversation, turn, textChannels);
 								}
 								catch (RuntimeException e) {
 									activeCancellation.cancel();
@@ -1600,7 +1603,8 @@ public class ChartSearchAiRestController {
 							cancellation)
 					.toCompletableFuture().get();
 			long responseTimeMs = (System.nanoTime() - startNs) / 1_000_000L;
-			ClinicalConversationTurn completedTurn = conversationService.finishTurn(turn, withModuleStatements(result), responseTimeMs);
+			ClinicalConversationTurn completedTurn = conversationService.finishTurn(turn,
+					withModuleStatements(delivered.attachTo(result)), responseTimeMs);
 			persisted = true;
 			if (!activeCancellation.isCancelled() && terminalEvent.get() != null) {
 				writeTurnEventOrThrow(out, withModuleStatements(terminalEvent.get()), activeConversation, completedTurn, textChannels);
@@ -1613,7 +1617,8 @@ public class ChartSearchAiRestController {
 				String problem = cancellation != null && cancellation.isCancelled()
 						|| e.getCause() instanceof IOException ? "cancelled" : "provider_failure";
 				try {
-					conversationService.finishTurn(startedTurn, TurnResult.error(providerId, resolvedMode, problem),
+					conversationService.finishTurn(startedTurn,
+							TurnResult.error(providerId, resolvedMode, problem, delivered.answer()),
 							(System.nanoTime() - startNs) / 1_000_000L);
 				}
 				catch (RuntimeException persistenceError) {
@@ -1642,6 +1647,46 @@ public class ChartSearchAiRestController {
 				cancellation.unbindCloseable(stopKeepAlive);
 				preemptionRegistry.end(conversation.getUuid(), cancellation);
 			}
+		}
+	}
+
+	/**
+	 * What a provider turn has sent its client, for the audit row of a turn that then fails. Recorded
+	 * BEFORE each frame is written, as {@link StreamAuditState#recordToken} is, so a fragment whose write
+	 * the client refused is still on the record. The last answer envelope sent outranks the deltas,
+	 * which only stand in for an answer that never arrived whole. Synchronized because a provider may
+	 * deliver events on its own thread while a failed request thread reads the answer.
+	 */
+	private static final class DeliveredAnswer {
+
+		private final StringBuilder deltas = new StringBuilder();
+
+		private AnswerEnvelope envelope;
+
+		synchronized void record(TurnEvent event) {
+			if (event.getType() == TurnEventType.ANSWER_DELTA && event.getTextDelta() != null) {
+				deltas.append(event.getTextDelta());
+			}
+			else if (event.getAnswer() != null) {
+				envelope = event.getAnswer();
+			}
+		}
+
+		/** The answer the client has, or {@code null} when nothing of one was sent. */
+		synchronized AnswerEnvelope answer() {
+			if (envelope != null) {
+				return envelope;
+			}
+			return deltas.length() == 0 ? null
+					: AnswerEnvelope.fromPayload(Collections.singletonMap("answer", deltas.toString()));
+		}
+
+		/** A failed result carrying the answer the client has, unless the provider supplied one. */
+		TurnResult attachTo(TurnResult result) {
+			if (result.getTerminalState() != TurnEventType.TURN_ERROR || result.getDeliveredAnswer() != null) {
+				return result;
+			}
+			return TurnResult.error(result.getProviderId(), result.getMode(), result.getProblemCode(), answer());
 		}
 	}
 

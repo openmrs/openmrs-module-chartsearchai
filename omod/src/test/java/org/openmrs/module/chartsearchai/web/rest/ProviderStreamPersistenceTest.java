@@ -28,6 +28,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.function.Consumer;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -44,6 +45,9 @@ import org.springframework.http.ResponseEntity;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.api.AuditLogService;
+import org.openmrs.module.chartsearchai.api.ChartSearchService;
+import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
+import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
 import org.openmrs.module.chartsearchai.api.conversation.ConversationDAO;
 import org.openmrs.module.chartsearchai.api.conversation.ConversationService;
 import org.openmrs.module.chartsearchai.api.provider.AnswerEnvelope;
@@ -328,6 +332,81 @@ public class ProviderStreamPersistenceTest extends BaseModuleWebContextSensitive
 		assertEquals("hub_stream_incomplete", assistant.path("problemCode").asText());
 		assertTrue(conversations.priorClinicalTurns(active).isEmpty(),
 				"an incomplete turn remains inspectable but is not replayed as completed context");
+	}
+
+	/** A Hub stream that ends after an unchecked answer files that answer on the audit row only. */
+	@Test
+	public void aHubStreamEndingAfterAnUncheckedAnswerAuditsTheAnswerTheClientHas() throws Exception {
+		ChartSearchAiRestController controller = requestController();
+		Patient patient = Context.getPatientService().getPatient(2);
+		peerStatus = 200;
+		peerBody = "event: answer_done\ndata: {\"answer\":\"Unchecked answer.\",\"references\":[]}\n\n";
+		MockHttpServletResponse response = new MockHttpServletResponse();
+		controller.chatStream(requestBody(patient), response);
+		assertTrue(response.getContentAsString().contains("Unchecked answer."));
+		ClinicalConversation conversation = conversations.getLatestActiveConversation(patient);
+		String turnUuid = conversations.getTurns(conversation).get(0).getUuid();
+		Context.flushSession();
+		Context.clearSession();
+		ClinicalConversationTurn turn = conversationDAO.getTurnByUuid(turnUuid);
+		assertEquals("turn_error", turn.getTerminalState());
+		assertEquals(null, turn.getAnswerText());
+		assertEquals("Unchecked answer.", turn.getAuditLog().getAnswer());
+		assertTrue(conversations.priorClinicalTurns(turn.getConversation()).isEmpty());
+	}
+
+	/** A client that drops mid-answer leaves every delta the turn wrote, the refused one included, on the audit row. */
+	@Test
+	public void aClientDroppingMidAnswerAuditsTheAnswerWrittenSoFar() throws Exception {
+		ChartSearchService streaming = new ChartSearchService() {
+			@Override
+			public ChartAnswer search(Patient patient, String question) {
+				throw new AssertionError("the turn path streams");
+			}
+
+			@Override
+			public ChartAnswer searchStreaming(Patient patient, String question, Consumer<String> tokens) {
+				return searchStreaming(patient, question, tokens, r -> { }, c -> { }, a -> { });
+			}
+
+			@Override
+			public ChartAnswer searchStreaming(Patient patient, String question, Consumer<String> tokens,
+					Consumer<String> reasoning, Consumer<List<RecordReference>> citations,
+					Consumer<ChartAnswer> ungrounded) {
+				tokens.accept("Partial ");
+				tokens.accept("answer ");
+				tokens.accept("cut");
+				throw new AssertionError("the client disconnected at the third delta");
+			}
+		};
+		Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_CHART_MODE, "queryScoped");
+		BundledClinicalAnswerProvider provider = new BundledClinicalAnswerProvider(streaming) {
+			@Override public ProviderDescriptor descriptor() { return readyDescriptor(); }
+		};
+		ChartSearchAiRestController controller = new ChartSearchAiRestController();
+		controller.setConversationService(conversations);
+		controller.setProviderRegistry(new ClinicalAnswerProviderRegistry(Collections.singletonList(provider)));
+		Patient patient = Context.getPatientService().getPatient(2);
+		java.io.OutputStream dropsAtTheThirdDelta = new java.io.OutputStream() {
+			@Override public void write(int value) { }
+
+			@Override public void write(byte[] bytes, int offset, int length) throws IOException {
+				if (new String(bytes, offset, length, StandardCharsets.UTF_8).contains("cut")) {
+					throw new IOException("Client disconnected");
+				}
+			}
+		};
+		controller.streamProviderTurn(dropsAtTheThirdDelta, patient, "Question", "bundled",
+				ProviderMode.QUERY_SCOPED, null, null);
+		ClinicalConversation conversation = conversations.getLatestActiveConversation(patient);
+		String turnUuid = conversations.getTurns(conversation).get(0).getUuid();
+		Context.flushSession();
+		Context.clearSession();
+		ClinicalConversationTurn turn = conversationDAO.getTurnByUuid(turnUuid);
+		assertEquals("turn_error", turn.getTerminalState());
+		assertEquals("cancelled", turn.getProblemCode());
+		assertEquals(null, turn.getAnswerText());
+		assertEquals("Partial answer cut", turn.getAuditLog().getAnswer());
 	}
 
 	@Test

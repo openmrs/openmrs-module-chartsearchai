@@ -1038,13 +1038,16 @@ Both paths reject truncated results and incomplete source projections with an
 incomplete-chart response (HTTP 503 on blocking search). Required evidence exceeding
 the input budget returns HTTP 422 and recommends increasing the context size;
 streaming search emits the corresponding error message. These APIs
-require the QueryStore contribution in [PR #68](https://github.com/openmrs/openmrs-module-querystore/pull/68);
-build and test against its declared source dependency before an upstream artifact
+require the QueryStore contributions openmrs/openmrs-module-querystore
+[#85](https://github.com/openmrs/openmrs-module-querystore/pull/85) to
+[#87](https://github.com/openmrs/openmrs-module-querystore/pull/87) (with
+[#86](https://github.com/openmrs/openmrs-module-querystore/pull/86) between them);
+build and test against their declared source dependency before an upstream artifact
 is available.
 
-A temporary paired-source check validates against the QueryStore contribution while
-its API is unpublished. The ordinary published-dependency and QueryStore-main checks
-also run on pull requests. These may fail until QueryStore #68 is merged and its API
+A temporary paired-source check validates against the QueryStore contributions while
+their API is unpublished. The ordinary published-dependency and QueryStore-main checks
+also run on pull requests. These may fail until QueryStore #85 to #87 are merged and their API
 is published; the paired check does not establish upstream merge readiness. Remove
 the temporary paired job once ordinary checks pass with the published API, before
 merging this contribution.

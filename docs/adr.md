@@ -20869,3 +20869,28 @@ medication's — with no other active medication to check it against, for George
 tell which of her medications the group means.
 
 Pinned by `GroupOfHerMedicationsNamedTest.herOwnDrugBesideANamedGroupIsAnsweredAsHerOwnUnderTheGroupLead`.
+
+## Decision 382: Two words in a two-drug question's drug places, neither one the data recognises, are said not checked
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It carries Decision 250 from one unrecognised name beside a
+drug to two.
+
+### Context
+
+*"Does his klarizom interact with his zolvimix?"*, *"Is klarizom safe with zolvimix?"* and *"Is Zolvimix safe with
+Klarizom?"* went to the model for every patient on the 3.7.1 standalone but Michael Turner, on both, whose orders by those
+names Decision 265 answers: *"The records do not address Zolvimix and Klarizom"*. One such word beside a drug the data does
+recognise was answered, and one alone; two together reached no answer, since marking one word leaves the other where a
+drug's name stands.
+
+### The decision
+
+Where the question resolves no drug and no single word stands in a drug's place, `UnrecognisedDrugName` tries two — each of
+one or two words, no possessive, neither a group of her medications nor her allergies — in the drug places of a question
+whether two drugs interact, are safe together, or one changes the other. The answer names both: *"No interaction check was
+run for "klarizom" and "zolvimix": neither is a drug name the interaction data recognises."*, after *"None of this patient's
+active orders is named "klarizom" or "zolvimix"."* where the question calls either hers. Either naming one of her orders
+leaves it to Decision 265, and that decision's screen still runs (`DrugSafetyValidator`).
+
+Pinned by `TwoUnrecognisedDrugNamesTest`.

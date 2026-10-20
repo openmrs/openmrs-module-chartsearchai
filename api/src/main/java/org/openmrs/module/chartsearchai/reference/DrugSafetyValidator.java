@@ -1189,11 +1189,13 @@ public class DrugSafetyValidator {
 				&& UnrecognisedDrugName.namesAWordInADrugsPlace(question);
 		boolean oneOfHerOrdersByName = wordInADrugsPlace
 				&& DrugReferenceInjector.asksAboutOneOfHerOrdersByName(question, context, drugReferenceService) != null;
+		// Two words in a two-drug question's drug places stand in them too (ADR Decision 382): where they are two of her
+		// orders by their own names, the screen is still what relates them.
+		boolean twoOfHerOrdersByName = warnInteractions && questionDrugs.isEmpty()
+				&& DrugReferenceInjector.asksAboutTwoOfHerOrdersByName(question, context, drugReferenceService);
 		if (warnInteractions && questionDrugs.isEmpty()
-				&& (QueryScopeRouter.isInteractionScreening(question)
-						|| DrugReferenceInjector.asksAboutTwoOfHerOrdersByName(question, context, drugReferenceService)
-						|| oneOfHerOrdersByName)
-				&& (oneOfHerOrdersByName || !wordInADrugsPlace)) {
+				&& (QueryScopeRouter.isInteractionScreening(question) || twoOfHerOrdersByName || oneOfHerOrdersByName)
+				&& (oneOfHerOrdersByName || twoOfHerOrdersByName || !wordInADrugsPlace)) {
 			int screenedFrom = warnings.size();
 			pairExtent = addActiveOrderPairInteractions(warnings, subjects, context, severityFloor,
 					orderEntries, interactionPairs, coMedications, statedChips, bridgedOrders);

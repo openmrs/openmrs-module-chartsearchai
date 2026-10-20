@@ -95,7 +95,8 @@ final class UnrecognisedDrugName {
 	static UnrecognisedDrugName in(String question, List<DrugReference> entries) {
 		String word = wordInADrugsPlace(question);
 		if (word == null) {
-			return null;
+			// Or two words in a two-drug question's drug places, neither recognised (ADR Decision 382).
+			return twoIn(question, entries);
 		}
 		UnrecognisedDrugName name = new UnrecognisedDrugName(asWritten(word, question), suggestionsFor(word, entries));
 		name.inAStop = QueryScopeRouter.asksWhetherToStopHerDrug(QueryScopeRouter.words(
@@ -107,6 +108,76 @@ final class UnrecognisedDrugName {
 				(" " + question.toLowerCase(java.util.Locale.ROOT) + " ").replaceFirst("(?<=[^\\p{L}])" + java.util.regex.Pattern
 						.quote(word) + "(?=[^\\p{L}])", " " + QueryScopeRouter.DRUG_NAME + " ")));
 		return name;
+	}
+
+	/** The second word, where two stand in a two-drug question's drug places and the data recognises neither (ADR Decision
+	 *  382); {@code null} for one. */
+	private String second;
+
+	private List<String> secondSuggestions = new ArrayList<String>();
+
+	/** Whether either of two such words is named as hers — "his klarizom" (ADR Decision 382). */
+	private boolean eitherNamedAsHers;
+
+	/** The two words standing in a two-drug question's drug places, or {@code null} (ADR Decision 382). */
+	private static UnrecognisedDrugName twoIn(String question, List<DrugReference> entries) {
+		int[] at = twoWordsInDrugsPlaces(QueryScopeRouter.words(question));
+		if (at == null) {
+			return null;
+		}
+		List<String> words = QueryScopeRouter.words(question);
+		String first = String.join(" ", words.subList(at[0], at[0] + at[1]));
+		String other = String.join(" ", words.subList(at[2], at[2] + at[3]));
+		UnrecognisedDrugName name = new UnrecognisedDrugName(asWritten(first, question), suggestionsFor(first, entries));
+		name.second = asWritten(other, question);
+		name.secondSuggestions = suggestionsFor(other, entries);
+		name.eitherNamedAsHers = namedAsHers(words, at[0]) || namedAsHers(words, at[2]);
+		return name;
+	}
+
+	/**
+	 * Where two spans of one or two words stand in the drug places of a two-drug question — whether the two interact, are
+	 * safe together, or one changes the other — as {start, length, start, length}, or {@code null}: each a name, neither a
+	 * group of her medications nor her allergies (ADR Decision 382). The question resolved no drug, so neither is one the
+	 * data recognises.
+	 */
+	private static int[] twoWordsInDrugsPlaces(List<String> words) {
+		// One-word names before two-word ones, as wordInADrugsPlace reads one, so "his klarizom" is never a name.
+		for (int la = 1; la <= 2; la++) {
+			for (int lb = 1; lb <= 2; lb++) {
+				for (int a = 0; a + la <= words.size(); a++) {
+					for (int b = a + la + 1; b + lb <= words.size(); b++) {
+						List<String> one = words.subList(a, a + la);
+						List<String> two = words.subList(b, b + lb);
+						if (!isADrugsName(one) || !isADrugsName(two)) {
+							continue;
+						}
+						List<String> marked = new ArrayList<String>(words.subList(0, a));
+						marked.add(QueryScopeRouter.DRUG_NAME);
+						marked.addAll(words.subList(a + la, b));
+						marked.add(QueryScopeRouter.DRUG_NAME);
+						marked.addAll(words.subList(b + lb, words.size()));
+						if (QueryScopeRouter.asksAboutTwoDrugsTogether(marked) || QueryScopeRouter.asksWhetherTwoDrugsInteract(marked)
+								|| QueryScopeRouter.asksWhetherOneDrugChangesTheOther(marked)) {
+							return new int[] { a, la, b, lb };
+						}
+					}
+				}
+			}
+		}
+		return null;
+	}
+
+	/** Whether {@code span} may be a drug's name standing in a two-drug question: a name, no possessive, and neither a group
+	 *  of her medications nor her allergies (ADR Decision 382). */
+	private static boolean isADrugsName(List<String> span) {
+		String joined = String.join(" ", span);
+		for (String w : span) {
+			if (POSSESSIVES.contains(w) || "her".equals(w)) {
+				return false;
+			}
+		}
+		return isAName(span) && !joined.contains("allerg") && !QueryScopeRouter.namesAMedicationGroup(joined);
 	}
 
 	/** Whether the word stands in the place of a drug the question asks whether to stop (ADR Decision 335): what was not
@@ -170,7 +241,7 @@ final class UnrecognisedDrugName {
 	/** Whether the unrecognised word names one of her active orders — her drug, checked through the order whatever the data
 	 *  calls it, so never said to be unrecognised (ADR Decisions 250, 265). */
 	boolean namesOneOfHerOrders(PatientClinicalContext context) {
-		return namesOneOfHerOrders(context, word);
+		return namesOneOfHerOrders(context, word) || second != null && namesOneOfHerOrders(context, second);
 	}
 
 	/** {@link #statementBeside} — or, for a switch, {@link #statement}: the new drug is checked against her other
@@ -221,7 +292,8 @@ final class UnrecognisedDrugName {
 	 * no chip about two of her orders may stand beside "No interaction check was run" (ADR Decision 183).
 	 */
 	static boolean namesAWordInADrugsPlace(String question) {
-		return question != null && wordInADrugsPlace(question) != null;
+		return question != null && (wordInADrugsPlace(question) != null
+				|| twoWordsInDrugsPlaces(QueryScopeRouter.words(question)) != null);
 	}
 
 	private static String wordInADrugsPlace(String question) {
@@ -348,6 +420,19 @@ final class UnrecognisedDrugName {
 	 * Rifampicin (rifampin)? Ask again with the name it carries."</em> — or without the suggestion where there is none.
 	 */
 	String statement() {
+		if (second != null) {
+			// Two words, neither recognised: the pair was never checked (ADR Decision 382).
+			List<String> both = new ArrayList<String>(suggestions);
+			for (String suggestion : secondSuggestions) {
+				if (!both.contains(suggestion)) {
+					both.add(suggestion);
+				}
+			}
+			return withSuggestions(new StringBuilder(eitherNamedAsHers
+					? "None of this patient's active orders is named \"" + word + "\" or \"" + second + "\".\n" : "")
+					.append("No interaction check was run for \"").append(word).append("\" and \"").append(second)
+					.append("\": neither is a drug name the interaction data recognises."), both);
+		}
 		if (inAStop) {
 			return "None of this patient's active orders is named \"" + word + "\", so there is no order of it to stop.";
 		}
@@ -370,6 +455,10 @@ final class UnrecognisedDrugName {
 	}
 
 	private String withSuggestions(StringBuilder sb) {
+		return withSuggestions(sb, suggestions);
+	}
+
+	private static String withSuggestions(StringBuilder sb, List<String> suggestions) {
 		if (!suggestions.isEmpty()) {
 			sb.append(" Did you mean ");
 			for (int i = 0; i < suggestions.size(); i++) {

@@ -28,9 +28,17 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 import org.openmrs.util.OpenmrsUtil;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 
+/**
+ * The counting cases that run without a server override the engine's I/O methods only
+ * ({@code getContextSize}, {@code countChatInputTokens}, {@code infer}, {@code inferStreaming}): the
+ * messages those methods receive are built by the production {@link LlmProvider#answerMessages} path. Whether a real server's count
+ * equals its inference usage is the opt-in
+ * {@link #realEngineCountMatchesInferenceUsageAndArmsIdleUnload}.
+ */
 public class LocalLlamaTokenCounterTest extends BaseModuleContextSensitiveTest {
 
 	@Test
@@ -139,10 +147,15 @@ public class LocalLlamaTokenCounterTest extends BaseModuleContextSensitiveTest {
 		engine.shutdown();
 	}
 
-	/** Opt-in: launches the real local engine from a tester-prepared application-data directory. */
+	/**
+	 * Opt-in: launches the real local engine from a tester-prepared application-data directory.
+	 * The module spawns this server itself, so it is not one of the tester-started servers
+	 * {@link LlmEndpointTestSupport} serves.
+	 */
 	@Test
 	public void realEngineCountMatchesInferenceUsageAndArmsIdleUnload() {
-		LlmEndpointTestSupport.assumeOptedIn("chartsearchai.test.tokenCount.enabled");
+		Assumptions.assumeTrue(Boolean.getBoolean("chartsearchai.test.tokenCount.enabled"),
+				"Skipping: set -Dchartsearchai.test.tokenCount.enabled=true to run");
 		String directory = System.getProperty("chartsearchai.test.tokenCount.dataDirectory");
 		assertNotNull(directory,
 				"Set dataDirectory containing model.gguf and chartsearchai/bin/llama-server");

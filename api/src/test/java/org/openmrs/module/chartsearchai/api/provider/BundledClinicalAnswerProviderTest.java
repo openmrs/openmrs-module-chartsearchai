@@ -211,6 +211,10 @@ public class BundledClinicalAnswerProviderTest {
 		Map<?, ?> safetyCheck = result.getAnswer().getSource().getSafetyCheck();
 		assertEquals("drug_safety.v1", safetyCheck.get("schema_version"));
 		assertEquals("unavailable", safetyCheck.get("status"));
+		// The chips are the REST layer's to publish, with their pair extent beside them; raw SafetyWarning objects
+		// here would be a second chip list carrying none.
+		assertEquals(new java.util.LinkedHashSet<String>(Arrays.asList("schema_version", "status", "issues")),
+				safetyCheck.keySet());
 		assertNull(result.getProblemCode());
 	}
 

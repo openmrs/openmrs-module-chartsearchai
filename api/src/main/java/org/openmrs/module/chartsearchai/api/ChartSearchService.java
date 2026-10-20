@@ -1311,16 +1311,16 @@ public interface ChartSearchService {
 
 		/**
 		 * Provider-neutral safety envelope retained for clients that consume the dual-provider
-		 * contract. The current validator can state execution status and findings, so this projection
-		 * publishes exactly those facts and leaves package provenance or coverage fields absent when
-		 * this implementation cannot establish them.
+		 * contract: the execution status and its limitation codes. Package provenance and coverage
+		 * fields are absent because this implementation cannot establish them. The findings are not
+		 * in it: they are {@link #getSafetyWarnings()}, and the REST layer adds their wire form to this
+		 * envelope together with the interaction-pair extent that must travel with any chip list.
 		 */
 		public java.util.Map<String, Object> getSafetyCheck() {
 			java.util.Map<String, Object> safetyCheck = new java.util.LinkedHashMap<String, Object>();
 			safetyCheck.put("schema_version", "drug_safety.v1");
 			safetyCheck.put("status", safetyStatus);
 			safetyCheck.put("issues", new java.util.ArrayList<String>(safetyIssues));
-			safetyCheck.put("warnings", new java.util.ArrayList<SafetyWarning>(safetyWarnings));
 			return java.util.Collections.unmodifiableMap(safetyCheck);
 		}
 

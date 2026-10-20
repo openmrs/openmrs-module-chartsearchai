@@ -524,6 +524,9 @@ public class DrugSafetyStatusTest extends BaseModuleContextSensitiveTest {
 		assertTrue(result.getWarnings().isEmpty());
 	}
 
+	// Fault injection, and the one override in this class: no real input makes the reference service throw
+	// part-way through a pass, so the failure is injected at the first service call the pass makes, and
+	// everything else is the production path.
 	@Test
 	public void aPassThatThrewIsUnavailableNotClean() {
 		DrugSafetyValidator throwing = DrugReferenceTestSupport.validator(new DrugReferenceService() {

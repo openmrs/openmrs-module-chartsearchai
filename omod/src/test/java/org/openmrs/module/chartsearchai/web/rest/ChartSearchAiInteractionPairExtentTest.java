@@ -268,6 +268,24 @@ public class ChartSearchAiInteractionPairExtentTest {
 						+ grounded);
 	}
 
+	// safetyCheck is a second surface carrying the chips (its warnings), so the statement of how bounded they
+	// are travels inside it too: a client reading the provider-neutral envelope alone must not take three
+	// chips for a complete screen (issue #336 on a new key).
+	@Test
+	public void theSafetyCheckEnvelopeCarriesTheExtentBesideItsChips() {
+		Map<String, Object> payload = searchPayload();
+
+		@SuppressWarnings("unchecked")
+		Map<String, Object> safetyCheck = (Map<String, Object>) payload.get("safetyCheck");
+		assertNotNull(safetyCheck, "precondition: the answer states its safety envelope");
+		assertEquals(payload.get("safetyWarnings"), safetyCheck.get("warnings"));
+		@SuppressWarnings("unchecked")
+		Map<String, Object> pairs = (Map<String, Object>) safetyCheck.get("interactionPairs");
+		assertNotNull(pairs, "the envelope's chips must say how bounded they are: " + safetyCheck);
+		assertEquals(FOUND, pairs.get("found"));
+		assertEquals(REPORTED, pairs.get("reported"));
+	}
+
 	@Test
 	public void noEmissionSiteCanPublishChipsWithoutSayingHowBoundedTheyAre() throws Exception {
 		// Structural, and it is what makes the three cases above hold for a site nobody has written

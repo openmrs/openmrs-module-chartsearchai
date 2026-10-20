@@ -2669,7 +2669,12 @@ public class ChartSearchAiRestController {
 	 */
 	private void putModuleStatements(Map<String, Object> target, ChartAnswer answer) {
 		target.put("safetyStatus", answer.getSafetyStatus());
-		List<Map<String, Object>> safetyWarningsForWire = putSafetyChips(target, answer);
+		// The chips and the statement of how bounded they are, written once by putSafetyChips and carried to
+		// both surfaces that hold the chips: the top-level keys and the safetyCheck envelope, whose warnings
+		// must not travel without the extent (issue #336).
+		Map<String, Object> chipStatements = new LinkedHashMap<String, Object>();
+		List<Map<String, Object>> safetyWarningsForWire = putSafetyChips(chipStatements, answer);
+		target.putAll(chipStatements);
 		Map<String, Object> safetyCheck = answer.getSafetyCheck();
 		if (safetyCheck == null) {
 			target.put("safetyCheck", null);
@@ -2677,6 +2682,12 @@ public class ChartSearchAiRestController {
 			Map<String, Object> safetyCheckForWire =
 				new LinkedHashMap<String, Object>(safetyCheck);
 			safetyCheckForWire.put("warnings", safetyWarningsForWire);
+			// Every statement beside the chip list, under its own key; the list itself is warnings here.
+			for (Map.Entry<String, Object> statement : chipStatements.entrySet()) {
+				if (statement.getValue() != safetyWarningsForWire) {
+					safetyCheckForWire.put(statement.getKey(), statement.getValue());
+				}
+			}
 			target.put("safetyCheck", safetyCheckForWire);
 		}
 		target.put("unresolvedDrugClass", answer.getUnresolvedDrugClass());

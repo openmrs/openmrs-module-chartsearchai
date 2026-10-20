@@ -574,8 +574,7 @@ public class LlmProvider {
 		}
 		// Only model work may interrupt this thread. Chart retrieval can flush shared Lucene
 		// writers, so binding at the provider-turn boundary can permanently close an index.
-		Thread inferenceThread = Thread.currentThread();
-		Closeable interruptInference = inferenceThread::interrupt;
+		InferenceInterrupt interruptInference = new InferenceInterrupt();
 		cancellation.bindCloseable(interruptInference);
 		LlmEngine.InferenceResult result;
 		try {
@@ -584,13 +583,41 @@ public class LlmProvider {
 		}
 		finally {
 			cancellation.unbindCloseable(interruptInference);
-			if (cancellation.isCancelled()) {
-				Thread.interrupted();
-			}
+			interruptInference.finished();
 		}
 
 		return extractResponse(result.getText(), result.getInputTokens(), result.getOutputTokens(),
 				result.getCachedTokens());
+	}
+
+	/**
+	 * The interrupt that cancels model inference, scoped to that inference. A cancel dequeues each bound
+	 * resource and then closes it, so it can reach this one after inference has returned and its cleanup has
+	 * run; {@link #finished} makes that late close a no-op and clears only an interrupt this delivered, so a
+	 * pooled request thread is never left interrupted for its next request.
+	 */
+	private static final class InferenceInterrupt implements Closeable {
+
+		private final Thread thread = Thread.currentThread();
+
+		private boolean active = true;
+
+		private boolean interrupted;
+
+		@Override
+		public synchronized void close() {
+			if (active) {
+				interrupted = true;
+				thread.interrupt();
+			}
+		}
+
+		synchronized void finished() {
+			active = false;
+			if (interrupted) {
+				Thread.interrupted();
+			}
+		}
 	}
 
 	/** The shared message assembly for inference and exact input budgeting. */

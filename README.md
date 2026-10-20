@@ -43,6 +43,7 @@ The standalone download above includes the backend module, frontend ESM, and the
 - [Provider integration contract](#provider-integration-contract)
 - [Local token counting](#local-token-counting)
 - [Safety-check execution status](#safety-check-execution-status)
+- [Bundled provider integration](#bundled-provider-integration)
 - [Conversation persistence](#conversation-persistence)
 - [License](#license)
 

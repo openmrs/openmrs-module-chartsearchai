@@ -40,6 +40,7 @@ The standalone download above includes the backend module, frontend ESM, and the
 - [Evals](#evals)
 - [Evaluated models](#evaluated-models)
 - [Architecture](#architecture)
+- [Provider integration contract](#provider-integration-contract)
 - [License](#license)
 
 ## Try it on the demo server

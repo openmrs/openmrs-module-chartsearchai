@@ -202,6 +202,7 @@ public class DrugSafetyValidator {
 	private static final class SafetyCoverage {
 		private final Set<String> issues = new LinkedHashSet<String>();
 		private boolean unavailable;
+		private boolean noCheckEnabled;
 
 		void limited(String issue) {
 			issues.add(issue);
@@ -212,7 +213,17 @@ public class DrugSafetyValidator {
 			limited(issue);
 		}
 
+		/** Every sub-check is switched off, so nothing examined the answer: the same statement as the
+		 *  answer check itself being off, and the only one made. */
+		void noCheckEnabled() {
+			noCheckEnabled = true;
+		}
+
 		SafetyCheckResult result(List<SafetyWarning> warnings) {
+			if (noCheckEnabled) {
+				return new SafetyCheckResult(STATUS_UNAVAILABLE, warnings,
+						java.util.Collections.singletonList("check_disabled"));
+			}
 			return new SafetyCheckResult(unavailable ? STATUS_UNAVAILABLE
 					: issues.isEmpty() ? STATUS_CHECKED : STATUS_LIMITED,
 					warnings, new ArrayList<String>(issues));
@@ -1003,7 +1014,9 @@ public class DrugSafetyValidator {
 		// by every concurrent request.
 		Map<Object, List<DrugReference>> resolvedRows = resolvedSubstanceRows(inPlay, orderEntries);
 		if (coverage != null) {
-			if (!warnDose || !warnInteractions || !warnContra) {
+			if (!warnDose && !warnInteractions && !warnContra) {
+				coverage.noCheckEnabled();
+			} else if (!warnDose || !warnInteractions || !warnContra) {
 				coverage.limited("checks_partially_disabled");
 			}
 			for (PatientClinicalContext.ActiveDrugOrder order : context.getActiveDrugOrders()) {

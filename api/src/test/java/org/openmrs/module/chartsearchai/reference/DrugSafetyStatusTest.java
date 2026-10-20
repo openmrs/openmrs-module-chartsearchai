@@ -144,6 +144,18 @@ public class DrugSafetyStatusTest extends BaseModuleContextSensitiveTest {
 		assertTrue(result.getIssues().contains("source_unavailable"));
 	}
 
+	// No sub-check enabled means nothing examined the answer, so it cannot be reported as partly checked.
+	@Test
+	public void noEnabledSubCheckIsUnavailableNotLimited() {
+		set(ChartSearchAiConstants.GP_DRUG_SAFETY_WARN_ON_DOSE_EXCESS, "false");
+		set(ChartSearchAiConstants.GP_DRUG_SAFETY_WARN_ON_INTERACTIONS, "false");
+		set(ChartSearchAiConstants.GP_DRUG_SAFETY_WARN_ON_CONTRAINDICATIONS, "false");
+		DrugSafetyValidator.SafetyCheckResult result = validate(patient);
+		assertEquals("unavailable", result.getStatus(), result.getIssues().toString());
+		assertEquals(Collections.singletonList("check_disabled"), result.getIssues());
+		assertTrue(result.getWarnings().isEmpty(), result.getWarnings().toString());
+	}
+
 	// The warnings-only entry point keeps its contract for a caller with no patient: the question's own
 	// drugs are still screened against each other, as before the status entry point existed.
 	@Test

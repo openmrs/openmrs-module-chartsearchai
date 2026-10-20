@@ -109,8 +109,11 @@ public class HubClinicalAnswerProviderTest {
 		}
 	}
 
+	// One rule for a stream that stops after its answer without the Hub's done: a transport failure there settles
+	// exactly as a clean end there does (aStreamThatEndsWithoutDoneIsATurnError). Its interrupted stages are
+	// settled first, the delivered answer reaching the client in them, and the turn is an incomplete stream.
 	@Test
-	public void aTransportFailureAfterAnswerDonePreservesTheAnswerForReload() throws Exception {
+	public void aTransportFailureAfterAnswerDoneSettlesAsAStreamEndingThereDoes() throws Exception {
 		ScriptedHubTransport transport = new ScriptedHubTransport();
 		transport.events = Collections.singletonList(wire("answer_done", answerPayload("Aspirin 81mg.")));
 		transport.failure = new RuntimeException("upstream read timed out");
@@ -122,12 +125,16 @@ public class HubClinicalAnswerProviderTest {
 		TurnResult result = provider.execute(request("product-profile-a"), sink,
 				CancellationSignal.NONE).toCompletableFuture().get();
 
-		assertEquals(TurnEventType.TURN_DONE, result.getTerminalState());
-		assertEquals("Aspirin 81mg.", result.getAnswer().getText());
+		assertEquals(TurnEventType.TURN_ERROR, result.getTerminalState());
+		assertEquals("hub_stream_incomplete", result.getProblemCode());
+		assertNull(result.getAnswer());
+		TurnEvent validation = sink.events.stream().filter(event -> event.getType() == TurnEventType.ANSWER_VALIDATION)
+				.findFirst().orElseThrow(AssertionError::new);
+		assertEquals("Aspirin 81mg.", validation.getAnswer().getText());
 		assertEquals("unavailable",
-				((Map<?, ?>) result.getAnswer().getPayload().get("answerValidation")).get("status"));
+				((Map<?, ?>) validation.getAnswer().getPayload().get("answerValidation")).get("status"));
 		assertEquals(Arrays.asList(TurnEventType.TURN_STARTED, TurnEventType.ANSWER_DONE,
-				TurnEventType.ANSWER_VALIDATION, TurnEventType.TURN_DONE), sink.types());
+				TurnEventType.ANSWER_VALIDATION, TurnEventType.TURN_ERROR), sink.types());
 	}
 
 	@Test

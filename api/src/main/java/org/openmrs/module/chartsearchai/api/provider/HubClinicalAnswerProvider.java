@@ -140,8 +140,7 @@ public class HubClinicalAnswerProvider implements ClinicalAnswerProvider {
 				return settled;
 			}
 			if (latestAnswer.get() != null) {
-				return completedWithPartialAnswer(events, sequence, request.getMode(),
-						latestAnswer.get(), emitted);
+				return endedBeforeDone(events, sequence, request.getMode(), latestAnswer.get(), emitted);
 			}
 			return failed(events, sequence, request.getMode(), problemCodeFromHubBody(e.getBody()));
 		}
@@ -153,13 +152,15 @@ public class HubClinicalAnswerProvider implements ClinicalAnswerProvider {
 				return settled;
 			}
 			if (current != null) {
-				if (!cancellation.isCancelled()) {
-					// Parser exceptions can include response text; log the failure type, not that text.
-					Throwable cause = e.getCause() == null ? e : e.getCause();
-					log.warn("Hub provider answer tail failed for request {} ({})",
-							request.getRequestId(), cause.getClass().getSimpleName());
+				if (cancellation.isCancelled()) {
+					// A later question preempted this turn: what it had answered stands as its outcome.
+					return completedWithPartialAnswer(events, sequence, request.getMode(), current, emitted);
 				}
-				return completedWithPartialAnswer(events, sequence, request.getMode(), current, emitted);
+				// Parser exceptions can include response text; log the failure type, not that text.
+				Throwable cause = e.getCause() == null ? e : e.getCause();
+				log.warn("Hub provider answer tail failed for request {} ({})",
+						request.getRequestId(), cause.getClass().getSimpleName());
+				return endedBeforeDone(events, sequence, request.getMode(), current, emitted);
 			}
 			if (cancellation.isCancelled()) {
 				return failed(events, sequence, request.getMode(), PROBLEM_CANCELLED);
@@ -179,7 +180,7 @@ public class HubClinicalAnswerProvider implements ClinicalAnswerProvider {
 		if (!doneSeen[0]) {
 			AnswerEnvelope current = latestAnswer.get();
 			if (current != null) {
-				emitInterruptedStageOutcomes(events, sequence, current, withInterruptedStages(current), emitted);
+				return endedBeforeDone(events, sequence, request.getMode(), current, emitted);
 			}
 			return failed(events, sequence, request.getMode(), PROBLEM_HUB_STREAM_INCOMPLETE);
 		}
@@ -207,6 +208,18 @@ public class HubClinicalAnswerProvider implements ClinicalAnswerProvider {
 		}
 		return CompletableFuture.completedFuture(
 				TurnResult.done(PROVIDER_ID, mode, answer));
+	}
+
+	/**
+	 * A stream that stopped after its answer and before the Hub's {@code done}, whether it ended cleanly or
+	 * failed: one rule for both, since a client cannot tell them apart. The unfinished stages are settled first,
+	 * so the client holds the answer with them marked interrupted, and the turn is an incomplete stream. Only
+	 * a cancellation keeps the answer as the turn's outcome (see {@link #completedWithPartialAnswer}).
+	 */
+	private CompletionStage<TurnResult> endedBeforeDone(TurnEventSink events, AtomicInteger sequence,
+			ProviderMode mode, AnswerEnvelope current, Set<TurnEventType> emitted) {
+		emitInterruptedStageOutcomes(events, sequence, current, withInterruptedStages(current), emitted);
+		return failed(events, sequence, mode, PROBLEM_HUB_STREAM_INCOMPLETE);
 	}
 
 	private CompletionStage<TurnResult> completedWithPartialAnswer(TurnEventSink events,

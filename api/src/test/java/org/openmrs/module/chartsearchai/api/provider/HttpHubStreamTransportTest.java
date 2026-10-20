@@ -200,8 +200,14 @@ public class HttpHubStreamTransportTest {
 			TurnResult result = httpProvider(Duration.ofSeconds(5)).execute(turn(), event -> {
 				if (cancel && event.getType() == TurnEventType.ANSWER_DONE) cancellation.cancel();
 			}, cancellation).toCompletableFuture().get();
-			assertEquals(TurnEventType.TURN_DONE, result.getTerminalState());
-			assertEquals("Retained answer", result.getAnswer().getText());
+			// A cancelled turn keeps what it answered; a broken one is an incomplete stream, as a clean end there is.
+			if (cancel) {
+				assertEquals(TurnEventType.TURN_DONE, result.getTerminalState());
+				assertEquals("Retained answer", result.getAnswer().getText());
+			} else {
+				assertEquals(TurnEventType.TURN_ERROR, result.getTerminalState());
+				assertEquals("hub_stream_incomplete", result.getProblemCode());
+			}
 			assertEquals(cancel ? 0 : 1, capture.messagesAt(Level.WARN).size());
 			if (!cancel) assertTrue(capture.hasMessageAt(Level.WARN, "request-1", "JsonParseException"));
 			assertTrue(capture.describeAll().stream().noneMatch(message -> message.contains("invalid-json")),

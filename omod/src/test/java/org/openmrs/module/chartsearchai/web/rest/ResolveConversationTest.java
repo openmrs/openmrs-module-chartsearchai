@@ -11,229 +11,123 @@ package org.openmrs.module.chartsearchai.web.rest;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.Patient;
+import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.api.conversation.ConversationService;
-import org.openmrs.module.chartsearchai.api.conversation.PriorClinicalTurn;
 import org.openmrs.module.chartsearchai.api.provider.ProviderMode;
-import org.openmrs.module.chartsearchai.api.provider.TurnResult;
 import org.openmrs.module.chartsearchai.model.ClinicalConversation;
-import org.openmrs.module.chartsearchai.model.ClinicalConversationTurn;
+import org.openmrs.web.test.jupiter.BaseModuleWebContextSensitiveTest;
+import org.springframework.beans.factory.annotation.Autowired;
 
 /**
- * {@code ChartSearchAiRestController#resolveConversation} — the REST-layer half of "changing
- * providerId creates a new conversation" (the service-layer half,
- * {@code ConversationServiceImpl.openOrCreate}, is covered by
- * {@code ConversationServicePersistenceTest#reusesOnlyAnActiveConversationWithTheSameProviderAndMode}).
- * A turn submitted with a provider different from its client-supplied session must open a new
- * conversation. The returned UUID lets the client keep turns from different providers in
- * separate threads.
+ * {@code ChartSearchAiRestController#resolveConversation} over the real {@link ConversationService} and its
+ * Hibernate store: the REST-layer half of "changing providerId creates a new conversation" (the service-layer
+ * half, {@code ConversationServiceImpl.openOrCreate}, is covered by
+ * {@code ConversationServicePersistenceTest#reusesOnlyAnActiveConversationWithTheSameProviderAndMode}). A turn
+ * submitted with a provider or mode different from its client-supplied session, or naming a session that is not
+ * the caller's active one, must not be appended to that session.
  */
-public class ResolveConversationTest {
+public class ResolveConversationTest extends BaseModuleWebContextSensitiveTest {
 
-	private static Patient patient() {
-		Patient patient = new Patient();
-		patient.setUuid("patient-1");
-		patient.setPatientId(1);
-		return patient;
-	}
+	@Autowired
+	private ConversationService conversations;
 
-	private static ClinicalConversation conversation(String uuid, Patient patient, String providerId,
-			String mode, String status) {
-		ClinicalConversation conversation = new ClinicalConversation();
-		conversation.setUuid(uuid);
-		conversation.setPatient(patient);
-		conversation.setProviderId(providerId);
-		conversation.setProviderMode(mode);
-		conversation.setStatus(status);
-		return conversation;
+	private ChartSearchAiRestController controller;
+
+	private Patient patient;
+
+	@BeforeEach
+	public void setUp() {
+		controller = new ChartSearchAiRestController();
+		controller.setConversationService(conversations);
+		patient = Context.getPatientService().getPatient(2);
 	}
 
 	@Test
 	public void reusesTheClientSuppliedSessionWhenProviderAndModeMatch() {
-		ChartSearchAiRestController controller = new ChartSearchAiRestController();
-		StubConversationService conversations = new StubConversationService();
-		Patient patient = patient();
-		ClinicalConversation existing = conversation("conversation-1", patient, "bundled", "query_scoped",
-				ClinicalConversation.STATUS_ACTIVE);
-		conversations.byUuid.put("conversation-1", existing);
-		controller.setConversationService(conversations);
+		ClinicalConversation existing = conversations.startNew(patient, "bundled", ProviderMode.QUERY_SCOPED);
 
 		ClinicalConversation resolved = controller.resolveConversation(patient, "bundled",
-				ProviderMode.QUERY_SCOPED, "conversation-1");
+				ProviderMode.QUERY_SCOPED, existing.getUuid());
 
-		assertSame(existing, resolved);
-		assertEquals(0, conversations.openOrCreateCalls, "a matching session never falls through to openOrCreate");
+		assertEquals(existing.getUuid(), resolved.getUuid());
+		assertEquals(ClinicalConversation.STATUS_ACTIVE, conversations.getByUuid(existing.getUuid()).getStatus());
 	}
 
 	@Test
 	public void aProviderMismatchNeverReusesTheClientSuppliedSession() {
 		// A session bound to the bundled provider must not receive a hub-answered turn.
-		ChartSearchAiRestController controller = new ChartSearchAiRestController();
-		StubConversationService conversations = new StubConversationService();
-		Patient patient = patient();
-		ClinicalConversation staleBundled = conversation("conversation-old-bundled", patient, "bundled",
-				"query_scoped", ClinicalConversation.STATUS_ACTIVE);
-		conversations.byUuid.put("conversation-old-bundled", staleBundled);
-		ClinicalConversation freshHub = conversation("conversation-new-hub", patient, "hub", "query_scoped",
-				ClinicalConversation.STATUS_ACTIVE);
-		conversations.openOrCreateResult = freshHub;
-		controller.setConversationService(conversations);
+		ClinicalConversation staleBundled = conversations.startNew(patient, "bundled", ProviderMode.QUERY_SCOPED);
 
 		ClinicalConversation resolved = controller.resolveConversation(patient, "hub", ProviderMode.QUERY_SCOPED,
-				"conversation-old-bundled");
+				staleBundled.getUuid());
 
-		assertSame(freshHub, resolved);
 		assertNotEquals(staleBundled.getUuid(), resolved.getUuid(),
 				"a provider-mismatched session must never be reused for the new provider's turn");
-		assertEquals(1, conversations.openOrCreateCalls);
-		assertEquals("hub", conversations.lastOpenOrCreateProviderId);
+		assertEquals("hub", resolved.getProviderId());
 	}
 
 	@Test
 	public void aModeMismatchAlsoFallsThroughToOpenOrCreate() {
-		ChartSearchAiRestController controller = new ChartSearchAiRestController();
-		StubConversationService conversations = new StubConversationService();
-		Patient patient = patient();
-		ClinicalConversation queryScoped = conversation("conversation-1", patient, "bundled", "query_scoped",
-				ClinicalConversation.STATUS_ACTIVE);
-		conversations.byUuid.put("conversation-1", queryScoped);
-		ClinicalConversation fullChart = conversation("conversation-2", patient, "bundled", "full_chart_stable",
-				ClinicalConversation.STATUS_ACTIVE);
-		conversations.openOrCreateResult = fullChart;
-		controller.setConversationService(conversations);
+		ClinicalConversation queryScoped = conversations.startNew(patient, "bundled", ProviderMode.QUERY_SCOPED);
 
 		ClinicalConversation resolved = controller.resolveConversation(patient, "bundled",
-				ProviderMode.FULL_CHART_STABLE, "conversation-1");
+				ProviderMode.FULL_CHART_STABLE, queryScoped.getUuid());
 
-		assertSame(fullChart, resolved);
-		assertEquals(1, conversations.openOrCreateCalls);
+		assertNotEquals(queryScoped.getUuid(), resolved.getUuid());
+		assertEquals(ProviderMode.FULL_CHART_STABLE.getWireName(), resolved.getProviderMode());
 	}
 
 	@Test
 	public void aClosedConversationIsNeverReusedEvenWithAMatchingProviderAndMode() {
-		ChartSearchAiRestController controller = new ChartSearchAiRestController();
-		StubConversationService conversations = new StubConversationService();
-		Patient patient = patient();
-		ClinicalConversation closed = conversation("conversation-1", patient, "bundled", "query_scoped",
-				ClinicalConversation.STATUS_CLOSED);
-		conversations.byUuid.put("conversation-1", closed);
-		ClinicalConversation fresh = conversation("conversation-2", patient, "bundled", "query_scoped",
-				ClinicalConversation.STATUS_ACTIVE);
-		conversations.openOrCreateResult = fresh;
-		controller.setConversationService(conversations);
+		ClinicalConversation closed = conversations.startNew(patient, "bundled", ProviderMode.QUERY_SCOPED);
+		ClinicalConversation current = conversations.startNew(patient, "bundled", ProviderMode.QUERY_SCOPED);
+		assertEquals(ClinicalConversation.STATUS_CLOSED, conversations.getByUuid(closed.getUuid()).getStatus(),
+				"precondition: starting a new conversation closed the earlier one");
 
 		ClinicalConversation resolved = controller.resolveConversation(patient, "bundled",
-				ProviderMode.QUERY_SCOPED, "conversation-1");
+				ProviderMode.QUERY_SCOPED, closed.getUuid());
 
-		assertSame(fresh, resolved);
-		assertEquals(1, conversations.openOrCreateCalls);
+		assertNotEquals(closed.getUuid(), resolved.getUuid());
+		assertEquals(current.getUuid(), resolved.getUuid(), "the caller's active conversation is used instead");
 	}
 
 	@Test
 	public void anUnknownConversationUuidFallsThroughToOpenOrCreate() {
-		ChartSearchAiRestController controller = new ChartSearchAiRestController();
-		StubConversationService conversations = new StubConversationService();
-		Patient patient = patient();
-		ClinicalConversation fresh = conversation("conversation-new", patient, "bundled", "query_scoped",
-				ClinicalConversation.STATUS_ACTIVE);
-		conversations.openOrCreateResult = fresh;
-		controller.setConversationService(conversations);
-
 		ClinicalConversation resolved = controller.resolveConversation(patient, "bundled",
 				ProviderMode.QUERY_SCOPED, "does-not-exist");
 
-		assertSame(fresh, resolved);
-		assertEquals(1, conversations.openOrCreateCalls);
+		assertNotNull(resolved.getUuid());
+		assertEquals(resolved.getUuid(), conversations.getLatestActiveConversation(patient).getUuid());
 	}
 
 	@Test
 	public void aBlankConversationUuidGoesStraightToOpenOrCreate() {
-		ChartSearchAiRestController controller = new ChartSearchAiRestController();
-		StubConversationService conversations = new StubConversationService();
-		Patient patient = patient();
-		ClinicalConversation fresh = conversation("conversation-new", patient, "bundled", "query_scoped",
-				ClinicalConversation.STATUS_ACTIVE);
-		conversations.openOrCreateResult = fresh;
-		controller.setConversationService(conversations);
+		ClinicalConversation active = conversations.openOrCreate(patient, "bundled", ProviderMode.QUERY_SCOPED);
 
 		ClinicalConversation resolved = controller.resolveConversation(patient, "bundled", ProviderMode.QUERY_SCOPED,
 				null);
 
-		assertSame(fresh, resolved);
-		assertEquals(1, conversations.openOrCreateCalls);
+		assertEquals(active.getUuid(), resolved.getUuid());
 	}
 
-	private static final class StubConversationService implements ConversationService {
+	@Test
+	public void anotherUsersSessionIsNeverReused() {
+		ClinicalConversation theirs = conversations.startNew(patient, "bundled", ProviderMode.QUERY_SCOPED);
+		Context.flushSession();
+		Context.getAdministrationService().executeSQL("update chartsearchai_conversation set user_id = 501 where uuid = '"
+				+ theirs.getUuid() + "'", false);
+		Context.flushSession();
+		Context.clearSession();
 
-		final Map<String, ClinicalConversation> byUuid = new HashMap<>();
+		ClinicalConversation resolved = controller.resolveConversation(patient, "bundled",
+				ProviderMode.QUERY_SCOPED, theirs.getUuid());
 
-		ClinicalConversation openOrCreateResult;
-
-		int openOrCreateCalls;
-
-		String lastOpenOrCreateProviderId;
-
-		@Override
-		public ClinicalConversation openOrCreate(Patient patient, String providerId, ProviderMode mode) {
-			openOrCreateCalls++;
-			lastOpenOrCreateProviderId = providerId;
-			return openOrCreateResult;
-		}
-
-		@Override
-		public ClinicalConversation startNew(Patient patient, String providerId, ProviderMode mode) {
-			throw new UnsupportedOperationException();
-		}
-
-		@Override
-		public ClinicalConversation getByUuid(String uuid) {
-			return byUuid.get(uuid);
-		}
-
-		@Override
-		public ClinicalConversation getLatestActiveConversation(Patient patient) {
-			throw new UnsupportedOperationException();
-		}
-
-		@Override
-		public List<ClinicalConversationTurn> getTurns(ClinicalConversation conversation) {
-			return new ArrayList<ClinicalConversationTurn>();
-		}
-
-		@Override
-		public ClinicalConversationTurn startTurn(ClinicalConversation conversation, String requestId,
-				String question) {
-			throw new UnsupportedOperationException();
-		}
-
-		@Override
-		public ClinicalConversationTurn finishTurn(ClinicalConversationTurn turn, TurnResult result,
-				long responseTimeMs) {
-			throw new UnsupportedOperationException();
-		}
-
-		@Override
-		public boolean recordCheckedAnswer(ClinicalConversationTurn turn,
-				org.openmrs.module.chartsearchai.api.provider.AnswerEnvelope answer) {
-			throw new UnsupportedOperationException();
-		}
-
-		@Override
-		public int purgeBefore(java.util.Date cutoff) {
-			throw new UnsupportedOperationException();
-		}
-
-		@Override
-		public List<PriorClinicalTurn> priorClinicalTurns(ClinicalConversation conversation) {
-			throw new UnsupportedOperationException();
-		}
+		assertNotEquals(theirs.getUuid(), resolved.getUuid());
+		assertEquals(Context.getAuthenticatedUser(), resolved.getUser());
 	}
 }

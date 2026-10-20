@@ -251,7 +251,8 @@ public class ConversationServiceImpl implements ConversationService {
 		AnswerEnvelope answer = result.getAnswer() != null ? result.getAnswer()
 				: result.getDeliveredAnswer() != null ? result.getDeliveredAnswer() : retainedAnswer(turn);
 		audit.setAnswer(answer == null ? "" : answer.getText());
-		audit.setReferenceCount(referenceCount(answer));
+		audit.setReferenceCount(answer != null && answer.getSource() != null
+				? answer.getSource().getReferences().size() : referenceCount(answer));
 		ChartAnswer source = answer == null ? null : answer.getSource();
 		audit.setSearchMode(source == null ? ChartSearchAiConstants.SEARCH_MODE_UNKNOWN : source.getSearchMode());
 		ReferenceSlice slice = source == null ? null : source.getReferenceSlice();

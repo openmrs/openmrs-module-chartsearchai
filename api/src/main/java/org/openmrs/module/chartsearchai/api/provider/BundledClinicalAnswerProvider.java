@@ -9,7 +9,6 @@
  */
 package org.openmrs.module.chartsearchai.api.provider;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
@@ -26,13 +25,10 @@ import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.api.ChartSearchService;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
-import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
 import org.openmrs.module.chartsearchai.api.ChartTooLargeException;
 import org.openmrs.module.chartsearchai.api.IncompleteChartException;
 import org.openmrs.module.chartsearchai.api.impl.RemoteLlmEngine;
 import org.openmrs.module.chartsearchai.api.InsufficientContextException;
-import org.openmrs.module.chartsearchai.reference.SafetyWarning;
-import org.openmrs.module.chartsearchai.util.DateFormatUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -296,37 +292,16 @@ public class BundledClinicalAnswerProvider implements ClinicalAnswerProvider {
 				String.valueOf(ChartSearchAiConstants.DEFAULT_GROUNDING_ENABLED)));
 	}
 
+	/**
+	 * The answer text and its token accounting, with the {@link ChartAnswer} itself as the envelope's
+	 * source. Citations, chips and the module's statements are deliberately absent: their wire shape
+	 * is the REST layer's ({@code ChartSearchAiRestController.groundedForWire} is the only place a
+	 * verdict reaches the wire, and a chip list travels with its pair extent), and the controller
+	 * builds them from the source as it does for {@code /search}.
+	 */
 	private static AnswerEnvelope toAnswerEnvelope(ChartAnswer answer) {
 		Map<String, Object> payload = new LinkedHashMap<>();
 		payload.put("answer", answer.getAnswer());
-
-		List<Map<String, Object>> references = new ArrayList<>();
-		for (RecordReference reference : answer.getReferences()) {
-			Map<String, Object> value = new LinkedHashMap<>();
-			value.put("index", reference.getIndex());
-			value.put("resourceType", reference.getResourceType());
-			value.put("resourceUuid", reference.getResourceUuid());
-			value.put("date", reference.getDate() == null ? null
-					: DateFormatUtil.formatDate(reference.getDate()));
-			value.put("grounded", reference.getGrounded());
-			value.put("group", reference.getGroup());
-			value.put("source", reference.getSource());
-			value.put("withheldInteractions", reference.getWithheldInteractions());
-			references.add(value);
-		}
-		payload.put("references", references);
-
-		List<Map<String, Object>> warnings = new ArrayList<>();
-		for (SafetyWarning warning : answer.getSafetyWarnings()) {
-			Map<String, Object> value = new LinkedHashMap<>();
-			value.put("type", warning.getType());
-			value.put("drug", warning.getDrug());
-			value.put("detail", warning.getDetail());
-			warnings.add(value);
-		}
-		payload.put("safetyWarnings", warnings);
-		payload.put("safetyStatus", answer.getSafetyStatus());
-		payload.put("safetyCheck", answer.getSafetyCheck());
 		payload.put("blocks", Collections.emptyList());
 		payload.put("inputTokens", answer.getInputTokens());
 		payload.put("outputTokens", answer.getOutputTokens());

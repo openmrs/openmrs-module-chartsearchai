@@ -348,6 +348,21 @@ public class ConversationServicePersistenceTest extends BaseModuleContextSensiti
 		assertNull(composed.getAuditLog().getOutputTokens());
 	}
 
+	// The bundled envelope's payload carries no citation list; the audit counts the answer's own, as
+	// saveAuditLog does.
+	@Test
+	public void aBundledTurnAuditsTheReferenceCountOfTheAnswerItWasBuiltFrom() {
+		ClinicalConversation conversation = conversationService.openOrCreate(patient, "bundled",
+				ProviderMode.QUERY_SCOPED);
+		ClinicalConversationTurn turn = conversationService.startTurn(conversation, "bundled-refs", "Question");
+		ChartAnswer source = new ChartAnswer("Answer [1]", Collections.singletonList(
+				new org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference(1, "obs", "obs-uuid",
+						new Date())), 12, 3, 0, Collections.emptyList(), "fullChart", new ReferenceSlice(0, 0));
+		conversationService.finishTurn(turn, TurnResult.done("bundled", ProviderMode.QUERY_SCOPED,
+				AnswerEnvelope.fromPayload(Collections.singletonMap("answer", "Answer [1]"), source)), 5L);
+		assertEquals(1, turn.getAuditLog().getReferenceCount());
+	}
+
 	// One turn has one outcome and at most one audit row, so a second settlement (a cancel racing a finish,
 	// or a retry after a commit timeout) is refused and the first stands.
 	@Test

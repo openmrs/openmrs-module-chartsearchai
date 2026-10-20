@@ -141,9 +141,9 @@ public class BundledClinicalAnswerProviderTest {
 		return new ChartSearchService.ChartAnswer(text, references, 100, 20, 5);
 	}
 
-	@SuppressWarnings("unchecked")
-	private static List<Map<String, Object>> references(AnswerEnvelope answer) {
-		return (List<Map<String, Object>>) answer.getPayload().get("references");
+	/** The references of the answer an envelope was built from; their wire shape is the REST layer's. */
+	private static List<ChartSearchService.RecordReference> references(AnswerEnvelope answer) {
+		return answer.getSource().getReferences();
 	}
 
 	/** Provider with grounding enabled so the full canonical lifecycle (evidence_updated) runs. */
@@ -193,22 +193,22 @@ public class BundledClinicalAnswerProviderTest {
 		assertEquals("Aspirin ", sink.events.get(3).getTextDelta());
 		TurnEvent answerDone = sink.single(TurnEventType.ANSWER_DONE);
 		assertEquals("Aspirin 81mg [1]", answerDone.getAnswer().getText());
-		assertNull(references(answerDone.getAnswer()).get(0).get("grounded"),
+		assertNull(references(answerDone.getAnswer()).get(0).getGrounded(),
 				"answer_done fires before grounding, so verdicts are still null");
 		TurnEvent evidence = sink.single(TurnEventType.EVIDENCE_UPDATED);
-		assertEquals(Boolean.TRUE, references(evidence.getAnswer()).get(0).get("grounded"));
+		assertEquals(Boolean.TRUE, references(evidence.getAnswer()).get(0).getGrounded());
 		TurnEvent terminal = sink.single(TurnEventType.TURN_DONE);
-		assertEquals(Boolean.TRUE, references(terminal.getAnswer()).get(0).get("grounded"),
+		assertEquals(Boolean.TRUE, references(terminal.getAnswer()).get(0).getGrounded(),
 				"turn_done must carry the final grounded envelope");
 
 		assertEquals(TurnEventType.TURN_DONE, result.getTerminalState());
 		assertEquals(BundledClinicalAnswerProvider.PROVIDER_ID, result.getProviderId());
-		assertEquals(Boolean.TRUE, references(result.getAnswer()).get(0).get("grounded"),
+		assertEquals(Boolean.TRUE, references(result.getAnswer()).get(0).getGrounded(),
 				"the result carries the grounded answer");
 		assertEquals(100, result.getAnswer().getPayload().get("inputTokens"));
 		assertEquals(20, result.getAnswer().getPayload().get("outputTokens"));
 		assertEquals(5, result.getAnswer().getPayload().get("cachedTokens"));
-		Map<?, ?> safetyCheck = (Map<?, ?>) result.getAnswer().getPayload().get("safetyCheck");
+		Map<?, ?> safetyCheck = result.getAnswer().getSource().getSafetyCheck();
 		assertEquals("drug_safety.v1", safetyCheck.get("schema_version"));
 		assertEquals("unavailable", safetyCheck.get("status"));
 		assertNull(result.getProblemCode());
@@ -252,10 +252,28 @@ public class BundledClinicalAnswerProviderTest {
 		TurnResult result = provider(service).execute(request(), new CollectingSink(), CancellationSignal.NONE)
 				.toCompletableFuture().get();
 
-		Map<String, Object> reference = references(result.getAnswer()).get(0);
-		assertEquals("reference", reference.get("group"));
-		assertEquals("who-atc", reference.get("source"));
-		assertEquals(3, reference.get("withheldInteractions"));
+		ChartSearchService.RecordReference reference = references(result.getAnswer()).get(0);
+		assertEquals("reference", reference.getGroup());
+		assertEquals("who-atc", reference.getSource());
+		assertEquals(3, reference.getWithheldInteractions());
+	}
+
+	// The wire shape of citations, chips and module statements is the REST layer's alone (groundedForWire,
+	// putModuleStatements); a second serializer here would publish a raw verdict on a reference citation and
+	// chips without their pair extent to any consumer that skipped the controller.
+	@Test
+	public void thePayloadCarriesTheAnswerAndItsAccountingAndNoWireShapeOfItsOwn() throws Exception {
+		ScriptedChartSearchService service = new ScriptedChartSearchService();
+		service.ungrounded = answer("Naproxen [1]", Arrays.asList(referenceWithProvenance(1, null)));
+		service.groundedResult = answer("Naproxen [1]", Arrays.asList(referenceWithProvenance(1, Boolean.FALSE)));
+
+		TurnResult result = provider(service).execute(request(), new CollectingSink(), CancellationSignal.NONE)
+				.toCompletableFuture().get();
+
+		assertEquals(new java.util.LinkedHashSet<String>(Arrays.asList("answer", "blocks", "inputTokens",
+				"outputTokens", "cachedTokens")), result.getAnswer().getPayload().keySet());
+		assertEquals(Boolean.FALSE, references(result.getAnswer()).get(0).getGrounded(),
+				"the verdict stays on the answer the envelope carries, for the REST layer to publish or withhold");
 	}
 
 	@Test
@@ -290,7 +308,7 @@ public class BundledClinicalAnswerProviderTest {
 
 		TurnEvent answerDone = sink.single(TurnEventType.ANSWER_DONE);
 		assertEquals("cached [1]", answerDone.getAnswer().getText());
-		assertEquals(Boolean.TRUE, references(answerDone.getAnswer()).get(0).get("grounded"),
+		assertEquals(Boolean.TRUE, references(answerDone.getAnswer()).get(0).getGrounded(),
 				"a cached answer is already final, so answer_done carries its grounded verdicts");
 		assertFalse(sink.types().contains(TurnEventType.EVIDENCE_UPDATED),
 				"no separate evidence event when the answer arrived final");

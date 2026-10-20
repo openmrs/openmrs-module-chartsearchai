@@ -108,15 +108,26 @@ public class AuditLogSchemaMappingTest {
 		return columns;
 	}
 
-	/** Column names created or added to this table by any packaged changeset. */
+	/** Column names this table has after every packaged changeset, in changelog order: created or added,
+	 *  less any dropped since. */
 	private Set<String> declaredColumns(String table) throws Exception {
 		Set<String> columns = new LinkedHashSet<String>();
 		NodeList all = parse("liquibase.xml").getElementsByTagName("*");
 		for (int i = 0; i < all.getLength(); i++) {
 			Element element = (Element) all.item(i);
 			String name = element.getTagName();
-			if (!("createTable".equals(name) || "addColumn".equals(name))
-					|| !table.equals(element.getAttribute("tableName"))) {
+			if (!table.equals(element.getAttribute("tableName"))) {
+				continue;
+			}
+			if ("dropColumn".equals(name)) {
+				columns.remove(element.getAttribute("columnName"));
+				NodeList dropped = element.getElementsByTagName("column");
+				for (int j = 0; j < dropped.getLength(); j++) {
+					columns.remove(((Element) dropped.item(j)).getAttribute("name"));
+				}
+				continue;
+			}
+			if (!("createTable".equals(name) || "addColumn".equals(name))) {
 				continue;
 			}
 			NodeList declarations = element.getElementsByTagName("column");

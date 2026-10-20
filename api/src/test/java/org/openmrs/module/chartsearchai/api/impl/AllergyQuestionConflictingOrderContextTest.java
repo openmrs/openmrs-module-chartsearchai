@@ -456,15 +456,16 @@ public class AllergyQuestionConflictingOrderContextTest extends BaseModuleContex
 	/**
 	 * Sarah Taylor's "Which steroids is she on?" resolved nothing before the answer — no drug, no class, no finding —
 	 * so the injector handed the chart back unrebuilt and numbered none of her orders, and an answer citing her
-	 * dexamethasone order got no statement. The record each of her orders is, is a fact about her chart, not about a
-	 * finding (ADR Decision 210).
+	 * dexamethasone order got no statement. Since ADR Decision 379 "steroid" names a class, so the case asks a question
+	 * that still resolves nothing: "Which antimalarials is she on?". The record each of her orders is, is a fact about
+	 * her chart, not about a finding (ADR Decision 210).
 	 */
 	@Test
 	public void search_anAnswerNamingTheConflictingOrderStatesItWhereNothingResolvedBeforeTheAnswer() throws IOException {
 		int number = theAspirinOrderRecordNumber(SLICE);
 		String modelAnswer = "Her one steroid-sparing drug is aspirin [" + number + "].";
 
-		ChartAnswer answer = serviceAnswering(modelAnswer).search(patient, "Which steroids is she on?");
+		ChartAnswer answer = serviceAnswering(modelAnswer).search(patient, "Which antimalarials is she on?");
 
 		assertEquals(0, answer.getFindingCitationExtent().getCarried(),
 				"precondition: the pass before the answer carried no finding, so the chart was not rebuilt");
@@ -498,7 +499,7 @@ public class AllergyQuestionConflictingOrderContextTest extends BaseModuleContex
 		String modelAnswer = "Her one steroid-sparing drug is aspirin [" + number + "].";
 
 		ChartAnswer answer = serviceAnswering(modelAnswer, SLICE, records.toArray(new RecordMapping[0])).search(patient,
-			"Which steroids is she on?");
+			"Which antimalarials is she on?");
 
 		assertEquals(0, answer.getFindingCitationExtent().getCarried(), "precondition: the pass before the answer carried "
 				+ "no finding");

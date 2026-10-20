@@ -87,6 +87,19 @@ public class DrugClassProposalTest extends BaseModuleContextSensitiveTest {
 				DrugReferenceTestSupport.activeOrder("order-mtz", "Metronidazole", "Metronidazole")));
 	}
 
+	/** A fluoroquinolone proposed is answered as a class whose ATC group IS it, J01MA (ADR Decision 379): on the 3.7.1
+	 *  standalone "Can I give her a fluoroquinolone?" went to the model for every patient — "The records do not address
+	 *  fluoroquinolones" to Dorothy Odhiambo, recorded allergic to ciprofloxacin. */
+	@Test
+	public void aFluoroquinoloneProposedStatesHerOrdersAndAllergiesInJ01MA() {
+		assertEquals(DrugReferenceInjector.drugClassStatement("fluoroquinolone") + "\n"
+				+ "None of this patient's active medication orders is in that class (ATC group J01MA).\n"
+				+ "Recorded drug allergies in that class (ATC group J01MA): ciprofloxacin.",
+			ask("Can I give her a fluoroquinolone?", DrugReferenceTestSupport.set("ciprofloxacin"),
+				DrugReferenceTestSupport.activeOrder("order-mtz", "Metronidazole", "Metronidazole")).replace("Ciprofloxacin",
+					"ciprofloxacin"));
+	}
+
 	/** A dose stated beside the class is said not checked, as one beside a drug is (ADR Decision 322): "Is it safe to
 	 *  give her a statin 20 mg?" was answered on the 3.7.1 standalone with no word of the dose. */
 	@Test

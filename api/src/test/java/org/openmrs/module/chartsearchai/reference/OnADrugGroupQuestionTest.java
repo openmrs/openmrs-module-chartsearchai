@@ -80,6 +80,38 @@ public class OnADrugGroupQuestionTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/**
+	 * Whether she is on more than one steroid is answered with her orders in the WHO ATC corticosteroid groups, counted by
+	 * ORDER, and "Yes —" only where there are two or more (ADR Decision 379): on the 3.7.1 standalone "Is she on more than
+	 * one steroid?" went to the model for every patient, which told Sarah Taylor, on five corticosteroids, "The records do
+	 * not address steroid use".
+	 */
+	@Test
+	public void whetherSheIsOnMoreThanOneSteroidIsAnsweredWithHerOrdersInTheCorticosteroidGroups() {
+		String question = "Is she on more than one steroid?";
+		assertEquals("Yes — 5 of this patient's active medication orders are in the WHO ATC corticosteroid groups: "
+				+ "Dexamethasone Injection vial 8mg, Hydrocortisone Injection vial 100mg, Prednisone Co 5mg, Pulmicort 90mcg and "
+				+ "Solu-Medrol 125mg/5ml.", ask(question,
+					DrugReferenceTestSupport.activeOrder("order-dex", "Dexamethasone Injection vial 8mg", "Dexamethasone"),
+					DrugReferenceTestSupport.activeOrder("order-hc", "Hydrocortisone Injection vial 100mg", "Hydrocortisone"),
+					DrugReferenceTestSupport.activeOrder("order-pred", "Prednisone Co 5mg", "Prednisone"),
+					DrugReferenceTestSupport.activeOrder("order-bud", "Pulmicort 90mcg", "Budesonide"),
+					DrugReferenceTestSupport.activeOrder("order-mp", "Solu-Medrol 125mg/5ml", "Methylprednisolone"),
+					DrugReferenceTestSupport.activeOrder("order-met", "Metformin", "Metformin")));
+		assertEquals("Yes — 2 of this patient's active medication orders are in the WHO ATC corticosteroid groups: "
+				+ "Dexamethasone (2 orders).", ask(question,
+					DrugReferenceTestSupport.activeOrder("order-dex1", "Dexamethasone", "Dexamethasone"),
+					DrugReferenceTestSupport.activeOrder("order-dex2", "Dexamethasone", "Dexamethasone")));
+		assertEquals("One of this patient's active medication orders is in the WHO ATC corticosteroid groups: Prednisone Co "
+				+ "5mg.", ask(question, DrugReferenceTestSupport.activeOrder("order-pred", "Prednisone Co 5mg", "Prednisone"),
+					DrugReferenceTestSupport.activeOrder("order-met", "Metformin", "Metformin")));
+		assertEquals("None of this patient's active medication orders is in the WHO ATC corticosteroid groups.",
+			ask(question, DrugReferenceTestSupport.activeOrder("order-met", "Metformin", "Metformin")));
+		assertEquals("Yes — one of this patient's active medication orders is in the WHO ATC corticosteroid groups: "
+				+ "Prednisone Co 5mg.", ask("Is she on any steroids?",
+					DrugReferenceTestSupport.activeOrder("order-pred", "Prednisone Co 5mg", "Prednisone")));
+	}
+
 	private static String ask(String question, PatientClinicalContext.ActiveDrugOrder... orders) {
 		Set<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : orders) {

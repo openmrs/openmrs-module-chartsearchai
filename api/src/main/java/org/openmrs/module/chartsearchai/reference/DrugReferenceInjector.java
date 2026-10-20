@@ -1361,16 +1361,22 @@ public class DrugReferenceInjector {
 				&& ChartSearchAiUtils.getBooleanGlobalProperty(
 						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
 						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS)) {
-			List<String> inIt = askedGroup != null
-					? ordersFiledUnder(askedGroup::containsAnyCodeForDuplicateTherapy, orderEntries, context)
-					: ordersFiledUnder(askedAtcGroup, orderEntries, context);
+			// One name per ORDER, so two orders of one drug count as two (ADR Decision 379).
+			List<String> inIt = eachOrderFiledUnder(askedGroup != null ? askedGroup::containsAnyCodeForDuplicateTherapy
+					: codes -> DrugClassMembersStatement.filedUnder(codes, askedAtcGroup), orderEntries, context);
 			if (inIt != null) {
 				String carried = askedGroup != null ? " in the drug group this module carries as " + askedGroup.getName()
-						: " in the ATC group " + askedAtcGroup + " (" + namedClass + ")";
+						: " in the " + DrugClassMembersStatement.groupPhrase(askedAtcGroup)
+								+ (DrugClassMembersStatement.namesSeveralGroups(askedAtcGroup) ? "" : " (" + namedClass + ")");
+				// Whether she is on MORE than one: "Yes —" only for two or more; one is stated, and neither "Yes" nor "No"
+				// (ADR Decision 379).
+				boolean moreThanOne = QueryScopeRouter.asksWhetherSheIsOnMoreThanOneOfADrugClass(question);
+				String named = DrugSafetyValidator.joinPartners(collapsedByName(inIt));
 				moduleAnswer = inIt.isEmpty() ? "None of this patient's active medication orders is" + carried + "."
-						: "Yes — " + (inIt.size() == 1 ? "one of this patient's active medication orders is"
-								: inIt.size() + " of this patient's active medication orders are")
-								+ carried + ": " + DrugSafetyValidator.joinPartners(inIt) + ".";
+						: inIt.size() == 1 ? (moreThanOne ? "One" : "Yes — one") + " of this patient's active medication orders is"
+								+ carried + ": " + named + "."
+						: "Yes — " + inIt.size() + " of this patient's active medication orders are" + carried + ": " + named
+								+ ".";
 			}
 		}
 		// A drug class proposed: the module chooses no drug of it and rates none — it states that the class was not resolved
@@ -7210,19 +7216,34 @@ public class DrugReferenceInjector {
 	 * cannot be said: her orders were not read, or one of them the drug data does not identify (ADR Decision 275).
 	 */
 	private List<String> ordersFiledUnder(String group, List<DrugReference> orderEntries, PatientClinicalContext context) {
-		return ordersFiledUnder(codes -> {
-			for (String code : codes) {
-				if (code.startsWith(group)) {
-					return true;
-				}
-			}
-			return false;
-		}, orderEntries, context);
+		return ordersFiledUnder(codes -> DrugClassMembersStatement.filedUnder(codes, group), orderEntries, context);
 	}
 
 	/** As above, for the class {@code inClass} answers of a set of normalized codes — an ATC group's prefix, or a drug group
 	 *  this module carries (ADR Decision 298). */
 	private List<String> ordersFiledUnder(Predicate<Set<String>> inClass, List<DrugReference> orderEntries,
+			PatientClinicalContext context) {
+		List<String> each = eachOrderFiledUnder(inClass, orderEntries, context);
+		return each == null ? null : collapsedByName(each);
+	}
+
+	/** Each name of {@code each} once, with how many orders it names where that is more than one — <em>"Dexamethasone (2
+	 *  orders)"</em> (ADR Decision 379). */
+	private static List<String> collapsedByName(List<String> each) {
+		Map<String, Integer> counted = new LinkedHashMap<String, Integer>();
+		for (String name : each) {
+			counted.merge(name, 1, Integer::sum);
+		}
+		List<String> named = new ArrayList<String>();
+		for (Map.Entry<String, Integer> name : counted.entrySet()) {
+			named.add(name.getKey() + (name.getValue() > 1 ? " (" + name.getValue() + " orders)" : ""));
+		}
+		return named;
+	}
+
+	/** As {@link #ordersFiledUnder(Predicate, List, PatientClinicalContext)}, one name per ORDER, so two orders of one drug
+	 *  are counted as two (ADR Decision 379). */
+	private List<String> eachOrderFiledUnder(Predicate<Set<String>> inClass, List<DrugReference> orderEntries,
 			PatientClinicalContext context) {
 		if (context == null || !context.chartReadForSafety()) {
 			return null;
@@ -7255,9 +7276,7 @@ public class DrugReferenceInjector {
 			if (!order.hasStarted()) {
 				name += " (" + PatientChartSerializer.scheduledToStart(order.getScheduledStart()) + ")";
 			}
-			if (!filed.contains(name)) {
-				filed.add(name);
-			}
+			filed.add(name);
 		}
 		if (filed.isEmpty() && !DrugSafetyValidator.unresolvedActiveOrders(drugReferenceService, context, entries).isEmpty()) {
 			return null;
@@ -8019,15 +8038,8 @@ public class DrugReferenceInjector {
 				return null;
 			}
 			ordersLine = DrugClassMembersStatement.statement(atc, orders);
-			where = "in that class (ATC group " + atc + ")";
-			allergenInIt = codes -> {
-				for (String code : codes) {
-					if (code.startsWith(atc)) {
-						return true;
-					}
-				}
-				return false;
-			};
+			where = "in that class (" + DrugClassMembersStatement.groupPhrase(atc) + ")";
+			allergenInIt = codes -> DrugClassMembersStatement.filedUnder(codes, atc);
 		} else if (group != null) {
 			List<String> orders = ordersFiledUnder(group::containsAnyCodeForDuplicateTherapy, orderEntries, context);
 			if (orders == null) {

@@ -1650,11 +1650,30 @@ public final class QueryScopeRouter {
 				&& fitsAShape(words(question), ON_A_DRUG_CLASS_SHAPES);
 	}
 
+	/**
+	 * Whether a question asks whether she takes MORE THAN ONE drug of a class, and nothing else — <em>"Is she on more than
+	 * one steroid?"</em> (ADR Decision 379): one of the {@link #asksWhetherSheIsOnADrugClass} shapes, whose answer says
+	 * "Yes" only for two or more.
+	 */
+	public static boolean asksWhetherSheIsOnMoreThanOneOfADrugClass(String question) {
+		return question != null && question.indexOf('?') == question.lastIndexOf('?')
+				&& fitsAShape(words(question), MORE_THAN_ONE_OF_A_DRUG_CLASS_SHAPES);
+	}
+
+	private static final List<Pattern> MORE_THAN_ONE_OF_A_DRUG_CLASS_SHAPES = shapes(
+			// "Is she on more than one steroid?"
+			"(?:is|are) " + SUBJECT + " (?:currently |still )?(?:on|taking|receiving|using) more than one(?: \\p{L}+){1,3}",
+			// "Does she take more than one steroid?"
+			"(?:does|do) " + SUBJECT + " (?:currently |still )?(?:take|use|receive) more than one(?: \\p{L}+){1,3}");
+
 	private static final List<Pattern> ON_A_DRUG_CLASS_SHAPES = shapes(
 			// "Is she on any NSAIDs?", "Is she currently taking an NSAID?"
 			"(?:is|are) " + SUBJECT + " (?:currently |still )?(?:on|taking|receiving|using) (?:any|an?|some)(?: \\p{L}+){1,3}",
 			// "Does she take any NSAIDs?"
-			"(?:does|do) " + SUBJECT + " (?:currently |still )?(?:take|use|receive) (?:any|an?|some)(?: \\p{L}+){1,3}");
+			"(?:does|do) " + SUBJECT + " (?:currently |still )?(?:take|use|receive) (?:any|an?|some)(?: \\p{L}+){1,3}",
+			// "Is she on more than one steroid?" (ADR Decision 379)
+			"(?:is|are) " + SUBJECT + " (?:currently |still )?(?:on|taking|receiving|using) more than one(?: \\p{L}+){1,3}",
+			"(?:does|do) " + SUBJECT + " (?:currently |still )?(?:take|use|receive) more than one(?: \\p{L}+){1,3}");
 
 	private static final String HER_MEDICATIONS = POSSESSIVE + " " + MEDICATIONS;
 

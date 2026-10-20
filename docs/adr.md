@@ -20795,3 +20795,33 @@ medications (Klarizom [n]). What the interaction check relates it to:"*, then ea
 whether it interacts with his medications.
 
 Pinned by `HerOrdersNamedByTheirOwnNamesTest.whetherOneOfHisOrdersNamedByItsOwnNameIsSafeIsAnsweredAsHisMedication`.
+
+## Decision 379: A fluoroquinolone is the class J01MA is, a steroid is answered over the WHO corticosteroid groups, and "more than one" is answered "Yes" only for two
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It extends Decision 368's vocabulary.
+
+### Context
+
+*"Can I give her a fluoroquinolone?"* and *"Is she on more than one steroid?"* went to the model for every patient on the
+3.7.1 standalone: neither class was a term `DrugClassTerms` carries, and *"more than one"* was no shape of
+`QueryScopeRouter.asksWhetherSheIsOnADrugClass`. Dorothy Odhiambo, recorded allergic to ciprofloxacin, was told *"The
+records do not address fluoroquinolones"*, and Sarah Taylor, on five corticosteroids, *"The records do not address steroid
+use"*.
+
+### The decision
+
+*Fluoroquinolone* is a class whose ATC group IS it, J01MA, as Decision 275 admits one. A steroid has no one group: WHO files
+the corticosteroids under every subgroup its index names so — H02, D07A, R03BA, R01AD, S01BA, S02BA, S03BA, A07EA, C05AA,
+D10AA and A01AC — and on the shipped knowledge base, read on 2026-10-20 with `DrugReferenceService.findImpliedByQuery`,
+budesonide, beclometasone and fluticasone carry no H02 code at all, so H02 alone would have told Sarah her Pulmicort is no
+steroid. Both *steroid* and *corticosteroid* are answered over those groups, and the answer names them as *"the WHO ATC
+corticosteroid groups"*, so it never says she is on no steroid of any other kind. The class key carries its groups after
+the class's name, read in one place (`DrugClassMembersStatement.atcPrefixes`, `groupPhrase`).
+
+Whether she is on more than one is its own shape (`asksWhetherSheIsOnMoreThanOneOfADrugClass`), answered *"Yes —"* only
+for two or more orders, one stated with neither *"Yes"* nor *"No"*. Orders are counted as orders: two of one drug are two,
+named once as *"Dexamethasone (2 orders)"* — which every class statement now says, where it named such a drug once.
+
+Pinned by `OnADrugGroupQuestionTest.whetherSheIsOnMoreThanOneSteroidIsAnsweredWithHerOrdersInTheCorticosteroidGroups` and
+`DrugClassProposalTest.aFluoroquinoloneProposedStatesHerOrdersAndAllergiesInJ01MA`.

@@ -133,6 +133,13 @@ final class DrugClassTerms {
 		terms.put("blood thinners", "blood thinner");
 		terms.put("antithrombotic", "blood thinner");
 		terms.put("antithrombotics", "blood thinner");
+		// ADR Decision 379: "Can I give her a fluoroquinolone?" and "Is she on more than one steroid?" went to the model.
+		terms.put("fluoroquinolone", "fluoroquinolone");
+		terms.put("fluoroquinolones", "fluoroquinolone");
+		terms.put("steroid", "steroid");
+		terms.put("steroids", "steroid");
+		terms.put("corticosteroid", "corticosteroid");
+		terms.put("corticosteroids", "corticosteroid");
 		TERMS = Collections.unmodifiableMap(terms);
 	}
 
@@ -155,6 +162,15 @@ final class DrugClassTerms {
 		// B01A, the antithrombotic agents: the anticoagulants and the platelet inhibitors, low-dose aspirin among them,
 		// with the thrombolytics and the prostacyclin analogues WHO files there (ADR Decision 368).
 		groups.put("blood thinner", "B01A");
+		// J01MA, the fluoroquinolones (ADR Decision 379).
+		groups.put("fluoroquinolone", "J01MA");
+		// The corticosteroids WHO files under no one group: every subgroup its index NAMES corticosteroids — systemic,
+		// dermatological, inhaled, nasal, ophthalmic, otological, intestinal, rectal, for acne and for oral use — read with
+		// the shipped knowledge base's atc arrays on 2026-10-20, where budesonide, beclometasone and fluticasone carry no H02
+		// code at all (ADR Decision 379). A steroid question is answered over the corticosteroids, and says so.
+		String corticosteroids = "corticosteroid: H02, D07A, R03BA, R01AD, S01BA, S02BA, S03BA, A07EA, C05AA, D10AA, A01AC";
+		groups.put("corticosteroid", corticosteroids);
+		groups.put("steroid", corticosteroids);
 		ATC_GROUP_OF_CLASS = Collections.unmodifiableMap(groups);
 	}
 

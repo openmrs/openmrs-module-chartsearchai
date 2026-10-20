@@ -9,6 +9,7 @@
  */
 package org.openmrs.module.chartsearchai.api.provider;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
@@ -61,7 +62,7 @@ public final class TurnRequest {
 		this.mode = mode;
 		this.profileId = profileId;
 		this.priorClinicalTurns = priorClinicalTurns == null ? Collections.emptyList()
-				: Collections.unmodifiableList(priorClinicalTurns);
+				: Collections.unmodifiableList(new ArrayList<>(priorClinicalTurns));
 	}
 
 	public Patient getPatient() {

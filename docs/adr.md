@@ -20772,3 +20772,26 @@ listed under *"What this module's drug-safety check found about …"*, or the an
 verdict, since giving it would duplicate what she takes. It fails closed on a finding about anything else.
 
 Pinned by `ProductHeldInPartNamedAsHersTest`.
+
+## Decision 378: Whether his order named by its own name is safe, or what interacts with it, is answered as his medication and never "Yes —"
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It amends
+[Decision 374](#decision-374-whether-his-drug-named-by-a-brand-the-data-does-not-carry-is-safe--or-what-interacts-with-it--is-answered-of-his-order-or-said-to-name-none),
+which answered both wordings as *"Does X interact with his medications?"* is.
+
+### Context
+
+On the 3.7.1 standalone, once Decision 374 was deployed, Michael Turner, on Klarizom and Zolvimix, was told for *"Is his
+klarizom safe?"* *"Yes — Klarizom interacts with this patient's other active medications."* Beside a question whether it
+is safe, "Yes —" reads as a clearance. Decision 374's test pinned only Kevin Brown, on one order, where the two answers
+coincide.
+
+### The decision
+
+Whether it is safe, or what interacts with it, is its own kind of question about one of his orders named by its own name
+(`OneOfHerOrdersAsked.ABOUT_IT`). It is answered as a drug he takes is answered: *"Klarizom is one of this patient's active
+medications (Klarizom [n]). What the interaction check relates it to:"*, then each finding. "Yes —" stays the answer to
+whether it interacts with his medications.
+
+Pinned by `HerOrdersNamedByTheirOwnNamesTest.whetherOneOfHisOrdersNamedByItsOwnNameIsSafeIsAnsweredAsHisMedication`.

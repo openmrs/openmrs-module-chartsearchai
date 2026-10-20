@@ -7177,6 +7177,8 @@ public class DrugReferenceInjector {
 		PROPOSED,
 		/** Whether it interacts with her medications — "Does Zolvimix interact with his medications?". */
 		INTERACTS,
+		/** Whether it is safe, or what interacts with it — "Is his Klarizom safe?" (ADR Decisions 374, 378). */
+		ABOUT_IT,
 		/** Whether to stop it — "Can I stop his Klarizom?" (ADR Decision 335). */
 		STOPPED
 	}
@@ -7192,11 +7194,12 @@ public class DrugReferenceInjector {
 			return null;
 		}
 		List<String> words = wordsMarking(question, named.values());
-		// Whether it is safe, or what interacts with it, asked as whether it interacts (ADR Decision 374).
+		// Whether it is safe, or what interacts with it, answered as her medication and what the check relates it to (ADR
+		// Decisions 374, 378).
 		return QueryScopeRouter.asksWhetherToGiveADrug(words) ? OneOfHerOrdersAsked.PROPOSED
-				: QueryScopeRouter.asksWhetherADrugInteractsWithHerMedications(words)
-						|| QueryScopeRouter.asksWhichOfHerMedicationsInteractWith(words)
-						|| QueryScopeRouter.asksWhetherADrugIsSafeWithHerMedications(words) ? OneOfHerOrdersAsked.INTERACTS
+				: QueryScopeRouter.asksWhetherADrugInteractsWithHerMedications(words) ? OneOfHerOrdersAsked.INTERACTS
+				: QueryScopeRouter.asksWhichOfHerMedicationsInteractWith(words)
+						|| QueryScopeRouter.asksWhetherADrugIsSafeWithHerMedications(words) ? OneOfHerOrdersAsked.ABOUT_IT
 				: QueryScopeRouter.asksWhetherToStopHerDrug(words) ? OneOfHerOrdersAsked.STOPPED : null;
 	}
 
@@ -7424,10 +7427,15 @@ public class DrugReferenceInjector {
 			return String.join("\n", alone);
 		}
 		List<String> lines = findingLines(findings, numbers, relating, orderRecordNumbers, herOrderRecords, true);
+		// Whether it is safe, or what interacts with it: her medication and what the check relates it to — never "Yes —",
+		// which beside "Is his Klarizom safe?" reads as a clearance (ADR Decision 378).
 		lines.add(0, asked == OneOfHerOrdersAsked.PROPOSED
 				? label + OWN_MEDICATION_LEAD + " (" + display + (number == null ? "" : " [" + number + "]")
 						+ "), so adding it would duplicate that order. What the interaction check relates it to:"
-				: "Yes — " + label + " interacts with this patient's other active medications.");
+				: asked == OneOfHerOrdersAsked.ABOUT_IT
+						? label + OWN_MEDICATION_LEAD + " (" + display + (number == null ? "" : " [" + number + "]")
+								+ "). What the interaction check relates it to:"
+						: "Yes — " + label + " interacts with this patient's other active medications.");
 		lines.add(BELOW_FLOOR_SCOPE);
 		return String.join("\n", lines);
 	}

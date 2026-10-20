@@ -9,6 +9,8 @@
  */
 package org.openmrs.module.chartsearchai.reference;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Arrays;
@@ -77,6 +79,26 @@ public class HerOrdersNamedByTheirOwnNamesTest extends BaseModuleContextSensitiv
 		assertTrue(interacts != null && interacts.startsWith("Yes — Zolvimix interacts with this patient's other active "
 				+ "medications.\n"), "was: " + interacts);
 		assertTrue(interacts.contains("\nSimvastatin interacts with active order Clarithromycin — Major."), "was: " + interacts);
+	}
+
+	/**
+	 * Whether one of his orders, named by its own name, is safe, or what interacts with it, is answered as his medication and
+	 * what the check relates it to — never "Yes —", which beside "Is his Klarizom safe?" reads as a clearance (ADR Decision
+	 * 378). On the 3.7.1 standalone Michael Turner was told "Yes — Klarizom interacts with this patient's other active
+	 * medications."
+	 */
+	@Test
+	public void whetherOneOfHisOrdersNamedByItsOwnNameIsSafeIsAnsweredAsHisMedication() {
+		for (String question : Arrays.asList("Is his Klarizom safe?", "What interacts with his Klarizom?")) {
+			String answer = ask(question).getModuleAnswer();
+			assertNotNull(answer, question + " — the module answers");
+			String[] lines = answer.replaceAll("\\[\\d+\\]", "[n]").split("\n");
+			assertEquals("Klarizom is one of this patient's active medications (Klarizom [n]). What the interaction check "
+					+ "relates it to:", lines[0], question + " — was: " + answer);
+			assertTrue(answer.contains("\nSimvastatin interacts with active order Clarithromycin — Major."),
+				question + " — was: " + answer);
+			assertTrue(!answer.contains("Yes —") && !answer.contains("No —"), question + " — was: " + answer);
+		}
 	}
 
 	private static PatientChart ask(String question) {

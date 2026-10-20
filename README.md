@@ -45,6 +45,7 @@ The standalone download above includes the backend module, frontend ESM, and the
 - [Safety-check execution status](#safety-check-execution-status)
 - [Bundled provider integration](#bundled-provider-integration)
 - [Conversation persistence](#conversation-persistence)
+- [Med Agent Hub adapter](#med-agent-hub-adapter)
 - [License](#license)
 
 ## Try it on the demo server
@@ -1175,7 +1176,7 @@ content, independently of `chartsearchai.auditLogRetentionDays`. Both default to
 completion time, or their start time if unfinished. Old empty conversations are
 then removed; independently retained audit rows remain.
 
-### Med Agent Hub adapter
+## Med Agent Hub adapter
 
 `HubClinicalAnswerProvider` relays one configured product-profile request through
 `HttpHubStreamTransport`. It maps the staged Hub events onto the shared lifecycle

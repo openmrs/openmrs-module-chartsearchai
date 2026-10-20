@@ -1140,9 +1140,11 @@ public class LlmInferenceService implements ChartSearchService {
 	private static List<SafetyWarning> aboutTheDrugAsked(List<SafetyWarning> chips, PatientChart chart) {
 		List<SafetyWarning> published = new ArrayList<SafetyWarning>(chips.size());
 		for (SafetyWarning chip : chips) {
+			// And none about none of the drugs the question names (ADR Decision 387).
 			if ((!chip.isAboutADrugOtherThanTheOneProposed() || chip.isAboutAnotherOfHerMedications())
 					&& !DrugReferenceInjector.isAboutGivingTheDrugAHistoryQuestionNames(chip,
-							chart.getHistoryQuestionDrugRows())) {
+							chart.getHistoryQuestionDrugRows())
+					&& !DrugReferenceInjector.isAboutNoneOf(chip, chart.getQuestionSubstances())) {
 				published.add(chip);
 			}
 		}

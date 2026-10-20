@@ -50,10 +50,9 @@ public class ProposalBesideHerOwnConflictsTest extends BaseModuleContextSensitiv
 		String[] lines = answer.split("\n");
 		assertEquals("1 interaction caution for Omeprazole:", lines[0], "was: " + answer);
 		assertEquals(true, lines[1].startsWith("Omeprazole interacts with active order "), "was: " + answer);
-		int apart = Arrays.asList(lines).indexOf(APART);
-		assertEquals(lines.length - 2, apart, "her own conflict closes the answer, was: " + answer);
-		assertEquals(true, lines[apart + 1].startsWith("Acetylsalicylic acid (aspirin) is in the drug group (NSAID) the patient has a"
-				+ " recorded allergy to."), "was: " + answer);
+		// Her aspirin's conflict with her NSAID allergy is about aspirin, which the question does not name (ADR Decision 387).
+		assertEquals(-1, Arrays.asList(lines).indexOf(APART), "nothing about her own conflict, was: " + answer);
+		assertEquals(false, answer.contains("recorded allergy"), "was: " + answer);
 	}
 
 	/** The shipped data lists omeprazole against dexamethasone with no rating, so the proposal's answer is that sentence
@@ -67,11 +66,9 @@ public class ProposalBesideHerOwnConflictsTest extends BaseModuleContextSensitiv
 		String[] lines = answer.split("\n");
 		assertEquals("The interaction data gives no rated reason to withhold Omeprazole: it lists Omeprazole against one of"
 				+ " this patient's orders, with no severity or mechanism on file. [3]", lines[0], "was: " + answer);
-		int apart = Arrays.asList(lines).indexOf(APART);
-		assertEquals(true, apart > 0, "was: " + answer);
-		assertEquals(lines.length - 2, apart, "her own conflict closes the answer, was: " + answer);
-		assertEquals(true, lines[apart + 1].startsWith("The patient has a recorded allergy to Dexamethasone."),
-			"was: " + answer);
+		// Her dexamethasone allergy is about dexamethasone, which the question does not name (ADR Decision 387).
+		assertEquals(-1, Arrays.asList(lines).indexOf(APART), "nothing about her own conflict, was: " + answer);
+		assertEquals(false, answer.contains("recorded allergy"), "was: " + answer);
 	}
 
 	private static String ask(String question, Set<String> allergens, PatientClinicalContext.ActiveDrugOrder... orders) {

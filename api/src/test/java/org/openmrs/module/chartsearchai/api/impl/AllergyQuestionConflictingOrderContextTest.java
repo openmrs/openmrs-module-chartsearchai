@@ -177,6 +177,28 @@ public class AllergyQuestionConflictingOrderContextTest extends BaseModuleContex
 			"precondition: the general allergy question still lists her conflicting order");
 	}
 
+	/**
+	 * A question about one drug carries nothing about her other medications alone — neither in the answer nor as a chip
+	 * (ADR Decision 387). On the 3.7.1 standalone "Is her metronidazole safe?" was answered for Agnes Adams, on aspirin
+	 * and recorded allergic to NSAIDs, with "Found as well, about this patient's other medications:" and her aspirin
+	 * conflict, and a chip about it: nothing about metronidazole.
+	 */
+	@Test
+	public void search_aQuestionAboutOneDrugCarriesNothingAboutHerOtherMedicationsAlone() throws IOException {
+		ChartAnswer answer = serviceAnswering("No interaction with fluconazole is recorded.").search(patient,
+			"Is her fluconazole safe?");
+		assertFalse(answer.getAnswer().contains("Found as well, about this patient's other medications:")
+				|| answer.getAnswer().contains("recorded allergy") || answer.getAnswer().contains(HEADING.trim()),
+			"nothing about her aspirin allergy: " + answer.getAnswer());
+		for (SafetyWarning chip : answer.getSafetyWarnings()) {
+			assertFalse(SafetyWarning.TYPE_CONTRAINDICATION.equals(chip.getType()),
+				"no chip about her aspirin allergy: " + chip.getDetail());
+		}
+		// The drug asked about is what it is about: her aspirin, asked of, keeps its conflict.
+		ChartAnswer aspirin = serviceAnswering(MODEL_ANSWER).search(patient, "Is her aspirin safe?");
+		assertNotNull(theAspirinChip(aspirin), "the chip about the drug the question names");
+	}
+
 	@Test
 	public void search_anAllergyQuestionStatesTheConflictingOrderInTheAnswer() throws IOException {
 		ChartAnswer answer = serviceAnswering(MODEL_ANSWER).search(patient, ALLERGY_QUESTION);

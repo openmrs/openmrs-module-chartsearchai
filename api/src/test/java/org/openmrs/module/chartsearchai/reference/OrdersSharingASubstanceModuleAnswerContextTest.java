@@ -152,15 +152,15 @@ public class OrdersSharingASubstanceModuleAnswerContextTest extends BaseModuleCo
 		String answer = chart.getModuleAnswer();
 		assertNotNull(answer, "a Major licenses the module's No: " + chart.getText());
 		List<String> lines = Arrays.asList(answer.split("\n"));
-		assertEquals(4, lines.size(), "was: " + answer);
+		// Her two isoniazid orders are about isoniazid, which the question does not name (ADR Decision 387).
+		assertEquals(3, lines.size(), "was: " + answer);
 		assertEquals("No — this module's drug-safety check found a reason to withhold Rifampicin (rifampin).",
 			lines.get(0), "the lead, off the Major: " + answer);
 		assertTrue(lines.get(1).startsWith("Rifampicin (rifampin) interacts with active order Pyrazinamide — Major."),
 			"the Major under the No: " + answer);
 		assertTrue(lines.get(2).startsWith("Rifampicin (rifampin) interacts with active order Isoniazid")
 				&& lines.get(2).contains(" — Minor."), "then the proposed drug's caution: " + answer);
-		assertTrue(lines.get(3).startsWith("Isoniazid is in active orders Isoniazid 300mg and Isoniazid 100mg"
-				+ " — possible duplicate therapy."), "then her own orders: " + answer);
+		assertTrue(!answer.contains("possible duplicate therapy"), "and nothing about her own orders: " + answer);
 	}
 
 	private static PatientChart screen(PatientClinicalContext.ActiveDrugOrder... orders) throws IOException {

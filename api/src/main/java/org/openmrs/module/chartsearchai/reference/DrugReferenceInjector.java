@@ -990,6 +990,32 @@ public class DrugReferenceInjector {
 		String twoProposalsAnswer;
 		// A question about a drug: the findings the validator drew apart as about her OTHER medications decide nothing below,
 		// and are stated after the answer (ADR Decision 296). The whole list is restored for what is stamped after it.
+		// And a finding about none of the substances the question names — her other orders' allergies, her own orders sharing
+		// a substance, two of her other orders together — is no answer to it, and is stated nowhere (ADR Decision 387).
+		Set<Object> askedSubstances = new LinkedHashSet<Object>();
+		for (DrugReference entry : questionDrugs) {
+			askedSubstances.add(entry.substanceGroupKey());
+		}
+		// Her own drug asked of is the combination order she takes it in, and its other substances are what that order
+		// carries (ADR Decision 292).
+		if (!askedSubstances.isEmpty()) {
+			for (DrugReference companion : companionsOfHerOwn(drugReferenceService, question, questionDrugs, orderEntries,
+					context)) {
+				askedSubstances.add(companion.substanceGroupKey());
+			}
+		}
+		if (!askedSubstances.isEmpty()) {
+			List<SafetyWarning> related = new ArrayList<SafetyWarning>();
+			List<Integer> relatedNumbers = new ArrayList<Integer>();
+			for (int n = 0; n < findings.size(); n++) {
+				if (!isAboutNoneOf(findings.get(n), askedSubstances)) {
+					related.add(findings.get(n));
+					relatedNumbers.add(findingNumbers.get(n));
+				}
+			}
+			findings = related;
+			findingNumbers = relatedNumbers;
+		}
 		List<SafetyWarning> allFindings = findings;
 		List<Integer> allFindingNumbers = findingNumbers;
 		List<SafetyWarning> apart = new ArrayList<SafetyWarning>();
@@ -1600,6 +1626,8 @@ public class DrugReferenceInjector {
 		injected.markListedDrugsWithNoActiveOrder(listed.stated());
 		// And whether the question states a dose of the drug it asks about, which the findings never weigh (ADR Decision
 		// 274), so LlmInferenceService says after the answer that it was not checked.
+		// And the substances the question names, so the chips it publishes are about them (ADR Decision 387).
+		injected.markQuestionSubstances(askedSubstances);
 		// And a word in its drug place the data has no near name for, stated after the chart answer (ADR Decision 384).
 		injected.markUncheckedWordStatement(moduleAnswer == null ? uncheckedWord : null);
 		injected.markStatesADose(!questionDrugs.isEmpty()
@@ -7010,6 +7038,25 @@ public class DrugReferenceInjector {
 	}
 
 	/** The substances {@code finding}'s subject rows are of. */
+	/**
+	 * Whether {@code finding} is about none of {@code substances} — neither its subject nor any partner it was decided against
+	 * is one of them — where it states either (ADR Decision 387). A finding stating neither is not known to be unrelated, so
+	 * it is never said to be. The one test of whether a finding answers a question naming those substances, for the answer
+	 * the module composes and for the chips a response publishes.
+	 */
+	public static boolean isAboutNoneOf(SafetyWarning finding, Set<Object> substances) {
+		if (substances == null || substances.isEmpty()) {
+			return false;
+		}
+		Set<Object> about = subjectSubstances(finding);
+		for (List<DrugReference> rows : finding.partnerRows().values()) {
+			for (DrugReference row : rows) {
+				about.add(row.substanceGroupKey());
+			}
+		}
+		return !about.isEmpty() && Collections.disjoint(about, substances);
+	}
+
 	private static Set<Object> subjectSubstances(SafetyWarning finding) {
 		Set<Object> about = new HashSet<Object>();
 		for (DrugReference row : finding.subjectRows()) {

@@ -76,10 +76,9 @@ public class UnratedWithholdingProposalTest extends BaseModuleContextSensitiveTe
 					null, null, orders), "Can he take ketoconazole?").getModuleAnswer();
 		assertNotNull(answer, "the module answers");
 		String[] lines = answer.split("\n");
-		assertEquals(4, lines.length, "was: " + answer);
+		// Her two metronidazole orders are about metronidazole, which the question does not name (ADR Decision 387).
+		assertEquals(2, lines.length, "was: " + answer);
 		assertEquals(DrugReferenceInjector.FOUND_LEAD_OPENING + "Ketoconazole:", lines[0], "was: " + answer);
 		assertTrue(lines[1].startsWith("Ketoconazole interacts with active order Metronidazole — Minor."), "was: " + answer);
-		assertEquals(DrugReferenceInjector.ABOUT_HER_OTHER_MEDICATIONS_LEAD, lines[2], "was: " + answer);
-		assertTrue(lines[3].startsWith("Metronidazole is in active orders Metronidazole (2 orders)"), "was: " + answer);
 	}
 }

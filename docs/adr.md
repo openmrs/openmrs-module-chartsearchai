@@ -20992,3 +20992,31 @@ allergy and order). *"Does she have any allergies?"*, *"Is she allergic to anyth
 medications?"* keep Decision 124's statement.
 
 Pinned by `AllergyQuestionConflictingOrderContextTest.search_whetherSheIsAllergicToOneNamedThingIsAnsweredAboutThatThingAlone`.
+
+## Decision 387: A question naming a drug states, and publishes as chips, only what is about a drug it names
+
+**Status: Accepted** (October 2026) — the owner's instruction of 2026-10-20 that an answer carry nothing unrelated to what was
+asked. It narrows Decisions 140, 159, 296 and 370, which stated findings about her other medications after a question about
+a drug.
+
+### Context
+
+Over the full run of 2026-10-20, a question naming a drug was followed by findings about none of the drugs it names: *"Found
+as well, about this patient's other medications:"* in 636 answers to 103 questions — Agnes Adams's NSAID allergy beside her
+aspirin, after *"Is her metronidazole safe?"* — and about 1,450 lines saying two of her own orders share a substance, in 510
+questions — Rose Rifadupla's two TB regimens after *"Is ampicillin safe for him?"* and *"Can he drink alcohol?"*. The chips
+beside those answers carried the same findings. Counted over the module's answers in the run's answer files.
+
+### The decision
+
+Where the question names a drug, a finding whose subject and every partner it was decided against are substances the
+question names none of is no answer to it (`DrugReferenceInjector.isAboutNoneOf`): the injector leaves it out of every answer
+it composes, and `LlmInferenceService` publishes no chip of it, off the substances stamped on the chart
+(`PatientChart.getQuestionSubstances`). A finding stating neither subject nor partner is kept, never said to be unrelated.
+A question naming no drug — a screen of her medications, her allergies as a whole — is unchanged, and so is a finding about
+a drug the question names: her aspirin's conflict with her allergy after *"Is her aspirin safe?"*, the substance two of her
+orders share after a question naming it. What a question about one drug no longer carries is the standing chart's to state,
+on the surface a client asks for (Decision 79).
+
+Pinned by `AllergyQuestionConflictingOrderContextTest.search_aQuestionAboutOneDrugCarriesNothingAboutHerOtherMedicationsAlone`
+and `UnrelatedFindingsLeftOutTest`.

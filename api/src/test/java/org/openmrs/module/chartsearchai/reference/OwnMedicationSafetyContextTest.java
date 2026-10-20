@@ -286,8 +286,8 @@ public class OwnMedicationSafetyContextTest extends BaseModuleContextSensitiveTe
 					+ "other orders, rated Moderate, below the level this module reports as a finding\\. \\[\\d+\\]"),
 				question + " was: " + answer);
 			// Its own two orders are stated once: by the lead ("2 orders"), and as a line where the question did not propose it.
-			assertTrue(answer.matches("(?s).*\nPrednisone is in active orders Prednisone 5mg \\(2 orders\\) — possible "
-					+ "duplicate therapy\\.[^\n]*\\[\\d+\\]\n.*"), question + " was: " + answer);
+			// Her prednisone in two orders is about prednisone, which the question does not name (ADR Decision 387).
+			assertTrue(!answer.contains("Prednisone is in active orders"), question + " was: " + answer);
 			assertEquals(DrugReferenceInjector.BELOW_FLOOR_SCOPE, lines[lines.length - 1], question + " was: " + answer);
 		}
 	}

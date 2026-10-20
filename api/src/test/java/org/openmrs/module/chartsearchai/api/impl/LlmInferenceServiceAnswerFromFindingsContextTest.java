@@ -1112,12 +1112,10 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		assertEquals(0, provider.calls, "no model is asked: " + answer.getAnswer());
 		assertTrue(answer.isAnsweredByTheModule());
 		String[] lines = answer.getAnswer().split("\n");
-		assertEquals(2, lines.length, answer.getAnswer());
+		// Her own orders sharing a substance the question names none of are no answer to it (ADR Decision 387).
+		assertEquals(1, lines.length, answer.getAnswer());
 		assertEquals("The interaction check relates Mebendazole to none of this patient's 3 active medications. ["
 				+ referenceRecordOf(answer, "mebendazole") + "]", lines[0]);
-		assertTrue(lines[1].startsWith(duplicate.drug + " are in active orders ")
-				&& lines[1].contains(" [" + duplicate.index + "]"),
-				"the finding about her own orders is stated as a line, citing its record: " + lines[1]);
 	}
 
 	/**
@@ -1253,10 +1251,8 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		String[] lines = answer.getAnswer().split("\n");
 		assertTrue(lines[0].startsWith("The interaction data gives no rated reason to withhold Nystatin"),
 				answer.getAnswer());
-		String last = lines[lines.length - 1];
-		assertTrue(last.startsWith(duplicate.drug + " are in active orders ")
-				&& last.contains(" [" + duplicate.index + "]"),
-				"the finding about her own orders closes the answer, citing its record: " + answer.getAnswer());
+		// Her own orders sharing a substance the question names none of are no answer to it (ADR Decision 387).
+		assertFalse(answer.getAnswer().contains(" are in active orders "), answer.getAnswer());
 	}
 
 	/**
@@ -1284,13 +1280,13 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		assertEquals(0, provider.calls, "no model is asked: " + answer.getAnswer());
 		assertTrue(answer.isAnsweredByTheModule());
 		String[] lines = answer.getAnswer().split("\\n");
-		assertEquals(3, lines.length, answer.getAnswer());
+		// Her own orders sharing a substance the question names none of are no answer to it (ADR Decision 387).
+		assertEquals(2, lines.length, answer.getAnswer());
 		assertEquals("1 interaction caution for Clarithromycin:", lines[0],
 				"the count is of the cautions about the drug, not of her own orders' duplicate");
 		assertTrue(lines[1].startsWith("Clarithromycin interacts with active order Rifampicin (rifampin) — Moderate.")
 				&& lines[1].contains(" [" + caution.index + "]"), lines[1]);
-		assertTrue(lines[2].startsWith(duplicate.drug + " are in active orders ")
-				&& lines[2].contains(" [" + duplicate.index + "]"), lines[2]);
+		assertFalse(answer.getAnswer().contains(" are in active orders "), answer.getAnswer());
 	}
 
 	/** And a withholding finding still leads with the module's "No", the duplicate stated last — what the "No" did
@@ -1306,8 +1302,8 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		assertEquals(0, provider.calls, "no model is asked: " + answer.getAnswer());
 		String[] lines = answer.getAnswer().split("\\n");
 		assertTrue(lines[0].startsWith(DrugReferenceInjector.WITHHOLD_LEAD_OPENING), answer.getAnswer());
-		assertTrue(lines[lines.length - 1].contains(" are in active orders ")
-				&& lines[lines.length - 1].contains("(2 orders) — possible duplicate therapy"), answer.getAnswer());
+		// Her own orders sharing a substance the question names none of are no answer to it (ADR Decision 387).
+		assertFalse(answer.getAnswer().contains("(2 orders) — possible duplicate therapy"), answer.getAnswer());
 	}
 
 	/**
@@ -1336,15 +1332,13 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		assertEquals(0, provider.calls, "no model is asked: " + answer.getAnswer());
 		assertTrue(answer.isAnsweredByTheModule());
 		String[] lines = answer.getAnswer().split("\n");
-		assertEquals(4, lines.length, answer.getAnswer());
+		// Her own orders sharing a substance the question names none of are no answer to it (ADR Decision 387).
+		assertEquals(3, lines.length, answer.getAnswer());
 		assertEquals("The interaction check relates Mebendazole to none of this patient's 3 active medications. ["
 				+ referenceRecordOf(answer, "mebendazole") + "]", lines[0]);
 		assertEquals("The check of Mebendazole against Zidovudine, also named in the question, raised no finding.",
 				lines[1]);
-		assertTrue(lines[2].startsWith(duplicate.drug + " are in active orders ")
-				&& lines[2].contains("(2 orders) — possible duplicate therapy") && lines[2].contains(" [" + duplicate.index + "]"),
-				"the finding about her own orders is stated as a line, citing its record: " + lines[2]);
-		assertEquals("The chart holds no active order for Zidovudine.", lines[3]);
+		assertEquals("The chart holds no active order for Zidovudine.", lines[2]);
 	}
 
 	/** The same where a finding about the drug proposed answers the list question (ADR Decisions 150, 165): its lines,
@@ -1375,11 +1369,9 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		assertTrue(lines[1].startsWith("Ibuprofen interacts with active order Acetylsalicylic acid (aspirin) — Major."),
 				answer.getAnswer());
 		assertEquals("The chart holds no active order for Zidovudine.", lines[lines.length - 1], answer.getAnswer());
-		String beforeIt = lines[lines.length - 2];
-		assertTrue(beforeIt.startsWith(duplicate.drug + " are in active orders ")
-				&& beforeIt.contains(" [" + duplicate.index + "]"),
-				"the duplicate closes what the module states, before the listed drugs' line: " + answer.getAnswer());
-		for (int i = 1; i < lines.length - 2; i++) {
+		// Her own orders sharing a substance the question names none of are no answer to it (ADR Decision 387).
+		assertFalse(answer.getAnswer().contains(" are in active orders "), answer.getAnswer());
+		for (int i = 1; i < lines.length - 1; i++) {
 			assertTrue(lines[i].startsWith("Ibuprofen interacts with "), "only ibuprofen's own findings above it: "
 					+ answer.getAnswer());
 		}
@@ -2220,8 +2212,10 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 			allergyChip |= SafetyWarning.TYPE_CONTRAINDICATION.equals(chip.getType())
 					&& chip.getDetail().contains("recorded allergy to Warfarin");
 		}
-		assertTrue(allergyChip, "her warfarin allergy against her warfarin order is a chip beside the answer, "
-				+ "chips were: " + answer.getSafetyWarnings());
+		// Her warfarin allergy against her warfarin order is about warfarin, which the question does not name: no chip of it
+		// beside an answer about omeprazole (ADR Decision 387).
+		assertFalse(allergyChip, "no chip about her warfarin allergy beside an answer about omeprazole, chips were: "
+				+ answer.getSafetyWarnings());
 	}
 
 	private static int occurrences(String text, String needle) {

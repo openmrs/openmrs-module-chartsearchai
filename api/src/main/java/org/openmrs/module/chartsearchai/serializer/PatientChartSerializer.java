@@ -14,6 +14,7 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -558,6 +559,9 @@ public class PatientChartSerializer {
 		/** @see #getUncheckedWordStatement() */
 		private String uncheckedWordStatement;
 
+		/** @see #getQuestionSubstances() */
+		private Set<Object> questionSubstances = Collections.emptySet();
+
 		/** @see #getNamedClassAtcGroup() */
 		private String namedClassAtcGroup;
 
@@ -728,6 +732,19 @@ public class PatientChartSerializer {
 		 */
 		public String getUncheckedWordStatement() {
 			return uncheckedWordStatement;
+		}
+
+		/** Records the substances the question names — ADR Decision 387, and {@code DrugReferenceInjector} is the only
+		 *  caller. */
+		public void markQuestionSubstances(Set<Object> substances) {
+			this.questionSubstances = substances == null ? Collections.<Object> emptySet()
+					: Collections.unmodifiableSet(new LinkedHashSet<Object>(substances));
+		}
+
+		/** The substances the question names, as the drug data keys them — ADR Decision 387 — or empty where it names none:
+		 *  a chip about none of them answers nothing it asks, and is not published. */
+		public Set<Object> getQuestionSubstances() {
+			return questionSubstances;
 		}
 
 		/**

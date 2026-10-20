@@ -192,6 +192,29 @@ public class WhichOfHerMedicationsInteractTest extends BaseModuleContextSensitiv
 		}
 	}
 
+	/**
+	 * What interacts with her drug, asked of one she is not on, says she is not, then which of her medications interact
+	 * with it (ADR Decision 369): on the 3.7.1 standalone "What interacts with her lamivudine?" went to the model for every
+	 * patient not on lamivudine, which told Susan Hall, on no medication, "Lamivudine interacts with ketoconazole (Major),
+	 * leflunomide (Major) …" — drugs she does not take.
+	 */
+	@Test
+	public void whatInteractsWithHerDrugSheIsNotOnSaysSoAndWhichOfHersInteract() {
+		List<PatientClinicalContext.ActiveDrugOrder> aspirin = Arrays.asList(
+			DrugReferenceTestSupport.activeOrder("order-asa", "Aspirin 81mg", "Aspirin"));
+		List<PatientClinicalContext.ActiveDrugOrder> nevirapine = Arrays.asList(
+			DrugReferenceTestSupport.activeOrder("order-nvp", "Nevirapine 200mg", "Nevirapine"));
+		List<PatientClinicalContext.ActiveDrugOrder> none = Arrays.<PatientClinicalContext.ActiveDrugOrder> asList();
+		for (List<PatientClinicalContext.ActiveDrugOrder> orders : Arrays.asList(aspirin, nevirapine)) {
+			String which = ask("Which of her medications interact with rifampicin?", orders);
+			assertNotNull(which, "precondition: " + orders);
+			assertEquals("Rifampicin (rifampin)" + DrugReferenceInjector.NOT_HER_MEDICATION + "\n" + mask(which),
+				mask(ask("What interacts with her rifampicin?", orders)), String.valueOf(orders));
+		}
+		assertEquals(mask(ask("Which of her medications interact with rifampicin?", none)),
+			mask(ask("What interacts with her rifampicin?", none)), "no orders");
+	}
+
 	private static String mask(String answer) {
 		return answer == null ? null : answer.replaceAll("\\[\\d+\\]", "[n]");
 	}

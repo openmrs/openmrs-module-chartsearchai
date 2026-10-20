@@ -505,7 +505,10 @@ public final class QueryScopeRouter {
 	private static final List<Pattern> WHICH_OF_HER_MEDICATIONS_INTERACT_SHAPES = shapes(
 			"(?:which|what) (?:of )?" + POSSESSIVE + " (?:other |current |active )?(?:medications|meds|medicines|drugs|"
 					+ "prescriptions) (?:interact|interacts|interfere|interferes) with " + D,
-			"which of " + POSSESSIVE + " (?:medications|meds|medicines|drugs) (?:is|are) the problems? with " + D);
+			"which of " + POSSESSIVE + " (?:medications|meds|medicines|drugs) (?:is|are) the problems? with " + D,
+			// "What interacts with her lamivudine?" — which of hers interact with it, of a drug named as hers (ADR Decision
+			// 369)
+			"what (?:drugs |medications |medicines |meds )?(?:interacts?|interferes?) with " + POSSESSIVE + " " + D);
 
 	/** Whether a question asks which of her medications interact with its one drug — {@link
 	 *  #WHICH_OF_HER_MEDICATIONS_INTERACT_SHAPES} (ADR Decision 319). Fail-CLOSED as {@link #asksWhetherToGiveADrug} is. */

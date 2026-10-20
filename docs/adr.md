@@ -20558,3 +20558,24 @@ carries, is answered with her orders in it: *"Yes — 2 of this patient's active
 inhibitors are answered so too.
 
 Pinned by `OnADrugGroupQuestionTest.whetherSheIsOnABloodThinnerIsAnsweredWithHerOrdersInItsAtcGroup`.
+
+## Decision 369: What interacts with her drug, asked of one she is not on, says she is not and which of hers interact with it
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It gives [Decision 319](#decision-319-which-of-her-medications-interact-with-a-drug-is-answered-with-the-findings-and-whether-anything-she-takes-interacts-with-it-as-whether-it-interacts)'s *which* question the
+wording [Decision 301](#decision-301-whether-her-own-drug-is-safe-and-what-interacts-with-it-is-answered-as-her-own-medication) admits only of her own drug.
+
+### Context
+
+*"What interacts with her lamivudine?"* was the module's only where she takes lamivudine. Of a patient who does not, the
+model answered — on the 3.7.1 standalone 41 of 45, among them Susan Hall, on no medication, told *"Lamivudine interacts
+with ketoconazole (Major), leflunomide (Major) …"*, drugs she does not take.
+
+### The decision
+
+*"What (drugs) interact(s) with her X?"* is one of `WHICH_OF_HER_MEDICATIONS_INTERACT_SHAPES`: of a drug she is not on it is
+answered as *"Which of her medications interact with X?"* is, after *"X is not one of this patient's active
+medications."* ([Decision 315](#decision-315-a-drug-the-question-names-as-hers-and-she-is-not-on-it-is-said-so-before-whatever-the-module-answers)); of her own drug, as before.
+
+Pinned by `WhichOfHerMedicationsInteractTest.whatInteractsWithHerDrugSheIsNotOnSaysSoAndWhichOfHersInteract`.
+

@@ -910,6 +910,21 @@ public final class QueryScopeRouter {
 			CONTINUE_HER_D_AS_SHE, "is " + POSSESSIVE + " " + D + " (?:safe|ok|okay|appropriate)(?: for " + PATIENT + ")? to "
 					+ "(?:continue|keep taking)(?: now)?");
 
+	/** "Should she keep taking both aspirin and Advil?", "Can I continue her aspirin and her Advil?", "Is it safe to keep
+	 *  giving her aspirin and Advil?" — whether to continue TWO drugs (ADR Decision 380). */
+	private static final List<Pattern> CONTINUE_BOTH_SHAPES = shapes(
+			"(?:can|could|may|should) " + SUBJECT + " (?:continue|keep taking|keep on) (?:both )?" + HER_D + " and " + HER_D
+					+ "(?: together)?(?: now)?",
+			"(?:can|could|may|should) (?:i|we) (?:safely )?(?:continue|keep giving) (?:" + PATIENT + " )?(?:both )?" + HER_D
+					+ " and " + HER_D + "(?: together)?(?: now)?",
+			"is it (?:safe|ok|okay|alright|appropriate|fine) (?:for " + PATIENT + " )?to (?:continue|keep (?:giving|taking)) "
+					+ "(?:" + PATIENT + " )?(?:both )?" + HER_D + " and " + HER_D + "(?: together)?(?: now)?");
+
+	/** Whether a question asks whether to continue its TWO drugs, and nothing else (ADR Decision 380). Fail-CLOSED. */
+	public static boolean asksWhetherToContinueBothDrugs(List<String> wordsWithTheDrugsMarked) {
+		return fitsAShape(wordsWithTheDrugsMarked, CONTINUE_BOTH_SHAPES);
+	}
+
 	/** Whether a question asks whether to continue its one drug, named as hers (ADR Decision 341). Fail-CLOSED. */
 	public static boolean asksWhetherToContinueHerDrug(List<String> wordsWithTheDrugMarked) {
 		return fitsAShape(wordsWithTheDrugMarked, CONTINUE_HER_DRUG_SHAPES);

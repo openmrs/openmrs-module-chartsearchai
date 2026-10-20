@@ -1036,8 +1036,18 @@ public class DrugReferenceInjector {
 								: orderRecordNumbers(findingRecords != null ? findingRecords : new DrugOrderRecords(mappings),
 										context),
 						orderEntries, context);
+		// Whether to keep taking both of two drugs, one or neither of them hers: which she is not on, and what relates the two
+		// (ADR Decision 380). Both hers is Decision 203's answer, below.
+		String continuingTwo = nothingToStop != null || heldInPart != null ? null
+				: composeContinuingTwo(question, questionDrugs, screenedSubstances, findings, findingNumbers, orderRecordNumbers,
+						!orderRecordNumbers.isEmpty() ? orderRecordNumbers
+								: orderRecordNumbers(findingRecords != null ? findingRecords : new DrugOrderRecords(mappings),
+										context),
+						orderEntries, context);
 		if (heldInPart != null) {
 			moduleAnswer = heldInPart;
+		} else if (continuingTwo != null) {
+			moduleAnswer = continuingTwo;
 		} else if (nothingToStop != null) {
 			moduleAnswer = nothingToStop;
 		} else if (againstHerAllergies != null) {
@@ -6069,8 +6079,10 @@ public class DrugReferenceInjector {
 		List<Integer> relating = new ArrayList<Integer>();
 		// Each drug as the question names it — a combination's name one of the two (ADR Decision 272).
 		List<AskedDrug> asked = askedDrugs(question, questionDrugs, null, false);
+		// Or whether to keep taking both (ADR Decision 380).
 		if (asked.size() != 2 || !asked.get(0).isHers(herSubstances) || !asked.get(1).isHers(herSubstances)
-				|| !QueryScopeRouter.asksAboutTwoDrugsTogether(wordsBesideItsNames(question, questionDrugs))) {
+				|| !QueryScopeRouter.asksAboutTwoDrugsTogether(wordsBesideItsNames(question, questionDrugs))
+						&& !QueryScopeRouter.asksWhetherToContinueBothDrugs(wordsBesideItsNames(question, questionDrugs))) {
 			return relating;
 		}
 		List<Set<Object>> sides = Arrays.asList(ofHerOrders(asked.get(0), orderEntries, context),
@@ -7900,6 +7912,63 @@ public class DrugReferenceInjector {
 		lines.add(FOUND_LEAD_OPENING + product + ":");
 		lines.addAll(already);
 		lines.addAll(others);
+		return String.join("\n", lines);
+	}
+
+	/**
+	 * The module's answer to whether to keep taking both of two drugs, one or neither of them hers (ADR Decision 380), or
+	 * {@code null}: each in the order the question names them, hers as one of her active medications with its orders, the
+	 * other as {@link #NO_ORDER_TO_CONTINUE} says; then, under <em>"What the interaction check relates between them:"</em>,
+	 * each finding relating the two, and the scope. Never a verdict: the model told patients on neither "No — she should not
+	 * take both aspirin and Advil". Both hers is {@link #composeTwoOfHerOwn}'s. Fail-closed: her orders read, two drugs, and
+	 * every one of hers started.
+	 */
+	private String composeContinuingTwo(String question, List<DrugReference> questionDrugs, Set<Object> herSubstances,
+			List<SafetyWarning> findings, List<Integer> numbers, Map<String, Integer> orderRecordNumbers,
+			Map<String, Integer> herOrderRecords, List<DrugReference> orderEntries, PatientClinicalContext context) {
+		if (questionDrugs.isEmpty() || context == null || !context.activeDrugOrdersRead()
+				|| !ChartSearchAiUtils.getBooleanGlobalProperty(ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
+						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS)
+				|| !QueryScopeRouter.asksWhetherToContinueBothDrugs(wordsBesideItsNames(question, questionDrugs))) {
+			return null;
+		}
+		List<AskedDrug> asked = askedDrugs(question, questionDrugs, context, true);
+		if (asked.size() != 2 || asked.get(0).isHers(herSubstances) && asked.get(1).isHers(herSubstances)) {
+			return null;
+		}
+		List<String> lines = new ArrayList<String>();
+		for (AskedDrug drug : asked) {
+			if (drug.isHers(herSubstances)) {
+				String orders = herStartedOrdersOf(drug, orderEntries, context, herOrderRecords);
+				if (orders.isEmpty()) {
+					return null;
+				}
+				lines.add(drug.label + OWN_MEDICATION_LEAD + orders + ".");
+			} else if (Collections.disjoint(drug.substances, herSubstances)) {
+				lines.add(drug.label + NO_ORDER_TO_CONTINUE);
+			} else {
+				// A combination she takes only some of is Decision 377's, which names what of it she takes.
+				return null;
+			}
+		}
+		List<Integer> between = new ArrayList<Integer>();
+		for (int i = 0; i < findings.size(); i++) {
+			SafetyWarning finding = findings.get(i);
+			// The question-pair arm's subject rows are of both drugs; the drug-in-play arm's of one, its partner the other.
+			Set<Object> about = subjectSubstances(finding);
+			if (SafetyWarning.TYPE_INTERACTION.equals(finding.getType()) && !finding.statesOrdersSharingASubstance()
+					&& (!Collections.disjoint(about, asked.get(0).substances)
+							&& !Collections.disjoint(about, asked.get(1).substances)
+							|| isAbout(finding, asked.get(0).substances) && namesAPartnerOf(finding, asked.get(1).substances)
+							|| isAbout(finding, asked.get(1).substances) && namesAPartnerOf(finding, asked.get(0).substances))) {
+				between.add(i);
+			}
+		}
+		if (!between.isEmpty()) {
+			lines.add("What the interaction check relates between them:");
+			lines.addAll(findingLines(findings, numbers, between, orderRecordNumbers, herOrderRecords, true));
+			lines.add(BELOW_FLOOR_SCOPE);
+		}
 		return String.join("\n", lines);
 	}
 

@@ -11,6 +11,7 @@ package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -67,6 +68,55 @@ public class ContinuingHerDrugQuestionTest extends BaseModuleContextSensitiveTes
 				assertEquals("Acetylsalicylic acid (aspirin) is not one of this patient's active medications, so there is no "
 						+ "order of it to continue.", ask(question, orders), question + " / " + orders);
 			}
+		}
+	}
+
+	private static final String KEEP_BOTH = "Should she keep taking both aspirin and Advil?";
+
+	/**
+	 * Whether she should keep taking both of two drugs is answered as two of her own asked about together where both are
+	 * hers, and otherwise by saying which she is not on — no order of it to continue — then what relates the two, never a
+	 * verdict (ADR Decision 380). On the 3.7.1 standalone "Should she keep taking both aspirin and Advil?" went to the model
+	 * for every patient, which told patients on neither "No — she should not take both aspirin and Advil".
+	 */
+	@Test
+	public void keepingBothOfTwoDrugsSheTakesIsAnsweredAsHerTwoTogether() {
+		String answer = ask(KEEP_BOTH, Arrays.asList(
+			DrugReferenceTestSupport.activeOrder("order-asa", "Aspirin 81mg", "Aspirin"),
+			DrugReferenceTestSupport.activeOrder("order-ibu", "Advil 400mg", "Ibuprofen")));
+		assertNotNull(answer, "the module answers");
+		assertTrue(answer.startsWith("Acetylsalicylic acid (aspirin) (Aspirin 81mg [n]) and Ibuprofen (Advil 400mg [n])"
+				+ DrugReferenceInjector.TWO_OF_HER_OWN_LEAD + "\n"), "was: " + answer);
+		assertTrue(answer.contains("— Major."), "what relates them: " + answer);
+		assertTrue(!answer.contains("No —") && !answer.contains("Yes —"), "no verdict: " + answer);
+	}
+
+	@Test
+	public void keepingBothOfTwoDrugsSheIsNotOnBothOfSaysWhichSheIsNotOn() {
+		String one = ask(KEEP_BOTH, Arrays.asList(
+			DrugReferenceTestSupport.activeOrder("order-asa", "Aspirin 81mg", "Aspirin")));
+		assertNotNull(one, "the module answers");
+		String[] lines = one.split("\n");
+		assertEquals("Acetylsalicylic acid (aspirin) is one of this patient's active medications (Aspirin 81mg [n]).", lines[0],
+			one);
+		assertEquals("Ibuprofen is not one of this patient's active medications, so there is no order of it to continue.",
+			lines[1], one);
+		assertEquals("What the interaction check relates between them:", lines[2], one);
+		assertTrue(lines[3].contains("— Major."), one);
+
+		String neither = ask(KEEP_BOTH, Arrays.asList(
+			DrugReferenceTestSupport.activeOrder("order-nvp", "Nevirapine 200mg", "Nevirapine")));
+		assertNotNull(neither, "the module answers");
+		lines = neither.split("\n");
+		assertEquals("Acetylsalicylic acid (aspirin) is not one of this patient's active medications, so there is no order of "
+				+ "it to continue.", lines[0], neither);
+		assertEquals("Ibuprofen is not one of this patient's active medications, so there is no order of it to continue.",
+			lines[1], neither);
+		assertEquals("What the interaction check relates between them:", lines[2], neither);
+		assertTrue(lines[3].contains("— Major."), neither);
+		for (String answer : Arrays.asList(one, neither)) {
+			assertTrue(!answer.contains("No —") && !answer.contains("Yes —") && !answer.contains("can be given"),
+				"no verdict: " + answer);
 		}
 	}
 

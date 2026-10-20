@@ -20825,3 +20825,25 @@ named once as *"Dexamethasone (2 orders)"* — which every class statement now s
 
 Pinned by `OnADrugGroupQuestionTest.whetherSheIsOnMoreThanOneSteroidIsAnsweredWithHerOrdersInTheCorticosteroidGroups` and
 `DrugClassProposalTest.aFluoroquinoloneProposedStatesHerOrdersAndAllergiesInJ01MA`.
+
+## Decision 380: Whether to keep taking both of two drugs is answered by which she takes, and what relates them, never a verdict
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It carries Decision 341 from one drug to two.
+
+### Context
+
+*"Should she keep taking both aspirin and Advil?"* went to the model for every patient on the 3.7.1 standalone, none of
+whom takes both: every answer was a verdict — *"No — she should not take both aspirin and Advil"* — told to patients on
+neither drug as though they were.
+
+### The decision
+
+Whether to continue two drugs is its own shape (`QueryScopeRouter.asksWhetherToContinueBothDrugs`). Where both are hers it
+is Decision 203's answer: both among her active medications, and what the interaction check relates between them. Otherwise
+each is named in the question's order — hers as one of her active medications with its orders, the other as having no order
+of it to continue — and then what the interaction check relates between the two (`composeContinuingTwo`). Never a verdict,
+and a combination she takes only some of is left to Decision 377.
+
+Pinned by `ContinuingHerDrugQuestionTest.keepingBothOfTwoDrugsSheTakesIsAnsweredAsHerTwoTogether` and
+`.keepingBothOfTwoDrugsSheIsNotOnBothOfSaysWhichSheIsNotOn`.

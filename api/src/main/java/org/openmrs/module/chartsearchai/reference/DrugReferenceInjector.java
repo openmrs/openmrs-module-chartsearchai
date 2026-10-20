@@ -1231,15 +1231,21 @@ public class DrugReferenceInjector {
 			PairChipExtent extent = product == null ? pairExtent.stated() : productExtent(pairExtent, questionDrugs);
 			// And a question whether it interacts with her medications, or which of them it interacts with: which orders
 			// the data lists it against, and how rated, with no word on withholding (ADR Decision 320).
-			boolean relates = !proposes && asksWhetherItInteracts(question, questionDrugs);
+			// And whether she is on a drug she is not on, answered as whether it interacts, after saying she is not (ADR
+			// Decision 365).
+			boolean onIt = !proposes && asksWhetherSheIsOnIt(question, questionDrugs)
+					&& !askedDrugs(question, questionDrugs, context, false).isEmpty()
+					&& !askedDrugs(question, questionDrugs, context, false).get(0).isHers(screenedSubstances);
+			boolean relates = !proposes && (asksWhetherItInteracts(question, questionDrugs) || onIt);
 			moduleAnswer = composeFromBelowFloor(proposes, relates, questionDrugs, screenedSubstances, extent, mappings,
 					context, product);
 			if (moduleAnswer == null) {
 				// A question whether the drug interacts with her medications is answered where the check related it to
 				// none of them: "relates X to none of …" answers it as it answers a proposal (ADR Decision 181). Not
 				// below the floor, whose sentence is about withholding and leaves "does it interact?" unanswered.
-				moduleAnswer = composeFromNoPair(proposes || asksWhetherItInteracts(question, questionDrugs), questionDrugs, screenedSubstances, orderEntries,
-						extent, mappings, matched, context, reading.states(), unidentified.size(), product);
+				moduleAnswer = composeFromNoPair(proposes || asksWhetherItInteracts(question, questionDrugs) || onIt, questionDrugs,
+						screenedSubstances, orderEntries, extent, mappings, matched, context, reading.states(), unidentified.size(),
+						product);
 			}
 			if (moduleAnswer == null) {
 				moduleAnswer = composeFromNoActiveOrders(proposes || relates, questionDrugs, mappings, matched, context,
@@ -1248,6 +1254,10 @@ public class DrugReferenceInjector {
 			if (moduleAnswer == null) {
 				moduleAnswer = composeFromNoIdentifiedOrders(proposes, questionDrugs, screenedSubstances, mappings, matched,
 						context, reading.states(), unidentified.size(), product);
+			}
+			if (moduleAnswer != null && onIt && !context.getActiveDrugOrders().isEmpty()) {
+				moduleAnswer = askedDrugs(question, questionDrugs, context, false).get(0).label + NOT_HER_MEDICATION + "\n"
+						+ moduleAnswer;
 			}
 			// A finding that her own orders share a substance says nothing about the drug proposed, so it does not
 			// stop the answer; it is stated after it (ADR Decision 159).

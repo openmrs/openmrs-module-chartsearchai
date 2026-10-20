@@ -20471,3 +20471,26 @@ clearance.
 weighed.
 
 Pinned by `TerseDrugQuestionWordingsTest.aConditionNamedByASubstanceIsAPurpose`.
+
+## Decision 365: Whether she is on a drug she is not on says she is not, whatever the check found
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It completes [Decision 287](#decision-287-whether-she-is-on-a-drug-none-of-her-orders-carries-is-answered-that-she-is-not-then-with-what-the-check-found) for a drug no rated
+finding relates to her orders.
+
+### Context
+
+Decision 287 answered *"Is she on X?"*, of a drug she is not on, where a finding relates X to her orders: that she is
+not, then the findings. Where none did — no active order, rows below the severity floor, or nothing at all — the model
+answered: on the 3.7.1 standalone *"Is she on lithium?"* told Mogan Kamwara and seven others *"The records do not address
+Lithium"*, and *"Is the patient on tenofovir?"* told 31 of 45 the same of tenofovir, though their orders, read, hold
+none.
+
+### The decision
+
+Such a question is answered as *"Does X interact with her medications?"* is where no rated finding relates it — the rows
+listed below the floor, that the check relates it to none of her orders, or that she has no order — after *"X is not one
+of this patient's active medications."* where she has any. With no order at all, *"This patient has no active medication
+orders"* says it.
+
+Pinned by `WhichOfHerMedicationsInteractTest.whetherSheIsOnADrugSheIsNotOnSaysSoWhateverTheCheckFound`.

@@ -172,6 +172,26 @@ public class WhichOfHerMedicationsInteractTest extends BaseModuleContextSensitiv
 		}
 	}
 
+	/**
+	 * Whether she is on a drug she is not on, with no rated finding relating it to her orders, says she is not and what the
+	 * check found (ADR Decision 365): on the 3.7.1 standalone "Is she on lithium?" went to the model wherever no such finding
+	 * was raised, which told Mogan Kamwara and seven others "The records do not address Lithium" — though her orders, read,
+	 * hold none.
+	 */
+	@Test
+	public void whetherSheIsOnADrugSheIsNotOnSaysSoWhateverTheCheckFound() {
+		List<PatientClinicalContext.ActiveDrugOrder> aspirin = Arrays.asList(
+			DrugReferenceTestSupport.activeOrder("order-asa", "Aspirin 81mg", "Aspirin"));
+		List<PatientClinicalContext.ActiveDrugOrder> none = Arrays.<PatientClinicalContext.ActiveDrugOrder> asList();
+		for (String question : Arrays.asList("Is she on rifampicin?", "Is the patient on rifampicin?",
+				"Is she taking rifampicin?", "Is rifampicin one of her medications?")) {
+			assertEquals("Rifampicin (rifampin)" + DrugReferenceInjector.NOT_HER_MEDICATION + "\n"
+					+ mask(ask("Does rifampicin interact with her medications?", aspirin)), mask(ask(question, aspirin)), question);
+			assertEquals(mask(ask("Does rifampicin interact with her medications?", none)), mask(ask(question, none)),
+				question + " / no orders");
+		}
+	}
+
 	private static String mask(String answer) {
 		return answer == null ? null : answer.replaceAll("\\[\\d+\\]", "[n]");
 	}

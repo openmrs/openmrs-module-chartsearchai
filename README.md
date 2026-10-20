@@ -1061,11 +1061,12 @@ Limitation codes state the cause. `unavailable` carries one of:
 
 `limited` carries one or more of:
 
-- `source_data_partially_invalid` and `cross_reactivity_data_partially_invalid`: the drug
-  reference file or the cross-reactivity groups file loaded with a finding the loader did not
-  repair (`GET /chartsearchai/drugreferencestatus` lists them). The finding concerns the loaded
-  file, not necessarily a drug this answer screened, and the shipped DDInter data has such
-  findings, so a default install reports `limited`;
+- `source_data_partially_invalid`: the drug reference file loaded with a finding the loader did
+  not repair (`GET /chartsearchai/drugreferencestatus` lists them) that bears on this answer: one
+  about the file or the configuration, or one about entries of a drug this answer screened. A
+  finding about other drugs does not limit it;
+- `cross_reactivity_data_partially_invalid`: the cross-reactivity groups file loaded with a
+  finding the loader did not repair;
 - `checks_partially_disabled`: one or two sub-checks are switched off;
 - `mapping_incomplete`: an active order could not be read or resolved to a reference entry;
 - `no_applicable_check`: this answer triggered no applicable check;

@@ -201,11 +201,26 @@ public class DrugSafetyValidator {
 	/** Completeness measured by the same invocation that produces the warnings, never shared state. */
 	private static final class SafetyCoverage {
 		private final Set<String> issues = new LinkedHashSet<String>();
+		private final List<DrugReferenceValidity.Finding> entryFindings = new ArrayList<DrugReferenceValidity.Finding>();
 		private boolean unavailable;
 		private boolean noCheckEnabled;
 
 		void limited(String issue) {
 			issues.add(issue);
+		}
+
+		/** A loader finding about entries, which limits this check only if the pass screens one of them. */
+		void limitedWhereScreened(DrugReferenceValidity.Finding finding) {
+			entryFindings.add(finding);
+		}
+
+		/** The substances this pass screened, keyed as {@link DrugReference#substanceGroupKey()} keys them. */
+		void screened(Set<Object> substances) {
+			for (DrugReferenceValidity.Finding finding : entryFindings) {
+				if (finding.concernsAnyOf(substances)) {
+					limited("source_data_partially_invalid");
+				}
+			}
 		}
 
 		void unavailable(String issue) {
@@ -432,7 +447,14 @@ public class DrugSafetyValidator {
 				coverage.unavailable("source_unavailable");
 			}
 			for (DrugReferenceValidity.Finding finding : load.getFindings()) {
-				if (finding.getRemedy() != DrugReferenceValidity.Remedy.REPAIRED) {
+				if (finding.getRemedy() == DrugReferenceValidity.Remedy.REPAIRED) {
+					continue;
+				}
+				// A finding about the document or the configuration bears on every screen; one about entries
+				// only on a screen of their substances, which the pass decides once it has resolved them.
+				if (finding.isAboutEntries()) {
+					coverage.limitedWhereScreened(finding);
+				} else {
 					coverage.limited("source_data_partially_invalid");
 				}
 			}
@@ -1014,6 +1036,7 @@ public class DrugSafetyValidator {
 		// by every concurrent request.
 		Map<Object, List<DrugReference>> resolvedRows = resolvedSubstanceRows(inPlay, orderEntries);
 		if (coverage != null) {
+			coverage.screened(resolvedRows.keySet());
 			if (!warnDose && !warnInteractions && !warnContra) {
 				coverage.noCheckEnabled();
 			} else if (!warnDose || !warnInteractions || !warnContra) {

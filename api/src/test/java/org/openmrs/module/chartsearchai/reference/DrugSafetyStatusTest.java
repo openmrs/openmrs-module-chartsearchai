@@ -33,6 +33,8 @@ import org.openmrs.util.PrivilegeConstants;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
 /** Verifies the shared checked, limited, and unavailable safety-status contract
  * through the public patient entry point and real OpenMRS configuration. */
@@ -286,6 +288,49 @@ public class DrugSafetyStatusTest extends BaseModuleContextSensitiveTest {
 	}
 
 	@Test
+	public void aDefectTheLoaderReportsOnAnotherDrugDoesNotLimitTheCheckOfThisOne() throws IOException {
+		prepareCompletePatient();
+		loadTheBundledEntriesWith(null, "{\"id\":\"zorblatine\",\"name\":\"Zorblatine\","
+				+ "\"aliases\":[\"zorblatine\",\" \"],\"atcCodes\":[],\"interactions\":[],\"contraindications\":[]}");
+		assertTrue(referenceService.getLoadStatus().getFindings().stream()
+				.anyMatch(f -> DrugReferenceValidity.BLANK_ALIAS.equals(f.getRule())));
+		DrugSafetyValidator.SafetyCheckResult result = validate(patient);
+		assertEquals("checked", result.getStatus(), result.getIssues().toString());
+		assertTrue(result.getIssues().isEmpty());
+	}
+
+	@Test
+	public void aDefectTheLoaderReportsOnTheScreenedDrugLimitsItsCheck() throws IOException {
+		prepareCompletePatient();
+		loadTheBundledEntriesWith("ibuprofen", null);
+		DrugSafetyValidator.SafetyCheckResult result = validate(patient);
+		assertEquals("limited", result.getStatus());
+		assertEquals(Collections.singletonList("source_data_partially_invalid"), result.getIssues());
+	}
+
+	/** The bundled dataset as an operator file, optionally with a blank alias on one entry and one entry more. */
+	private void loadTheBundledEntriesWith(String blankAliasOn, String extraEntry) throws IOException {
+		ObjectMapper mapper = new ObjectMapper();
+		ObjectNode dataset;
+		try (InputStream input = DrugSafetyStatusTest.class.getResourceAsStream("/chartsearchai/drug-reference.json")) {
+			dataset = (ObjectNode) mapper.readTree(input);
+		}
+		ArrayNode entries = (ArrayNode) dataset.get("entries");
+		for (JsonNode entry : entries) {
+			if (entry.path("id").asText().equals(blankAliasOn)) {
+				((ArrayNode) entry.get("aliases")).add(" ");
+			}
+		}
+		if (extraEntry != null) {
+			entries.add(mapper.readTree(extraEntry));
+		}
+		set(ChartSearchAiConstants.GP_DRUG_REFERENCE_DATA_FILE_PATH, DrugReferenceTestSupport.writeDatasetToAppData(
+				"status-bundled-with-a-defect.json", mapper.writeValueAsString(dataset), created));
+		referenceService = new DrugReferenceService();
+		validator = DrugReferenceTestSupport.validator(referenceService);
+	}
+
+	@Test
 	public void aRecognizedDrugWithoutInteractionDataHasItsOwnLimitation() throws IOException {
 		prepareCompletePatient();
 		ObjectMapper mapper = new ObjectMapper();
@@ -364,6 +409,16 @@ public class DrugSafetyStatusTest extends BaseModuleContextSensitiveTest {
 		assertEquals("limited", result.getStatus());
 		assertTrue(result.getIssues().contains("condition_rules_unavailable"));
 		assertTrue(result.getIssues().contains("no_actionable_dose_reference"));
+	}
+
+	@Test
+	public void theShippedKnowledgeBasesDefectsElsewhereDoNotLimitAScreenOfIbuprofen() {
+		set(ChartSearchAiConstants.GP_DRUG_REFERENCE_SOURCE_FORMAT, ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_DDINTER);
+		referenceService = new DrugReferenceService();
+		validator = DrugReferenceTestSupport.validator(referenceService);
+		assertFalse(referenceService.getLoadStatus().getFindings().isEmpty(), "the shipped knowledge base carries findings");
+		DrugSafetyValidator.SafetyCheckResult result = validate(patient);
+		assertFalse(result.getIssues().contains("source_data_partially_invalid"), result.getIssues().toString());
 	}
 
 	@Test

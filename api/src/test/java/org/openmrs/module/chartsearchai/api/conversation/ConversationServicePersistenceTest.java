@@ -348,6 +348,29 @@ public class ConversationServicePersistenceTest extends BaseModuleContextSensiti
 		assertNull(composed.getAuditLog().getOutputTokens());
 	}
 
+	// One turn has one outcome and at most one audit row, so a second settlement (a cancel racing a finish,
+	// or a retry after a commit timeout) is refused and the first stands.
+	@Test
+	public void aTurnIsFinishedOnce() {
+		ClinicalConversation conversation = conversationService.openOrCreate(patient, "hub", ProviderMode.QUERY_SCOPED);
+		ClinicalConversationTurn turn = conversationService.startTurn(conversation, "finished-once", "Question");
+		conversationService.finishTurn(turn, TurnResult.done("hub", ProviderMode.QUERY_SCOPED,
+				AnswerEnvelope.fromPayload(Collections.singletonMap("answer", "Answer"))), 5L);
+		Integer firstAudit = turn.getAuditLog().getAuditLogId();
+
+		assertThrows(IllegalArgumentException.class, () -> conversationService.finishTurn(turn,
+				TurnResult.error("hub", ProviderMode.QUERY_SCOPED, "provider_failure"), 6L));
+		Context.flushSession();
+		Context.clearSession();
+		ClinicalConversationTurn stored = conversationDAO.getTurnByUuid(turn.getUuid());
+		assertEquals("turn_done", stored.getTerminalState());
+		assertNull(stored.getProblemCode());
+		assertEquals(firstAudit, stored.getAuditLog().getAuditLogId());
+		assertEquals(1L, ((Number) sessionFactory.getCurrentSession()
+				.createQuery("select count(*) from ChartSearchAuditLog where requestId = :requestId")
+				.setParameter("requestId", "finished-once").uniqueResult()).longValue());
+	}
+
 	@Test
 	public void failedOptionalTailAuditsTheCheckedAnswerAlreadyDisplayed() {
 		ClinicalConversation conversation = conversationService.openOrCreate(patient, "hub",

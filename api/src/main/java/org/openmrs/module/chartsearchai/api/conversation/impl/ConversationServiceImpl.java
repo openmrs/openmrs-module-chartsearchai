@@ -172,6 +172,9 @@ public class ConversationServiceImpl implements ConversationService {
 		require(result.getTerminalState() == TurnEventType.TURN_DONE
 				|| result.getTerminalState() == TurnEventType.TURN_ERROR,
 				"turn result must be terminal");
+		// One outcome and at most one audit row per turn: a second settlement is refused, as
+		// recordCheckedAnswer refuses a settled turn.
+		require(turn.getTerminalState() == null, "turn is already finished");
 
 		Date now = new Date();
 		turn.setTerminalState(result.getTerminalState().getWireName());

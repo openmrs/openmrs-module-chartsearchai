@@ -42,6 +42,7 @@ The standalone download above includes the backend module, frontend ESM, and the
 - [Architecture](#architecture)
 - [Provider integration contract](#provider-integration-contract)
 - [Local token counting](#local-token-counting)
+- [Safety-check execution status](#safety-check-execution-status)
 - [License](#license)
 
 ## Try it on the demo server

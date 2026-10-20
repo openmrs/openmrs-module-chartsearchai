@@ -76,6 +76,11 @@ public class HubClinicalAnswerProvider implements ClinicalAnswerProvider {
 		return PROVIDER_ID;
 	}
 
+	/**
+	 * Ready means the Hub endpoint is configured, and nothing more: the Hub is not probed here, as the
+	 * bundled provider probes its remote engine, so an unreachable Hub surfaces when profiles are listed
+	 * or a turn runs.
+	 */
 	@Override
 	public ProviderDescriptor descriptor() {
 		String endpoint = configuredEndpoint();

@@ -1193,9 +1193,12 @@ bodies; they do not impose a whole-profile generation timeout.
 
 The adapter reads `chartsearchai.hub.endpointUrl` from OpenMRS global properties;
 it must name the Hub's `/v1/chat/completions` endpoint. An unset endpoint makes the
-provider unavailable. The optional Bearer token belongs in the runtime property
-`chartsearchai.hub.apikey`, never in a global property. `HubProfileService` relays
-profile metadata from `/v1/models` on the same configured Hub.
+provider unavailable. Hub readiness means the endpoint is configured; unlike the
+bundled provider's remote engine, the Hub is not probed, so an unreachable Hub is
+reported when profiles are listed or a turn runs. The optional Bearer token belongs
+in the runtime property `chartsearchai.hub.apikey`, never in a global property.
+`HubProfileService` relays profile metadata from `/v1/models` on the same configured
+Hub, and only while `hub` is listed in `chartsearchai.providers.enabled`.
 
 This adapter is an integration building block. Provider selection, conversation
 storage and REST endpoint wiring are separate contributions; configuring it alone

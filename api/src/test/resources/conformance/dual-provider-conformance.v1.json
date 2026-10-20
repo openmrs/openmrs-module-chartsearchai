@@ -153,5 +153,44 @@
       "switch_to": "hub",
       "expected": "new_conversation"
     }
+  ],
+  "temporal_gate": [
+    {
+      "id": "temporal.malformed-date-fails",
+      "answer": "The next visit is 2025-10-//13.",
+      "expected_status": "fail"
+    },
+    {
+      "id": "temporal.non-ledger-date-fails",
+      "answer": "The last visit was 2026-02-17.",
+      "ledger_dates": [
+        "2026-02-16"
+      ],
+      "expected_status": "fail"
+    },
+    {
+      "id": "temporal.date-value-binding-fails",
+      "answer": "Weight was 60 kg on 2026-01-01.",
+      "concept": "Weight",
+      "numeric_series": [
+        {
+          "date": "2026-01-01",
+          "value": 58
+        }
+      ],
+      "expected_status": "fail"
+    },
+    {
+      "id": "temporal.single-point-trend-fails",
+      "answer": "Weight is increasing.",
+      "concept": "Weight",
+      "numeric_series": [
+        {
+          "date": "2026-01-01",
+          "value": 58
+        }
+      ],
+      "expected_status": "fail"
+    }
   ]
 }

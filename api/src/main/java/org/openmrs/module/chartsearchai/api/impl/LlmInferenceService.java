@@ -1169,7 +1169,8 @@ public class LlmInferenceService implements ChartSearchService {
 	 * optional recency and similarity records give way and every protected and injected record stays.
 	 * The protected tiers and the reservation together exceeding the budget is the builder's
 	 * {@code InsufficientContextException}. A full chart has no optional records, so one that does not
-	 * fit is refused at once.
+	 * fit is refused at once. A count that fails is no count, as an unavailable counter is: the chart
+	 * as assembled is answered unbudgeted, so this check can refuse a prompt and never fail one.
 	 *
 	 * @throws ChartTooLargeException where the composed prompt still exceeds the input budget
 	 */
@@ -1185,9 +1186,26 @@ public class LlmInferenceService implements ChartSearchService {
 			if (tokenCounter == null || !tokenCounter.isAvailable() || answersFromTheModule(injected)) {
 				return assembled;
 			}
-			int budget = tokenCounter.inputBudget();
-			int composed = tokenCounter.countPrompt(chartTextOrPlaceholder(injected), injected.getFocusIndices(),
-					question, severalFindingsAboutOneDrug(injected), injected.getDrugsAlreadyOrdered());
+			int budget;
+			int composed;
+			int slice;
+			try {
+				budget = tokenCounter.inputBudget();
+				composed = tokenCounter.countPrompt(chartTextOrPlaceholder(injected), injected.getFocusIndices(),
+						question, severalFindingsAboutOneDrug(injected), injected.getDrugsAlreadyOrdered());
+				// The slice exactly as the builder counted it, so the difference is what injection added;
+				// counted only where a rebuild needs it.
+				slice = composed <= budget || !built.isQueryScoped() || assembly == MAX_SLICE_ASSEMBLIES ? 0
+						: tokenCounter.countPrompt(chartTextOrPlaceholder(built), Collections.<Integer>emptyList(),
+								question, false, Collections.<PatientChartSerializer.AlreadyOrderedDrug>emptyList());
+			}
+			catch (RuntimeException e) {
+				// A count the engine could not answer is no count, as an unavailable counter is
+				// (TokenCounter.countPrompt): the chart as assembled goes to the model unbudgeted.
+				log.warn("Could not count the prompt for patient [id={}]; it is not budgeted: {}",
+						patient == null ? null : patient.getPatientId(), e.getMessage());
+				return assembled;
+			}
 			if (composed <= budget) {
 				return assembled;
 			}
@@ -1195,9 +1213,6 @@ public class LlmInferenceService implements ChartSearchService {
 				throw new ChartTooLargeException("The complete chart, reference material, and question "
 						+ "exceed the configured model input budget.");
 			}
-			// The slice exactly as the builder counted it, so the difference is what injection added.
-			int slice = tokenCounter.countPrompt(chartTextOrPlaceholder(built), Collections.<Integer>emptyList(),
-					question, false, Collections.<PatientChartSerializer.AlreadyOrderedDrug>emptyList());
 			reservedTokens = Math.max(reservedTokens + composed - budget, composed - slice);
 		}
 	}

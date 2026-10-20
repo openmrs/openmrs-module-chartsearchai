@@ -235,6 +235,33 @@ public class LlmInferenceServiceModuleBudgetContextTest extends BaseModuleContex
 		assertEquals(question, measured.get(2));
 	}
 
+	// A llama-server build without the count route answers every count with an error. That is no count, as an
+	// unavailable counter is, so the answer is produced unbudgeted rather than failed (TokenCounter.countPrompt).
+	@Test
+	public void blockingSearchAnswersUnbudgetedWhereTheCountFails() {
+		assertAnsweredDespiteAFailedCount(false);
+	}
+
+	@Test
+	public void streamingSearchAnswersUnbudgetedWhereTheCountFails() {
+		assertAnsweredDespiteAFailedCount(true);
+	}
+
+	private void assertAnsweredDespiteAFailedCount(boolean streaming) {
+		Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS, "false");
+		List<String> prompts = new ArrayList<>();
+		ask(new TokenCounter() {
+			@Override public boolean isAvailable() { return true; }
+			@Override public int countPrompt(String records, List<Integer> focus, String question,
+					boolean enumerateFindings, List<AlreadyOrderedDrug> drugsAlreadyOrdered) {
+				throw new org.openmrs.api.APIException("Local chat input token count returned HTTP 404");
+			}
+			@Override public int inputBudget() { return 100; }
+		}, prompts, "Can I give her clarithromycin?", streaming);
+		assertEquals(1, prompts.size(), "the model is asked once, with the chart as assembled");
+		assertTrue(prompts.get(0).contains("Warfarin"), prompts.get(0));
+	}
+
 	@Test
 	public void cancellingDuringChartRetrievalDoesNotInterruptTheSharedIndex() {
 		TurnCancellation cancellation = new TurnCancellation();

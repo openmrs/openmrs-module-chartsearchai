@@ -1097,6 +1097,10 @@ If an optional tail fails after a checked answer was shown, the audit retains th
 answer and its accounting. A turn that fails after any other answer reached the client
 records that answer on the audit row only; the turn keeps no answer, so it is never
 replayed.
+A turn and its audit row are written in one transaction: if the audit row cannot be
+written, the turn's terminal state is not stored either and the call fails, whereas
+`/search` logs a failed audit write and still returns its answer. A turn is finished
+once; a second attempt to finish it is refused.
 
 Checked or edited answers can be reused for a follow-up while In-Depth is still
 running. Failed and needs-review answers remain inspectable in storage but are

@@ -26,11 +26,11 @@ import org.openmrs.api.APIException;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils.ReferenceSlice;
+import org.openmrs.module.chartsearchai.api.AuditLogService;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
 import org.openmrs.module.chartsearchai.api.conversation.ConversationDAO;
 import org.openmrs.module.chartsearchai.api.conversation.ConversationService;
 import org.openmrs.module.chartsearchai.api.conversation.PriorClinicalTurn;
-import org.openmrs.module.chartsearchai.api.db.ChartSearchAiDAO;
 import org.openmrs.module.chartsearchai.api.provider.AnswerEnvelope;
 import org.openmrs.module.chartsearchai.api.provider.ProviderMode;
 import org.openmrs.module.chartsearchai.api.provider.TurnEventType;
@@ -57,7 +57,7 @@ public class ConversationServiceImpl implements ConversationService {
 	private ConversationDAO conversationDAO;
 
 	@Autowired
-	private ChartSearchAiDAO auditDAO;
+	private AuditLogService auditLogService;
 
 	@Override
 	public ClinicalConversation openOrCreate(Patient patient, String providerId, ProviderMode mode) {
@@ -192,7 +192,9 @@ public class ConversationServiceImpl implements ConversationService {
 		}
 
 		ChartSearchAuditLog audit = buildAudit(turn, result, responseTimeMs, now);
-		auditDAO.saveAuditLog(audit);
+		// In this transaction, so a turn is never settled without its audit row: a failure to write the
+		// row rolls the settlement back with it, where /search logs the failure and lets its answer stand.
+		auditLogService.saveAuditLog(audit);
 		turn.setAuditLog(audit);
 		conversationDAO.touchConversation(conversation.getConversationId(), now);
 		return conversationDAO.saveTurn(turn);

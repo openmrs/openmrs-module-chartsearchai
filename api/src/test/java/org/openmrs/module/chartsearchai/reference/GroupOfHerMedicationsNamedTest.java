@@ -11,6 +11,7 @@ package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Arrays;
 import java.util.LinkedHashSet;
@@ -113,6 +114,24 @@ public class GroupOfHerMedicationsNamedTest extends BaseModuleContextSensitiveTe
 				+ DrugReferenceInjector.GROUP_NOT_IDENTIFIED_CLOSING + "Acetaminophen against all of them.", lines[0], answer);
 		assertEquals("Acetaminophen is one of this patient's active medications (Acetaminophen [n]), and this patient has no "
 				+ "other active medication to check it against.", lines[1], answer);
+	}
+
+	/**
+	 * And where the check relates her drug to her other orders, the findings about it, under the group lead (ADR Decision
+	 * 383): on the 3.7.1 standalone "Can she take ibuprofen with her cold medicine?" went to the model for Sarah Taylor and
+	 * Barbara Miller, both on ibuprofen — Sarah told of one of its four interactions.
+	 */
+	@Test
+	public void herOwnDrugWithFindingsBesideANamedGroupIsAnsweredAsHerOwnUnderTheGroupLead() {
+		String answer = ask("Can she take ibuprofen with her cold medicine?",
+			DrugReferenceTestSupport.activeOrder("order-ibu", "Advil 400mg", "Ibuprofen"),
+			DrugReferenceTestSupport.activeOrder("order-asa", "Aspirin 81mg", "Aspirin"));
+		assertNotNull(answer, "the module answers");
+		String[] lines = answer.replaceAll("\\[\\d+\\]", "[n]").split("\n");
+		assertEquals(DrugReferenceInjector.GROUP_NOT_IDENTIFIED_OPENING + "cold medicine"
+				+ DrugReferenceInjector.GROUP_NOT_IDENTIFIED_CLOSING + "Ibuprofen against all of them.", lines[0], answer);
+		assertTrue(lines[1].startsWith("Ibuprofen is one of this patient's active medications (Advil 400mg [n])."), answer);
+		assertTrue(answer.contains("— Major."), "its interaction with her aspirin: " + answer);
 	}
 
 	private static String ask(String question, PatientClinicalContext.ActiveDrugOrder... given) {

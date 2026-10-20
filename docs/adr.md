@@ -20894,3 +20894,24 @@ active orders is named "klarizom" or "zolvimix"."* where the question calls eith
 leaves it to Decision 265, and that decision's screen still runs (`DrugSafetyValidator`).
 
 Pinned by `TwoUnrecognisedDrugNamesTest`.
+
+## Decision 383: Her own drug asked about beside a group of her medications, with findings about it, is answered as her own drug, under the group lead
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It carries
+[Decision 381](#decision-381-her-own-drug-proposed-beside-a-group-of-her-medications-is-answered-as-her-own-drug-under-the-group-lead)
+to her own drug the check relates to her other orders.
+
+### Context
+
+*"Can she take ibuprofen with her cold medicine?"* went to the model for Sarah Taylor and Barbara Miller, both on ibuprofen:
+Decision 381 admitted the group shape to the answer for her own drug that no pair relates, and not to the one stating its
+findings (Decision 193). Sarah was told of one of ibuprofen's four interactions with her orders.
+
+### The decision
+
+Both answers for her own drug ask the one question `DrugReferenceInjector.asksAboutItBesideAGroupOfHerMedications` — a group
+of her medications the question names, in one of `asksWhetherADrugIsSafeWithHerMedications`'s shapes — so her own drug's
+findings are stated as her own drug's, under Decision 313's lead.
+
+Pinned by `GroupOfHerMedicationsNamedTest.herOwnDrugWithFindingsBesideANamedGroupIsAnsweredAsHerOwnUnderTheGroupLead`.

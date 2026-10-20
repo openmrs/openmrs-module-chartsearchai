@@ -3372,6 +3372,13 @@ public class DrugReferenceInjector {
 				&& QueryScopeRouter.asksAboutADrugBesideHerMedications(wordsBesideItsNames(question, questionDrugs));
 	}
 
+	/** Whether {@code question} asks about its drug beside a group of her medications it names — "Can she take ibuprofen
+	 *  with her cold medicine?" — which, of her own drug, is answered as her own drug is (ADR Decisions 381, 383). */
+	static boolean asksAboutItBesideAGroupOfHerMedications(String question, List<DrugReference> questionDrugs) {
+		return !questionDrugs.isEmpty() && QueryScopeRouter.groupOfHerMedicationsNamed(question) != null
+				&& QueryScopeRouter.asksWhetherADrugIsSafeWithHerMedications(wordsBesideItsNames(question, questionDrugs));
+	}
+
 	/**
 	 * Her STARTED orders of {@code drug}'s substance, each cited by the record {@code herOrderRecords} gives its display —
 	 * <em>" (Prednisone Co 5mg [15])"</em> — for the lead of {@link #composeAboutHerOwnMedication} where no finding named
@@ -5696,10 +5703,12 @@ public class DrugReferenceInjector {
 			ofItsOrder.add(companion.substanceGroupKey());
 		}
 		// One substance, or one product named whole whose substances are hers — her combination order (ADR Decision 372).
+		// Or about it beside a group of her medications the question names (ADR Decision 383).
 		if (asked.size() != 1 && !namesOneProduct(question, questionDrugs) || !herSubstances.containsAll(asked)
 				|| !questionProposes(question, questionDrugs) && !asksWhetherItInteracts(question, questionDrugs)
 						&& !asksWhetherSheIsOnIt(question, questionDrugs)
-						&& !asksAboutItBesideHerMedications(question, questionDrugs)) {
+						&& !asksAboutItBesideHerMedications(question, questionDrugs)
+						&& !asksAboutItBesideAGroupOfHerMedications(question, questionDrugs)) {
 			return new ArrayList<Integer>();
 		}
 		return aboutHerOwnSubstance(findings, ofItsOrder, itsOwnOrders);
@@ -5978,9 +5987,7 @@ public class DrugReferenceInjector {
 				|| !questionProposes(question, questionDrugs) && !asksWhetherItInteracts(question, questionDrugs)
 						&& !asksWhetherSheIsOnIt(question, questionDrugs)
 						&& !asksAboutItBesideHerMedications(question, questionDrugs)
-						&& !(QueryScopeRouter.groupOfHerMedicationsNamed(question) != null
-								&& QueryScopeRouter.asksWhetherADrugIsSafeWithHerMedications(wordsBesideItsNames(question,
-									questionDrugs)))) {
+						&& !asksAboutItBesideAGroupOfHerMedications(question, questionDrugs)) {
 			return null;
 		}
 		Set<String> itsOwnOrders = itsOwnOrderDisplays(questionDrugs, orderEntries, context);

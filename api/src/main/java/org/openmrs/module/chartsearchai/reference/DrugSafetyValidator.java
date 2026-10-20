@@ -983,8 +983,6 @@ public class DrugSafetyValidator {
 		// exist. This bean is a Spring singleton, so a field memo is one unsynchronized structure shared
 		// by every concurrent request.
 		Map<Object, List<DrugReference>> resolvedRows = resolvedSubstanceRows(inPlay, orderEntries);
-		boolean screeningOrders = warnInteractions && QueryScopeRouter.isInteractionScreening(question)
-				&& context.getActiveDrugOrders().size() > 1;
 		if (coverage != null) {
 			if (!warnDose || !warnInteractions || !warnContra) {
 				coverage.limited("checks_partially_disabled");
@@ -1245,9 +1243,9 @@ public class DrugSafetyValidator {
 		// pairs are her own orders on both sides — but because they are a lookup OVER her medication
 		// list rather than a finding AGAINST her records, they are the two that grow quadratically, and
 		// they are the two a cap can truncate (maxPairChips, #131).
-		// Whether the order-driven arm below compared any of her orders with her records: the one arm that
-		// runs with nothing in play, so the no_applicable_check decision at the end of this pass has to wait
-		// for its answer rather than be read off inPlay here.
+		// Whether the order-driven arm below compared any of her orders with her records. It and the screen of
+		// her orders further down run with nothing in play, so the no_applicable_check decision at the end of
+		// this pass has to wait for both answers rather than be read off inPlay here.
 		boolean ordersScreened = false;
 		if (warnContra && hasContraindicationRecords(context)) {
 			// The corpus is parsed HERE only where the arm can actually reach a chip. Asking the
@@ -1322,9 +1320,13 @@ public class DrugSafetyValidator {
 		// orders by their own names, the screen is still what relates them.
 		boolean twoOfHerOrdersByName = warnInteractions && questionDrugs.isEmpty()
 				&& DrugReferenceInjector.asksAboutTwoOfHerOrdersByName(question, context, drugReferenceService);
+		// Whether the screen below put two of her orders to each other, set inside its own gate so the
+		// no_applicable_check decision cannot read a copy of that gate that has fallen behind it.
+		boolean ordersPairScreened = false;
 		if (warnInteractions && questionDrugs.isEmpty()
 				&& (QueryScopeRouter.isInteractionScreening(question) || twoOfHerOrdersByName || oneOfHerOrdersByName)
 				&& (oneOfHerOrdersByName || twoOfHerOrdersByName || !wordInADrugsPlace)) {
+			ordersPairScreened = context.getActiveDrugOrders().size() > 1;
 			int screenedFrom = warnings.size();
 			pairExtent = addActiveOrderPairInteractions(warnings, subjects, context, severityFloor,
 					orderEntries, interactionPairs, coMedications, statedChips, bridgedOrders);
@@ -1382,7 +1384,7 @@ public class DrugSafetyValidator {
 		// say no applicable check ran. It is the arm's own answer that counts, whether or not it found
 		// anything: an order compared with her recorded allergies and cleared was checked.
 		if (coverage != null && !ordersScreened
-				&& (resolvedRows.isEmpty() || (inPlay.isEmpty() && !screeningOrders))) {
+				&& (resolvedRows.isEmpty() || (inPlay.isEmpty() && !ordersPairScreened))) {
 			coverage.limited("no_applicable_check");
 		}
 		// A screen asked only about her interactions draws her contraindications apart: they are findings about her

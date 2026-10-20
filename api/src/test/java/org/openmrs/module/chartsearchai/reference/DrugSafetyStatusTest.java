@@ -317,6 +317,43 @@ public class DrugSafetyStatusTest extends BaseModuleContextSensitiveTest {
 		assertFalse(result.getIssues().contains("no_applicable_check"), result.getIssues().toString());
 	}
 
+	// An unrecognised word in a drug's place keeps the screen of her own orders closed (ADR Decision 183), so
+	// nothing was checked, beside the module's own "No interaction check was run" (dkayiwa, #585 review).
+	@Test
+	public void anUnrecognisedDrugBesideTwoOfHerOrdersIsNoApplicableCheck() throws Exception {
+		DrugSafetyValidator.SafetyCheckResult result = herTwoOrdersWith(
+				"No interaction check was run: \"zorblatine\" is not a drug name the interaction data recognises.",
+				"Does zorblatine interact with any of her medications?");
+		assertTrue(result.getWarnings().isEmpty(), result.getWarnings().toString());
+		assertEquals("limited", result.getStatus(), result.getIssues().toString());
+		assertTrue(result.getIssues().contains("no_applicable_check"), result.getIssues().toString());
+	}
+
+	@Test
+	public void aScreenOfTwoOfHerOrdersIsAnApplicableCheck() throws Exception {
+		DrugSafetyValidator.SafetyCheckResult result = herTwoOrdersWith("", "Do any of her medications interact?");
+		assertFalse(result.getIssues().contains("no_applicable_check"), result.getIssues().toString());
+	}
+
+	private DrugSafetyValidator.SafetyCheckResult herTwoOrdersWith(String answer, String question) throws Exception {
+		executeDataSet("AnswerFromFindingsWarfarinOrderTestData.xml");
+		DrugReferenceTestSupport.nameTheConcept(88, "Other non-coded drug");
+		Context.getAdministrationService().executeSQL("update orders set concept_id = 88 where order_id = 9469", false);
+		Context.getAdministrationService().executeSQL("update drug_order set drug_inventory_id = null,"
+				+ " drug_non_coded = 'Ibuprofen' where order_id = 111", false);
+		Context.getAdministrationService().executeSQL("update drug_order set drug_inventory_id = null,"
+				+ " drug_non_coded = 'Paracetamol' where order_id = 9469", false);
+		Context.flushSession();
+		Context.clearSession();
+		patient = Context.getPatientService().getPatient(7);
+		PatientClinicalContext context = PatientClinicalContextBuilder.build(patient);
+		assertEquals(2, context.getActiveDrugOrders().size(), context.getActiveDrugOrders().toString());
+		assertTrue(context.getAllergyTokens().isEmpty());
+		assertTrue(context.getConditionTokens().isEmpty());
+		return validator.validateWithStatus(answer, question, patient, Collections.emptyList(),
+				new PairChipExtent.Sink());
+	}
+
 	private DrugSafetyValidator.SafetyCheckResult herMedicationsWithARecordedAllergy(String allergen) {
 		DrugReferenceTestSupport.nameTheConcept(88, "Other non-coded drug");
 		Context.getAdministrationService().executeSQL("update drug_order set drug_inventory_id = null,"

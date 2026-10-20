@@ -1238,10 +1238,16 @@ A later question preempts unfinished work for the same conversation. Terminal
 completion is sent after persistence and includes the audit identifier for feedback.
 The existing `/feedback` request continues to use `questionId`.
 
-A response disconnect or unexpected execution failure settles an already started
-turn as an error in stored history. Checked answers, original drafts and partial
+Before the answer is sent, a response disconnect or unexpected execution failure
+settles an already started turn as an error in stored history. After it, the two
+differ. A disconnect cancels the turn, and a cancelled turn keeps the answer the
+client was shown as a completed turn; for the bundled provider with
+`chartsearchai.grounding.async=true` that is the ungrounded answer, whose
+`safetyStatus` is `unavailable`. An execution failure, a Hub stream ending before its
+terminal event included, is an error, and the answer already delivered is kept on
+the audit row only. Checked answers, original drafts and partial
 In-Depth content remain inspectable after an interrupted optional stage; unfinished
-In-Depth work is marked failed. Incomplete turns are not replayed as completed
+In-Depth work is marked failed. A turn stored as an error is not replayed as
 conversation context.
 
 ## License

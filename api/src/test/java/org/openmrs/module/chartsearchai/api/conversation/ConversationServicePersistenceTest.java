@@ -510,6 +510,36 @@ public class ConversationServicePersistenceTest extends BaseModuleContextSensiti
 		assertNotNull(conversationDAO.getTurnByUuid(completed.getUuid()));
 	}
 
+	// The first purge after retention is enabled can expire more rows than a driver binds in one statement
+	// (PostgreSQL 32767, MySQL 65535), so the audit links are nulled by the cutoff and never by an id list.
+	@Test
+	public void aPurgeOfMoreRowsThanADriverBindsInOneStatementStillPurges() {
+		setProperty("chartsearchai.auditLogRetentionDays", "90");
+		ClinicalConversation conversation = conversationService.openOrCreate(patient, "hub", ProviderMode.QUERY_SCOPED);
+		ClinicalConversationTurn turn = conversationService.startTurn(conversation, "linked", "Question");
+		conversationService.finishTurn(turn, TurnResult.done("hub", ProviderMode.QUERY_SCOPED,
+				AnswerEnvelope.fromPayload(Collections.singletonMap("answer", "Answer"))), 5L);
+		turn.getAuditLog().setDateCreated(new Date(System.currentTimeMillis() - 200L * 24 * 60 * 60 * 1000));
+		Context.flushSession();
+		Integer linked = turn.getAuditLog().getAuditLogId();
+		Context.getAdministrationService().executeSQL("insert into chartsearchai_audit_log (user_id, patient_id,"
+				+ " question, answer, search_mode, date_created) select user_id, patient_id, question, answer,"
+				+ " search_mode, date_created from chartsearchai_audit_log, system_range(1, 70000)"
+				+ " where audit_log_id = " + linked, false);
+		Context.flushSession();
+		Context.clearSession();
+
+		new AuditLogPurgeTask().execute();
+		Context.flushSession();
+		Context.clearSession();
+
+		assertEquals(0L, ((Number) sessionFactory.getCurrentSession()
+				.createQuery("select count(*) from ChartSearchAuditLog").uniqueResult()).longValue());
+		ClinicalConversationTurn stored = conversationDAO.getTurnByUuid(turn.getUuid());
+		assertNotNull(stored);
+		assertNull(stored.getAuditLog());
+	}
+
 	@Test
 	public void disablingChatRetentionKeepsOldTurnsWhileAuditRetentionStillRuns() {
 		setProperty("chartsearchai.chat.retentionDays", "0");

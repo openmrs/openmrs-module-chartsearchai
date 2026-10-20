@@ -154,6 +154,47 @@ public class DrugSafetyStatusTest extends BaseModuleContextSensitiveTest {
 		assertEquals(Collections.singletonList("dose_not_assessable"), result.getIssues());
 	}
 
+	// Each dose_not_assessable branch on its own: the adult bands above carry both ceilings, so either
+	// branch alone keeps that test green (dkayiwa, #585 review).
+	@Test
+	public void aDailyCeilingWithoutAStatedDailyDoseIsNotAssessable() throws IOException {
+		prepareCompletePatient();
+		String entries = "{\"entries\":["
+				+ "{\"id\":\"daily-probe\",\"name\":\"DailyProbe\",\"atcCodes\":[\"M01AE01\"],"
+				+ "\"ageBands\":[{\"minYears\":0,\"maxYears\":120,\"maxDailyDoseMg\":1000}],"
+				+ "\"contraindications\":[{\"type\":\"condition\",\"token\":\"probe condition\"}],\"interactions\":[]}]}";
+		set(ChartSearchAiConstants.GP_DRUG_REFERENCE_DATA_FILE_PATH,
+				DrugReferenceTestSupport.writeDatasetToAppData("status-daily-probe.json", entries, created));
+		referenceService = new DrugReferenceService();
+		validator = DrugReferenceTestSupport.validator(referenceService);
+		DrugSafetyValidator.SafetyCheckResult result = validator.validateWithStatus("DailyProbe was discussed.",
+				"Can I take DailyProbe?", patient, Collections.emptyList(), new PairChipExtent.Sink());
+		assertEquals("limited", result.getStatus());
+		assertEquals(Collections.singletonList("dose_not_assessable"), result.getIssues());
+	}
+
+	@Test
+	public void aPerKgCeilingWithAWeightButNoStatedDoseIsNotAssessable() {
+		Context.getAdministrationService().executeSQL("update orders set voided = 1 where patient_id = 7", false);
+		patient.setBirthdate(new java.util.Date());
+		Context.getPatientService().savePatient(patient);
+		Context.flushSession();
+		Context.clearSession();
+		patient = Context.getPatientService().getPatient(7);
+		org.openmrs.Concept weightConcept = Context.getConceptService().getConcept(5089);
+		org.openmrs.Obs weight = new org.openmrs.Obs(patient, weightConcept, new java.util.Date(),
+				Context.getLocationService().getLocation(1));
+		weight.setValueNumeric(8.0);
+		Context.getObsService().saveObs(weight, null);
+		set(ChartSearchAiConstants.GP_DRUG_SAFETY_WEIGHT_CONCEPT_UUID, weightConcept.getUuid());
+		assertEquals(0, (int) patient.getAge());
+		assertEquals(8.0, PatientClinicalContextBuilder.build(patient).getWeightKg());
+		DrugSafetyValidator.SafetyCheckResult result = validator.validateWithStatus("Ibuprofen was discussed.",
+				"Can I give her ibuprofen?", patient, Collections.emptyList(), new PairChipExtent.Sink());
+		assertEquals("limited", result.getStatus());
+		assertEquals(Collections.singletonList("dose_not_assessable"), result.getIssues());
+	}
+
 	@Test
 	public void damagedGroupsLimitTheInteractionCheckEvenWithoutAllergies() throws IOException {
 		prepareCompletePatient();

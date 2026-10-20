@@ -1025,7 +1025,20 @@ public class DrugReferenceInjector {
 		// Which interactions stopping a drug she is not on would end: none, and there is no order of it to stop (ADR
 		// Decision 333). Of her own drug the question is what interacts with it, answered below.
 		String nothingToStop = nothingToStop(question, questionDrugs, screenedSubstances, context);
-		if (nothingToStop != null) {
+		// A combination named as hers that she takes only some of: not hers, what of it she takes, and what the check found
+		// about it with no verdict — or, asked whether to stop it, that there is no order of it (ADR Decision 377).
+		String heldInPart = nothingToStop != null ? null
+				: composeProductHeldInPart(question, questionDrugs, screenedSubstances, findings, findingNumbers,
+						orderRecordNumbers,
+						// Her orders' records even where no finding was raised to index them, as Decision 302's answer cites
+						// them.
+						!orderRecordNumbers.isEmpty() ? orderRecordNumbers
+								: orderRecordNumbers(findingRecords != null ? findingRecords : new DrugOrderRecords(mappings),
+										context),
+						orderEntries, context);
+		if (heldInPart != null) {
+			moduleAnswer = heldInPart;
+		} else if (nothingToStop != null) {
 			moduleAnswer = nothingToStop;
 		} else if (againstHerAllergies != null) {
 			moduleAnswer = againstHerAllergies;
@@ -7861,6 +7874,76 @@ public class DrugReferenceInjector {
 		lines.addAll(already);
 		lines.addAll(others);
 		return String.join("\n", lines);
+	}
+
+	/**
+	 * The module's answer to a combination the question names as hers — whether it is safe, what interacts with it, whether
+	 * to stop it — that she takes only some of the substances of (ADR Decision 377), or {@code null} where the model answers:
+	 * that it is not one of her active medications, then {@link #substancesSheTakesOf}'s line; then, asked whether to stop
+	 * it, nothing more, and otherwise each finding about its substances under {@link #FOUND_LEAD_OPENING} — no verdict, since
+	 * it would duplicate what she takes — or that the check raised none, then the scope. The model answered Rose Rifadupla
+	 * "The records do not address the safety of isoniazid / rifapentine". Fail-closed: her chart read and every order of hers
+	 * identified, and a finding about neither the combination's substances nor her orders sharing one leaves it to the
+	 * model.
+	 */
+	private String composeProductHeldInPart(String question, List<DrugReference> questionDrugs, Set<Object> herSubstances,
+			List<SafetyWarning> findings, List<Integer> numbers, Map<String, Integer> orderRecordNumbers,
+			Map<String, Integer> herOrderRecords, List<DrugReference> orderEntries, PatientClinicalContext context) {
+		if (questionDrugs.isEmpty() || context == null || !context.chartReadForSafety()
+				|| !ChartSearchAiUtils.getBooleanGlobalProperty(ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
+						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS)) {
+			return null;
+		}
+		List<String> words = wordsBesideItsNames(question, questionDrugs);
+		boolean stop = QueryScopeRouter.asksWhetherToStopHerDrug(words);
+		if (!stop && !QueryScopeRouter.asksAboutHerNamedDrug(words) && !QueryScopeRouter.asksAboutADrugNamedAsHers(words)
+				&& !QueryScopeRouter.asksWhetherADrugInteractsWithHerMedications(words)) {
+			return null;
+		}
+		List<AskedDrug> asked = askedDrugs(question, questionDrugs, context, false);
+		if (asked.size() != 1) {
+			return null;
+		}
+		AskedDrug drug = asked.get(0);
+		String carried = substancesSheTakesOf(drug, herSubstances, orderEntries, herOrderRecords, context);
+		if (carried == null) {
+			return null;
+		}
+		if (stop) {
+			return drug.label + " is not one of this patient's active medications, so there is no order of it to stop.\n"
+					+ carried;
+		}
+		if (!DrugSafetyValidator.unresolvedActiveOrders(drugReferenceService, context,
+				orderEntries == null ? Collections.<DrugReference> emptyList() : orderEntries).isEmpty()) {
+			return null;
+		}
+		List<String> found = new ArrayList<String>();
+		List<SafetyWarning> sharing = new ArrayList<SafetyWarning>();
+		List<Integer> sharingNumbers = new ArrayList<Integer>();
+		for (int i = 0; i < findings.size(); i++) {
+			SafetyWarning finding = findings.get(i);
+			if (finding.statesOrdersSharingASubstance()) {
+				sharing.add(finding);
+				sharingNumbers.add(numbers.get(i));
+			} else if (isAbout(finding, drug.substances) || hasPartnerOf(finding, drug.substances)) {
+				found.add(findingLine(finding, numbers.get(i), orderRecordNumbers, herOrderRecords, true));
+			} else {
+				return null;
+			}
+		}
+		List<String> lines = new ArrayList<String>();
+		lines.add(drug.label + NOT_HER_MEDICATION);
+		lines.add(carried);
+		if (found.isEmpty()) {
+			lines.add("The interaction check raised no finding about " + drug.label
+					+ " against this patient's active medications.");
+		} else {
+			lines.add(FOUND_LEAD_OPENING + drug.label + ":");
+			lines.addAll(found);
+		}
+		lines.add(BELOW_FLOOR_SCOPE);
+		return withHerOwnOrdersSharingASubstance(String.join("\n", lines), sharing, sharingNumbers, orderRecordNumbers,
+			herOrderRecords);
 	}
 
 	/** What follows a drug's name where the question asks whether to continue her drug and she is not on it (ADR Decision

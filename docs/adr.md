@@ -20746,3 +20746,29 @@ what she takes, which no finding states — but what the check found about it, l
 lists findings that make none.
 
 Pinned by `ProductHeldInPartAskedWithAnotherDrugTest`.
+
+## Decision 377: A combination named as hers that she takes only some of is said not to be hers, with what of it she takes, and given no verdict
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It carries
+[Decision 376](#decision-376-two-drugs-asked-about-together-one-a-combination-she-takes-only-in-part-are-answered-as-neither-hers-saying-what-of-it-she-takes)
+from two drugs to one.
+
+### Context
+
+*"Is his isoniazid / rifapentine safe?"*, *"Can I stop his isoniazid / rifapentine?"* and *"What interacts with his
+isoniazid / rifapentine?"* went to the model for Rose Rifadupla, on isoniazid in two TB regimens and not on rifapentine:
+*"The records do not address the safety of isoniazid / rifapentine"*, or findings listed under *"Interactions involving
+Isoniazid"* as though the combination were hers. The same three wordings of *"her eucalyptus & diphenhydramine &
+phenylephrine"* went to the model for Mark Smith, on Benadryl. Every answer for her own combination (Decision 372) needs
+all of its substances hers, and every answer for a drug she is not on needs none of them hers.
+
+### The decision
+
+Such a combination is answered as not hers, and the line after says what of it she takes and in which orders
+(`DrugReferenceInjector.composeProductHeldInPart`, over Decision 376's `substancesSheTakesOf`). Asked whether to stop it,
+there is no order of it to stop. Asked whether it is safe or what interacts with it, each finding about its substances is
+listed under *"What this module's drug-safety check found about …"*, or the answer says the check raised none — and no
+verdict, since giving it would duplicate what she takes. It fails closed on a finding about anything else.
+
+Pinned by `ProductHeldInPartNamedAsHersTest`.

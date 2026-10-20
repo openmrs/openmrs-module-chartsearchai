@@ -27,6 +27,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.openmrs.api.APIException;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+import org.openmrs.module.chartsearchai.api.provider.ClinicalAnswerProviderRegistry;
+import org.openmrs.module.chartsearchai.api.provider.HubClinicalAnswerProvider;
 import org.springframework.stereotype.Component;
 
 /** Relays med-agent-hub's authoritative product-profile metadata without reshaping it. */
@@ -41,6 +43,13 @@ public class HubProfileService {
 			.build();
 
 	public Map<String, Object> listProfiles() {
+		// Profiles of a provider require() refuses would offer the picker choices no turn can use.
+		if (!ClinicalAnswerProviderRegistry.enabledProviderIds(Context.getAdministrationService().getGlobalProperty(
+				ChartSearchAiConstants.GP_PROVIDERS_ENABLED, ChartSearchAiConstants.DEFAULT_PROVIDER))
+				.contains(HubClinicalAnswerProvider.PROVIDER_ID)) {
+			throw new APIException("Cannot list profiles: the Hub provider is not in "
+					+ ChartSearchAiConstants.GP_PROVIDERS_ENABLED + ".");
+		}
 		String endpoint = Context.getAdministrationService()
 				.getGlobalProperty(ChartSearchAiConstants.GP_HUB_ENDPOINT_URL);
 		if (endpoint == null || endpoint.trim().isEmpty()) {

@@ -37,6 +37,41 @@ public class HubProfileServiceTest extends BaseModuleContextSensitiveTest {
 				() -> HubProfileService.modelsUri("http://hub:8080/other"));
 	}
 
+	@org.junit.jupiter.api.BeforeEach
+	public void enableTheHub() {
+		Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_PROVIDERS_ENABLED, "bundled,hub");
+	}
+
+	// The picker would offer profiles of a provider that require() refuses, so a Hub that is configured but not
+	// enabled lists nothing and is not asked.
+	@Test
+	public void profilesAreNotListedForAHubThatIsNotEnabled() throws Exception {
+		java.util.concurrent.atomic.AtomicInteger asked = new java.util.concurrent.atomic.AtomicInteger();
+		HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
+		server.createContext("/v1/models", exchange -> {
+			asked.incrementAndGet();
+			byte[] body = "{\"data\":[]}".getBytes(StandardCharsets.UTF_8);
+			exchange.sendResponseHeaders(200, body.length);
+			try (OutputStream output = exchange.getResponseBody()) {
+				output.write(body);
+			}
+		});
+		server.start();
+		try {
+			Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_PROVIDERS_ENABLED, "bundled");
+			Context.getAdministrationService().setGlobalProperty(
+					ChartSearchAiConstants.GP_HUB_ENDPOINT_URL,
+					"http://localhost:" + server.getAddress().getPort() + "/v1/chat/completions");
+			org.openmrs.api.APIException failure = assertThrows(org.openmrs.api.APIException.class,
+					() -> new HubProfileService().listProfiles());
+			assertTrue(failure.getMessage().contains(ChartSearchAiConstants.GP_PROVIDERS_ENABLED), failure.getMessage());
+			assertEquals(0, asked.get(), "a Hub that is not enabled is not asked for its profiles");
+		}
+		finally {
+			server.stop(0);
+		}
+	}
+
 	@SuppressWarnings("unchecked")
 	@Test
 	public void listProfilesRelaysHubMetadataWithoutCuratingIt() throws Exception {

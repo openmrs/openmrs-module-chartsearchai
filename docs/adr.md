@@ -20718,3 +20718,31 @@ escaping before any length check, validation or audit sees it. A clinician who l
 having typed `&`; nothing in a clinical question depends on that spelling.
 
 Pinned by `ChartSearchAiHtmlEscapedQuestionTest`.
+
+## Decision 376: Two drugs asked about together, one a combination she takes only in part, are answered as neither hers, saying what of it she takes
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It widens
+[Decision 220](#decision-220-whether-two-drugs-neither-hers-interact-is-answered-yes-where-the-data-relates-them) and
+[Decision 222](#decision-222-two-drugs-proposed-together-neither-hers-are-each-answered-as-their-own-proposal).
+
+### Context
+
+*"Does her efavirenz interact with her isoniazid / pyrazinamide / rifampin?"* and *"Is efavirenz safe with isoniazid /
+pyrazinamide / rifampin?"* were answered by the module for every patient on neither drug, and went to the model for
+Michelle Lewis and Steven White, on isoniazid / rifapentine, and Dora DdiControl, on rifampicin: each takes one substance
+of the combination, and both answers required each drug to share no substance with her orders. Steven was told every
+finding was *"a caution to note, not a reason to withhold it"*; Michelle that *"The records do not address the safety of
+Efavirenz with isoniazid / pyrazinamide / rifampin"*.
+
+### The decision
+
+A combination she takes only some of the substances of is not one of her medications, so both answers take it as they take
+a drug she is not on (`heldNoneOrInPart`), and the line after the lead names what of it she takes:
+*"Isoniazid / pyrazinamide / rifampin carries Isoniazid, which this patient takes in active order Isoniazid /
+Rifapentine."* (`substancesSheTakesOf`). Proposed together, that combination gets no verdict — giving it would duplicate
+what she takes, which no finding states — but what the check found about it, listed, as
+[Decision 305](#decision-305-two-drugs-proposed-together-state-what-the-check-found-about-one-whose-findings-make-no-verdict)
+lists findings that make none.
+
+Pinned by `ProductHeldInPartAskedWithAnotherDrugTest`.

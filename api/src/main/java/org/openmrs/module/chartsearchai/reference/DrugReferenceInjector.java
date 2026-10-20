@@ -1218,7 +1218,7 @@ public class DrugReferenceInjector {
 				&& (pairAnswer = composeWhetherTwoDrugsNotHersInteract(question, questionDrugs, screenedSubstances, findings,
 						findingNumbers, orderRecordNumbers,
 						orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers,
-						context)) != null) {
+						orderEntries, context)) != null) {
 			// Whether two drugs, neither hers, interact: "Yes" where the data relates them (ADR Decision 220); whether one
 			// changes the other's effect: what relates them, and neither "Yes" nor "No" (ADR Decision 286).
 			moduleAnswer = pairAnswer;
@@ -1230,7 +1230,7 @@ public class DrugReferenceInjector {
 				&& (twoProposalsAnswer = composeTwoProposalsTogether(question, questionDrugs, screenedSubstances, findings,
 						findingNumbers, orderRecordNumbers,
 						orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers,
-						pairExtent.stated(), context)) != null) {
+						pairExtent.stated(), orderEntries, context)) != null) {
 			// Two drugs proposed together, neither hers: each answered as its own proposal (ADR Decision 222).
 			moduleAnswer = twoProposalsAnswer;
 		} else if (onlyHerOwnOrdersSharingASubstance(findings) && context != null
@@ -6543,11 +6543,13 @@ public class DrugReferenceInjector {
 	 * whose subject rows are of both substances — since "Yes" is a claim about it; the model answered such a question "No —
 	 * Nevirapine interacts with Rifampicin, which is a Major interaction". Whether one of them changes an effect of the other
 	 * is answered the same way under a lead saying neither "Yes" nor "No" (ADR Decision 286), as ADR Decision 249 answers
-	 * it where one is hers.
+	 * it where one is hers. A combination she holds only in part is not hers either, and the line after the lead names the
+	 * substances of it she takes and the orders she takes them in (ADR Decision 376).
 	 */
-	private static String composeWhetherTwoDrugsNotHersInteract(String question, List<DrugReference> questionDrugs,
+	private String composeWhetherTwoDrugsNotHersInteract(String question, List<DrugReference> questionDrugs,
 			Set<Object> herSubstances, List<SafetyWarning> findings, List<Integer> numbers,
-			Map<String, Integer> orderRecordNumbers, Map<String, Integer> herOrderRecords, PatientClinicalContext context) {
+			Map<String, Integer> orderRecordNumbers, Map<String, Integer> herOrderRecords, List<DrugReference> orderEntries,
+			PatientClinicalContext context) {
 		if (questionDrugs.isEmpty()) {
 			return null;
 		}
@@ -6558,8 +6560,8 @@ public class DrugReferenceInjector {
 		}
 		// Each drug as the question names it — a combination's name one drug (ADR Decision 272).
 		List<AskedDrug> rows = askedDrugs(question, questionDrugs, context, true);
-		if (rows.size() != 2 || !Collections.disjoint(rows.get(0).substances, herSubstances)
-				|| !Collections.disjoint(rows.get(1).substances, herSubstances)) {
+		if (rows.size() != 2 || !heldNoneOrInPart(rows.get(0), herSubstances)
+				|| !heldNoneOrInPart(rows.get(1), herSubstances)) {
 			return null;
 		}
 		List<Integer> pair = new ArrayList<Integer>();
@@ -6589,6 +6591,12 @@ public class DrugReferenceInjector {
 				+ " interact; neither is one of this patient's active medications."
 				: "Neither " + rows.get(0).label + " nor " + rows.get(1).label + " is one of this patient's active "
 						+ "medications. What the interaction check relates between them:");
+		for (AskedDrug row : rows) {
+			String carried = substancesSheTakesOf(row, herSubstances, orderEntries, herOrderRecords, context);
+			if (carried != null) {
+				lines.add(carried);
+			}
+		}
 		lines.addAll(pairLines);
 		if (!herLines.isEmpty()) {
 			lines.add("Against this patient's active medications:");
@@ -6596,6 +6604,48 @@ public class DrugReferenceInjector {
 		}
 		lines.add(BELOW_FLOOR_SCOPE);
 		return String.join("\n", lines);
+	}
+
+	/** Whether {@code drug} is one she takes none of, or a combination she holds only some of the substances of (ADR
+	 *  Decision 376) — not one whose every substance is hers. */
+	private static boolean heldNoneOrInPart(AskedDrug drug, Set<Object> herSubstances) {
+		return Collections.disjoint(drug.substances, herSubstances)
+				|| (drug.substances.size() > 1 && !drug.isHers(herSubstances));
+	}
+
+	/**
+	 * Of a combination asked about that she holds only in part, the line naming the substances of it she takes and the
+	 * orders she takes them in (ADR Decision 376) — <em>"Isoniazid / pyrazinamide / rifampin carries Isoniazid, which this
+	 * patient takes in active order Isoniazid / Rifapentine [5]."</em> — or {@code null} for any other drug.
+	 */
+	private String substancesSheTakesOf(AskedDrug drug, Set<Object> herSubstances, List<DrugReference> orderEntries,
+			Map<String, Integer> herOrderRecords, PatientClinicalContext context) {
+		if (drug.substances.size() < 2 || drug.isHers(herSubstances)
+				|| Collections.disjoint(drug.substances, herSubstances)) {
+			return null;
+		}
+		List<String> taken = new ArrayList<String>();
+		Set<String> orders = new LinkedHashSet<String>();
+		for (Object substance : drug.substances) {
+			if (!herSubstances.contains(substance)) {
+				continue;
+			}
+			List<DrugReference> ofIt = new ArrayList<DrugReference>();
+			for (DrugReference row : drug.rows) {
+				if (substance.equals(row.substanceGroupKey())) {
+					ofIt.add(row);
+				}
+			}
+			taken.add(DrugSafetyValidator.interactionSubject(ofIt, context).displayLabel());
+			orders.addAll(itsOwnOrderDisplays(ofIt, orderEntries, context));
+		}
+		List<String> cited = new ArrayList<String>();
+		for (String order : orders) {
+			Integer number = herOrderRecords.get(order);
+			cited.add(order + (number == null ? "" : " [" + number + "]"));
+		}
+		return drug.label + " carries " + joinedAsAList(taken) + ", which this patient takes"
+				+ (cited.isEmpty() ? "" : " in active order" + (cited.size() > 1 ? "s " : " ") + joinedAsAList(cited)) + ".";
 	}
 
 	/**
@@ -6608,19 +6658,23 @@ public class DrugReferenceInjector {
 	 *
 	 * <p>Fail-closed on a proposal's own rule: a drug whose findings a proposal of it would leave to the model — a
 	 * contraindication, an unrated relationship — leaves this to the model too.
+	 *
+	 * <p>A combination she takes only some of the substances of is not hers either: the line after the lead names what of it
+	 * she takes, and it is given no verdict — proposing it would duplicate that, which no finding states — but what the
+	 * check found about it, listed (ADR Decision 376).
 	 */
-	private static String composeTwoProposalsTogether(String question, List<DrugReference> questionDrugs,
+	private String composeTwoProposalsTogether(String question, List<DrugReference> questionDrugs,
 			Set<Object> herSubstances, List<SafetyWarning> findings, List<Integer> numbers,
 			Map<String, Integer> orderRecordNumbers, Map<String, Integer> herOrderRecords, PairChipExtent pairs,
-			PatientClinicalContext context) {
+			List<DrugReference> orderEntries, PatientClinicalContext context) {
 		if (questionDrugs.isEmpty()
 				|| !QueryScopeRouter.asksWhetherToGiveDrugsTogether(wordsBesideItsNames(question, questionDrugs))) {
 			return null;
 		}
 		// Each drug as the question names it — a combination's name one drug (ADR Decision 272).
 		List<AskedDrug> rowOf = askedDrugs(question, questionDrugs, context, true);
-		if (rowOf.size() != 2 || !Collections.disjoint(rowOf.get(0).substances, herSubstances)
-				|| !Collections.disjoint(rowOf.get(1).substances, herSubstances)) {
+		if (rowOf.size() != 2 || !heldNoneOrInPart(rowOf.get(0), herSubstances)
+				|| !heldNoneOrInPart(rowOf.get(1), herSubstances)) {
 			return null;
 		}
 		List<String> pairLines = new ArrayList<String>();
@@ -6660,6 +6714,14 @@ public class DrugReferenceInjector {
 		List<String> lines = new ArrayList<String>();
 		lines.add(rowOf.get(0).label + " and " + rowOf.get(1).label
 				+ ", asked about together; neither is one of this patient's active medications.");
+		Set<AskedDrug> takenInPart = new HashSet<AskedDrug>();
+		for (AskedDrug drug : rowOf) {
+			String carried = substancesSheTakesOf(drug, herSubstances, orderEntries, herOrderRecords, context);
+			if (carried != null) {
+				lines.add(carried);
+				takenInPart.add(drug);
+			}
+		}
 		if (!pairLines.isEmpty()) {
 			lines.add("Between them:");
 			lines.addAll(pairLines);
@@ -6676,7 +6738,7 @@ public class DrugReferenceInjector {
 			for (SafetyWarning finding : its) {
 				withholds |= licensesTheModulesNo(finding);
 			}
-			if (!withholds && !cautionsOnlyAbout(drug.substances, its)) {
+			if (takenInPart.contains(drug) || !withholds && !cautionsOnlyAbout(drug.substances, its)) {
 				// Findings that make no verdict — a contraindication, a reason to withhold no rating makes: what the check
 				// found, every one, and no verdict, as Decision 257 answers one drug (ADR Decision 305). The model answered
 				// "can be given" and left a cross-reactivity out.

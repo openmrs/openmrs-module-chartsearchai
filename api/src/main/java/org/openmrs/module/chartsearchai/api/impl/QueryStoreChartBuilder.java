@@ -228,6 +228,11 @@ class QueryStoreChartBuilder {
 					e.getClass().getSimpleName());
 			throw new IllegalStateException(failure, e);
 		}
+		if (chartRead.isTruncated() || !chartRead.isProjectionComplete()) {
+			log.info("[timing] querystoreBuild patient={} mode={} hits=0 focusHits=0 rpcMs={} serializeMs=0 totalMs={} outcome=incomplete",
+					patient.getPatientId(), mode, System.currentTimeMillis() - rpcStart,
+					System.currentTimeMillis() - buildStart);
+		}
 		if (chartRead.isTruncated()) {
 			throw new IncompleteChartException("QueryStore returned an incomplete chart for patient "
 					+ patient.getUuid() + "; the answer was withheld rather than treating it as complete.");
@@ -343,6 +348,10 @@ class QueryStoreChartBuilder {
 		}
 		long rpcMs = System.currentTimeMillis() - rpcStart;
 
+		if (slice.isChartTruncated() || !slice.isProjectionComplete()) {
+			log.info("[timing] querystoreScopedBuild patient={} types=unresolved chartDocs=0 simHits=0 slice=0 rpcMs={} serializeMs=0 totalMs={} outcome=incomplete",
+					patient.getPatientId(), rpcMs, System.currentTimeMillis() - buildStart);
+		}
 		if (slice.isChartTruncated()) {
 			throw new IncompleteChartException("QueryStore built the context slice from an incomplete chart for patient "
 					+ patient.getUuid() + " (reported chart size " + slice.getChartSize()

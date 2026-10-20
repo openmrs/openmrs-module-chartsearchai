@@ -81,6 +81,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.util.HtmlUtils;
 
 /**
  * REST endpoint for AI-powered chart search.
@@ -215,7 +216,7 @@ public class ChartSearchAiRestController {
 		Context.requirePrivilege(ChartSearchAiConstants.PRIV_QUERY_PATIENT_DATA);
 
 		String patientUuid = body.get("patient");
-		String question = body.get("question");
+		String question = asTyped(body.get("question"));
 
 		PatientResolution resolved = resolvePatient(patientUuid);
 		if (resolved.hasError()) {
@@ -563,7 +564,7 @@ public class ChartSearchAiRestController {
 		Context.requirePrivilege(ChartSearchAiConstants.PRIV_QUERY_PATIENT_DATA);
 
 		String patientUuid = body.get("patient");
-		String question = body.get("question");
+		String question = asTyped(body.get("question"));
 
 		if (patientUuid == null || patientUuid.trim().isEmpty()) {
 			writeJsonError(response, HttpServletResponse.SC_BAD_REQUEST, "patient is required");
@@ -1402,6 +1403,16 @@ public class ChartSearchAiRestController {
 			comment = comment.substring(0, 500);
 		}
 		return comment;
+	}
+
+	/**
+	 * The question as the clinician typed it. OpenMRS core HTML-escapes the strings of a request body
+	 * before a controller reads them, so a typed {@code &} arrives as {@code &amp;amp;} and every reading
+	 * of the question downstream would read the entity instead (ADR Decision 375). Both endpoints read
+	 * the question through this one method, before any length check or validation sees it.
+	 */
+	static String asTyped(String question) {
+		return question == null ? null : HtmlUtils.htmlUnescape(question);
 	}
 
 	/**

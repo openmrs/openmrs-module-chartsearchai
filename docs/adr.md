@@ -20695,3 +20695,26 @@ findings about them — his recorded allergy to it among them — are in scope (
 *"No interaction check was run: "klarizom" is not a drug name the interaction data recognises."*
 
 Pinned by `HerOrderNamedByItsBrandAloneTest`.
+
+## Decision 375: The question is read as the clinician typed it, not as OpenMRS core re-encoded it
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It makes
+[Decision 373](#decision-373-a-products-names-joined-by--are-one-product-and-a-word-the-data-does-not-recognise-joined-so-is-part-of-its-name-said-not-checked)
+reach the rig.
+
+### Context
+
+Decision 373 was green in the build and changed nothing on the 3.7.1 standalone: *"Is her eucalyptus &
+diphenhydramine & phenylephrine safe?"* still went to the model for all 45 patients. The audit log showed why — the
+question was stored as *"Is her eucalyptus &amp;amp; diphenhydramine &amp;amp; phenylephrine safe?"*. OpenMRS core
+HTML-escapes the strings of a request body before a controller reads them, so every reading of the question — the
+router's shapes, a product's joined names — read an entity where the clinician typed `&`, `<`, `>`, `"` or `'`.
+
+### The decision
+
+Both endpoints read the question through one method, `ChartSearchAiRestController.asTyped`, which reverses that
+escaping before any length check, validation or audit sees it. A clinician who literally types `&amp;` is read as
+having typed `&`; nothing in a clinical question depends on that spelling.
+
+Pinned by `ChartSearchAiHtmlEscapedQuestionTest`.

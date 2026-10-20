@@ -313,6 +313,40 @@ public class ProviderStreamPersistenceTest extends BaseModuleWebContextSensitive
 		assertEquals(typed.toString(), turns.get(turns.size() - 1).getQuestion());
 	}
 
+	// Ownership is enforced by the real ConversationService.getByUuid, which ResolveConversationTest's stub cannot
+	// reach: another user's session is not found in history, and a turn naming it is never appended to it.
+	@Test
+	public void anotherUsersSessionIsNotFoundAndReceivesNoTurn() throws Exception {
+		ChartSearchAiRestController controller = requestController();
+		peerStatus = 200;
+		peerBody = "event: done\ndata: {\"answer\":\"Recorded.\",\"references\":[]}\n\n";
+		Patient patient = Context.getPatientService().getPatient(2);
+		assertNotNull(Context.getUserService().getUser(501), "precondition: a second user exists");
+		ClinicalConversation theirs = conversations.startNew(patient, "hub", ProviderMode.QUERY_SCOPED);
+		Context.flushSession();
+		Context.getAdministrationService().executeSQL("update chartsearchai_conversation set user_id = 501 where uuid = '"
+				+ theirs.getUuid() + "'", false);
+		Context.flushSession();
+		Context.clearSession();
+
+		assertEquals(404, controller.getChat(patient.getUuid(), theirs.getUuid()).getStatusCode().value());
+
+		Map<String, String> body = requestBody(patient);
+		body.put("session", theirs.getUuid());
+		MockHttpServletResponse response = new MockHttpServletResponse();
+		controller.chatStream(body, response);
+		assertTrue(response.getContentAsString().contains("event: turn_done"), response.getContentAsString());
+		Context.flushSession();
+		Context.clearSession();
+		ClinicalConversation stored = conversationDAO.getConversationByUuid(theirs.getUuid());
+		assertEquals(501, stored.getUser().getUserId());
+		assertTrue(conversationDAO.getTurns(stored).isEmpty(), "no turn may be appended to another user's conversation");
+		ClinicalConversation mine = conversations.getLatestActiveConversation(patient);
+		assertNotNull(mine);
+		assertFalse(theirs.getUuid().equals(mine.getUuid()));
+		assertEquals(1, conversations.getTurns(mine).size());
+	}
+
 	@Test
 	public void actualHttpProviderFailureIsTerminalInDatabaseAndHistory() throws Exception {
 		ChartSearchAiRestController controller = requestController();

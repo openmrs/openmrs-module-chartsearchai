@@ -1688,6 +1688,20 @@ public final class QueryScopeRouter {
 			// "What needs to be monitored with her medications?"
 			"what (?:needs|should|has) (?:to )?be monitored (?:with|for|on) " + HER_MEDICATIONS);
 
+	/** Her DRUG allergies, asked for — "What are her drug allergies?", "Does she have any drug allergies?", "List her
+	 *  medication allergies" (ADR Decision 366). Never her allergies unqualified, which her food and environmental
+	 *  allergies answer too and the drug-allergy line does not state. */
+	private static final List<Pattern> HER_DRUG_ALLERGIES_SHAPES = shapes(
+			"what (?:are|is) " + POSSESSIVE + " (?:recorded |known )?(?:drug|medication) allerg(?:y|ies)",
+			"(?:does|do) " + SUBJECT + " have (?:any )?(?:recorded |known )?(?:drug|medication) allerg(?:y|ies)",
+			"(?:please )?list " + POSSESSIVE + " (?:recorded |known )?(?:drug|medication) allerg(?:y|ies)",
+			"what (?:drugs|medications|medicines) (?:is|are) " + SUBJECT + " allergic to");
+
+	/** Whether a question asks for her drug allergies, and nothing else ({@link #HER_DRUG_ALLERGIES_SHAPES}). Fail-CLOSED. */
+	public static boolean asksForHerDrugAllergies(String question) {
+		return fitsAShape(words(question), HER_DRUG_ALLERGIES_SHAPES);
+	}
+
 	private static final String ALLERGIC = "(?:allergic|(?:she|he|they)'s allergic|(?:she|he|they) (?:is|are) allergic)";
 
 	private static final List<Pattern> ALLERGIC_TO_HER_MEDICATIONS_SHAPES = shapes(

@@ -20494,3 +20494,24 @@ of this patient's active medications."* where she has any. With no order at all,
 orders"* says it.
 
 Pinned by `WhichOfHerMedicationsInteractTest.whetherSheIsOnADrugSheIsNotOnSaysSoWhateverTheCheckFound`.
+
+## Decision 366: Her drug allergies, asked for, are listed from her allergy records
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It answers with [Decision 324](#decision-324-which-drugs-to-avoid-in-her-is-answered-with-her-recorded-drug-allergies-and-the-screen-of-her-medications)'s line.
+
+### Context
+
+*"What are her drug allergies?"* was the model's, which on the 3.7.1 standalone left Sarah Taylor's dexamethasone allergy
+out of a list of nine and wrote Barbara Miller's as *"an allergy to Ibuprofen and."* — the omission the owner had
+already raised of Sarah's allergies.
+
+### The decision
+
+*"What are her drug allergies?"*, *"Does she have any drug allergies?"*, *"List her medication allergies"* and *"What
+drugs is she allergic to?"* (`QueryScopeRouter.asksForHerDrugAllergies`) are answered by the module, where her allergy
+records were read, with `recordedDrugAllergiesLine`: each recorded drug allergy as the chart spells it, or that none is
+recorded. Her allergies unqualified stay the model's (`AllergyToHerMedicationsQuestionTest.aQuestionAboutHerAllergiesAloneIsNotThisOne`):
+her food and environmental allergies answer them too, and the line states drug allergies only.
+
+Pinned by `HerDrugAllergiesListedTest`.

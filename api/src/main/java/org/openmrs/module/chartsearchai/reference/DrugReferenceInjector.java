@@ -746,6 +746,12 @@ public class DrugReferenceInjector {
 		boolean allergyToHerMedications = questionDrugs.isEmpty()
 				&& QueryScopeRouter.asksWhetherAllergicToHerMedications(question) && context != null
 				&& context.chartReadForSafety();
+		// Nor does a question asking for her drug allergies, answered from her allergy records (ADR Decision 366).
+		boolean herDrugAllergiesAsked = questionDrugs.isEmpty() && namedClass == null
+				&& QueryScopeRouter.asksForHerDrugAllergies(question) && context != null
+				&& context.contraindicationRecordsRead()
+				&& ChartSearchAiUtils.getBooleanGlobalProperty(ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
+						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS);
 		// Nor does a duplicate-therapy question, answered where nothing was found too — one order with no finding raises
 		// nothing else (ADR Decision 294).
 		boolean duplicateQuestion = questionDrugs.isEmpty() && QueryScopeRouter.asksAboutDuplicateTherapy(question)
@@ -769,7 +775,8 @@ public class DrugReferenceInjector {
 		boolean stopOfHerOrderByName = questionDrugs.isEmpty()
 				&& asksAboutOneOfHerOrdersByName(question, context, drugReferenceService) != null;
 		if (nothingResolved && unrepresented.isEmpty() && !screenRelatedNothing && !screenOfNoMedications
-				&& !screenOfOneOrder && !allergyToHerMedications && !duplicateQuestion && listed.stated().isEmpty() && unrecognised == null
+				&& !screenOfOneOrder && !allergyToHerMedications && !herDrugAllergiesAsked && !duplicateQuestion
+				&& listed.stated().isEmpty() && unrecognised == null
 				&& !stopOfHerOrderByName) {
 			// The record each of her orders is, though nothing here resolved: it is a fact about her chart, and the
 			// statement after a model's answer naming an order her records directly conflict with cites it (ADR
@@ -1350,6 +1357,10 @@ public class DrugReferenceInjector {
 				&& QueryScopeRouter.proposesADrugClass(question,
 					DrugClassTerms.termsOf(namedClass, drugReferenceService.getCrossReactivityGroups()))) {
 			moduleAnswer = composeClassProposal(namedClass, askedGroup, orderEntries, context);
+		}
+		// Her drug allergies, asked for: listed from her allergy records, as the chart spells each (ADR Decision 366).
+		if (moduleAnswer == null && herDrugAllergiesAsked) {
+			moduleAnswer = recordedDrugAllergiesLine(context);
 		}
 		// Whether she is allergic to any of her medications: what her allergy findings say of them (ADR Decision 295).
 		if (moduleAnswer == null && allergyToHerMedications

@@ -1029,8 +1029,10 @@ to provide a tokenizer, and this interface does not estimate their counts.
 In `queryScoped` mode, the chart builder uses these counts to retain required evidence
 and fit optional records within the model input budget. If required evidence alone
 exceeds that budget, the turn fails explicitly instead of dropping required records.
-The count includes the system prompt, question and model chat template. Without an
-available counter, the builder preserves the selected records.
+The count includes the system prompt, question and model chat template, but not the
+drug-reference records the module appends after the slice is built; the bundled-provider
+contribution measures the composed prompt and reserves room for them. Without an
+available counter, or where a count fails, the builder preserves the selected records.
 
 Context selection uses QueryStore's `getContextSlice` API with the raw question and
 server-side interpretation enabled. Full-chart reads use `getPatientChartRead`.

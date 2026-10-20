@@ -419,6 +419,11 @@ class QueryStoreChartBuilder {
 	 * Returns {@code records} unchanged when no {@link TokenCounter} is configured or
 	 * available (e.g. a remote engine with no assumed tokenizer route) — this feature can only
 	 * ever tighten behavior, never introduce a new failure mode where none existed.
+	 *
+	 * <p>The count covers this slice, the system prompt and the question. The reference records
+	 * {@code DrugReferenceInjector} appends after the slice is built are not in it, so on its own this
+	 * budget does not guarantee the composed prompt fits; the bundled provider's assembly measures the
+	 * injected prompt and rebuilds the slice with that room reserved.
 	 */
 	private List<ContextSliceRecord> applyContextBudget(Patient patient, String question,
 			List<ContextSliceRecord> records, OrderCurrency orderCurrency) {

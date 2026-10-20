@@ -2600,7 +2600,10 @@ public class DrugSafetyValidator {
 			// A choice of drug asked of the module is about her medications whatever word names the drugs — "painkiller"
 			// is no medication cue (ADR Decision 293).
 			this.coversActiveOrders = QueryScopeRouter.asksAboutMedications(question)
-					|| QueryScopeRouter.asksWhichDrugToGiveHer(question);
+					|| QueryScopeRouter.asksWhichDrugToGiveHer(question)
+					// And about a drug named as hers, by whatever name — her own order, a brand the data does not carry
+					// (ADR Decision 374).
+					|| question != null && QueryScopeRouter.asksAboutADrugNamedAsHersByAnyName(question);
 			this.coversRecordedAllergies = QueryScopeRouter.asksAboutAllergies(question);
 			this.coversRecordedConditions = QueryScopeRouter.asksAboutConditions(question);
 		}

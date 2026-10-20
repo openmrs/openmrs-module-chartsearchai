@@ -7117,8 +7117,11 @@ public class DrugReferenceInjector {
 			return null;
 		}
 		List<String> words = wordsMarking(question, named.values());
+		// Whether it is safe, or what interacts with it, asked as whether it interacts (ADR Decision 374).
 		return QueryScopeRouter.asksWhetherToGiveADrug(words) ? OneOfHerOrdersAsked.PROPOSED
-				: QueryScopeRouter.asksWhetherADrugInteractsWithHerMedications(words) ? OneOfHerOrdersAsked.INTERACTS
+				: QueryScopeRouter.asksWhetherADrugInteractsWithHerMedications(words)
+						|| QueryScopeRouter.asksWhichOfHerMedicationsInteractWith(words)
+						|| QueryScopeRouter.asksWhetherADrugIsSafeWithHerMedications(words) ? OneOfHerOrdersAsked.INTERACTS
 				: QueryScopeRouter.asksWhetherToStopHerDrug(words) ? OneOfHerOrdersAsked.STOPPED : null;
 	}
 

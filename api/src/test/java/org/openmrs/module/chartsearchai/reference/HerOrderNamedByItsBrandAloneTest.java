@@ -59,6 +59,42 @@ public class HerOrderNamedByItsBrandAloneTest extends BaseModuleContextSensitive
 		}
 	}
 
+	/**
+	 * Whether his drug named by its brand is safe, or what interacts with it, is asked of his order as whether it interacts
+	 * is (ADR Decision 374): on the 3.7.1 standalone Kevin Brown, on Clarithromycine Co 500mg, was told by the model "The
+	 * records do not address the safety of Clarithromycine".
+	 */
+	@Test
+	public void whetherHisBrandOrderIsSafeIsAskedAsWhetherItInteracts() {
+		String interacts = ask("Does clarithromycine interact with his medications?");
+		assertNotNull(interacts, "precondition");
+		for (String question : Arrays.asList("Is his clarithromycine safe?", "What interacts with his clarithromycine?")) {
+			assertEquals(interacts, ask(question), question);
+		}
+	}
+
+	/**
+	 * Of a patient on no order of it, a brand the data does not recognise, named as his, is said to name none of his
+	 * orders and not to be checked (ADR Decision 374): the model told every patient but Kevin "The records do not address
+	 * clarithromycine safety".
+	 */
+	@Test
+	public void aBrandNamedAsHisThatNoOrderOfHisCarriesIsSaidSo() {
+		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(DrugReferenceTestSupport.activeOrder("order-m",
+			"Metronidazole", "Metronidazole"));
+		LinkedHashSet<String> names = new LinkedHashSet<String>(orders.get(0).getNames());
+		for (String question : Arrays.asList("Is his klarizom safe?", "What interacts with his klarizom?")) {
+			String answer = DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.shippedServiceWithGroups())
+					.injectRecords(DrugReferenceTestSupport.oneRecordChart(), DrugReferenceTestSupport.ctx(45, null, names, null,
+						null, null, orders), question).getModuleAnswer();
+			assertNotNull(answer, question + " — the module answers");
+			String[] lines = answer.split("\n");
+			assertEquals("None of this patient's active orders is named \"klarizom\".", lines[0], question + " — was: " + answer);
+			assertTrue(lines[1].startsWith("No interaction check was run: \"klarizom\" is not a drug name the interaction data "
+					+ "recognises."), question + " — was: " + answer);
+		}
+	}
+
 	private static String ask(String question) {
 		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(DrugReferenceTestSupport.activeOrder("order-k",
 			"Clarithromycine Co 500mg", new LinkedHashSet<String>(Arrays.asList("clarithromycine co 500mg", "clarithromycine")),

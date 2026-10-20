@@ -101,12 +101,20 @@ final class UnrecognisedDrugName {
 		name.inAStop = QueryScopeRouter.asksWhetherToStopHerDrug(QueryScopeRouter.words(
 				(" " + question.toLowerCase(java.util.Locale.ROOT) + " ").replaceFirst("(?<=[^\\p{L}])" + java.util.regex.Pattern
 						.quote(word) + "(?=[^\\p{L}])", " " + QueryScopeRouter.DRUG_NAME + " ")));
+		// Named as hers — "his klarizom" — the question says she takes it, and none of her orders is named so (ADR Decision
+		// 374), as Decision 308 says it beside a drug.
+		name.namedAsHersAlone = QueryScopeRouter.asksAboutHerNamedDrug(QueryScopeRouter.words(
+				(" " + question.toLowerCase(java.util.Locale.ROOT) + " ").replaceFirst("(?<=[^\\p{L}])" + java.util.regex.Pattern
+						.quote(word) + "(?=[^\\p{L}])", " " + QueryScopeRouter.DRUG_NAME + " ")));
 		return name;
 	}
 
 	/** Whether the word stands in the place of a drug the question asks whether to stop (ADR Decision 335): what was not
 	 *  done is a stop of an order none of hers is named for, not an interaction check. */
 	private boolean inAStop;
+
+	/** Whether the question names the word as hers, where it stands alone in a drug's place (ADR Decision 374). */
+	private boolean namedAsHersAlone;
 
 	/**
 	 * @return the unrecognised word standing in the OTHER drug's place of a two-drug question whose one drug the data does
@@ -229,10 +237,13 @@ final class UnrecognisedDrugName {
 				if (marked.size() == 1) {
 					continue;
 				}
-				// Or whether to stop it, named as hers (ADR Decision 335).
+				// Or whether to stop it, named as hers (ADR Decision 335) — or whether her drug is safe, or what interacts with
+				// it (ADR Decision 374).
 				if (!QueryScopeRouter.asksWhetherToGiveADrug(marked)
 						&& !QueryScopeRouter.asksWhetherADrugInteractsWithHerMedications(marked)
-						&& !QueryScopeRouter.asksWhetherToStopHerDrug(marked)) {
+						&& !QueryScopeRouter.asksWhetherToStopHerDrug(marked)
+						&& !(QueryScopeRouter.asksAboutHerNamedDrug(marked)
+								&& !QueryScopeRouter.namesAMedicationGroup(String.join(" ", span)))) {
 					continue;
 				}
 				return isAName(span) ? String.join(" ", span) : null;
@@ -340,7 +351,9 @@ final class UnrecognisedDrugName {
 		if (inAStop) {
 			return "None of this patient's active orders is named \"" + word + "\", so there is no order of it to stop.";
 		}
-		return withSuggestions(new StringBuilder("No interaction check was run: \"").append(word)
+		return withSuggestions(new StringBuilder(namedAsHersAlone
+				? "None of this patient's active orders is named \"" + word + "\".\n" : "")
+				.append("No interaction check was run: \"").append(word)
 				.append("\" is not a drug name the interaction data recognises."));
 	}
 

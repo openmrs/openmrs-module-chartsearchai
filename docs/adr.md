@@ -20670,3 +20670,28 @@ the question asks of a drug she is not on — and the answer closes, for each su
 product the question names, is not a drug name the interaction data recognises."*
 
 Pinned by `ProductJoinedByAmpersandTest`.
+
+## Decision 374: Whether his drug, named by a brand the data does not carry, is safe — or what interacts with it — is answered of his order, or said to name none
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It carries [Decision 335](#decision-335-whether-to-stop-her-drug-is-answered-with-what-relates-it-to-her-other-medications-the-stopping-itself-not-weighed) and
+[Decision 336](#decision-336-her-only-order-named-by-a-brand-the-data-does-not-carry-proposed-or-asked-whether-it-interacts-is-answered-as-hers) from stopping a brand-named order and whether it interacts to whether it is safe and what interacts
+with it.
+
+### Context
+
+*"Is his klarizom safe?"*, *"What interacts with his klarizom?"*, *"Is his clarithromycine safe?"* and *"What interacts
+with his clarithromycine?"* — local brands of Michael Turner's and Kevin Brown's orders, which the data does not carry —
+went to the model for every patient on the 3.7.1 standalone: Kevin was told *"The records do not address the safety of
+Clarithromycine"* of the drug he takes and is recorded allergic to, and every patient on no such order the same.
+
+### The decision
+
+Of his order named so, either wording is answered as *"Does X interact with his medications?"* is
+(`asksAboutOneOfHerOrdersByName`); a drug named as his is a question about his active orders, so the screen runs and the
+findings about them — his recorded allergy to it among them — are in scope (`QueryScopeRouter.isInteractionScreening`,
+`DrugSafetyValidator.SubjectMatter`). Of a patient on no order so named, the word stands in a drug's place
+(`UnrecognisedDrugName`), and the answer says *"None of this patient's active orders is named "klarizom"."* before
+*"No interaction check was run: "klarizom" is not a drug name the interaction data recognises."*
+
+Pinned by `HerOrderNamedByItsBrandAloneTest`.

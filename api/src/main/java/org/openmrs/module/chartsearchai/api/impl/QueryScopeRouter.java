@@ -243,7 +243,33 @@ public final class QueryScopeRouter {
 				// And which of her medications are high risk, and whether any need changing (ADR Decision 300).
 				|| asksWhichOfHerMedicationsAreHighRisk(question) || asksWhetherHerMedicationsNeedChanging(question)
 				// And which drugs to avoid in her (ADR Decision 324).
-				|| asksWhichDrugsToAvoid(question));
+				|| asksWhichDrugsToAvoid(question)
+				// And about a drug named as hers, by whatever name — "Is his clarithromycine safe?", a brand the cues do not
+				// know (ADR Decision 374).
+				|| asksAboutADrugNamedAsHersByAnyName(question));
+	}
+
+	/** Whether {@code question} asks about one word named as hers as about her drug beside her medications — {@link
+	 *  #BESIDE_HER_MEDICATIONS_SHAPES} with the word after "her" marked a drug (ADR Decision 374). */
+	public static boolean asksAboutADrugNamedAsHersByAnyName(String question) {
+		List<String> words = words(question);
+		for (int i = 0; i + 1 < words.size(); i++) {
+			if (!words.get(i).matches("her|his|their") || namesAMedicationGroup(words.get(i + 1))) {
+				continue;
+			}
+			List<String> marked = new ArrayList<String>(words);
+			marked.set(i + 1, DRUG_NAME);
+			if (asksAboutHerNamedDrug(marked)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/** Whether {@code wordsWithTheDrugMarked} asks whether a drug named as hers is safe, or what interacts with it ({@link
+	 *  #HER_NAMED_DRUG_SHAPES}, ADR Decision 374). Fail-CLOSED. */
+	public static boolean asksAboutHerNamedDrug(List<String> wordsWithTheDrugMarked) {
+		return fitsAShape(wordsWithTheDrugMarked, HER_NAMED_DRUG_SHAPES);
 	}
 
 	/**
@@ -788,6 +814,13 @@ public final class QueryScopeRouter {
 			+ "|issues?|concerns?) with " + POSSESSIVE + " " + D;
 
 	private static final List<Pattern> ANY_INTERACTIONS_WITH_HER_D_SHAPES = shapes(ANY_INTERACTIONS_WITH_HER_D);
+
+	/** "Is his klarizom safe?", "What interacts with his klarizom?" — a drug named as hers, asked whether it is safe or what
+	 *  interacts with it, the possessive right before the drug (ADR Decision 374). */
+	private static final List<Pattern> HER_NAMED_DRUG_SHAPES = shapes(
+			"is " + POSSESSIVE + " " + D + " (?:safe|ok|okay|appropriate)(?: for " + PATIENT + ")?(?: to (?:continue|keep"
+					+ " taking|take|use))?(?: now)?",
+			"what (?:drugs |medications |medicines |meds )?(?:interacts?|interferes?) with " + POSSESSIVE + " " + D);
 
 	/** "Is lidocaine safe with her other medications?", "Is ibuprofen okay with her current meds?" */
 	private static final String SAFE_WITH_HER_MEDICATIONS = "is " + HER_D + " (?:safe|ok|okay|appropriate) (?:with|alongside|"

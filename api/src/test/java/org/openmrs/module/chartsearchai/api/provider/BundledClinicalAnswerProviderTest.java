@@ -345,6 +345,21 @@ public class BundledClinicalAnswerProviderTest {
 	}
 
 	@Test
+	public void anIncompleteChartReadMapsToIncompleteChart() throws Exception {
+		ScriptedChartSearchService service = new ScriptedChartSearchService();
+		service.failure = new org.openmrs.module.chartsearchai.api.IncompleteChartException(
+				"querystore bootstrap has not completed");
+		BundledClinicalAnswerProvider provider = provider(service);
+
+		CollectingSink sink = new CollectingSink();
+		TurnResult result = provider.execute(request(), sink, CancellationSignal.NONE)
+				.toCompletableFuture().get();
+
+		assertEquals("incomplete_chart", result.getProblemCode());
+		assertEquals("incomplete_chart", sink.single(TurnEventType.TURN_ERROR).getProblemCode());
+	}
+
+	@Test
 	public void theDescriptorAdvertisesBundledIdentityAndTruthfulDefaultCapabilities() {
 		BundledClinicalAnswerProvider provider = defaultConfigProvider(new ScriptedChartSearchService());
 

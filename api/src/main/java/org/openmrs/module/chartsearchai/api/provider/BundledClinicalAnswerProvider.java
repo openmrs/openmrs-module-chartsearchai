@@ -28,6 +28,7 @@ import org.openmrs.module.chartsearchai.api.ChartSearchService;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
 import org.openmrs.module.chartsearchai.api.ChartTooLargeException;
+import org.openmrs.module.chartsearchai.api.IncompleteChartException;
 import org.openmrs.module.chartsearchai.api.impl.RemoteLlmEngine;
 import org.openmrs.module.chartsearchai.api.InsufficientContextException;
 import org.openmrs.module.chartsearchai.reference.SafetyWarning;
@@ -70,6 +71,10 @@ public class BundledClinicalAnswerProvider implements ClinicalAnswerProvider {
 	 *  alone exceeded the budget, a proactively-diagnosed abstention rather than llama-server's
 	 *  after-the-fact rejection ({@link #PROBLEM_CHART_TOO_LARGE}). */
 	public static final String PROBLEM_INSUFFICIENT_CONTEXT = "insufficient_context";
+
+	/** QueryStore could not serve a complete chart (its bootstrap has not completed, or a read
+	 *  was truncated): the remedy is indexing, not a retry. */
+	public static final String PROBLEM_INCOMPLETE_CHART = "incomplete_chart";
 
 	public static final String PROBLEM_UNSUPPORTED_MODE = "unsupported_mode";
 
@@ -244,6 +249,9 @@ public class BundledClinicalAnswerProvider implements ClinicalAnswerProvider {
 		}
 		catch (ChartTooLargeException e) {
 			return failed(events, sequence, configuredMode, PROBLEM_CHART_TOO_LARGE);
+		}
+		catch (IncompleteChartException e) {
+			return failed(events, sequence, configuredMode, PROBLEM_INCOMPLETE_CHART);
 		}
 		catch (RuntimeException e) {
 			if (cancellation.isCancelled()) {

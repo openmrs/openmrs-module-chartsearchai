@@ -144,6 +144,19 @@ public class DrugSafetyStatusTest extends BaseModuleContextSensitiveTest {
 		assertTrue(result.getIssues().contains("source_unavailable"));
 	}
 
+	// The warnings-only entry point keeps its contract for a caller with no patient: the question's own
+	// drugs are still screened against each other, as before the status entry point existed.
+	@Test
+	public void theWarningsEntryPointStillScreensAQuestionWithNoPatient() {
+		set(ChartSearchAiConstants.GP_DRUG_REFERENCE_SOURCE_FORMAT, ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_DDINTER);
+		referenceService = new DrugReferenceService();
+		validator = DrugReferenceTestSupport.validator(referenceService);
+		List<SafetyWarning> warnings = validator.validate("Warfarin and ibuprofen were discussed.",
+				"Do warfarin and ibuprofen interact?", null, Collections.emptyList(), new PairChipExtent.Sink());
+		assertTrue(warnings.stream().anyMatch(w -> SafetyWarning.TYPE_INTERACTION.equals(w.getType())),
+				warnings.toString());
+	}
+
 	@Test
 	public void answerWithoutAnAssessableDoseDoesNotClaimTheChartIsIncomplete() {
 		prepareCompletePatient();

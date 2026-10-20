@@ -378,10 +378,29 @@ public class DrugSafetyValidator {
 	 */
 	public List<SafetyWarning> validate(String answer, String question, Patient patient,
 			List<RecordMapping> mappings, PairChipExtent.Sink pairExtentSink) {
-		return validateWithStatus(answer, question, patient, mappings, pairExtentSink).getWarnings();
+		try {
+			if (!ChartSearchAiUtils.isDrugReferenceEnabled()
+					|| !ChartSearchAiUtils.getBooleanGlobalProperty(
+							ChartSearchAiConstants.GP_DRUG_SAFETY_VALIDATE_ANSWERS,
+							ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_VALIDATE_ANSWERS)) {
+				return new ArrayList<SafetyWarning>();
+			}
+			PatientClinicalContext context = PatientClinicalContextBuilder.build(patient);
+			return validate(answer, question, context, mappings, null, pairExtentSink);
+		}
+		catch (RuntimeException e) {
+			log.warn("Drug-safety validation failed; returning no warnings — the answer path is never broken", e);
+			return new ArrayList<SafetyWarning>();
+		}
 	}
 
-	/** Status-carrying production entry point; preserves the same mapping and pair-extent pass. */
+	/**
+	 * The same pass as {@link #validate(String, String, Patient, List, PairChipExtent.Sink)}, also
+	 * stating how completely it checked. Two differences, both because a status is a claim: a null
+	 * patient is {@code unavailable} ({@code patient_context_unavailable}) rather than screened as a
+	 * chart read by nothing, and the coverage reads this method adds are made only here, so a caller
+	 * that publishes no status does not pay for them.
+	 */
 	public SafetyCheckResult validateWithStatus(String answer, String question, Patient patient,
 			List<RecordMapping> mappings, PairChipExtent.Sink pairExtentSink) {
 		try {

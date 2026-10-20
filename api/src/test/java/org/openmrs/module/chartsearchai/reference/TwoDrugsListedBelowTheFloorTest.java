@@ -91,6 +91,42 @@ public class TwoDrugsListedBelowTheFloorTest extends BaseModuleContextSensitiveT
 		assertEquals(DrugReferenceInjector.BELOW_FLOOR_SCOPE, lines[lines.length - 1], "was: " + answer);
 	}
 
+	/**
+	 * Two drugs the data lists only below the floor, one of them related by a contraindication to her allergy, is answered
+	 * as without the allergy, the contraindication stated apart (ADR Decision 371): on the 3.7.1 standalone "Does her
+	 * amoxicillin interact with her clopidogrel?" went to the model for the three patients recorded allergic to a penicillin,
+	 * which answered "The records do not address whether Amoxicillin interacts with Clopidogrel".
+	 */
+	@Test
+	public void aContraindicationAboutADrugAskedAboutIsStatedApart() {
+		PatientClinicalContext.ActiveDrugOrder metformin = DrugReferenceTestSupport.activeOrder("order-met", "Metformin",
+			"Metformin");
+		String plain = askAllergic("Does her amoxicillin interact with her clopidogrel?", null, metformin);
+		assertNotNull(plain, "precondition: answered with no allergy");
+		String[] plainLines = plain.replaceAll("\\[\\d+\\]", "[n]").split("\n");
+		String answer = askAllergic("Does her amoxicillin interact with her clopidogrel?",
+			DrugReferenceTestSupport.set("penicillin g"), metformin);
+		assertNotNull(answer, "the module answers");
+		String[] lines = answer.replaceAll("\\[\\d+\\]", "[n]").split("\n");
+		assertEquals(plainLines[0], lines[0], "was: " + answer);
+		assertEquals(plainLines[1], lines[1], "was: " + answer);
+		int lead = Arrays.asList(lines).indexOf(DrugReferenceInjector.ABOUT_THE_DRUGS_ASKED_ABOUT_LEAD);
+		assertTrue(lead > 1 && lines[lead + 1].startsWith("Amoxicillin"), "the allergy finding apart: " + answer);
+		assertEquals(DrugReferenceInjector.BELOW_FLOOR_SCOPE, lines[lines.length - 1], "was: " + answer);
+	}
+
+	private static String askAllergic(String question, java.util.Set<String> allergies,
+			PatientClinicalContext.ActiveDrugOrder... given) {
+		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(given);
+		LinkedHashSet<String> names = new LinkedHashSet<String>();
+		for (PatientClinicalContext.ActiveDrugOrder order : orders) {
+			names.addAll(order.getNames());
+		}
+		return DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.shippedServiceWithGroups()).injectRecords(
+			DrugReferenceTestSupport.oneRecordChart(), DrugReferenceTestSupport.ctx(45, null, names, null, allergies, null,
+				orders), question).getModuleAnswer();
+	}
+
 	private static String ask(String question, PatientClinicalContext.ActiveDrugOrder... given) {
 		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(given);
 		LinkedHashSet<String> names = new LinkedHashSet<String>();

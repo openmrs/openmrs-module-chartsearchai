@@ -20599,3 +20599,23 @@ allergy — is stated after the rest, under `ABOUT_HER_OTHER_MEDICATIONS_LEAD`; 
 answered as before.
 
 Pinned by `TwoDrugsListedBelowTheFloorTest.aFindingRelatingOneOfHersToAThirdOrderIsStatedApart`.
+
+## Decision 371: Two drugs the data does not relate at a reported rating state a contraindication to one not hers apart
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It completes [Decision 370](#decision-370-two-drugs-the-data-does-not-relate-at-a-reported-rating-state-a-finding-about-one-of-hers-apart) for a drug she is not
+on.
+
+### Context
+
+`composeTwoDrugsTheDataDoesNotRelate` still left to the model a pair one of whose drugs, not hers, her allergy covered:
+*"Does her amoxicillin interact with her clopidogrel?"*, asked of the three patients recorded allergic to a penicillin on
+the 3.7.1 standalone, was answered *"The records do not address whether Amoxicillin interacts with Clopidogrel"*.
+
+### The decision
+
+A contraindication to a drug the question names that she is not on is stated after what relates the two, under
+*"Found as well, about the drugs the question names:"* (`DrugReferenceInjector.ABOUT_THE_DRUGS_ASKED_ABOUT_LEAD`); the pair
+is answered as before.
+
+Pinned by `TwoDrugsListedBelowTheFloorTest.aContraindicationAboutADrugAskedAboutIsStatedApart`.

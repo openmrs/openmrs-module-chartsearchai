@@ -6354,6 +6354,7 @@ public class DrugReferenceInjector {
 		both.addAll(asked.get(1).substances);
 		List<Integer> notHersLines = new ArrayList<Integer>();
 		List<Integer> herOwnLines = new ArrayList<Integer>();
+		List<Integer> askedAboutLines = new ArrayList<Integer>();
 		for (int i = 0; i < findings.size(); i++) {
 			SafetyWarning finding = findings.get(i);
 			Set<Object> about = subjectSubstances(finding);
@@ -6369,6 +6370,18 @@ public class DrugReferenceInjector {
 			}
 			if (ofOneNotHers) {
 				notHersLines.add(i);
+				continue;
+			}
+			// A contraindication to a drug the question names that she is not on — her allergy covering it — is stated apart,
+			// after what relates the two (ADR Decision 371).
+			boolean contraindicationOfOneNotHers = false;
+			if (SafetyWarning.TYPE_CONTRAINDICATION.equals(finding.getType()) && !about.isEmpty()) {
+				for (AskedDrug drug : asked) {
+					contraindicationOfOneNotHers |= !drug.isHers(herSubstances) && drug.substances.containsAll(about);
+				}
+			}
+			if (contraindicationOfOneNotHers) {
+				askedAboutLines.add(i);
 				continue;
 			}
 			// A finding about a drug of hers the question names, relating it to none of the two — a third order of hers,
@@ -6428,6 +6441,10 @@ public class DrugReferenceInjector {
 		if (!notHersLines.isEmpty()) {
 			lines.add("Against this patient's active medications:");
 			lines.addAll(findingLines(findings, numbers, notHersLines, orderRecordNumbers, herOrderRecords, true));
+		}
+		if (!askedAboutLines.isEmpty()) {
+			lines.add(ABOUT_THE_DRUGS_ASKED_ABOUT_LEAD);
+			lines.addAll(findingLines(findings, numbers, askedAboutLines, orderRecordNumbers, herOrderRecords, true));
 		}
 		if (!herOwnLines.isEmpty()) {
 			lines.add(ABOUT_HER_OTHER_MEDICATIONS_LEAD);
@@ -7588,6 +7605,9 @@ public class DrugReferenceInjector {
 	/** What opens the findings a drug question's answer states after it, which the validator drew apart as about her other
 	 *  medications (ADR Decision 296). */
 	static final String ABOUT_HER_OTHER_MEDICATIONS_LEAD = "Found as well, about this patient's other medications:";
+
+	/** What leads a contraindication about a drug a two-drug question names, set apart from the pair (ADR Decision 371). */
+	static final String ABOUT_THE_DRUGS_ASKED_ABOUT_LEAD = "Found as well, about the drugs the question names:";
 
 	/** How the answer to a question asking the module to choose a drug for her opens (ADR Decision 293): no finding
 	 *  chooses a drug or clears one, and the screen that follows is of the medications she already takes. */

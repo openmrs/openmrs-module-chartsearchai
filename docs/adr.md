@@ -20944,4 +20944,5 @@ too). The statement stays because a brand the data does not carry is as likely a
 would not say that nothing was checked. Kept from Decision 183: no screen of her own orders beside such a word, so no chip.
 
 Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aWordWithNoNearDrugNameTakesTheChartAnswerWithTheUncheckedStatementAfterIt`,
-and by the cases of Decisions 183, 250, 335, 374 and 382 that now assert the chart answer.
+`.searchStreaming_aWordWithNoNearDrugNameCarriesTheUncheckedStatementOnBothAnswers` for the streaming path and its early
+done, and by the cases of Decisions 183, 250, 335, 374 and 382 that now assert the chart answer.

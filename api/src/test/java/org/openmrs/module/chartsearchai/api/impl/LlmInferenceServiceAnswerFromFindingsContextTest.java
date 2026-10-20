@@ -3027,6 +3027,21 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		assertTrue(answer.getSafetyWarnings().isEmpty(), "no check ran, so no chip: " + answer.getSafetyWarnings());
 	}
 
+	/** On the streaming path too: the answer it returns and the early done a streaming user sees first both carry the
+	 *  statement after the chart answer (ADR Decision 384). */
+	@Test
+	public void searchStreaming_aWordWithNoNearDrugNameCarriesTheUncheckedStatementOnBothAnswers() {
+		String statement = "No interaction check was run: \"oranges\" is not a drug name the interaction data recognises.";
+		RecordingProvider provider = new RecordingProvider();
+		final List<ChartAnswer> early = new ArrayList<ChartAnswer>();
+		ChartAnswer answer = serviceWith(provider, shipped()).searchStreaming(patient, "Can i give her oranges?", t -> { },
+				r -> { }, c -> { }, early::add);
+		assertTrue(provider.calls >= 1, "the chart answer: " + answer.getAnswer());
+		assertTrue(answer.getAnswer().endsWith("\n" + statement), "the returned answer: " + answer.getAnswer());
+		assertEquals(1, early.size(), "the early done fired");
+		assertTrue(early.get(0).getAnswer().endsWith("\n" + statement), "the early done: " + early.get(0).getAnswer());
+	}
+
 	/** The unrecognised name is quoted as the question wrote it, hyphen and all (ADR Decision 245): on the 3.7.1 standalone
 	 *  "Can I give him co-trimoxazole?" was told that "co trimoxazole" is not a name the data recognises — a spelling the
 	 *  clinician never wrote, which reads as the module having misread the question. The data has recognised

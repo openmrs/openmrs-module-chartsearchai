@@ -20847,3 +20847,25 @@ and a combination she takes only some of is left to Decision 377.
 
 Pinned by `ContinuingHerDrugQuestionTest.keepingBothOfTwoDrugsSheTakesIsAnsweredAsHerTwoTogether` and
 `.keepingBothOfTwoDrugsSheIsNotOnBothOfSaysWhichSheIsNotOn`.
+
+## Decision 381: Her own drug proposed beside a group of her medications is answered as her own drug, under the group lead
+
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
+`docs/ddi-tested-questions.md` answer correctly for every patient. It joins Decision 313's group lead to the answer for her
+own drug that no pair relates.
+
+### Context
+
+*"Can I give her paracetamol with her cold medicine?"* went to the model for George Anderson, on acetaminophen alone — *"The
+records do not address the safety of giving paracetamol with cold medicine"* — while *"Can she take paracetamol?"* was
+answered as his own medication, and every patient not on it was answered under Decision 313's lead. The answer for her own
+drug with no pair admitted no shape of a drug beside a named group.
+
+### The decision
+
+`composeNoPairAboutHerOwnMedication` admits a drug proposed beside a group of her medications the question names
+(`QueryScopeRouter.groupOfHerMedicationsNamed` with `asksWhetherADrugIsSafeWithHerMedications`), so the answer is her own
+medication's — with no other active medication to check it against, for George — under the lead saying the check cannot
+tell which of her medications the group means.
+
+Pinned by `GroupOfHerMedicationsNamedTest.herOwnDrugBesideANamedGroupIsAnsweredAsHerOwnUnderTheGroupLead`.

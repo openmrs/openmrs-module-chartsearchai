@@ -97,6 +97,24 @@ public class GroupOfHerMedicationsNamedTest extends BaseModuleContextSensitiveTe
 		return answer.replaceAll("\\[\\d+\\]", "[n]");
 	}
 
+	/**
+	 * Her own drug proposed beside a group of her medications is answered as her own drug is, under the group lead (ADR
+	 * Decision 381): on the 3.7.1 standalone "Can I give her paracetamol with her cold medicine?" went to the model for
+	 * George Anderson, on acetaminophen alone — "The records do not address the safety of giving paracetamol with cold
+	 * medicine" — while "Can she take paracetamol?" was answered as his own medication.
+	 */
+	@Test
+	public void herOwnDrugBesideANamedGroupIsAnsweredAsHerOwnUnderTheGroupLead() {
+		String answer = ask("Can I give her paracetamol with her cold medicine?",
+			DrugReferenceTestSupport.activeOrder("order-apap", "Acetaminophen", "Acetaminophen"));
+		assertNotNull(answer, "the module answers");
+		String[] lines = answer.replaceAll("\\[\\d+\\]", "[n]").split("\n");
+		assertEquals(DrugReferenceInjector.GROUP_NOT_IDENTIFIED_OPENING + "cold medicine"
+				+ DrugReferenceInjector.GROUP_NOT_IDENTIFIED_CLOSING + "Acetaminophen against all of them.", lines[0], answer);
+		assertEquals("Acetaminophen is one of this patient's active medications (Acetaminophen [n]), and this patient has no "
+				+ "other active medication to check it against.", lines[1], answer);
+	}
+
 	private static String ask(String question, PatientClinicalContext.ActiveDrugOrder... given) {
 		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(given);
 		LinkedHashSet<String> names = new LinkedHashSet<String>();

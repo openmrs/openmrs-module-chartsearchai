@@ -5973,10 +5973,14 @@ public class DrugReferenceInjector {
 		// One substance, or her combination named whole (ADR Decision 372).
 		AskedDrug asProduct = asked.size() > 1 && namesOneProduct(question, questionDrugs)
 				? askedDrugs(question, questionDrugs, context, true).get(0) : null;
+		// Or proposed beside a group of her medications the question names — "with her cold medicine" (ADR Decision 381).
 		if (asked.size() != 1 && asProduct == null || !herSubstances.containsAll(asked)
 				|| !questionProposes(question, questionDrugs) && !asksWhetherItInteracts(question, questionDrugs)
 						&& !asksWhetherSheIsOnIt(question, questionDrugs)
-						&& !asksAboutItBesideHerMedications(question, questionDrugs)) {
+						&& !asksAboutItBesideHerMedications(question, questionDrugs)
+						&& !(QueryScopeRouter.groupOfHerMedicationsNamed(question) != null
+								&& QueryScopeRouter.asksWhetherADrugIsSafeWithHerMedications(wordsBesideItsNames(question,
+									questionDrugs)))) {
 			return null;
 		}
 		Set<String> itsOwnOrders = itsOwnOrderDisplays(questionDrugs, orderEntries, context);

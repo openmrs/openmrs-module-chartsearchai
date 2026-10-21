@@ -252,6 +252,35 @@ public class AllergyQuestionConflictingOrderContextTest extends BaseModuleContex
 		assertTrue(!unrelated.records.equals(recorder.records), "precondition: a safety question is handed more");
 	}
 
+	/**
+	 * The dose she is on is a fact of her record too (ADR Decision 401): "What dose of efavirenz is she on?" was answered "The
+	 * dose of Efavirenz is not recorded. The records address Efavirenz through safety findings: …". A dose asked of a drug
+	 * proposed keeps them (Decision 394).
+	 */
+	@Test
+	public void search_theDoseSheIsOnIsAQuestionAboutHerRecord() throws IOException {
+		int number = theAspirinOrderRecordNumber(SLICE);
+		String modelAnswer = "Her aspirin [" + number + "] is 81 mg daily.";
+		Recorder unrelated = new Recorder(modelAnswer);
+		TestableService plain = serviceAnswering(modelAnswer);
+		plain.setLlmProvider(unrelated);
+		plain.search(patient, "Summarize her chart.");
+		for (String question : Arrays.asList("What dose of aspirin is she on?", "What is her aspirin dose?",
+				"What dose of aspirin is she taking?")) {
+			Recorder recorder = new Recorder(modelAnswer);
+			TestableService service = serviceAnswering(modelAnswer);
+			service.setLlmProvider(recorder);
+			ChartAnswer answer = service.search(patient, question);
+			assertTrue(answer.getSafetyWarnings().isEmpty(), question + " — no chip: " + answer.getSafetyWarnings());
+			assertEquals(unrelated.records, recorder.records, question + " — no drug-safety material");
+		}
+		Recorder recorder = new Recorder(modelAnswer);
+		TestableService service = serviceAnswering(modelAnswer);
+		service.setLlmProvider(recorder);
+		service.search(patient, "What dose of aspirin is safe with her medications?");
+		assertTrue(!unrelated.records.equals(recorder.records), "a dose asked of the drug proposed keeps them");
+	}
+
 	@Test
 	public void search_anAllergyQuestionStatesTheConflictingOrderInTheAnswer() throws IOException {
 		ChartAnswer answer = serviceAnswering(MODEL_ANSWER).search(patient, ALLERGY_QUESTION);

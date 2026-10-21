@@ -1666,6 +1666,9 @@ public final class QueryScopeRouter {
 		"versus", "monitor", "watch", "check", "screen", "ddi", "alright", "affect", "level", "reduc", "increas", "decreas",
 		"dose", "dosage", "dosing");
 
+	/** The {@link #SAFETY_STEMS} of a dose, which a question about the dose she is on carries (ADR Decision 401). */
+	private static final Set<String> DOSE_STEMS = new HashSet<String>(Arrays.asList("dose", "dosage", "dosing"));
+
 	/** Such words as whole words: short ones, which as stems would open words of fact — "prescribed", "address". */
 	private static final Set<String> SAFETY_WORDS = new HashSet<String>(Arrays.asList("ok", "okay", "fine", "hold", "give",
 		"giving", "add", "adding", "prescribe", "prescribing", "start", "starting", "stop", "stopping", "best", "vs", "can",
@@ -1685,12 +1688,17 @@ public final class QueryScopeRouter {
 				|| wordsWithTheDrugMarked.isEmpty() || !RECORD_OPENERS.contains(wordsWithTheDrugMarked.get(0))) {
 			return false;
 		}
+		// The dose she is on, or her drug's dose, is a fact of her record: a dose asked of a drug proposed is not (ADR
+		// Decision 401).
+		boolean ofHers = String.join(" ", wordsWithTheDrugMarked).matches(".*\\b(?:(?:she|he|they) (?:is |are )?(?:on|taking|"
+				+ "receiving|getting)\\b|(?:is|are) (?:she|he|they) (?:on|taking|receiving|getting)\\b|"
+				+ "(?:her|his|their) " + Pattern.quote(DRUG_NAME) + ").*");
 		for (String word : wordsWithTheDrugMarked) {
 			if (SAFETY_WORDS.contains(word)) {
 				return false;
 			}
 			for (String stem : SAFETY_STEMS) {
-				if (word.startsWith(stem)) {
+				if (word.startsWith(stem) && !(ofHers && DOSE_STEMS.contains(stem))) {
 					return false;
 				}
 			}

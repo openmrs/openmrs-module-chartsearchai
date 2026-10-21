@@ -21330,3 +21330,22 @@ asked as which of her medications interact with X, the module choosing none to s
 any medication before starting X?"*.
 
 Pinned by `ClinicianWordingsTest.fiveMoreWordingsAreAnsweredAsTheQuestionsTheyAsk`.
+
+## Decision 401: The dose she is on is a question about her record
+
+**Status: Accepted** (October 2026) — found re-asking Decision 399's questions on the 3.7.1 standalone on 2026-10-21.
+
+### Context
+
+Decision 399 left every question carrying a dose to the findings, because a dose is also how a proposal is asked (Decision
+394). *"What dose of efavirenz is she on?"* asks no proposal, and kept its chips for 12 of 15 patients; for two the model
+answered *"The dose of Efavirenz is not recorded. The records address Efavirenz through safety findings: …"*.
+
+### The decision
+
+Where the question asks of a drug she is on — *"is she on"*, *"is she taking"*, *"she is receiving"*, or the drug named as hers,
+*"her aspirin dose"* — a dose is a fact of her record, and `QueryScopeRouter.asksOnlyAboutADrugsRecord` does not count it a
+word of safety (`DOSE_STEMS`). A dose asked of a drug proposed — *"What dose of aspirin is safe with her medications?"* — keeps
+the findings, as do the asking modals.
+
+Pinned by `AllergyQuestionConflictingOrderContextTest.search_theDoseSheIsOnIsAQuestionAboutHerRecord`.

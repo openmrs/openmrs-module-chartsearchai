@@ -235,11 +235,11 @@ class QueryStoreChartBuilder {
 		}
 		if (chartRead.isTruncated()) {
 			throw new IncompleteChartException("QueryStore returned an incomplete chart for patient "
-					+ patient.getUuid() + "; the answer was withheld rather than treating it as complete.");
+					+ patient.getUuid() + "; the answer was withheld rather than treating it as complete.", IncompleteChartException.Reason.CHART_TRUNCATED);
 		}
 		if (!chartRead.isProjectionComplete()) {
 			throw new IncompleteChartException("QueryStore has not completely indexed the chart for patient "
-					+ patient.getUuid() + "; the answer was withheld.");
+					+ patient.getUuid() + "; the answer was withheld.", IncompleteChartException.Reason.INDEXING_UNFINISHED);
 		}
 		List<QueryDocument> chartDocs = chartRead.getDocuments();
 
@@ -355,12 +355,12 @@ class QueryStoreChartBuilder {
 		if (slice.isChartTruncated()) {
 			throw new IncompleteChartException("QueryStore built the context slice from an incomplete chart for patient "
 					+ patient.getUuid() + " (reported chart size " + slice.getChartSize()
-					+ "); the answer was withheld rather than treating typed evidence as complete.");
+					+ ", IncompleteChartException.Reason.CHART_TRUNCATED); the answer was withheld rather than treating typed evidence as complete.");
 		}
 
 		if (!slice.isProjectionComplete()) {
 			throw new IncompleteChartException("QueryStore has not completely indexed the chart for patient "
-					+ patient.getUuid() + "; the answer was withheld.");
+					+ patient.getUuid() + "; the answer was withheld.", IncompleteChartException.Reason.INDEXING_UNFINISHED);
 		}
 
 		List<QueryDocument> unbudgetedDocs = new ArrayList<QueryDocument>();

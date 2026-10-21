@@ -159,6 +159,21 @@ public class PrewarmBootstrapServiceTest {
 	}
 
 	@Test
+	public void runSweep_shouldCountATruncatedChartAsFailedAndWarmTheRest() {
+		// One chart over QueryStore's retrieval cap is a fact about that patient, not about the index:
+		// stopping there would block every later patient on every start.
+		service.patientIds = new ArrayList<>(java.util.Arrays.asList(1L, 2L, 3L));
+		recorder.truncatedPatientId = 2;
+
+		service.runSweep(PrewarmBootstrapService.SCOPE_ALL, 0L, 0L, 0L);
+
+		assertEquals(java.util.Arrays.asList(1, 3), recorder.warmedPatientIds);
+		assertEquals(PrewarmBootstrapService.STATUS_COMPLETED, service.getStatus().getStatus());
+		assertEquals(1L, service.loadProgress().failed, "the truncated chart is a failed patient");
+		assertEquals(3L, service.loadProgress().cursorPatientId);
+	}
+
+	@Test
 	public void persistProgress_then_loadProgress_shouldRoundTrip() {
 		PrewarmProgress p = PrewarmProgress.running("all", 7L, 7L, 1L);
 		service.persistProgress(p);
@@ -274,11 +289,18 @@ public class PrewarmBootstrapServiceTest {
 		 *  completely indexed, as {@code QueryStoreChartBuilder} does during QueryStore's bootstrap. */
 		int incompleteFromPatientId = 0;
 
+		/** When &gt; 0, this one patient's chart exceeds QueryStore's retrieval cap, as the builder reports it. */
+		int truncatedPatientId = 0;
+
 		@Override
 		public void warmup(Patient patient, boolean pin) {
 			if (incompleteFromPatientId > 0 && patient.getPatientId() >= incompleteFromPatientId) {
 				throw new IncompleteChartException("QueryStore has not completely indexed the chart for patient "
 						+ patient.getUuid() + "; the answer was withheld.");
+			}
+			if (truncatedPatientId > 0 && patient.getPatientId() == truncatedPatientId) {
+				throw new IncompleteChartException("QueryStore built the context slice from an incomplete chart for patient "
+						+ patient.getUuid(), IncompleteChartException.Reason.CHART_TRUNCATED);
 			}
 			warmedPatientIds.add(patient.getPatientId());
 			if (!pin) {

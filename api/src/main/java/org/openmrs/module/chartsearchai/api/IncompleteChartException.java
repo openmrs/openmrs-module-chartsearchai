@@ -14,7 +14,27 @@ public class IncompleteChartException extends RuntimeException {
 
 	private static final long serialVersionUID = 1L;
 
+	/** Which of the two incompleteness conditions the read met; callers treat them differently. */
+	public enum Reason {
+		/** This one chart exceeds the read store's retrieval cap: a fact about the patient, stable across restarts. */
+		CHART_TRUNCATED,
+		/** The read store has not finished indexing: transient, and true of every later chart as well. */
+		INDEXING_UNFINISHED
+	}
+
+	private final Reason reason;
+
+	/** An unfinished index, the condition a caller must stop on; the builder states the other explicitly. */
 	public IncompleteChartException(String message) {
+		this(message, Reason.INDEXING_UNFINISHED);
+	}
+
+	public IncompleteChartException(String message, Reason reason) {
 		super(message);
+		this.reason = reason;
+	}
+
+	public Reason getReason() {
+		return reason;
 	}
 }

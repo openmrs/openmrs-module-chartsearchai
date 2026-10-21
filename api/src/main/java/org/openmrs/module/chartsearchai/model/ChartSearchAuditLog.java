@@ -205,7 +205,10 @@ public class ChartSearchAuditLog implements Serializable {
 		this.feedbackComment = feedbackComment;
 	}
 
-	/** Provider that produced this answer; nullable only for rows predating provider attribution. */
+	/**
+	 * Provider that produced this answer; null on {@code /search} and {@code /search/stream} rows,
+	 * which carry no provider attribution, and on rows written before it existed.
+	 */
 	public String getProviderId() {
 		return providerId;
 	}
@@ -214,7 +217,10 @@ public class ChartSearchAuditLog implements Serializable {
 		this.providerId = providerId;
 	}
 
-	/** Provider mode used for the turn; nullable when the provider has no mode. */
+	/**
+	 * Provider mode used for the turn; null when the provider has no mode, on {@code /search} and
+	 * {@code /search/stream} rows, and on rows written before it existed.
+	 */
 	public String getProviderMode() {
 		return providerMode;
 	}

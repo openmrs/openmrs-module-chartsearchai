@@ -293,20 +293,23 @@ public class ConversationServiceImpl implements ConversationService {
 		audit.setPatient(conversation.getPatient());
 		audit.setQuestion(turn.getQuestion());
 		// A failed turn audits what its client was last sent, else the checked answer the turn retained.
+		AnswerEnvelope retained = result.getAnswer() == null && result.getDeliveredAnswer() == null
+				? retainedAnswer(turn) : null;
 		AnswerEnvelope answer = result.getAnswer() != null ? result.getAnswer()
-				: result.getDeliveredAnswer() != null ? result.getDeliveredAnswer() : retainedAnswer(turn);
+				: result.getDeliveredAnswer() != null ? result.getDeliveredAnswer() : retained;
 		audit.setAnswer(answer == null ? "" : answer.getText());
 		audit.setReferenceCount(referenceCount(answer));
 		ChartAnswer source = answer == null ? null : answer.getSource();
-		// A retained bundled answer states its measurements in its payload (retainedPayload).
-		String retainedMode = text(answer, "searchMode");
+		// A retained bundled answer states its measurements in its payload (retainedPayload); a relayed
+		// payload's own fields are the provider's and are never read as this module's measurements.
+		String retainedMode = text(retained, "searchMode");
 		audit.setSearchMode(source != null ? source.getSearchMode()
 				: retainedMode != null ? retainedMode : ChartSearchAiConstants.SEARCH_MODE_UNKNOWN);
 		ReferenceSlice slice = source == null ? null : source.getReferenceSlice();
 		audit.setReferenceSliceRecords(slice != null ? Integer.valueOf(slice.getRecords())
-				: number(answer, "referenceSliceRecords"));
+				: count(retained, "referenceSliceRecords"));
 		audit.setReferenceSliceChars(slice != null ? Integer.valueOf(slice.getCharacters())
-				: number(answer, "referenceSliceChars"));
+				: count(retained, "referenceSliceChars"));
 		audit.setResponseTimeMs(responseTimeMs);
 		// The bundled answer's counts are on the ChartAnswer it was built from, as saveAuditLog reads
 		// them; only a relayed answer states them in its payload.
@@ -355,6 +358,12 @@ public class ConversationServiceImpl implements ConversationService {
 		}
 		Object value = answer.getPayload().get(field);
 		return value instanceof Number ? measured(((Number) value).intValue()) : null;
+	}
+
+	/** A slice count as stated: zero is a measurement here, unlike a token count. */
+	private static Integer count(AnswerEnvelope answer, String field) {
+		Object value = answer == null ? null : answer.getPayload().get(field);
+		return value instanceof Number ? Integer.valueOf(((Number) value).intValue()) : null;
 	}
 
 	/** Zero is no measurement, as saveAuditLog files it: a module-composed answer reports 0/0. */

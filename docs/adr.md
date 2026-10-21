@@ -21124,3 +21124,21 @@ Each is a wording of a question the module answers, and is answered as it is:
 | *"Can I stop her aspirin before surgery?"* | whether to stop it, the occasion asking nothing more |
 
 Pinned by `ClinicianWordingsTest`, which asks each beside the question it is a wording of.
+
+## Decision 392: A question naming one of her orders by its own name is about that order's substances
+
+**Status: Accepted** (October 2026) — found re-running all 669 questions after Decision 390.
+
+### Context
+
+Decision 390 publishes chips only for a question about drug safety, one of its tests being that the question names a drug
+the data resolved (`PatientChart.getQuestionSubstances`). *"Can I give him Zolvimix?"* names Michael Turner's order by its
+own name, which the data does not carry, so it resolved no substance; it was read as asking nothing of drug safety, and
+the Major his answer states — simvastatin against his clarithromycin — lost its chip.
+
+### The decision
+
+Where the question resolves no drug but names one of her orders by its own name (`herOrdersNamedIn`), the substances that
+order carries are the substances the chart stamps for it, so its chips are published, and Decision 387 keeps those about it.
+
+Pinned by `HerOrdersNamedByTheirOwnNamesTest.aQuestionNamingOneOfHisOrdersByItsOwnNameIsAboutThatOrdersSubstances`.

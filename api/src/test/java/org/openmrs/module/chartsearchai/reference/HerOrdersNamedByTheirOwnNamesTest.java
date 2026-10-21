@@ -101,6 +101,17 @@ public class HerOrdersNamedByTheirOwnNamesTest extends BaseModuleContextSensitiv
 		}
 	}
 
+	/** A question naming one of his orders by its own name is about that order's substances, so the chips its answer
+	 *  states are published beside it (ADR Decision 392): after Decision 390, "Can I give him Zolvimix?" resolved no
+	 *  substance, read as asking nothing of drug safety, and published no chip of the Major its answer states. */
+	@Test
+	public void aQuestionNamingOneOfHisOrdersByItsOwnNameIsAboutThatOrdersSubstances() {
+		for (String question : Arrays.asList("Can I give him Zolvimix?", "Is his Klarizom safe?",
+				"Does Zolvimix interact with his medications?")) {
+			assertTrue(!ask(question).getQuestionSubstances().isEmpty(), question);
+		}
+	}
+
 	private static PatientChart ask(String question) {
 		return DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.shippedServiceWithGroups()).injectRecords(
 			DrugReferenceTestSupport.oneRecordChart(), DrugReferenceTestSupport.ctx(60, null,

@@ -1627,8 +1627,20 @@ public class DrugReferenceInjector {
 		injected.markListedDrugsWithNoActiveOrder(listed.stated());
 		// And whether the question states a dose of the drug it asks about, which the findings never weigh (ADR Decision
 		// 274), so LlmInferenceService says after the answer that it was not checked.
-		// And the substances the question names, so the chips it publishes are about them (ADR Decision 387).
-		injected.markQuestionSubstances(askedSubstances);
+		// And the substances the question names, so the chips it publishes are about them (ADR Decision 387) — or, naming one
+		// of her orders by its own name, the substances that order carries (ADR Decision 392).
+		Set<Object> stampedSubstances = new LinkedHashSet<Object>(askedSubstances);
+		if (stampedSubstances.isEmpty() && orderEntries != null && context != null) {
+			for (PatientClinicalContext.ActiveDrugOrder named : herOrdersNamedIn(question, context, drugReferenceService)
+					.keySet()) {
+				for (DrugReference entry : orderEntries) {
+					if (DrugSafetyValidator.ordersOfSubstance(drugReferenceService, entry, orderEntries, context).contains(named)) {
+						stampedSubstances.add(entry.substanceGroupKey());
+					}
+				}
+			}
+		}
+		injected.markQuestionSubstances(stampedSubstances);
 		// And a word in its drug place the data has no near name for, stated after the chart answer (ADR Decision 384).
 		injected.markUncheckedWordStatement(moduleAnswer == null ? uncheckedWord : null);
 		injected.markStatesADose(!questionDrugs.isEmpty()

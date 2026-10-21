@@ -21441,3 +21441,24 @@ a drug, the patient and such a word is asked whole. *"good"*, *"choice"*, *"opti
 *"recommend"* are words of safety to `asksOnlyAboutADrugsRecord`, and *"What about X?"* is never a question about its record.
 
 Pinned by `ClinicianWordingsTest.aProposalOpenedByAGreetingOrAskedAsARecommendationIsTheProposal`.
+
+## Decision 406: A question asked in the negative is answered with no "Yes" or "No"
+
+**Status: Accepted** (October 2026) — found on the 3.7.1 standalone on 2026-10-22.
+
+### Context
+
+A *"Yes"* or *"No"* to a question asked in the negative can be read either way, and the model's were: *"Is fluconazole not safe
+for her?"* was answered *"Fluconazole can be given, with one caution"*, *"Can't I give her fluconazole?"* *"No — Fluconazole should
+not be given"*, and *"Is there no interaction between fluconazole and her meds?"* *"No, there is an interaction"* for one
+patient and *"Yes, there are interactions recorded"* for another.
+
+### The decision
+
+*"Is X not safe for her?"*, *"Is X unsafe for her?"* and *"Can't / Cannot / Shouldn't I give her X?"* are Decision 243's negated
+proposals, answered as *"Is there any reason not to give her X?"* is — what the check found, its withholding stated where a
+finding licenses it, and no *"Yes"* or *"No"*. *"Is there no interaction between X and her meds?"* and *"Are there no
+interactions with X?"* are Decision 319's which of her medications interact with X, which opens with what was found and no
+*"Yes"* or *"No"* either.
+
+Pinned by `ClinicianWordingsTest.aQuestionAskedInTheNegativeIsAnsweredWithNoYesOrNo`.

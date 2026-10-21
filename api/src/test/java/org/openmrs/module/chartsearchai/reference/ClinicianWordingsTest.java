@@ -218,6 +218,30 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/**
+	 * A question asked in the negative is answered with no "Yes" or "No" a reader could take either way (ADR Decision 406).
+	 * On the 3.7.1 standalone the model answered "Is fluconazole not safe for her?" with "Fluconazole can be given", "Can't I
+	 * give her fluconazole?" with "No — Fluconazole should not be given", and "Is there no interaction between fluconazole and
+	 * her meds?" with "No, there is an interaction" and "Yes, there are interactions" for different patients.
+	 */
+	@Test
+	public void aQuestionAskedInTheNegativeIsAnsweredWithNoYesOrNo() {
+		String notToGive = ask("Is there any reason not to give her warfarin?");
+		assertNotNull(notToGive, "precondition: the module answers it");
+		for (String question : new String[] { "Is warfarin not safe for her?", "Is warfarin unsafe for her?",
+				"Can't I give her warfarin?", "Cannot I give her warfarin?", "Shouldn't I give her warfarin?" }) {
+			assertEquals(notToGive, ask(question), question);
+		}
+		String which = ask("Which of her medications interact with warfarin?");
+		assertNotNull(which, "precondition: the module answers it");
+		for (String question : new String[] { "Is there no interaction between warfarin and her meds?",
+				"Are there no interactions with warfarin?" }) {
+			assertEquals(which, ask(question), question);
+		}
+		assertTrue(!notToGive.startsWith("Yes") && !notToGive.startsWith("No") && !which.startsWith("Yes")
+				&& !which.startsWith("No"), "neither lead is a Yes or a No: " + notToGive + " / " + which);
+	}
+
 	private static org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart chart(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

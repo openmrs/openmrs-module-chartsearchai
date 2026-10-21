@@ -445,6 +445,11 @@ public final class QueryScopeRouter {
 	 * tells the composer to open with neither "Yes" nor "No".
 	 */
 	private static final List<Pattern> NEGATED_PROPOSAL_SHAPES = shapes(
+			// "Is fluconazole not safe for her?", "Can't I give her fluconazole?" — asked in the negative, answered with no "Yes"
+			// or "No" (ADR Decision 406)
+			"is " + D + " (?:not (?:safe|ok|okay|appropriate|suitable)|unsafe)(?: (?:for|in) " + PATIENT + ")?",
+			"(?:can't|can’t|cant|cannot|can not|shouldn't|shouldn’t|shouldnt|should not) (?:i|we) (?:give|start|prescribe|"
+					+ "administer|add) (?:" + PATIENT + " )?(?:on )?" + D + "(?: (?:to|for) " + PATIENT + ")?",
 			// "Is there any reason I shouldn't give her ciprofloxacin?" (ADR Decision 394)
 			"is there (?:any )?reason (?:i|we) (?:shouldn't|shouldn’t|should not|shouldnt) (?:give|start|prescribe|administer|use|add) (?:"
 					+ PATIENT + " )?(?:on )?" + D + "(?: (?:to|for) " + PATIENT + ")?",
@@ -551,6 +556,10 @@ public final class QueryScopeRouter {
 	 * (ADR Decision 319): "Yes" does not answer "which".
 	 */
 	private static final List<Pattern> WHICH_OF_HER_MEDICATIONS_INTERACT_SHAPES = shapes(
+			// "Is there no interaction between fluconazole and her meds?" — which interact, with no "Yes" or "No" (ADR Decision
+			// 406)
+			"(?:is|are) there no (?:drug )?interactions? (?:between " + D + " and " + POSSESSIVE + " " + MEDICATIONS + "|with " + D
+					+ ")",
 			// "Which of her medications should I stop if I start rifampicin?" — which interact with it, the module choosing
 			// none to stop (ADR Decision 400)
 			"which of " + POSSESSIVE + " (?:medications|meds|medicines|drugs) should (?:i|we) stop if (?:i|we) (?:start|give|add|"

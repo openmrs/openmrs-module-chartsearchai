@@ -21207,3 +21207,34 @@ or two drugs given together with one hers (Decision 306's), are unchanged.
 
 Pinned by `EitherOfTwoDrugsTest.eitherOfTwoDrugsOneHersTheOtherContraindicatedIsAnsweredForEachAndNeitherIsChosen` and
 `EitherOfTwoDrugsTest.eitherOfTwoDrugsOneOfThemHersSaysSheTakesIt`.
+
+## Decision 396: A question about one drug in a wording no shape fits, made only of the words such questions are made of, is answered as the proposal or the interaction
+
+**Status: Accepted** (October 2026) — found asking 30 further drug-interaction wordings on the 3.7.1 standalone on 2026-10-21.
+
+### Context
+
+Fifteen of the thirty wordings went to the model for every one of 15 patients — *"Can I co-prescribe fluconazole?"*, *"I want to
+start her on simvastatin, any issues?"*, *"Planning to give her metronidazole, is that safe?"*, *"ciprofloxacin ok?"*, *"Would
+giving her clarithromycin interact with anything?"*, *"Any interaction between her meds and ibuprofen?"* among them. The
+model's answers cleared drugs over interactions the data never rated (*"Ciprofloxacin can be given, with one caution: it has an
+Unknown severity interaction with acetaminophen"*), answered *"No — … should be given with caution"*, and listed as
+interactions drugs she does not take, read off the reference record (*"Clarithromycin interacts with ivosidenib (Major),
+ketoconazole (Major), lapatinib (Major)…"*). Each round of wordings had found more such misses, one shape at a time.
+
+### The decision
+
+The shapes stay the grammar for what the module answers. Beside them, `QueryScopeRouter.residualReading` reads a question
+naming ONE drug whose every other word is an asking word, the patient, her medications as a whole or filler
+(`RESIDUAL_FILLER`): as whether the drug interacts with her medications where it says "interact", and as the drug proposed
+where it says the drug is safe, a problem or a concern, or an asking word proposes giving it. Any other word — a wh-word, a
+time, an organ, a dose, an outcome, food — is a question of its own, and the model answers it as before: *"Is her blood
+pressure ok on warfarin?"*, *"When should I give her warfarin?"* and *"Is warfarin ok for her kidneys?"* are not read.
+
+It reads only where no one-drug shape does, so a question a shape answers keeps that shape's answer; never a drug named as
+hers (*"Is her ibuprofen safe?"*), which her own medication's shapes answer; only a question — an asking word, or a drug and
+one word — so *"it safe to give her mebendazole?"* still goes to the model (Decision 152); and only over a name the data
+recognises: `UnrecognisedDrugName` marks each word in turn as a drug, and asks the shapes alone
+(`fitsAProposalShape`, `fitsAnInteractsShape`), or *"which"* in *"Which of her medications interact?"* would read as one.
+
+Pinned by `ClinicianWordingsTest.aQuestionAboutOneDrugInAnUnknownWordingIsAnsweredAsTheProposalOrTheInteraction`.

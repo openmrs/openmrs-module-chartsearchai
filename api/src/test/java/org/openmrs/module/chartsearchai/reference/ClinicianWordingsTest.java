@@ -92,6 +92,43 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 				+ DrugReferenceInjector.CONDITION_NOT_WEIGHED_OPENING + "kidney disease)."), "was: " + condition);
 	}
 
+	/**
+	 * A question about ONE drug in no wording the shapes know, made only of the words such questions are made of, is answered
+	 * as whether it interacts with her medications where it says "interact", else as the drug proposed (ADR Decision 396). On
+	 * the 3.7.1 standalone 15 of 30 such wordings went to the model, which cleared drugs over interactions the data never
+	 * rated ("Ciprofloxacin can be given, with one caution: it has an Unknown severity interaction") and listed drugs she
+	 * does not take from the reference record.
+	 */
+	@Test
+	public void aQuestionAboutOneDrugInAnUnknownWordingIsAnsweredAsTheProposalOrTheInteraction() {
+		String[][] pairs = {
+			{ "Can I co-prescribe fluconazole?", "Can I give her fluconazole?" },
+			{ "I want to start her on simvastatin, any issues?", "Can I give her simvastatin?" },
+			{ "Planning to give her metronidazole, is that safe?", "Can I give her metronidazole?" },
+			{ "She needs an antibiotic, is ciprofloxacin okay?", "Can I give her ciprofloxacin?" },
+			{ "Can I give her ciprofloxacin, she is on many drugs?", "Can I give her ciprofloxacin?" },
+			{ "ciprofloxacin ok?", "Can I give her ciprofloxacin?" },
+			{ "Can fluconazole be given with her current treatment?", "Can I give her fluconazole?" },
+			{ "Is warfarin compatible with her medications?", "Can I give her warfarin?" },
+			{ "Is it safe to start rifampicin with her ARVs?", "Can I give her rifampicin?" },
+			{ "Is there a drug interaction if I give her rifampicin?", "Does rifampicin interact with her medications?" },
+			{ "Would giving her clarithromycin interact with anything?",
+					"Does clarithromycin interact with her medications?" },
+			{ "Any interaction between her meds and warfarin?", "Does warfarin interact with her medications?" },
+			{ "Does she take anything that interacts with clarithromycin?",
+					"Does clarithromycin interact with her medications?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+		// A word outside that vocabulary is a question of its own, and the model answers it.
+		for (String other : new String[] { "Is her blood pressure ok on warfarin?", "When should I give her warfarin?",
+				"Did warfarin cause any problems for her?", "Is warfarin ok for her kidneys?" }) {
+			assertEquals(null, ask(other), other);
+		}
+	}
+
 	private static org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart chart(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

@@ -569,6 +569,16 @@ public final class QueryScopeRouter {
 	 * #INTERACTS_WITH_HER_MEDICATIONS_SHAPES} (ADR Decision 181). Fail-CLOSED as {@link #asksWhetherToGiveADrug} is.
 	 */
 	public static boolean asksWhetherADrugInteractsWithHerMedications(List<String> wordsWithTheDrugMarked) {
+		return fitsAnInteractsShape(wordsWithTheDrugMarked)
+				|| residualReading(wordsWithTheDrugMarked) == Residual.INTERACTS;
+	}
+
+	/**
+	 * {@link #asksWhetherADrugInteractsWithHerMedications} by its shapes alone, without {@link #residualReading} — for a
+	 * caller marking a word that may be no drug at all, where the residual's open vocabulary would read "Which of her
+	 * medications interact?", "which" marked, as a drug asked about (ADR Decision 396).
+	 */
+	public static boolean fitsAnInteractsShape(List<String> wordsWithTheDrugMarked) {
 		return fitsAShape(wordsWithTheDrugMarked, INTERACTS_WITH_HER_MEDICATIONS_SHAPES)
 				|| fitsAShape(wordsWithTheDrugMarked, BESIDE_A_GROUP_OF_HER_MEDICATIONS_SHAPES);
 	}
@@ -1564,12 +1574,131 @@ public final class QueryScopeRouter {
 	}
 
 	public static boolean asksWhetherToGiveADrug(List<String> wordsWithTheDrugMarked) {
+		return fitsAProposalShape(wordsWithTheDrugMarked) || residualReading(wordsWithTheDrugMarked) == Residual.PROPOSES;
+	}
+
+	/** {@link #asksWhetherToGiveADrug} by its shapes alone, as {@link #fitsAnInteractsShape} is (ADR Decision 396). */
+	public static boolean fitsAProposalShape(List<String> wordsWithTheDrugMarked) {
 		if (fitsAShape(wordsWithTheDrugMarked, PROPOSAL_SHAPES) || asksWhetherNotToGiveADrug(wordsWithTheDrugMarked)) {
 			return true;
 		}
 		List<String> proposal = withoutAPurpose(wordsWithTheDrugMarked);
 		return proposal != null
 				&& (fitsAShape(proposal, PROPOSAL_SHAPES) || asksWhetherNotToGiveADrug(proposal));
+	}
+
+	/** How {@link #residualReading} reads a question about one drug that no shape fits. */
+	enum Residual {
+		/** Not a question it reads: the model answers. */
+		NONE,
+		/** Whether the drug interacts with her medications. */
+		INTERACTS,
+		/** Whether to give the drug. */
+		PROPOSES
+	}
+
+	/**
+	 * The words a question about one drug may be made of and still be read without a shape (ADR Decision 396): asking
+	 * words, the patient, her medications as a whole, and filler. A word outside them — a wh-word, a time, an organ, a dose,
+	 * an outcome — makes it a question of its own, which the model answers.
+	 */
+	private static final Set<String> RESIDUAL_FILLER = new HashSet<String>(Arrays.asList("i", "we", "can", "could", "would",
+		"will", "should", "may", "might", "is", "are", "it", "there", "a", "an", "the", "to", "on", "be", "that", "this", "any",
+		"anything", "something", "with", "if", "her", "his", "him", "she", "he", "they", "them", "their", "patient", "do",
+		"does", "now", "today", "together", "alongside", "current", "currently", "other", "existing", "all", "of", "in",
+		"for", "want", "wanted", "planning", "plan", "going", "need", "needs", "many", "several", "drug", "drugs", "meds",
+		"medication", "medications", "medicine", "medicines", "treatment", "treatments", "regimen", "therapy",
+		"prescriptions", "tablets", "pills", "arvs", "arv", "antiretrovirals", "antibiotic", "painkiller", "take", "takes",
+		"taking", "co", "please", "so", "and", "also", "already", "between"));
+
+	/** Words saying the question is about the drug's interactions. */
+	private static final Set<String> RESIDUAL_INTERACTS = new HashSet<String>(Arrays.asList("interact", "interacts",
+		"interacting", "interaction", "interactions", "ddi", "ddis"));
+
+	/** Words saying the question is about whether the drug is safe to give. */
+	private static final Set<String> RESIDUAL_SAFE = new HashSet<String>(Arrays.asList("safe", "safely", "ok", "okay",
+		"fine", "alright", "issue", "issues", "problem", "problems", "concern", "concerns", "risk", "risks", "risky",
+		"compatible", "contraindicated", "contraindication", "contraindications", "appropriate"));
+
+	/** Words proposing to give the drug, where an asking word opens the question. */
+	private static final Set<String> RESIDUAL_GIVE = new HashSet<String>(Arrays.asList("give", "giving", "given", "start",
+		"starting", "started", "prescribe", "prescribing", "prescribed", "add", "adding", "added", "administer", "use"));
+
+	/** The asking words a proposal may open with. */
+	private static final Set<String> RESIDUAL_ASKING = new HashSet<String>(Arrays.asList("can", "could", "may", "should",
+		"would"));
+
+	/** Whether one of the one-drug shapes, any of them, reads {@code words}. */
+	private static boolean fitsAOneDrugShape(List<String> words) {
+		return fitsAProposalShape(words) || fitsAnInteractsShape(words) || asksWhichOfHerMedicationsInteractWith(words)
+				|| asksWhetherADrugIsSafeWithHerMedications(words) || asksWhetherSheIsOnADrug(words)
+				|| asksWhetherItIsSafeToStopHerDrug(words) || asksWhetherToStopHerDrug(words)
+				|| asksWhichInteractionsStoppingItEnds(words) || asksWhetherToContinueHerDrug(words)
+				|| asksAboutADrugNamedAsHers(words) || asksAboutADrugBesideHerMedications(words)
+				|| asksWhetherADrugChangesHerMedications(words) || asksWhetherToChangeHerDrugsDose(words)
+				|| asksWhetherSheHasTakenADrug(words) || asksAboutADrugAndHerAllergies(words) || asksAboutHerNamedDrug(words);
+	}
+
+	/** The possessives naming the drug as hers. */
+	private static final Set<String> RESIDUAL_POSSESSIVES = new HashSet<String>(Arrays.asList("her", "his", "their",
+		"patient's"));
+
+	/** The words that make the residual words a question. */
+	private static final Set<String> RESIDUAL_QUESTION = new HashSet<String>(Arrays.asList("can", "could", "may", "should",
+		"would", "will", "is", "are", "does", "do", "any"));
+
+	/**
+	 * How a question about ONE drug that no shape fits is read (ADR Decision 396): {@link Residual#INTERACTS} where it says
+	 * "interact", {@link Residual#PROPOSES} where it says the drug is safe, a problem, or proposes giving it after an
+	 * asking word — provided it names the drug once and every other word is one {@link #RESIDUAL_FILLER} admits. The shapes
+	 * are a grammar for what the module answers; this reads the wordings around them a clinician types — "Can I
+	 * co-prescribe fluconazole?", "Planning to give her metronidazole, is that safe?" — which went to the model, whose
+	 * answers cleared drugs over interactions the data never rated. Fail-closed still: any other word, and the model answers.
+	 */
+	static Residual residualReading(List<String> wordsWithTheDrugMarked) {
+		if (wordsWithTheDrugMarked == null || Collections.frequency(wordsWithTheDrugMarked, DRUG_NAME) != 1) {
+			return Residual.NONE;
+		}
+		// A drug named as hers — not "give her X", where she is who it is given to — is her own medication's question,
+		// which its own shapes answer (ADR Decisions 335, 374).
+		int at = wordsWithTheDrugMarked.indexOf(DRUG_NAME);
+		if (at > 0 && RESIDUAL_POSSESSIVES.contains(wordsWithTheDrugMarked.get(at - 1))
+				&& (at < 2 || !RESIDUAL_GIVE.contains(wordsWithTheDrugMarked.get(at - 2)))) {
+			return Residual.NONE;
+		}
+		// Only where no shape reads it: a question a shape answers is that shape's.
+		if (fitsAOneDrugShape(wordsWithTheDrugMarked)) {
+			return Residual.NONE;
+		}
+		boolean interacts = false;
+		boolean safe = false;
+		boolean gives = false;
+		for (String word : wordsWithTheDrugMarked) {
+			if (DRUG_NAME.equals(word) || RESIDUAL_FILLER.contains(word)) {
+				continue;
+			}
+			if (RESIDUAL_INTERACTS.contains(word)) {
+				interacts = true;
+			} else if (RESIDUAL_SAFE.contains(word)) {
+				safe = true;
+			} else if (RESIDUAL_GIVE.contains(word)) {
+				gives = true;
+			} else {
+				return Residual.NONE;
+			}
+		}
+		boolean asked = false;
+		boolean aQuestion = wordsWithTheDrugMarked.size() <= 2;
+		for (String word : wordsWithTheDrugMarked) {
+			asked |= RESIDUAL_ASKING.contains(word);
+			aQuestion |= RESIDUAL_QUESTION.contains(word);
+		}
+		// A question it must be: "it safe to give her mebendazole?" lost its first word, which is not guessed at (ADR Decision
+		// 152); a drug and a word saying it is safe, "ciprofloxacin ok?", is asked whole.
+		if (!aQuestion) {
+			return Residual.NONE;
+		}
+		return interacts ? Residual.INTERACTS : safe || gives && asked ? Residual.PROPOSES : Residual.NONE;
 	}
 
 	/**

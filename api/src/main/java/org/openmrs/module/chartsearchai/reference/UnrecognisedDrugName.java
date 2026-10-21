@@ -344,8 +344,9 @@ final class UnrecognisedDrugName {
 				}
 				// Or whether to stop it, named as hers (ADR Decision 335) — or whether her drug is safe, or what interacts with
 				// it (ADR Decision 374).
-				if (!QueryScopeRouter.asksWhetherToGiveADrug(marked)
-						&& !QueryScopeRouter.asksWhetherADrugInteractsWithHerMedications(marked)
+				// The shapes alone: the residual reading is of a name the data recognises (ADR Decision 396).
+				if (!QueryScopeRouter.fitsAProposalShape(marked)
+						&& !QueryScopeRouter.fitsAnInteractsShape(marked)
 						&& !QueryScopeRouter.asksWhetherToStopHerDrug(marked)
 						&& !(QueryScopeRouter.asksAboutHerNamedDrug(marked)
 								&& !QueryScopeRouter.namesAMedicationGroup(String.join(" ", span)))) {

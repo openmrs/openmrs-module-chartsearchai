@@ -376,6 +376,34 @@ public class ProviderRestContractTest {
 	}
 
 	@Test
+	public void aFailedCheckedAnswerSaveIsReportedToTheConnectedClientNotTakenForADisconnect() throws Exception {
+		ChartSearchAiRestController controller = new ChartSearchAiRestController();
+		RecordingConversationService conversations = new RecordingConversationService();
+		conversations.failOnRecord = true;
+		ScriptedProvider provider = new ScriptedProvider("hub", true);
+		Map<String, Object> checked = answerPayload("2026-01-26");
+		checked.put("answerValidation", Collections.singletonMap("status", "checked"));
+		AnswerEnvelope answer = AnswerEnvelope.fromPayload(checked);
+		provider.events = Arrays.asList(TurnEvent.of(TurnEventType.TURN_STARTED, 0, "hub"),
+				TurnEvent.withAnswer(TurnEventType.ANSWER_DONE, 1, "hub", answer),
+				TurnEvent.withAnswer(TurnEventType.ANSWER_VALIDATION, 2, "hub", answer),
+				TurnEvent.withAnswer(TurnEventType.TURN_DONE, 3, "hub", answer));
+		provider.result = TurnResult.done("hub", ProviderMode.QUERY_SCOPED, answer);
+		controller.setConversationService(conversations);
+		controller.setProviderRegistry(stubRegistry(provider));
+		ByteArrayOutputStream out = new ByteArrayOutputStream();
+
+		controller.streamProviderTurn(out, patient(), "Question", "hub", ProviderMode.QUERY_SCOPED,
+				"product-profile-a", null);
+
+		assertEquals(Arrays.asList("turn_started", "answer_done", "turn_error"), sseTypes(out));
+		assertEquals("provider_failure", ssePayload(out, "turn_error").path("problemCode").asText());
+		assertFalse(provider.capturedCancellations.get(0).isCancelled(),
+				"a persistence failure is not a departed client");
+		assertEquals(1, conversations.finished, "the turn is settled as an error");
+	}
+
+	@Test
 	public void aNewTurnOnTheSameConversationCancelsThePriorInFlightTurn() throws Exception {
 		// G18: starting a new turn while a prior one on the same conversation is still running
 		// (e.g. its In-Depth is still generating) must cancel that prior turn instead of letting
@@ -802,6 +830,8 @@ public class ProviderRestContractTest {
 
 		boolean failOnFinish;
 
+		boolean failOnRecord;
+
 		int recordedCheckedAnswers;
 
 		String lastFinishedAnswer;
@@ -875,6 +905,9 @@ public class ProviderRestContractTest {
 
 		@Override
 		public boolean recordCheckedAnswer(ClinicalConversationTurn turn, AnswerEnvelope answer) {
+			if (failOnRecord) {
+				throw new IllegalStateException("persistence unavailable");
+			}
 			recordedCheckedAnswers++;
 			lastRecordedCheckedAnswer = answer.getText();
 			return true;

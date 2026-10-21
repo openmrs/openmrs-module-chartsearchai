@@ -150,11 +150,6 @@ public class LocalLlamaTokenCounterTest extends BaseModuleContextSensitiveTest {
 		engine.shutdown();
 	}
 
-	/**
-	 * Opt-in: launches the real local engine from a tester-prepared application-data directory.
-	 * The module spawns this server itself, so it is not one of the tester-started servers
-	 * {@link LlmEndpointTestSupport} serves.
-	 */
 	@Test
 	public void anIdleTimerThatExpiresDuringACallWaitsOutTheRemainderInsteadOfClosing() {
 		AtomicLong now = new AtomicLong(0);
@@ -184,6 +179,11 @@ public class LocalLlamaTokenCounterTest extends BaseModuleContextSensitiveTest {
 		assertEquals(1, closes.get(), "a full idle interval since the last activity unloads the server");
 	}
 
+	/**
+	 * Opt-in: launches the real local engine from a tester-prepared application-data directory.
+	 * The module spawns this server itself, so it is not one of the tester-started servers
+	 * {@link LlmEndpointTestSupport} serves.
+	 */
 	@Test
 	public void realEngineCountMatchesInferenceUsageAndArmsIdleUnload() {
 		Assumptions.assumeTrue(Boolean.getBoolean("chartsearchai.test.tokenCount.enabled"),

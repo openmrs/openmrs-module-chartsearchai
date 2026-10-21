@@ -21259,3 +21259,25 @@ drugs to avoid (Decision 324); *"Any reason not to continue her current medicati
 medications?"* as whether any of her medications need changing (Decision 300).
 
 Pinned by `ClinicianWordingsTest.wordingsAboutHerMedicationsAsAWholeAreAnsweredAsTheQuestionsTheyAsk`.
+
+## Decision 398: Whether a drug interacts with her medications, where the only findings about it are allergy findings, is not answered "Yes"
+
+**Status: Accepted** (October 2026) — found on the 3.7.1 standalone on 2026-10-21, in the full 669-question run and in a
+wording Decision 396 admitted.
+
+### Context
+
+Decision 181's lead to *"Does X interact with her medications?"* is *"Yes — X interacts with this patient's active
+medications."*, on the premise that every question admitted so has an interaction finding about X. One with only allergy
+findings has none: *"Check interactions for amoxicillin"* was answered *"Yes — Amoxicillin interacts …"* over three patients'
+allergy records alone (a recorded allergy to amoxicillin, a penicillin-group allergy, a cross-reactivity), and George
+Anderson's *"Any interaction between her meds and ibuprofen?"* over his allergy to ibuprofen.
+
+### The decision
+
+`DrugReferenceInjector.composeFromFindings` opens *"Yes —"* only where an interaction finding is among them. Otherwise it
+opens *"The interaction check raised no interaction finding about X against this patient's active medications."* — with
+Decision 181's withholding sentence where a finding licenses it — then states what the check found under
+`FOUND_LEAD_OPENING`.
+
+Pinned by `InteractionQuestionWithOnlyAnAllergyFindingTest.anAllergyAloneIsNoInteractionAndIsStatedAsWhatTheCheckFound`.

@@ -5316,12 +5316,23 @@ public class DrugReferenceInjector {
 		// ingredient (ADR Decision 282), else the finding's own.
 		String leadDrug = askedLabel != null ? askedLabel : first.getDrug();
 		if (proposal && lead == Lead.INTERACTS) {
-			// "Does it interact with her medications?" — every question admitted so has an interaction finding about the
-			// drug, so "Yes" is true of it, and the withholding call follows where a finding makes it (ADR Decision 181).
-			// A reason to withhold no rating makes is no reason claimed (ADR Decision 314).
-			lines.add(0, "Yes — " + leadDrug + " interacts with this patient's active medications."
-					+ (STRENGTH_WITHHOLD.equals(clauses[leadIndex]) && anyLicensesTheModulesNo(findings)
-							? " This module's drug-safety check found a reason to withhold it." : ""));
+			// "Does it interact with her medications?" — "Yes" where an interaction finding about the drug is among them, and
+			// the withholding call follows where a finding makes it (ADR Decision 181). A reason to withhold no rating makes
+			// is no reason claimed (ADR Decision 314). Where none is an interaction — her allergy to it alone — no "Yes":
+			// the check raised no interaction, and what it found follows (ADR Decision 398).
+			boolean anInteraction = false;
+			for (SafetyWarning finding : findings) {
+				anInteraction |= SafetyWarning.TYPE_INTERACTION.equals(finding.getType());
+			}
+			String withholds = STRENGTH_WITHHOLD.equals(clauses[leadIndex]) && anyLicensesTheModulesNo(findings)
+					? " This module's drug-safety check found a reason to withhold it." : "";
+			if (anInteraction) {
+				lines.add(0, "Yes — " + leadDrug + " interacts with this patient's active medications." + withholds);
+			} else {
+				lines.add(0, FOUND_LEAD_OPENING + leadDrug + ":");
+				lines.add(0, "The interaction check raised no interaction finding about " + leadDrug
+						+ " against this patient's active medications." + withholds);
+			}
 		} else if (STRENGTH_WITHHOLD.equals(clauses[leadIndex]) && (lead == Lead.NOT_GIVE && !licensesTheModulesNo(first)
 				|| lead == Lead.GIVE && proposal && !anyLicensesTheModulesNo(findings))) {
 			// No rated reason to withhold, so no claim of one either: what the check found (ADR Decisions 257, 311). Her own

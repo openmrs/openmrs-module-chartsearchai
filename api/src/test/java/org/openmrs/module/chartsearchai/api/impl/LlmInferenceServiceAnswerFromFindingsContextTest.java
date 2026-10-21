@@ -1678,12 +1678,20 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 				+ "The chart holds no active order for Efavirenz.", answer.getAnswer());
 	}
 
-	/** A contraindication about the drug proposed keeps the model call (ADR Decisions 108, 150): its match against her
-	 *  records' free text is not one the module can vouch for. She is recorded allergic to fluconazole. */
+	/** A contraindication about the drug proposed after a list is stated with what else the check found, and no verdict
+	 *  (ADR Decision 389), as Decision 311 answers the drug proposed alone. She is recorded allergic to fluconazole. */
 	@Test
-	public void aListQuestionWithAContraindicationAboutTheDrugProposedStillAsksTheModel() {
+	public void aListQuestionWithAContraindicationAboutTheDrugProposedIsStatedWithNoVerdict() {
 		DrugReferenceTestSupport.recordFreeTextAllergy(patient, 88, "Fluconazole");
-		assertTheModelIsAsked("The patient is currently on Nevirapine, is it safe to give fluconazole?", shipped());
+		String question = "The patient is currently on Nevirapine, is it safe to give fluconazole?";
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider, shipped()).search(patient, question);
+		assertEquals(0, provider.calls, "the module states what it found: " + answer.getAnswer());
+		assertTrue(answer.getAnswer().startsWith(DrugReferenceInjector.FOUND_LEAD_OPENING + "Fluconazole:\n"),
+			answer.getAnswer());
+		assertTrue(answer.getAnswer().contains("recorded allergy to Fluconazole"), "her allergy: " + answer.getAnswer());
+		assertFalse(answer.getAnswer().contains("No —") || answer.getAnswer().contains("No if")
+				|| answer.getAnswer().contains("can be given"), "no verdict: " + answer.getAnswer());
 	}
 
 	/** An unrated rule withholding the drug proposed licenses no "No", after a list as alone (ADR Decisions 108, 150):
@@ -2105,7 +2113,12 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		assertEquals(0, provider.calls, "no model is asked: " + answer.getAnswer());
 		assertTrue(answer.getAnswer().startsWith("1 interaction caution for Vorapaxar:\nVorapaxar "), answer.getAnswer());
 		assertTrue(answer.getAnswer().contains(" [" + aspirin.index + "]"), answer.getAnswer());
-		assertFalse(answer.getAnswer().contains("raised no finding"), answer.getAnswer());
+		// Never that the check raised nothing about vorapaxar; the listed lamivudine it relates to nothing is named so (ADR
+		// Decision 389).
+		assertFalse(answer.getAnswer().contains("relates Vorapaxar to none")
+				|| answer.getAnswer().contains("raised no finding about Vorapaxar"), answer.getAnswer());
+		assertTrue(answer.getAnswer().contains("\nThe check of Vorapaxar against Lamivudine, also named in the question, raised "
+				+ "no finding."), answer.getAnswer());
 	}
 
 	/** {@link #assertTheCheckRelatedNothing}, then the model is asked for {@code question} with the property on. */

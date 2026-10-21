@@ -21041,3 +21041,29 @@ is safe, or for a screen of her medications not only for their interactions. Not
 whether to stop, continue or change the dose of one, nor only what interacts.
 
 Pinned by `UnidentifiedActiveOrdersAnswerTest.anUncheckedAllergyIsSaidOnlyAfterAQuestionItsCheckBearsOn`.
+
+## Decision 389: A drug proposed after a list is answered beside a contraindication about it, with no verdict, and every listed drug it relates to nothing is named
+
+**Status: Accepted** (October 2026) — the owner's instruction of 2026-10-21 to keep finding and fixing drug-interaction
+answers before production use. It widens Decision 150.
+
+### Context
+
+On the 3.7.1 standalone Betty Williams, on bupivacaine and lidocaine and recorded allergic to ketoconazole, was asked *"The
+patient is currently on Lamivudine / zidovudine, Efavirenz, Trimethoprim and sulfamethoxazole is it safe to give
+Fluconazole?"*. The model answered *"No — Fluconazole should not be given"* and left out the interactions with zidovudine
+and sulfamethoxazole: `composeListFindings` gave the question up wherever a finding about the drug proposed was a
+contraindication — here fluconazole's class shared with her ketoconazole allergy. And *"…Abacavir, Lopinavir / ritonavir,
+Didanosine and … is it safe to give Rifampicin?"*, which the module answered, never named abacavir, which the check related
+to nothing.
+
+### The decision
+
+A contraindication about the drug proposed is stated as a line among its findings, and makes no verdict: the answer leads
+*"What this module's drug-safety check found about Fluconazole:"*, as the drug proposed alone is answered, unless a rated
+finding withholds it against one of her own orders, which still leads Decision 108's *"No"*. The contraindication never
+leads *"No"* or *"No if the patient is on …"*. And each listed drug the check related the drug proposed to nothing is named
+on a line, *"The check of Rifampicin (rifampin) against Abacavir, also named in the question, raised no finding."*, so no
+drug the question lists is passed over in silence.
+
+Pinned by `ListProposalBesideHerAllergyTest`.

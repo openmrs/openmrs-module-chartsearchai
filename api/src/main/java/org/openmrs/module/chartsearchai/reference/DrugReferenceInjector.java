@@ -4177,9 +4177,18 @@ public class DrugReferenceInjector {
 		// Per finding: the listed substances it is against that her orders do not resolve to — empty for one against
 		// her own orders.
 		final Map<Integer, List<Object>> againstListed = new HashMap<Integer, List<Object>>();
+		// A contraindication about the drug proposed — her allergy covering it — is stated, and makes no verdict: the lead
+		// says what the check found, as for the drug asked alone (ADR Decision 389).
+		boolean noVerdict = false;
 		for (Integer i : aboutTheProposal) {
 			SafetyWarning finding = findings.get(i);
 			String clause = strengthClause(finding);
+			if (SafetyWarning.TYPE_CONTRAINDICATION.equals(finding.getType()) && !finding.subjectRows().isEmpty()
+					&& strengthRank(clause) >= 0) {
+				noVerdict = true;
+				againstListed.put(i, new ArrayList<Object>());
+				continue;
+			}
 			if (!SafetyWarning.TYPE_INTERACTION.equals(finding.getType()) || finding.subjectRows().isEmpty()
 					|| !(STRENGTH_CAUTION.equals(clause)
 							|| STRENGTH_WITHHOLD.equals(clause) && licensesTheModulesNo(finding))) {
@@ -4202,7 +4211,7 @@ public class DrugReferenceInjector {
 		List<String> lines = new ArrayList<String>(order.size() + 1);
 		for (Integer i : order) {
 			SafetyWarning finding = findings.get(i);
-			if (STRENGTH_WITHHOLD.equals(strengthClause(finding))) {
+			if (STRENGTH_WITHHOLD.equals(strengthClause(finding)) && SafetyWarning.TYPE_INTERACTION.equals(finding.getType())) {
 				if (againstListed.get(i).isEmpty()) {
 					withholdsAgainstHerOrders = true;
 				}
@@ -4217,8 +4226,26 @@ public class DrugReferenceInjector {
 			lines.add(line + orderRecordMarkers(finding, herOrderRecords, ChartSearchAiUtils.citedIndexes(line)));
 		}
 		String drug = findings.get(order.get(0)).getDrug();
+		// And each listed drug the check raised nothing against, named, so a drug the question lists is never passed over
+		// in silence (ADR Decision 389).
+		Set<Object> related = new HashSet<Object>();
+		for (List<Object> keys : againstListed.values()) {
+			related.addAll(keys);
+		}
+		List<String> nothingAgainst = new ArrayList<String>();
+		for (Map.Entry<Object, List<DrugReference>> rows : listedRows.entrySet()) {
+			if (!herSubstances.contains(rows.getKey()) && !related.contains(rows.getKey())) {
+				nothingAgainst.add(DrugSafetyValidator.interactionSubject(rows.getValue(), context).displayLabel());
+			}
+		}
+		if (!nothingAgainst.isEmpty()) {
+			lines.add("The check of " + drug + " against " + joinedAsAList(nothingAgainst)
+					+ ", also named in the question, raised no finding.");
+		}
 		if (withholdsAgainstHerOrders) {
 			lines.add(0, WITHHOLD_LEAD_OPENING + drug + WITHHOLD_LEAD_CLOSING);
+		} else if (noVerdict) {
+			lines.add(0, FOUND_LEAD_OPENING + drug + ":");
 		} else if (!withholdingListed.isEmpty()) {
 			List<String> names = new ArrayList<String>();
 			for (Object key : withholdingListed) {

@@ -134,9 +134,4 @@ public class ClinicalAnswerProviderRegistry {
 		}
 		return provider;
 	}
-
-	/** A provider change always starts a new conversation; the old one stays in history. */
-	public static boolean switchRequiresNewConversation(String fromProviderId, String toProviderId) {
-		return !fromProviderId.equals(toProviderId);
-	}
 }

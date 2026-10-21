@@ -99,6 +99,30 @@ public class ConversationServicePersistenceTest extends BaseModuleContextSensiti
 		assertEquals(ClinicalConversation.STATUS_CLOSED, switchedProvider.getStatus());
 	}
 
+	/** The shared fixture's provider-switch case, driven through openOrCreate, which enforces it. */
+	@Test
+	public void theSharedProviderSwitchCaseStartsANewConversation() throws Exception {
+		com.fasterxml.jackson.databind.JsonNode switchCase = null;
+		try (java.io.InputStream in = getClass().getResourceAsStream("/conformance/dual-provider-conformance.v1.json")) {
+			for (com.fasterxml.jackson.databind.JsonNode fixtureCase : new com.fasterxml.jackson.databind.ObjectMapper()
+					.readTree(in).get("provider_capabilities")) {
+				if (fixtureCase.has("switch_to")) {
+					switchCase = fixtureCase;
+				}
+			}
+		}
+		assertNotNull(switchCase, "the fixture carries a provider-switch case");
+		assertEquals("new_conversation", switchCase.get("expected").asText());
+
+		ClinicalConversation before = conversationService.openOrCreate(patient,
+				switchCase.get("switch_from").asText(), ProviderMode.QUERY_SCOPED);
+		ClinicalConversation after = conversationService.openOrCreate(patient,
+				switchCase.get("switch_to").asText(), ProviderMode.QUERY_SCOPED);
+
+		assertNotEquals(before.getUuid(), after.getUuid());
+		assertEquals(ClinicalConversation.STATUS_CLOSED, before.getStatus());
+	}
+
 	@Test
 	public void startNewAlwaysClosesActiveConversationEvenWhenProviderAndModeMatch() {
 		ClinicalConversation first = conversationService.openOrCreate(patient, "bundled",

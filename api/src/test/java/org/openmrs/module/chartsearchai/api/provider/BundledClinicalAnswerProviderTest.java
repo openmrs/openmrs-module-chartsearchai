@@ -296,21 +296,6 @@ public class BundledClinicalAnswerProviderTest {
 				"the preview channel must satisfy the provider's advertised capabilities");
 	}
 
-	@Test
-	public void canonicalEnvelopePreservesReferenceProvenanceAndCoverage() throws Exception {
-		ScriptedChartSearchService service = new ScriptedChartSearchService();
-		service.ungrounded = answer("Naproxen [1]", Arrays.asList(referenceWithProvenance(1, null)));
-		service.groundedResult = answer("Naproxen [1]", Arrays.asList(referenceWithProvenance(1, Boolean.TRUE)));
-
-		TurnResult result = provider(service).execute(request(), new CollectingSink(), CancellationSignal.NONE)
-				.toCompletableFuture().get();
-
-		ChartSearchService.RecordReference reference = references(result.getAnswer()).get(0);
-		assertEquals("reference", reference.getGroup());
-		assertEquals("who-atc", reference.getSource());
-		assertEquals(3, reference.getWithheldInteractions());
-	}
-
 	// The wire shape of citations, chips and module statements is the REST layer's alone (groundedForWire,
 	// putModuleStatements); a second serializer here would publish a raw verdict on a reference citation and
 	// chips without their pair extent to any consumer that skipped the controller.

@@ -197,6 +197,31 @@ public class DrugSafetyStatusTest extends BaseModuleContextSensitiveTest {
 		assertEquals(Collections.singletonList("dose_not_assessable"), result.getIssues());
 	}
 
+	@Test
+	public void aDoseWithoutAStatedFrequencyIsNotAnAssessableDailyTotal() {
+		prepareCompletePatient();
+		DrugSafetyValidator.SafetyCheckResult result = validator.validateWithStatus("Ibuprofen 200 mg.",
+				"Can I take ibuprofen?", patient, Collections.emptyList(), new PairChipExtent.Sink());
+		assertEquals("limited", result.getStatus());
+		assertEquals(Collections.singletonList("dose_not_assessable"), result.getIssues());
+	}
+
+	@Test
+	public void aDefectTheLoaderReportsOnARecordedAllergenLimitsTheCheck() throws IOException {
+		prepareCompletePatient();
+		org.openmrs.Concept otherNonCoded = Context.getConceptService().getConcept(88);
+		set("allergy.concept.otherNonCoded", otherNonCoded.getUuid());
+		Context.getPatientService().saveAllergy(new org.openmrs.Allergy(patient,
+				new org.openmrs.Allergen(org.openmrs.AllergenType.DRUG, otherNonCoded, "amoxicillin"), null, null, null));
+		Context.flushSession();
+		Context.clearSession();
+		patient = Context.getPatientService().getPatient(7);
+		loadTheBundledEntriesWith("amoxicillin", null);
+		DrugSafetyValidator.SafetyCheckResult result = validate(patient);
+		assertEquals("limited", result.getStatus(), result.getIssues().toString());
+		assertEquals(Collections.singletonList("source_data_partially_invalid"), result.getIssues());
+	}
+
 	// Each dose_not_assessable branch on its own: the adult bands above carry both ceilings, so either
 	// branch alone keeps that test green (dkayiwa, #585 review).
 	@Test

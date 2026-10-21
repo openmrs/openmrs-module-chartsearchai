@@ -218,6 +218,42 @@ public class DrugSafetyStatusTest extends BaseModuleContextSensitiveTest {
 	}
 
 	@Test
+	public void aDoseInAnotherUnitBesideAReadableOneIsNotAssessed() {
+		prepareCompletePatient();
+		DrugSafetyValidator.SafetyCheckResult result = validator.validateWithStatus(
+				"Paracetamol 500 mg four times daily. Paracetamol 5 g four times daily.",
+				"Can I take paracetamol?", patient, Collections.emptyList(), new PairChipExtent.Sink());
+		assertEquals("limited", result.getStatus(), result.getIssues().toString());
+		assertEquals(Collections.singletonList("dose_not_assessable"), result.getIssues());
+	}
+
+	@Test
+	public void aDoseRangeIsReadAsBeforeAndNotAsANegativeDose() {
+		prepareCompletePatient();
+		DrugSafetyValidator.SafetyCheckResult range = validator.validateWithStatus(
+				"Paracetamol 500-1000 mg four times daily.", "Can I take paracetamol?", patient,
+				Collections.emptyList(), new PairChipExtent.Sink());
+		DrugSafetyValidator.SafetyCheckResult upper = validator.validateWithStatus(
+				"Paracetamol 1000 mg four times daily.", "Can I take paracetamol?", patient,
+				Collections.emptyList(), new PairChipExtent.Sink());
+		assertEquals(upper.getStatus(), range.getStatus(), range.getIssues().toString());
+		assertEquals(upper.getIssues(), range.getIssues());
+		DrugSafetyValidator.SafetyCheckResult spaced = validator.validateWithStatus(
+				"Paracetamol 500 - 1000 mg four times daily.", "Can I take paracetamol?", patient,
+				Collections.emptyList(), new PairChipExtent.Sink());
+		assertEquals(upper.getIssues(), spaced.getIssues());
+	}
+
+	@Test
+	public void aNegativeDoseIsNotAssessed() {
+		prepareCompletePatient();
+		DrugSafetyValidator.SafetyCheckResult result = validator.validateWithStatus("Ibuprofen -200 mg daily.",
+				"Can I take ibuprofen?", patient, Collections.emptyList(), new PairChipExtent.Sink());
+		assertEquals("limited", result.getStatus(), result.getIssues().toString());
+		assertEquals(Collections.singletonList("dose_not_assessable"), result.getIssues());
+	}
+
+	@Test
 	public void aDefectTheLoaderReportsOnARecordedAllergenLimitsTheCheck() throws IOException {
 		prepareCompletePatient();
 		org.openmrs.Concept otherNonCoded = Context.getConceptService().getConcept(88);

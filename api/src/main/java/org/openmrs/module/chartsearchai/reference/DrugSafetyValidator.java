@@ -313,6 +313,16 @@ public class DrugSafetyValidator {
 
 	private static final Pattern DOSE_MG = Pattern.compile("(\\d+(?:\\.\\d+)?)\\s*mg\\b");
 
+	/**
+	 * A dose statement {@link #DOSE_MG} cannot read: a negative amount, or a mass in another unit. The
+	 * warning arm leaves these unparsed (it misses rather than misreads), so the coverage pass reads them
+	 * (a range's hyphen, {@code 500-1000 mg} or {@code 500 - 1000 mg}, follows a digit and is not a sign)
+	 * to say the dose was not assessed instead of reporting the ceiling screened. A unit followed by
+	 * {@code /} is a concentration ({@code 10 g/dL}), not a dose.
+	 */
+	private static final Pattern UNREAD_DOSE = Pattern.compile(
+			"(?<![\\d.]\\s{0,3})-\\s*\\d+(?:\\.\\d+)?\\s*mg\\b|\\d+(?:\\.\\d+)?\\s*(?:g|gm|grams?|mcg|ug|\u00b5g|micrograms?|mgs|milligrams?)\\b(?!\\s*/)");
+
 	private static final Pattern EVERY_N_HOURS = Pattern.compile("(?:every\\s+(\\d+)\\s*(?:hours|hrs|hr|h)\\b|q(\\d+)h\\b|(\\d+)\\s*hourly\\b)");
 
 	// Frequency word-forms, word-boundary anchored so "bd"/"od" do not match inside larger words
@@ -14707,10 +14717,15 @@ public class DrugSafetyValidator {
 		// the band it is about to be compared against.
 		List<AttributedDose> doses = attributedDoses(lowerAnswer, rows, allEntries);
 		if (coverage != null) {
+			boolean unreadDose = statesAnUnreadDose(lowerAnswer, rows);
 			for (DrugReference row : rows) {
 				DrugReference.AgeBand band = row.bandForAge(context.getAgeYears());
 				if (band == null) {
 					continue;
+				}
+				// A dose the warning arm could not read was not compared at all, whatever else was stated.
+				if (unreadDose && (dailyCeilingApplies(band) || perKgCeilingPublished(band))) {
+					coverage.limited("dose_not_assessable");
 				}
 				// A dose with no stated frequency is still COMPARED, at the conservative once-daily reading
 				// parseDailyDoseMg takes, but it is not an assessable daily total: "200 mg" tells the warning
@@ -15024,6 +15039,26 @@ public class DrugSafetyValidator {
 			}
 		}
 		return out;
+	}
+
+	/**
+	 * @return whether a clause naming one of {@code rows} states a dose {@link #DOSE_MG} cannot read
+	 *         ({@link #UNREAD_DOSE}), other than a ceiling the answer recites
+	 */
+	private static boolean statesAnUnreadDose(String lowerAnswer, List<DrugReference> rows) {
+		for (String rawClause : CLAUSE_DELIMITER.split(lowerAnswer)) {
+			String clause = DrugReference.foldedLower(rawClause);
+			if (!namesSubstance(clause, rows)) {
+				continue;
+			}
+			Matcher m = UNREAD_DOSE.matcher(clause);
+			while (m.find()) {
+				if (!precededByLimitCue(clause, m.start())) {
+					return true;
+				}
+			}
+		}
+		return false;
 	}
 
 	/** One dose statement attributed to a drug: per-administration mg + the clause's stated

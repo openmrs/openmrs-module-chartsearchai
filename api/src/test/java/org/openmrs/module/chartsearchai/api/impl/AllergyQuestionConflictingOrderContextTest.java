@@ -281,6 +281,35 @@ public class AllergyQuestionConflictingOrderContextTest extends BaseModuleContex
 		assertTrue(!unrelated.records.equals(recorder.records), "a dose asked of the drug proposed keeps them");
 	}
 
+	/**
+	 * Why she is on a drug is a question about her record (ADR Decision 403): "Why is she on efavirenz?" was answered "The
+	 * patient is on Efavirenz due to two drug interactions that are cautions to note". Why it was STOPPED keeps the findings,
+	 * which may be the reason (Decision 399).
+	 */
+	@Test
+	public void search_whySheIsOnADrugIsAQuestionAboutHerRecord() throws IOException {
+		int number = theAspirinOrderRecordNumber(SLICE);
+		String modelAnswer = "Her aspirin [" + number + "] was ordered for her heart.";
+		Recorder unrelated = new Recorder(modelAnswer);
+		TestableService plain = serviceAnswering(modelAnswer);
+		plain.setLlmProvider(unrelated);
+		plain.search(patient, "Summarize her chart.");
+		for (String question : Arrays.asList("Why is she on aspirin?", "Why was she started on aspirin?",
+				"Why does she take aspirin?")) {
+			Recorder recorder = new Recorder(modelAnswer);
+			TestableService service = serviceAnswering(modelAnswer);
+			service.setLlmProvider(recorder);
+			ChartAnswer answer = service.search(patient, question);
+			assertTrue(answer.getSafetyWarnings().isEmpty(), question + " — no chip: " + answer.getSafetyWarnings());
+			assertEquals(unrelated.records, recorder.records, question + " — no drug-safety material");
+		}
+		Recorder recorder = new Recorder(modelAnswer);
+		TestableService service = serviceAnswering(modelAnswer);
+		service.setLlmProvider(recorder);
+		service.search(patient, "Why was her aspirin stopped?");
+		assertTrue(!unrelated.records.equals(recorder.records), "why it was stopped keeps them");
+	}
+
 	@Test
 	public void search_anAllergyQuestionStatesTheConflictingOrderInTheAnswer() throws IOException {
 		ChartAnswer answer = serviceAnswering(MODEL_ANSWER).search(patient, ALLERGY_QUESTION);

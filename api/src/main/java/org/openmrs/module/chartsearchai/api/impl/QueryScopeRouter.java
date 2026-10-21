@@ -1667,9 +1667,9 @@ public final class QueryScopeRouter {
 				|| asksWhetherSheHasTakenADrug(words) || asksAboutADrugAndHerAllergies(words) || asksAboutHerNamedDrug(words);
 	}
 
-	/** The words a question about a drug's record in her chart opens with (ADR Decision 399). Not "why": why her drug was
-	 *  stopped may be the very allergy or interaction a finding states, which the model is handed. */
-	private static final Set<String> RECORD_OPENERS = new HashSet<String>(Arrays.asList("when", "who", "how", "what",
+	/** The words a question about a drug's record in her chart opens with (ADR Decision 399), "why" among them only where
+	 *  it asks why she is on the drug ({@link #ENDED_STEMS}; ADR Decision 403). */
+	private static final Set<String> RECORD_OPENERS = new HashSet<String>(Arrays.asList("when", "who", "why", "how", "what",
 		"which", "did", "was", "were", "has", "have", "had", "is", "are", "does", "do"));
 
 	/**
@@ -1682,6 +1682,11 @@ public final class QueryScopeRouter {
 		"harm", "toxic", "compatib", "appropriat", "switch", "replac", "instead", "continu", "better", "prefer", "choos",
 		"versus", "monitor", "watch", "check", "screen", "ddi", "alright", "affect", "level", "reduc", "increas", "decreas",
 		"dose", "dosage", "dosing");
+
+	/** Words of a drug's ending: why it was stopped, held or changed may be the very allergy or interaction a finding states,
+	 *  which the model is handed (ADR Decision 403). */
+	private static final List<String> ENDED_STEMS = Arrays.asList("stop", "discontinu", "held", "hold", "chang", "end",
+		"ceas", "withdr", "interrupt", "paus", "swap");
 
 	/** The {@link #SAFETY_STEMS} of a dose, which a question about the dose she is on carries (ADR Decision 401). */
 	private static final Set<String> DOSE_STEMS = new HashSet<String>(Arrays.asList("dose", "dosage", "dosing"));
@@ -1710,6 +1715,15 @@ public final class QueryScopeRouter {
 		boolean ofHers = String.join(" ", wordsWithTheDrugMarked).matches(".*\\b(?:(?:she|he|they) (?:is |are )?(?:on|taking|"
 				+ "receiving|getting)\\b|(?:is|are) (?:she|he|they) (?:on|taking|receiving|getting)\\b|"
 				+ "(?:her|his|their) " + Pattern.quote(DRUG_NAME) + ").*");
+		if ("why".equals(wordsWithTheDrugMarked.get(0))) {
+			for (String word : wordsWithTheDrugMarked) {
+				for (String stem : ENDED_STEMS) {
+					if (word.startsWith(stem)) {
+						return false;
+					}
+				}
+			}
+		}
 		for (String word : wordsWithTheDrugMarked) {
 			if (SAFETY_WORDS.contains(word)) {
 				return false;

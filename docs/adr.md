@@ -21376,3 +21376,23 @@ change her efavirenz if I start rifampicin?"* — for all 15 patients, most of t
   (`GIVEN_A_CONDITION`); an allergy named so stays the model's.
 
 Pinned by `ClinicianWordingsTest.sixMoreWordingsAreAnsweredAsTheQuestionsTheyAsk`.
+
+## Decision 403: Why she is on a drug is a question about her record
+
+**Status: Accepted** (October 2026) — found asking *"Why is she on efavirenz?"* of 15 patients on the 3.7.1 standalone on
+2026-10-21.
+
+### Context
+
+Decision 399 left every *"why"* question to the findings, since why her drug was stopped may be the very allergy or
+interaction one states. *"Why is she on efavirenz?"* kept chips for 12 of 15 patients, and for two the model answered from the
+findings: *"The patient is on Efavirenz due to two drug interactions that are cautions to note"*.
+
+### The decision
+
+A question opening *"why"* is about her record — no drug-safety material, no chip — unless it carries a word of the drug's
+ending: stopped, held, discontinued, changed, ended, withdrawn, paused, swapped (`QueryScopeRouter.ENDED_STEMS`). *"Why is she
+on aspirin?"*, *"Why was she started on aspirin?"* and *"Why does she take aspirin?"* are read so; *"Why was her aspirin
+stopped?"* keeps the findings, as `EndedOrderFindingReferentTest` hands them.
+
+Pinned by `AllergyQuestionConflictingOrderContextTest.search_whySheIsOnADrugIsAQuestionAboutHerRecord`.

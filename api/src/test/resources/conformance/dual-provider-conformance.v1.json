@@ -87,5 +87,31 @@
       ],
       "expected": "reject"
     }
+  ],
+  "drug_safety_status": [
+    {
+      "id": "drug-safety.complete-check-is-checked",
+      "source_package": "reviewed-package-v1",
+      "mapping_complete": true,
+      "exposure_complete": true,
+      "execution_complete": true,
+      "expected_status": "checked"
+    },
+    {
+      "id": "drug-safety.partial-check-is-limited",
+      "source_package": "reviewed-package-v1",
+      "mapping_complete": false,
+      "exposure_complete": true,
+      "execution_complete": true,
+      "expected_status": "limited"
+    },
+    {
+      "id": "drug_safety.missing-package-is-unavailable",
+      "source_package": null,
+      "mapping_complete": false,
+      "exposure_complete": false,
+      "execution_complete": false,
+      "expected_status": "unavailable"
+    }
   ]
 }

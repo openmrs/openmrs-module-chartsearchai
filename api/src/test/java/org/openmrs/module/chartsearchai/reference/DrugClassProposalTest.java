@@ -10,6 +10,7 @@
 package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
@@ -167,6 +168,31 @@ public class DrugClassProposalTest extends BaseModuleContextSensitiveTest {
 	public void aQuestionProposingNoClassIsNotAnswered() {
 		assertNull(ask("When was her last NSAID prescribed?", null,
 			DrugReferenceTestSupport.activeOrder("order-mtz", "Metronidazole", "Metronidazole")));
+	}
+
+	/**
+	 * Five classes a clinician names in place of a drug are named, each over the WHO group that IS it (ADR Decision 407): on the
+	 * 3.7.1 standalone "Can I give her a macrolide?" went to the model for every patient, and for Kevin, allergic to
+	 * clarithromycin, the answer named the allergy only because the model happened to.
+	 */
+	@Test
+	public void fiveMoreClassesProposedStateHerOrdersAndAllergiesInTheirGroups() {
+		String macrolide = ask("Can I give her a macrolide?", DrugReferenceTestSupport.set("clarithromycin"),
+			DrugReferenceTestSupport.activeOrder("order-mtz", "Metronidazole", "Metronidazole"));
+		assertNotNull(macrolide, "the module answers");
+		assertTrue(macrolide.startsWith(DrugReferenceInjector.drugClassStatement("macrolide") + "\n"), macrolide);
+		assertTrue(macrolide.contains("J01FA") && macrolide.toLowerCase().contains("allergies in that class")
+				&& macrolide.toLowerCase().contains("clarithromycin"), macrolide);
+		String[][] classes = { { "Can I give her a benzodiazepine?", "benzodiazepine", "Diazepam" },
+			{ "Can I give her an opioid?", "opioid", "Tramadol" }, { "Can I give her a beta blocker?", "beta blocker", "Atenolol" },
+			{ "Can I give her an antifungal?", "antifungal", "Fluconazole" } };
+		for (String[] each : classes) {
+			String answer = ask(each[0], null, DrugReferenceTestSupport.activeOrder("order-x", each[2], each[2]));
+			assertNotNull(answer, "the module answers " + each[0]);
+			assertTrue(answer.startsWith(DrugReferenceInjector.drugClassStatement(each[1]) + "\n"), answer);
+			assertTrue(answer.contains("in that class") && answer.contains(each[2]) && !answer.contains("None of this patient's "
+					+ "active medication orders"), "her order in the class is named: " + answer);
+		}
 	}
 
 	private static String ask(String question, Set<String> allergies, PatientClinicalContext.ActiveDrugOrder... given) {

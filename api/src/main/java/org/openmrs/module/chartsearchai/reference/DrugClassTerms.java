@@ -144,6 +144,20 @@ final class DrugClassTerms {
 		// under no ATC code, so the class has no group: the answer asks for the vaccine by name, which is checked.
 		terms.put("live vaccine", "live vaccine");
 		terms.put("live vaccines", "live vaccine");
+		// ADR Decision 407: "Can I give her a macrolide?", "… an opioid?", "… a beta blocker?" went to the model. Not "antibiotic",
+		// which a question asking the module to choose one names (ADR Decision 293).
+		terms.put("macrolide", "macrolide");
+		terms.put("macrolides", "macrolide");
+		terms.put("benzodiazepine", "benzodiazepine");
+		terms.put("benzodiazepines", "benzodiazepine");
+		terms.put("opioid", "opioid");
+		terms.put("opioids", "opioid");
+		terms.put("beta blocker", "beta blocker");
+		terms.put("beta blockers", "beta blocker");
+		terms.put("beta-blocker", "beta blocker");
+		terms.put("beta-blockers", "beta blocker");
+		terms.put("antifungal", "antifungal");
+		terms.put("antifungals", "antifungal");
 		TERMS = Collections.unmodifiableMap(terms);
 	}
 
@@ -175,6 +189,15 @@ final class DrugClassTerms {
 		String corticosteroids = "corticosteroid: H02, D07A, R03BA, R01AD, S01BA, S02BA, S03BA, A07EA, C05AA, D10AA, A01AC";
 		groups.put("corticosteroid", corticosteroids);
 		groups.put("steroid", corticosteroids);
+		// Read with the shipped knowledge base's atc arrays on 2026-10-22, each group holding that class's members and no other
+		// substance (ADR Decision 407): J01FA the macrolides; N05BA, N05CD and N03AE (clonazepam) the benzodiazepines; N02A the
+		// opioids — not N07BC, which files lofexidine beside methadone, so methadone, filed there alone, is the residue; C07 the
+		// beta blockers; J02A and D01B the antifungals — not D01A, which files salicylic acid and selenium sulfide.
+		groups.put("macrolide", "J01FA");
+		groups.put("benzodiazepine", "benzodiazepine: N05BA, N05CD, N03AE");
+		groups.put("opioid", "N02A");
+		groups.put("beta blocker", "C07");
+		groups.put("antifungal", "antifungal: J02A, D01B");
 		ATC_GROUP_OF_CLASS = Collections.unmodifiableMap(groups);
 	}
 

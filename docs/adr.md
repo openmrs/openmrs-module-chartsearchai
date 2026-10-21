@@ -21462,3 +21462,26 @@ interactions with X?"* are Decision 319's which of her medications interact with
 *"Yes"* or *"No"* either.
 
 Pinned by `ClinicianWordingsTest.aQuestionAskedInTheNegativeIsAnsweredWithNoYesOrNo`.
+
+## Decision 407: Five more drug classes a clinician names in place of a drug are named, each over the WHO group that is it
+
+**Status: Accepted** (October 2026) — found on the 3.7.1 standalone on 2026-10-22.
+
+### Context
+
+*"Can I give her a macrolide?"*, *"… a benzodiazepine?"*, *"… an opioid?"*, *"… a beta blocker?"*, *"… an antifungal?"* and *"Is an
+antibiotic safe for her?"* named no class the module carries, so each went to the model for every patient. Kevin, allergic to
+clarithromycin, was told of it only because the model happened to: *"No — the patient is allergic to Clarithromycine"*.
+
+### The decision
+
+`DrugClassTerms` names five of the classes, each answered as Decision 347 answers a class proposed — the class not resolved to a
+drug, her orders in it and her recorded drug allergies in it — over the WHO group that IS the class, read with the shipped
+knowledge base's `atc` arrays on 2026-10-22: J01FA the macrolides; N05BA, N05CD and N03AE the benzodiazepines; N02A the opioids;
+C07 the beta blockers; J02A and D01B the antifungals. Not *"antibiotic"*: a question asking the module to choose one — *"Which
+antibiotic is safest for him?"* — is Decision 293's screen, and `OnADrugGroupQuestionTest` holds it a class no group carries.
+Two groups are left out because
+they hold substances not of the class, Decision 275's rule: N07BC, which files lofexidine beside methadone — so methadone, filed
+only there, is the residue of the opioids — and D01A, which files salicylic acid and selenium sulfide among the antifungals.
+
+Pinned by `DrugClassProposalTest.fiveMoreClassesProposedStateHerOrdersAndAllergiesInTheirGroups`.

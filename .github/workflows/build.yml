@@ -200,7 +200,7 @@ jobs:
           DB_PASS: root
         run: sh scripts/demo-seed.test.sh
 
-  # Issue #181. `api/pom.xml` declares querystore-api at 1.0.0-SNAPSHOT, so what this module
+  # Issue #181. The root pom declares querystore-api at 1.0.0-SNAPSHOT, so what this module
   # compiles against is whatever snapshot was published remotely last (CI) or `mvn install`ed
   # locally last (a developer). When querystore changes a method this module calls, the local build
   # breaks while CI stays green — three times in one day on the development box, each time as an
@@ -287,7 +287,7 @@ jobs:
 
       - name: Fail loudly if the two repos no longer agree on the querystore version
         # Without this the job's own failure mode is a FALSE GREEN — the exact shape it exists to
-        # remove, re-created inside it. `api/pom.xml` names querystore-api at a literal version;
+        # remove, re-created inside it. The root pom names querystore-api at a literal version;
         # the step above installs whatever querystore HEAD declares. Today they coincide. The
         # moment upstream bumps or cuts a release they stop coinciding, the build below resolves
         # the PUBLISHED artifact instead of the one just built, and this job goes green having
@@ -331,7 +331,7 @@ jobs:
             exit 1
           fi
           if [ "${head_version}" != "${wanted_version}" ]; then
-            echo "::error::chartsearchai asks for querystore-api ${wanted_version} but querystore HEAD builds ${head_version}. The build below would silently resolve the PUBLISHED artifact, so this job would test nothing. Update the querystore-api version in api/pom.xml to ${head_version}."
+            echo "::error::chartsearchai asks for querystore-api ${wanted_version} but querystore HEAD builds ${head_version}. The build below would silently resolve the PUBLISHED artifact, so this job would test nothing. Update querystoreVersion in the root pom.xml to ${head_version}."
             exit 1
           fi
 

@@ -37,6 +37,7 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
+import java.util.function.LongSupplier;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -214,6 +215,12 @@ public class LocalLlmEngine implements LlmEngine {
 			});
 
 	private ScheduledFuture<?> idleUnloadFuture;
+
+	/** When the engine last started a server or completed a call, on {@link #clock}. */
+	private long lastActivityNanos;
+
+	/** Monotonic nanoseconds; package-private so a test can move time without waiting. */
+	LongSupplier clock = System::nanoTime;
 
 	@Override
 	public synchronized InferenceResult infer(String systemPrompt, String userMessage,
@@ -1821,23 +1828,45 @@ public class LocalLlmEngine implements LlmEngine {
 	}
 
 	private synchronized void resetIdleTimer() {
+		lastActivityNanos = clock.getAsLong();
+		int idleMinutes = getIdleTimeoutMinutes();
+		scheduleIdleUnload(TimeUnit.MINUTES.toNanos(idleMinutes), idleMinutes);
+	}
+
+	private void scheduleIdleUnload(long delayNanos, int idleMinutes) {
 		if (idleUnloadFuture != null) {
 			idleUnloadFuture.cancel(false);
 			idleUnloadFuture = null;
 		}
-		int idleMinutes = getIdleTimeoutMinutes();
 		if (idleMinutes > 0) {
 			try {
-				idleUnloadFuture = idleTimer.schedule(() -> {
-					log.info("LLM idle for {} minutes, stopping server to free memory",
-							idleMinutes);
-					close();
-				}, idleMinutes, TimeUnit.MINUTES);
+				idleUnloadFuture = idleTimer.schedule(() -> unloadIfIdle(idleMinutes), delayNanos,
+						TimeUnit.NANOSECONDS);
 			}
 			catch (java.util.concurrent.RejectedExecutionException e) {
 				log.debug("Idle timer already shut down, skipping schedule");
 			}
 		}
+	}
+
+	/**
+	 * The idle timer's callback. It takes the engine lock, so a timer that expires while a call is
+	 * in flight waits for the call, and that call's completion-time {@link #resetIdleTimer} has
+	 * moved {@code lastActivityNanos} by the time this runs: the server is closed only when the
+	 * full idle interval has elapsed since the last activity, otherwise the remainder is waited
+	 * out. Without the re-check, a first inference longer than the interval (the startup timer is
+	 * armed before it) would be followed at once by an unload that throws away the prompt cache it
+	 * just built.
+	 */
+	synchronized void unloadIfIdle(int idleMinutes) {
+		long idleFor = clock.getAsLong() - lastActivityNanos;
+		long limit = TimeUnit.MINUTES.toNanos(idleMinutes);
+		if (idleFor < limit) {
+			scheduleIdleUnload(limit - idleFor, idleMinutes);
+			return;
+		}
+		log.info("LLM idle for {} minutes, stopping server to free memory", idleMinutes);
+		close();
 	}
 
 	/**

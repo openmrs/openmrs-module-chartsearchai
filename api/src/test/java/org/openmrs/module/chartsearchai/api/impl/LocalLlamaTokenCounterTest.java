@@ -20,6 +20,9 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
 import org.openmrs.api.context.Context;
@@ -152,6 +155,35 @@ public class LocalLlamaTokenCounterTest extends BaseModuleContextSensitiveTest {
 	 * The module spawns this server itself, so it is not one of the tester-started servers
 	 * {@link LlmEndpointTestSupport} serves.
 	 */
+	@Test
+	public void anIdleTimerThatExpiresDuringACallWaitsOutTheRemainderInsteadOfClosing() {
+		AtomicLong now = new AtomicLong(0);
+		AtomicInteger closes = new AtomicInteger();
+		LocalLlmEngine engine = new LocalLlmEngine() {
+			@Override
+			public synchronized void close() {
+				closes.incrementAndGet();
+			}
+		};
+		engine.clock = now::get;
+		ReflectionTestUtils.setField(engine, "lastActivityNanos", 0L);
+
+		// The call completed half a minute before the startup timer's callback took the lock.
+		now.set(TimeUnit.SECONDS.toNanos(90));
+		ReflectionTestUtils.setField(engine, "lastActivityNanos", TimeUnit.SECONDS.toNanos(60));
+		engine.unloadIfIdle(1);
+		assertEquals(0, closes.get(), "a call that finished inside the interval must keep the server");
+		ScheduledFuture<?> remainder = (ScheduledFuture<?>) ReflectionTestUtils.getField(engine, "idleUnloadFuture");
+		assertNotNull(remainder, "the remainder of the interval must be rescheduled");
+		assertTrue(remainder.getDelay(TimeUnit.SECONDS) > 25 && remainder.getDelay(TimeUnit.SECONDS) <= 30);
+
+		// Nothing happened for the full interval: the server is unloaded.
+		remainder.cancel(false);
+		now.set(TimeUnit.SECONDS.toNanos(120));
+		engine.unloadIfIdle(1);
+		assertEquals(1, closes.get(), "a full idle interval since the last activity unloads the server");
+	}
+
 	@Test
 	public void realEngineCountMatchesInferenceUsageAndArmsIdleUnload() {
 		Assumptions.assumeTrue(Boolean.getBoolean("chartsearchai.test.tokenCount.enabled"),

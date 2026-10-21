@@ -21309,3 +21309,24 @@ A question opening *"why"* keeps them too: why her drug was stopped may be the v
 (`EndedOrderFindingReferentTest` hands the model such findings for *"Why was her ibuprofen stopped?"*).
 
 Pinned by `AllergyQuestionConflictingOrderContextTest.search_aQuestionAboutADrugsRecordInHerChartCarriesNoDrugSafetyMaterial`.
+
+## Decision 400: Five more wordings a clinician types are answered as the questions they ask
+
+**Status: Accepted** (October 2026) — found asking 20 further drug-interaction wordings of 15 patients on the 3.7.1 standalone
+on 2026-10-21.
+
+### Context
+
+Five went to the model for every patient: *"Can ciprofloxacin be taken with her medicines?"*, *"Should I be worried about
+giving her fluconazole?"*, *"Does ciprofloxacin clash with any of her medicines?"*, *"Is it ok to give ibuprofen and
+paracetamol to her?"* and *"Which of her medications should I stop if I start rifampicin?"*.
+
+### The decision
+
+Decision 396's residual reading takes *"taken"* as a word of giving, *"worried"*, *"worry"*, *"worrying"* and *"safety"* as
+words saying the drug may not be safe, *"clash"* as a word of interaction, and *"about"* as filler. The together shape *"is it
+ok to give X and Y"* closes *"to her"* as it closes *"for her"*. *"Which of her medications should I stop if I start X?"* is
+asked as which of her medications interact with X, the module choosing none to stop, as Decision 397 asks *"Should she stop
+any medication before starting X?"*.
+
+Pinned by `ClinicianWordingsTest.fiveMoreWordingsAreAnsweredAsTheQuestionsTheyAsk`.

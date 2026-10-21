@@ -548,6 +548,10 @@ public final class QueryScopeRouter {
 	 * (ADR Decision 319): "Yes" does not answer "which".
 	 */
 	private static final List<Pattern> WHICH_OF_HER_MEDICATIONS_INTERACT_SHAPES = shapes(
+			// "Which of her medications should I stop if I start rifampicin?" — which interact with it, the module choosing
+			// none to stop (ADR Decision 400)
+			"which of " + POSSESSIVE + " (?:medications|meds|medicines|drugs) should (?:i|we) stop if (?:i|we) (?:start|give|add|"
+					+ "prescribe) (?:" + PATIENT + " )?(?:on )?" + D,
 			// "Should she stop any medication before starting rifampicin?" — which of hers the drug interacts with, the
 			// module choosing none to stop (ADR Decision 397)
 			"(?:should|must|do|does) (?:i|we|she|he|they|the patient|this patient) (?:need to )?stop any (?:of " + POSSESSIVE
@@ -625,7 +629,7 @@ public final class QueryScopeRouter {
 			// to co-prescribe warfarin with her ibuprofen?" (ADR Decision 250)
 			"is it (?:safe|ok|okay|appropriate|fine|alright|advisable|wise) (?:for " + PATIENT + " )?to (?:(?:give|start|prescribe|"
 					+ "co prescribe|administer) (?:"
-					+ PATIENT + " )?(?:on )?|take )" + HER_D + " (?:and|with|alongside) " + HER_DS + "(?: together)?(?: for "
+					+ PATIENT + " )?(?:on )?|take )" + HER_D + " (?:and|with|alongside) " + HER_DS + "(?: together)?(?: (?:for|to) "
 					+ PATIENT + ")?(?: now| today)?",
 			// "Are warfarin and ibuprofen safe together?", "Is warfarin safe with ibuprofen?"
 			"are " + HER_D + " and " + HER_D + " (?:safe|ok|okay|appropriate)(?: to (?:give|take|use))?(?: together)?(?: for "
@@ -1614,20 +1618,22 @@ public final class QueryScopeRouter {
 		"for", "want", "wanted", "planning", "plan", "going", "need", "needs", "many", "several", "drug", "drugs", "meds",
 		"medication", "medications", "medicine", "medicines", "treatment", "treatments", "regimen", "therapy",
 		"prescriptions", "tablets", "pills", "arvs", "arv", "antiretrovirals", "antibiotic", "painkiller", "take", "takes",
-		"taking", "co", "please", "so", "and", "also", "already", "between"));
+		"taking", "co", "please", "so", "and", "also", "already", "between", "about"));
 
 	/** Words saying the question is about the drug's interactions. */
 	private static final Set<String> RESIDUAL_INTERACTS = new HashSet<String>(Arrays.asList("interact", "interacts",
-		"interacting", "interaction", "interactions", "ddi", "ddis"));
+		"interacting", "interaction", "interactions", "ddi", "ddis", "clash", "clashes", "clashing"));
 
 	/** Words saying the question is about whether the drug is safe to give. */
 	private static final Set<String> RESIDUAL_SAFE = new HashSet<String>(Arrays.asList("safe", "safely", "ok", "okay",
 		"fine", "alright", "issue", "issues", "problem", "problems", "concern", "concerns", "risk", "risks", "risky",
-		"compatible", "contraindicated", "contraindication", "contraindications", "appropriate"));
+		"compatible", "contraindicated", "contraindication", "contraindications", "appropriate", "worried", "worry",
+		"worrying", "safety"));
 
 	/** Words proposing to give the drug, where an asking word opens the question. */
 	private static final Set<String> RESIDUAL_GIVE = new HashSet<String>(Arrays.asList("give", "giving", "given", "start",
-		"starting", "started", "prescribe", "prescribing", "prescribed", "add", "adding", "added", "administer", "use"));
+		"starting", "started", "prescribe", "prescribing", "prescribed", "add", "adding", "added", "administer", "use",
+		"taken"));
 
 	/** The asking words a proposal may open with. */
 	private static final Set<String> RESIDUAL_ASKING = new HashSet<String>(Arrays.asList("can", "could", "may", "should",

@@ -153,6 +153,23 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/** Five more wordings are answered as the questions they ask (ADR Decision 400); each went to the model. */
+	@Test
+	public void fiveMoreWordingsAreAnsweredAsTheQuestionsTheyAsk() {
+		String[][] pairs = {
+			{ "Can ciprofloxacin be taken with her medicines?", "Can I give her ciprofloxacin?" },
+			{ "Should I be worried about giving her fluconazole?", "Can I give her fluconazole?" },
+			{ "Does ciprofloxacin clash with any of her medicines?", "Does ciprofloxacin interact with her medications?" },
+			{ "Is it ok to give warfarin and metronidazole to her?", "Can I give her warfarin and metronidazole together?" },
+			{ "Which of her medications should I stop if I start rifampicin?",
+					"Which of her medications interact with rifampicin?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+	}
+
 	private static org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart chart(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

@@ -20,21 +20,35 @@ public class TurnPreemptionRegistryTest {
 	public void aSecondTurnOnTheSameConversationCancelsTheFirst() {
 		TurnPreemptionRegistry registry = new TurnPreemptionRegistry();
 
-		TurnCancellation first = registry.begin("conversation-1");
+		TurnCancellation first = registry.begin("conversation-1", 1);
 		assertFalse(first.isCancelled());
 
-		TurnCancellation second = registry.begin("conversation-1");
+		TurnCancellation second = registry.begin("conversation-1", 1);
 
 		assertTrue(first.isCancelled());
 		assertFalse(second.isCancelled());
 	}
 
 	@Test
+	public void anOlderTurnRegisteringAfterANewerOneIsCancelledInsteadOfCancellingIt() {
+		TurnPreemptionRegistry registry = new TurnPreemptionRegistry();
+		TurnCancellation newer = registry.begin("conversation", 2);
+		TurnCancellation older = registry.begin("conversation", 1);
+
+		assertTrue(older.isCancelled(), "the older question must not run in place of the newer one");
+		assertFalse(newer.isCancelled());
+		registry.end("conversation", older);
+		TurnCancellation next = registry.begin("conversation", 3);
+		assertTrue(newer.isCancelled(), "the newer turn still held the slot after the older one ended");
+		assertFalse(next.isCancelled());
+	}
+
+	@Test
 	public void turnsOnDifferentConversationsDoNotCancelEachOther() {
 		TurnPreemptionRegistry registry = new TurnPreemptionRegistry();
 
-		TurnCancellation a = registry.begin("conversation-a");
-		TurnCancellation b = registry.begin("conversation-b");
+		TurnCancellation a = registry.begin("conversation-a", 1);
+		TurnCancellation b = registry.begin("conversation-b", 1);
 
 		assertFalse(a.isCancelled());
 		assertFalse(b.isCancelled());
@@ -43,13 +57,13 @@ public class TurnPreemptionRegistryTest {
 	@Test
 	public void endOnlyClearsTheEntryIfItIsStillTheCurrentTurn() {
 		TurnPreemptionRegistry registry = new TurnPreemptionRegistry();
-		TurnCancellation first = registry.begin("conversation-1");
-		TurnCancellation second = registry.begin("conversation-1");
+		TurnCancellation first = registry.begin("conversation-1", 1);
+		TurnCancellation second = registry.begin("conversation-1", 1);
 
 		// The first turn finishing (e.g. its provider noticed cancellation and returned) must not
 		// clear the SECOND turn's still-active entry out from under it.
 		registry.end("conversation-1", first);
-		TurnCancellation third = registry.begin("conversation-1");
+		TurnCancellation third = registry.begin("conversation-1", 1);
 
 		assertTrue(second.isCancelled(), "second should have been cancelled by third starting");
 		assertFalse(third.isCancelled());
@@ -58,10 +72,10 @@ public class TurnPreemptionRegistryTest {
 	@Test
 	public void endClearsTheEntryWhenItIsStillCurrent() {
 		TurnPreemptionRegistry registry = new TurnPreemptionRegistry();
-		TurnCancellation first = registry.begin("conversation-1");
+		TurnCancellation first = registry.begin("conversation-1", 1);
 
 		registry.end("conversation-1", first);
-		registry.begin("conversation-1");
+		registry.begin("conversation-1", 1);
 
 		// Nothing was left registered for "conversation-1" after end(), so this second begin()
 		// must not find (and cancel) anything.

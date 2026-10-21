@@ -29,9 +29,10 @@ import org.junit.jupiter.api.Test;
 /**
  * Conformance adapter for the {@code provider_lifecycle} family of
  * {@code conformance/dual-provider-conformance.v1.json}, which carries the cases of the shared
- * dual-provider conformance fixture that this module's tests read, each copied unchanged. Every
- * provider implementation must emit turn events
- * that {@link TurnLifecycleValidator} accepts against its advertised capabilities.
+ * dual-provider conformance fixture that this module's tests read, each copied unchanged from
+ * {@code datasets/validation/conformance/dual-provider-conformance.v1.json} in
+ * pmanko/clinical-ai-validation-harness. Every provider implementation must emit turn events that
+ * {@link TurnLifecycleValidator} accepts against its advertised capabilities.
  */
 public class TurnLifecycleConformanceTest {
 

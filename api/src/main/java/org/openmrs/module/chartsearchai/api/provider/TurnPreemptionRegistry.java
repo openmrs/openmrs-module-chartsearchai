@@ -20,17 +20,40 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class TurnPreemptionRegistry {
 
-	private final ConcurrentHashMap<String, TurnCancellation> inFlight = new ConcurrentHashMap<>();
+	private static final class InFlightTurn {
+
+		final int ordinal;
+
+		final TurnCancellation cancellation;
+
+		InFlightTurn(int ordinal, TurnCancellation cancellation) {
+			this.ordinal = ordinal;
+			this.cancellation = cancellation;
+		}
+	}
+
+	private final ConcurrentHashMap<String, InFlightTurn> inFlight = new ConcurrentHashMap<>();
 
 	/**
-	 * Registers a new in-flight turn for {@code conversationUuid}, cancelling whichever turn
-	 * currently holds that slot (if any). Returns the new turn's cancellation signal.
+	 * Registers the in-flight turn {@code ordinal} of {@code conversationUuid} and returns its
+	 * cancellation signal. The newer turn by ordinal wins: registering cancels an older turn that
+	 * holds the slot, and a turn that registers after a newer one has (its request paused between
+	 * creating its turn and arriving here) comes back already cancelled, so an older question never
+	 * cancels the newer one and runs in its place.
 	 */
-	public TurnCancellation begin(String conversationUuid) {
+	public TurnCancellation begin(String conversationUuid, int ordinal) {
 		TurnCancellation next = new TurnCancellation();
-		TurnCancellation previous = inFlight.put(conversationUuid, next);
-		if (previous != null) {
-			previous.cancel();
+		InFlightTurn[] superseded = new InFlightTurn[1];
+		inFlight.compute(conversationUuid, (uuid, current) -> {
+			if (current != null && current.ordinal > ordinal) {
+				superseded[0] = new InFlightTurn(ordinal, next);
+				return current;
+			}
+			superseded[0] = current;
+			return new InFlightTurn(ordinal, next);
+		});
+		if (superseded[0] != null) {
+			superseded[0].cancellation.cancel();
 		}
 		return next;
 	}
@@ -41,6 +64,7 @@ public final class TurnPreemptionRegistry {
 	 * entry must survive this call.
 	 */
 	public void end(String conversationUuid, TurnCancellation cancellation) {
-		inFlight.remove(conversationUuid, cancellation);
+		inFlight.computeIfPresent(conversationUuid,
+				(uuid, current) -> current.cancellation == cancellation ? null : current);
 	}
 }

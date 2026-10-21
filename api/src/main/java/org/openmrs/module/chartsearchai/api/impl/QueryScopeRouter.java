@@ -1635,7 +1635,10 @@ public final class QueryScopeRouter {
 		"for", "want", "wanted", "planning", "plan", "going", "need", "needs", "many", "several", "drug", "drugs", "meds",
 		"medication", "medications", "medicine", "medicines", "treatment", "treatments", "regimen", "therapy",
 		"prescriptions", "tablets", "pills", "arvs", "arv", "antiretrovirals", "antibiotic", "painkiller", "take", "takes",
-		"taking", "co", "please", "so", "and", "also", "already", "between", "about", "while", "tb", "have"));
+		"taking", "co", "please", "so", "and", "also", "already", "between", "about", "while", "tb", "have",
+		// a greeting or a preamble before the proposal (ADR Decision 405)
+		"hi", "hello", "hey", "doctor", "here", "check", "if", "whether", "am", "i'm", "thinking", "considering", "wondering",
+		"you", "choice", "option"));
 
 	/** Words saying the question is about the drug's interactions. */
 	private static final Set<String> RESIDUAL_INTERACTS = new HashSet<String>(Arrays.asList("interact", "interacts",
@@ -1645,12 +1648,12 @@ public final class QueryScopeRouter {
 	private static final Set<String> RESIDUAL_SAFE = new HashSet<String>(Arrays.asList("safe", "safely", "ok", "okay",
 		"fine", "alright", "issue", "issues", "problem", "problems", "concern", "concerns", "risk", "risks", "risky",
 		"compatible", "contraindicated", "contraindication", "contraindications", "appropriate", "worried", "worry",
-		"worrying", "safety"));
+		"worrying", "safety", "good", "suitable", "reasonable"));
 
 	/** Words proposing to give the drug, where an asking word opens the question. */
 	private static final Set<String> RESIDUAL_GIVE = new HashSet<String>(Arrays.asList("give", "giving", "given", "start",
 		"starting", "started", "prescribe", "prescribing", "prescribed", "add", "adding", "added", "administer", "use",
-		"taken"));
+		"taken", "recommend", "recommended"));
 
 	/** The asking words a proposal may open with. */
 	private static final Set<String> RESIDUAL_ASKING = new HashSet<String>(Arrays.asList("can", "could", "may", "should",
@@ -1681,7 +1684,7 @@ public final class QueryScopeRouter {
 		"allerg", "avoid", "withhold", "combin", "together", "problem", "concern", "issue", "clash", "caution", "warn", "worr",
 		"harm", "toxic", "compatib", "appropriat", "switch", "replac", "instead", "continu", "better", "prefer", "choos",
 		"versus", "monitor", "watch", "check", "screen", "ddi", "alright", "affect", "level", "reduc", "increas", "decreas",
-		"dose", "dosage", "dosing");
+		"dose", "dosage", "dosing", "good", "choice", "option", "suitab", "reasonab", "recommend");
 
 	/** Words of a drug's ending: why it was stopped, held or changed may be the very allergy or interaction a finding states,
 	 *  which the model is handed (ADR Decision 403). */
@@ -1706,8 +1709,10 @@ public final class QueryScopeRouter {
 	 * findings: the list is what a question must lack, and errs toward keeping them.
 	 */
 	public static boolean asksOnlyAboutADrugsRecord(List<String> wordsWithTheDrugMarked) {
+		// Nor "What about fluconazole?", which says nothing of its record (ADR Decision 405).
 		if (wordsWithTheDrugMarked == null || Collections.frequency(wordsWithTheDrugMarked, DRUG_NAME) != 1
-				|| wordsWithTheDrugMarked.isEmpty() || !RECORD_OPENERS.contains(wordsWithTheDrugMarked.get(0))) {
+				|| wordsWithTheDrugMarked.size() < 3 || !RECORD_OPENERS.contains(wordsWithTheDrugMarked.get(0))
+				|| "about".equals(wordsWithTheDrugMarked.get(1))) {
 			return false;
 		}
 		// The dose she is on, or her drug's dose, is a fact of her record: a dose asked of a drug proposed is not (ADR
@@ -1794,7 +1799,8 @@ public final class QueryScopeRouter {
 					&& RESIDUAL_SUBJECTS.contains(wordsWithTheDrugMarked.get(i - 1));
 		}
 		boolean asked = false;
-		boolean aQuestion = wordsWithTheDrugMarked.size() <= 2;
+		// A drug, the patient and a word saying it is safe — "Warfarin for her - safe?" — is asked whole (ADR Decision 405).
+		boolean aQuestion = wordsWithTheDrugMarked.size() <= 2 || safe && wordsWithTheDrugMarked.size() <= 4;
 		for (String word : wordsWithTheDrugMarked) {
 			asked |= RESIDUAL_ASKING.contains(word);
 			aQuestion |= RESIDUAL_QUESTION.contains(word);

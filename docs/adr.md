@@ -21419,3 +21419,25 @@ the model the answer. Decision 402's *"Should I change her X if I start Y?"* is 
 own it is answered with what relates them, as Decision 203 answers two of hers.
 
 Pinned by `OneOfTwoDrugsHersInteractTest`.
+
+## Decision 405: A proposal opened by a greeting or a preamble, or asked as a recommendation or a good choice, is the proposal
+
+**Status: Accepted** (October 2026) — found asking 20 further wordings of 15 patients on the 3.7.1 standalone on 2026-10-21.
+
+### Context
+
+*"Please check if fluconazole is safe for her"*, *"Doctor here, can I prescribe ciprofloxacin for this patient?"*, *"I am
+thinking of giving her clarithromycin, is that ok?"*, *"Hi, is it ok to start metronidazole?"*, *"Would you recommend fluconazole
+for her?"* and *"Fluconazole for her - safe?"* went to the model, which cleared drugs as before (*"Fluconazole can be given, with
+one caution"*). Worse, *"Is fluconazole a good choice for her?"* carried no word of Decision 399's safety list, so it was read as
+a question about the drug's record: the model was handed no drug-safety material and answered *"The records do not address
+fluconazole"* for every patient — as it did *"What about fluconazole?"*.
+
+### The decision
+
+Decision 396's residual reading takes a greeting or preamble as filler (*hi*, *doctor here*, *please check if*, *I am thinking
+of*, *you*), *"recommend"* as a word of giving, and *"good"*, *"suitable"*, *"reasonable"* as words saying the drug may be safe;
+a drug, the patient and such a word is asked whole. *"good"*, *"choice"*, *"option"*, *"suitable"*, *"reasonable"* and
+*"recommend"* are words of safety to `asksOnlyAboutADrugsRecord`, and *"What about X?"* is never a question about its record.
+
+Pinned by `ClinicianWordingsTest.aProposalOpenedByAGreetingOrAskedAsARecommendationIsTheProposal`.

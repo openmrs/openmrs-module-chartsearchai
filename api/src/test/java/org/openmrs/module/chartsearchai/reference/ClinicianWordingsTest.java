@@ -196,6 +196,28 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 				+ DrugReferenceInjector.CONDITION_NOT_WEIGHED_OPENING + "kidney disease)."), "was: " + condition);
 	}
 
+	/**
+	 * A proposal opened by a greeting or a preamble, or asked as a recommendation or a good choice, is answered as the
+	 * proposal (ADR Decision 405); and none of them, nor "What about warfarin?", is a question about the drug's record
+	 * alone. On the 3.7.1 standalone "Is fluconazole a good choice for her?" was handed the model with no drug-safety
+	 * material and answered "The records do not address fluconazole" for every patient.
+	 */
+	@Test
+	public void aProposalOpenedByAGreetingOrAskedAsARecommendationIsTheProposal() {
+		String canonical = ask("Can I give her warfarin?");
+		assertNotNull(canonical, "precondition: the module answers it");
+		for (String question : new String[] { "Please check if warfarin is safe for her",
+				"Doctor here, can I prescribe warfarin for this patient?", "I am thinking of giving her warfarin, is that ok?",
+				"Hi, is it ok to start warfarin?", "Would you recommend warfarin for her?", "Is warfarin a good choice for her?",
+				"Warfarin for her - safe?" }) {
+			assertEquals(canonical, ask(question), question);
+		}
+		for (String question : new String[] { "Is warfarin a good choice for her?", "What about warfarin?",
+				"Would you recommend warfarin for her?" }) {
+			assertTrue(!chart(question).asksOnlyAboutADrugsRecord(), "not a question about its record alone: " + question);
+		}
+	}
+
 	private static org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart chart(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

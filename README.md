@@ -46,6 +46,7 @@ The standalone download above includes the backend module, frontend ESM, and the
 - [Bundled provider integration](#bundled-provider-integration)
 - [Conversation persistence](#conversation-persistence)
 - [Med Agent Hub adapter](#med-agent-hub-adapter)
+- [Conversation endpoints](#conversation-endpoints)
 - [License](#license)
 
 ## Try it on the demo server
@@ -330,7 +331,7 @@ The `drugSafety.*` checks require both `chartsearchai.drugReference.enabled` and
 
 | Privilege | Purpose |
 |-----------|---------|
-| **AI Query Patient Data** | Execute chart search queries (`/search`, `/search/stream`, `/warmup`, `/feedback`) and read a patient's standing chart alerts (`/chartalerts`) |
+| **AI Query Patient Data** | Execute chart search queries (`/search`, `/search/stream`, `/warmup`, `/feedback`), read a patient's standing chart alerts (`/chartalerts`), list answer providers and Hub profiles (`/providers`, `/models`) and hold provider conversations (`/chat`, `/chat/new`, `/chat/stream`). With a Med Agent Hub configured, this privilege is also what lets a user send a patient's uuid, question and prior turns to that Hub |
 | **View AI Audit Logs** | Access the audit log endpoint |
 | **Manage AI Prewarm** | Trigger and monitor the bulk KV-prewarm bootstrap (`/prewarm`, `/prewarmstatus`) |
 
@@ -691,6 +692,8 @@ Each chip in `safetyWarnings` carries `namedPartners`, **the active orders that 
 
 `chartReadForSafety` says whether the three chart reads the drug-safety screen rests on — this patient's allergies, her conditions and her active drug orders — all happened behind this answer ([#247](https://github.com/openmrs/openmrs-module-chartsearchai/issues/247)). Those three and not every read the module makes, which is narrower than it sounds: age and weight are outside it — each has a gap of its own, which `ChartAnswer.getChartReadForSafety()` records — and so are most of the per-order sub-reads inside the active-order loop. One of them is not: since [#413](https://github.com/openmrs/openmrs-module-chartsearchai/issues/413) an order whose coded drug could not be read, and which nothing else names and no ATC code covers, is left off the medication list, and that does make the verdict `false`. The example above shows `null` because the shipped default has `chartsearchai.drugReference.enabled` off, so nothing reads the chart at all. `true` all three completed, `false` at least one of them did not complete, `null` no measurement (the drug-reference feature is off, or the pass threw before it had anything to read). The key is always present, on the `/search` response and on the `done` and `grounded` SSE events alike; the verdict comes off the chart read the module makes before the model is called, so the early `done` emitted under `chartsearchai.grounding.async=true` carries it in full, as `conditionRuleCoverage` does and unlike `interactionPairs`.
 
+`safetyStatus` says whether the drug-safety check behind this answer ran: `checked` when it completed within the reference data it resolved, `limited` when it ran with incomplete medication mapping, reference data, rules or dose information, and `unavailable` when it could not run. `safetyCheck` carries the same status with its limitation codes in `issues`, the chips in `warnings` and, beside them, the same `interactionPairs` statement of how bounded those chips are, under `schema_version` `drug_safety.v1`; [Safety-check execution status](#safety-check-execution-status) lists the codes. Neither says a medication is safe, and an empty `safetyWarnings` alone does not show that a check ran. With `chartsearchai.grounding.async=true` the early `done` is emitted before the check runs, so it carries `unavailable` with no issues and the trailing `grounded` event carries the result: read that first `unavailable` as not run yet, not as a check that could not run. Both keys are always present, on the `/search` response and on the `done` and `grounded` SSE events alike.
+
 **Read it alongside the keys above; it qualifies all of them.** The module's other safety keys report honestly about whatever the chart yielded, and a failed read empties the clinical context they are computed from — or, where it threw part-way, leaves it PARTIAL — though never the chart itself, whose records the model still sees. These reads go through core's service layer, so a role missing `Get Allergies`, `Get Conditions` or `Get Orders` reaches it, and so does a database error underneath them — and, since [#413](https://github.com/openmrs/openmrs-module-chartsearchai/issues/413), so does the dropped order the paragraph above names, with every privilege held and nothing failing underneath the reads at all. The issue measured what that looks like on a chart with a recorded ibuprofen allergy, asked *"Can I give him ibuprofen?"*: with the read working, 1 chip and 1 finding; with the read failing, **0 and 0** — the same counts a patient who is genuinely on no medication and allergic to nothing produces. `false` is the only key that tells those two apart, so **an empty `safetyWarnings` beside `chartReadForSafety: false` must not be rendered as a clear chart** — render it as a screen that could not run. A **non-empty** list beside `false` is not complete either: a read that threw part-way leaves what it had already collected, so those chips are a floor, not the finding set. `true` is the opposite and is also not a certificate: it says the reads happened, not that any contraindication was screened or that the loaded dataset had a rule to ask (`conditionRuleCoverage` is that question). `ChartAnswer.getChartReadForSafety()` is canonical for what each of the three values does and does not assert. It is not [`/chartalerts`](#chart-alerts)' `screened`, which is a strictly narrower verdict on a surface that carries no answer — that one also requires the drug-safety toggles and the pass completing — so the two keep separate names and neither is derived from the other. The same failure is logged at WARN. That line names the core privilege to check where there is one to name; for the dropped order it names the ORDER instead, there being no privilege to grant for a failed entity read.
 
 `withheldTypes` names the core record types QueryStore left out of the chart behind this answer because the asking user holds no read privilege for them — `["allergy"]` for a user without `Get Allergies` — sorted, and `[]` where nothing was withheld. The model is told the same, so it says those records are not visible rather than that none are recorded; **render an answer beside a non-empty list as one about a partial chart**, naming the types the user cannot see. `null` is no statement, from a `ChartSearchService` that built no chart. The key is always present, on the `/search` response and on the `done` and `grounded` SSE events alike, and like `chartReadForSafety` it is final on the early `done`.
@@ -1013,11 +1016,11 @@ See [docs/adr.md](docs/adr.md) for architectural decisions and design rationale.
 
 ## Provider integration contract
 
-The `api.provider` package defines a shared contract for the bundled answering
-pipeline and an optional Med Agent Hub relay: provider identity and capabilities,
-turn requests and results, ordered events, and cancellation. The contract is the
-foundation for provider integration; concrete adapters implement it. The running
-search endpoints are not yet routed through this contract.
+The `api.provider` package defines the shared conversation contract for bundled
+inference and an optional Med Agent Hub relay: explicit provider identity and
+capabilities, turn requests/results, ordered events and cancellation. The
+conversation endpoints use this contract; the existing search endpoints continue
+to use the bundled pipeline.
 
 `AnswerEnvelope` preserves the complete provider payload while exposing the answer
 text needed for display, conversation replay and audit. `TurnLifecycleValidator`
@@ -1129,8 +1132,8 @@ Completed bundled answers now carry this status and its limitation codes through
 findings. Early answers state that the check is unavailable until its result is
 attached. Existing warning callers and standing chart alerts retain their
 interfaces and behaviour: `validate` still screens a question with no patient and
-computes no status. REST publication and frontend display belong to the endpoint and
-presentation contributions.
+computes no status. Search and conversation answer payloads publish the same safety
+status and clinical limitations through the shared controller serializer.
 
 ## Bundled provider integration
 
@@ -1153,10 +1156,9 @@ from module findings remain available without model tokenization or inference.
 availability. A fresh installation enables bundled inference only; missing or
 unready implementations remain visible with a reason, and a requested provider is
 never silently replaced. This contribution provides the bundled implementation and
-registry; provider discovery and conversation HTTP endpoints are separate changes.
-The approved streaming toggle and optional-model capability behavior still require
-coordination with those endpoints and the frontend; this extraction does not claim
-that acceptance.
+registry. The conversation endpoints expose discovery and execute the selected
+provider without cross-provider fallback. Combined frontend/model acceptance
+remains separate from local component checks.
 
 ## Conversation persistence
 
@@ -1181,8 +1183,8 @@ once; a second attempt to finish it is refused.
 Checked or edited answers can be reused for a follow-up while In-Depth is still
 running. Failed and needs-review answers remain inspectable in storage but are
 excluded from replay. Audit retention clears the turn's audit link without deleting
-the conversation answer. The migration and Hibernate mappings are included here;
-REST history endpoints and provider execution wiring are separate contributions.
+the conversation answer. The migration and Hibernate mappings are included here.
+The history endpoint restores the stored answer envelope and terminal metadata.
 
 `chartsearchai.chat.retentionDays` controls the daily cleanup of conversation
 content, independently of `chartsearchai.auditLogRetentionDays`. Both default to
@@ -1217,9 +1219,52 @@ in the runtime property `chartsearchai.hub.apikey`, never in a global property.
 `HubProfileService` relays profile metadata from `/v1/models` on the same configured
 Hub, and only while `hub` is listed in `chartsearchai.providers.enabled`.
 
-This adapter is an integration building block. Provider selection, conversation
-storage and REST endpoint wiring are separate contributions; configuring it alone
-does not route the existing search endpoint through the Hub.
+The conversation endpoint can select this adapter explicitly. The existing search
+endpoints remain bundled; enabling Hub does not silently redirect them.
+
+## Conversation endpoints
+
+All paths below are under `/ws/rest/v1/chartsearchai`. Requests require the query
+privilege; patient-specific requests also require access to the selected patient. Conversations belong to the current
+OpenMRS user and keep the provider/mode that produced their turns.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/providers` | Configured providers, capabilities, availability and default |
+| GET | `/models` | Hub product-profile metadata from the configured Hub |
+| GET | `/chat?patient=<uuid>&session=<optional uuid>` | Recorded history; omitted session restores the user's latest active conversation |
+| POST | `/chat/new` | Close the current conversation and open a fresh one |
+| POST | `/chat/stream` | Execute and persist one provider-neutral turn with canonical lifecycle events |
+
+New-chat requests carry `patient` and an optional explicit `provider`/`mode`. Chat
+requests also carry `question`, optional `session` and, for Hub, the required
+`profile`. An omitted mode uses the selected provider's configured mode. A provider
+switch starts a new conversation. Unavailable selections fail explicitly.
+
+Chat streams use the same keep-alive comments and complete Unicode-character framing
+as `/search/stream`. The bundled gateway applies streaming proxy settings to both
+routes. Unsupported context modes are rejected before opening, closing or writing
+a conversation, on both `/chat/new` and `/chat/stream`.
+
+The stream publishes a complete answer even when a provider supplies no incremental
+tokens. Optional review, evidence and In-Depth events stay separate from that answer.
+A client can disable incremental display while retaining the same provider/profile
+and conversation transport. Missing optional events do not assert successful checks.
+A later question preempts unfinished work for the same conversation. Terminal
+completion is sent after persistence and includes the audit identifier for feedback.
+The existing `/feedback` request continues to use `questionId`.
+
+Before the answer is sent, a response disconnect or unexpected execution failure
+settles an already started turn as an error in stored history. After it, the two
+differ. A disconnect cancels the turn, and a cancelled turn keeps the answer the
+client was shown as a completed turn; for the bundled provider with
+`chartsearchai.grounding.async=true` that is the ungrounded answer, whose
+`safetyStatus` is `unavailable`. An execution failure, a Hub stream ending before its
+terminal event included, is an error, and the answer already delivered is kept on
+the audit row only. Checked answers, original drafts and partial
+In-Depth content remain inspectable after an interrupted optional stage; unfinished
+In-Depth work is marked failed. A turn stored as an error is not replayed as
+conversation context.
 
 ## License
 

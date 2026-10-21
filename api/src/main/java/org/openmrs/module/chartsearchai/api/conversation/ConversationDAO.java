@@ -37,6 +37,9 @@ public interface ConversationDAO {
 
 	ClinicalConversationTurn saveTurn(ClinicalConversationTurn turn);
 
+	/** The stored turn, re-read under a row lock; {@code null} when no such turn exists. */
+	ClinicalConversationTurn getTurnForUpdate(Integer turnId);
+
 	ClinicalConversationTurn getTurnByUuid(String uuid);
 
 	List<ClinicalConversationTurn> getTurns(ClinicalConversation conversation);

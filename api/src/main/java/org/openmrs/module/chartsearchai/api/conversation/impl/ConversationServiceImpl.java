@@ -173,8 +173,11 @@ public class ConversationServiceImpl implements ConversationService {
 				|| result.getTerminalState() == TurnEventType.TURN_ERROR,
 				"turn result must be terminal");
 		// One outcome and at most one audit row per turn: a second settlement is refused, as
-		// recordCheckedAnswer refuses a settled turn.
-		require(turn.getTerminalState() == null, "turn is already finished");
+		// recordCheckedAnswer refuses a settled turn. The stored row decides, read under a lock: the
+		// caller's object stays marked finished when a settlement fails after marking it and rolls back.
+		ClinicalConversationTurn stored = conversationDAO.getTurnForUpdate(turn.getTurnId());
+		require(stored != null && stored.getTerminalState() == null, "turn is already finished");
+		turn = stored;
 
 		Date now = new Date();
 		turn.setTerminalState(result.getTerminalState().getWireName());

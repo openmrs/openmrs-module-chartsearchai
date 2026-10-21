@@ -88,6 +88,18 @@ public class HibernateConversationDAO implements ConversationDAO {
 	}
 
 	@Override
+	public ClinicalConversationTurn getTurnForUpdate(Integer turnId) {
+		ClinicalConversationTurn turn = (ClinicalConversationTurn) sessionFactory.getCurrentSession()
+				.get(ClinicalConversationTurn.class, turnId);
+		if (turn != null) {
+			// As getConversationForUpdate: flushed first so the refresh keeps this transaction's own writes.
+			sessionFactory.getCurrentSession().flush();
+			sessionFactory.getCurrentSession().refresh(turn, LockOptions.UPGRADE);
+		}
+		return turn;
+	}
+
+	@Override
 	public ClinicalConversationTurn saveTurn(ClinicalConversationTurn turn) {
 		sessionFactory.getCurrentSession().saveOrUpdate(turn);
 		return turn;

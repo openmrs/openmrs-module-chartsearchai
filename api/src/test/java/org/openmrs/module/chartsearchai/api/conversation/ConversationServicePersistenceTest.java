@@ -371,6 +371,28 @@ public class ConversationServicePersistenceTest extends BaseModuleContextSensiti
 				.setParameter("requestId", "finished-once").uniqueResult()).longValue());
 	}
 
+	// A settlement that fails after marking the caller's turn finished rolls back, but the caller still holds
+	// the marked object; the fallback settlement must read the stored row, not that object.
+	@Test
+	public void aFallbackSettlementSucceedsAfterAFailedOneLeftTheCallersTurnMarked() {
+		ClinicalConversation conversation = conversationService.openOrCreate(patient, "hub", ProviderMode.QUERY_SCOPED);
+		ClinicalConversationTurn turn = conversationService.startTurn(conversation, "fallback-after-failure", "Question");
+		Context.flushSession();
+		assertThrows(IllegalArgumentException.class, () -> conversationService.finishTurn(turn,
+				TurnResult.done("hub", ProviderMode.QUERY_SCOPED, null), 5L));
+		Context.clearSession();
+
+		conversationService.finishTurn(turn,
+				TurnResult.error("hub", ProviderMode.QUERY_SCOPED, "provider_failure"), 6L);
+		Context.flushSession();
+		Context.clearSession();
+
+		ClinicalConversationTurn stored = conversationDAO.getTurnByUuid(turn.getUuid());
+		assertEquals("turn_error", stored.getTerminalState());
+		assertEquals("provider_failure", stored.getProblemCode());
+		assertNotNull(stored.getAuditLog());
+	}
+
 	// A close this transaction has made and not yet flushed is part of what the lock must read: refreshing
 	// over it would put the conversation back to active.
 	@Test

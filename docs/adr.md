@@ -21142,3 +21142,23 @@ Where the question resolves no drug but names one of her orders by its own name 
 order carries are the substances the chart stamps for it, so its chips are published, and Decision 387 keeps those about it.
 
 Pinned by `HerOrdersNamedByTheirOwnNamesTest.aQuestionNamingOneOfHisOrdersByItsOwnNameIsAboutThatOrdersSubstances`.
+
+## Decision 393: Either of two drugs is answered for each as if proposed alone, and the module chooses neither
+
+**Status: Accepted** (October 2026) — found asking 30 further drug-interaction wordings on 2026-10-21.
+
+### Context
+
+*"Can I give her ibuprofen or paracetamol?"* and *"Which is safer for her, ibuprofen or paracetamol?"* went to the model,
+which answered the first *"Ibuprofen can be given, with one caution"*, rating Major a finding the data never rated, and the
+second *"Acetaminophen is safer for her"* — a clearance and a choice no finding makes.
+
+### The decision
+
+A question about either of two drugs (`QueryScopeRouter.asksAboutEitherOfTwoDrugs`) is answered as Decision 222 answers two
+proposed together, each drug under *"For X:"* with the answer a proposal of it alone gets, but nothing is said of the two
+together, which was not asked: it leads *"Ibuprofen or Acetaminophen, each as if given alone; neither is one of this
+patient's active medications."* A question which of them is safer, or which to choose (`asksWhichOfTwoDrugs`), is answered
+the same under `DrugReferenceInjector.COMPARES_NO_DRUGS_LEAD` — the module compares no drugs and chooses none.
+
+Pinned by `EitherOfTwoDrugsTest`.

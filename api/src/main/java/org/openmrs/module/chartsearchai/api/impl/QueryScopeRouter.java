@@ -629,6 +629,36 @@ public final class QueryScopeRouter {
 		return fitsAShape(wordsWithTheDrugsMarked, TOGETHER_SHAPES);
 	}
 
+	/** "Can I give her ibuprofen or paracetamol?", "Is ibuprofen or paracetamol safe for her?" — one drug or the other, each
+	 *  proposed alone (ADR Decision 393). */
+	private static final List<Pattern> EITHER_SHAPES = shapes(
+			"(?:can|could|may|should) (?:i|we) (?:safely )?(?:give|start|prescribe|administer|use) (?:" + PATIENT + " )?(?:on )?"
+					+ D + " or " + D + "(?: (?:to|for) " + PATIENT + ")?(?: now| today)?",
+			"(?:can|could|may|should) (?:she|he|they|the patient|this patient) (?:safely )?(?:take|have|use) " + D + " or " + D
+					+ "(?: now| today)?",
+			"(?:is|would) " + D + " or " + D + " (?:be )?(?:safe|ok|okay|appropriate|suitable)(?: (?:for|in) " + PATIENT + ")?");
+
+	/** "Which is safer for her, ibuprofen or paracetamol?", "Is ibuprofen or paracetamol better for her?" — a choice between
+	 *  two drugs, which no finding makes (ADR Decision 393). */
+	private static final List<Pattern> WHICH_OF_TWO_SHAPES = shapes(
+			"(?:which|what) (?:is|would be|will be) (?:the )?(?:safer|safest|better|best|preferable|preferred)(?: (?:option|choice|"
+					+ "drug|one))?(?: (?:for|in) " + PATIENT + ")? " + D + " or " + D,
+			"(?:is|would) " + D + " or " + D + " (?:be )?(?:safer|better|preferable|preferred)(?: (?:for|in) " + PATIENT + ")?",
+			"(?:should|can|could) (?:i|we) (?:give|use|prescribe|choose) " + D + " or " + D + "(?: (?:for|in) " + PATIENT + ")?",
+			"(?:which|what) (?:should|can|could) (?:i|we) (?:give|use|prescribe|choose)(?: (?:for|to) " + PATIENT + ")? " + D + " or "
+					+ D);
+
+	/** Whether a question asks about either of two drugs, each proposed alone — or which of the two to choose, {@link
+	 *  #asksWhichOfTwoDrugs} (ADR Decision 393). Fail-CLOSED. */
+	public static boolean asksAboutEitherOfTwoDrugs(List<String> wordsWithTheDrugsMarked) {
+		return fitsAShape(wordsWithTheDrugsMarked, EITHER_SHAPES) || asksWhichOfTwoDrugs(wordsWithTheDrugsMarked);
+	}
+
+	/** Whether a question asks which of two drugs to choose, or which is safer (ADR Decision 393). Fail-CLOSED. */
+	public static boolean asksWhichOfTwoDrugs(List<String> wordsWithTheDrugsMarked) {
+		return fitsAShape(wordsWithTheDrugsMarked, WHICH_OF_TWO_SHAPES);
+	}
+
 	/**
 	 * The question shapes a request to screen the patient's OWN medications against each other may
 	 * take — issue #469. A grammar for the reason {@link #PROPOSAL_SHAPES} is: the word list it

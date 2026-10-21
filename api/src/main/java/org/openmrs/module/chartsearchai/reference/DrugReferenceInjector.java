@@ -6813,8 +6813,12 @@ public class DrugReferenceInjector {
 			Set<Object> herSubstances, List<SafetyWarning> findings, List<Integer> numbers,
 			Map<String, Integer> orderRecordNumbers, Map<String, Integer> herOrderRecords, PairChipExtent pairs,
 			List<DrugReference> orderEntries, PatientClinicalContext context) {
+		// Or either of the two, each proposed alone, nothing said of the pair; or which of them to choose, which no finding makes
+		// (ADR Decision 393).
+		boolean either = !questionDrugs.isEmpty()
+				&& QueryScopeRouter.asksAboutEitherOfTwoDrugs(wordsBesideItsNames(question, questionDrugs));
 		if (questionDrugs.isEmpty()
-				|| !QueryScopeRouter.asksWhetherToGiveDrugsTogether(wordsBesideItsNames(question, questionDrugs))) {
+				|| !either && !QueryScopeRouter.asksWhetherToGiveDrugsTogether(wordsBesideItsNames(question, questionDrugs))) {
 			return null;
 		}
 		// Each drug as the question names it — a combination's name one drug (ADR Decision 272).
@@ -6843,7 +6847,9 @@ public class DrugReferenceInjector {
 			boolean ofTheFirst = !Collections.disjoint(about, rowOf.get(0).substances);
 			boolean ofTheSecond = !Collections.disjoint(about, rowOf.get(1).substances);
 			if (ofTheFirst && ofTheSecond && SafetyWarning.TYPE_INTERACTION.equals(finding.getType())) {
-				pairLines.add(findingLine(finding, numbers.get(i), orderRecordNumbers, herOrderRecords, true));
+				if (!either) {
+					pairLines.add(findingLine(finding, numbers.get(i), orderRecordNumbers, herOrderRecords, true));
+				}
 			} else if (about.size() > 1 && (rowOf.get(0).substances.containsAll(about)
 					|| rowOf.get(1).substances.containsAll(about))) {
 				// Two ingredients of the one combination asked about: within that product, not between the two drugs.
@@ -6858,8 +6864,13 @@ public class DrugReferenceInjector {
 			}
 		}
 		List<String> lines = new ArrayList<String>();
-		lines.add(rowOf.get(0).label + " and " + rowOf.get(1).label
-				+ ", asked about together; neither is one of this patient's active medications.");
+		if (either && QueryScopeRouter.asksWhichOfTwoDrugs(wordsBesideItsNames(question, questionDrugs))) {
+			lines.add(COMPARES_NO_DRUGS_LEAD);
+		}
+		lines.add(either ? rowOf.get(0).label + " or " + rowOf.get(1).label
+				+ ", each as if given alone; neither is one of this patient's active medications."
+				: rowOf.get(0).label + " and " + rowOf.get(1).label
+						+ ", asked about together; neither is one of this patient's active medications.");
 		Set<AskedDrug> takenInPart = new HashSet<AskedDrug>();
 		for (AskedDrug drug : rowOf) {
 			String carried = substancesSheTakesOf(drug, herSubstances, orderEntries, herOrderRecords, context);
@@ -7945,6 +7956,11 @@ public class DrugReferenceInjector {
 	 *  chooses a drug or clears one, and the screen that follows is of the medications she already takes. */
 	static final String CHOOSES_NO_DRUG_LEAD = "This check does not choose a medication to give this patient, and states"
 			+ " none as safe: it screens only the medications this patient is already taking.";
+
+	/** How the answer to which of two drugs is safer, or which to choose, opens (ADR Decision 393): no finding compares two
+	 *  drugs, and the module chooses none. */
+	public static final String COMPARES_NO_DRUGS_LEAD = "This check does not compare drugs or choose between them: it states"
+			+ " what it found about each.";
 
 	/** How the answer to which of her medications are high risk opens (ADR Decision 300): no finding rates a medication's
 	 *  risk. */

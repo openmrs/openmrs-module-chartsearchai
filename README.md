@@ -43,6 +43,7 @@ The standalone download above includes the backend module, frontend ESM, and the
 - [Provider integration contract](#provider-integration-contract)
 - [Local token counting](#local-token-counting)
 - [Safety-check execution status](#safety-check-execution-status)
+- [Bundled provider integration](#bundled-provider-integration)
 - [Conversation persistence](#conversation-persistence)
 - [License](#license)
 
@@ -257,7 +258,7 @@ chartsearchai delegates all retrieval to the [openmrs-module-querystore](https:/
 | `chartsearchai.llm.timeoutSeconds` | `300` | Maximum seconds to wait for the inference server's FIRST output, per call to it. It stops applying once that arrives, so on the streaming endpoint it does not bound the generation that follows — see [Streaming search (SSE)](#streaming-search-sse) |
 | `chartsearchai.llm.idleTimeoutMinutes` | `30` | *(Local engine only)* Minutes of inactivity after which the embedded llama-server is stopped to free RAM. It is automatically restarted on the next query. Set to `0` to keep it running indefinitely |
 | `chartsearchai.llm.serverPort` | `18085` | *(Local engine only)* Port for the embedded llama-server, bound on loopback. Change if the default conflicts with another service — the module checks the port before launching and refuses to start rather than talk to whatever answers there (it does this by connecting: only a refused connection reads as a free port, and anything it cannot establish — including a listener whose accept queue is full — refuses the start there and then rather than at a later check) |
-| `chartsearchai.llm.contextSize` | `32768` | *(Local engine only)* Context window size in tokens for the embedded llama-server. The system prompt + serialized chart + question must fit within this. Larger values let bigger charts pass through full-chart mode but increase the KV cache memory footprint roughly linearly. Increase if you see "Patient chart exceeds the LLM context window" (HTTP 413) and have headroom for a larger KV cache; reduce on memory-constrained hardware |
+| `chartsearchai.llm.contextSize` | `32768` | *(Local engine only)* Context window size in tokens for the embedded llama-server. The system prompt, serialized chart, this module's reference records and the question must fit within this minus the 4096 tokens reserved for the answer, in either chart mode, or the question is refused before the model is called ([Local token counting](#local-token-counting)). The module's own instructions take about 2,200 tokens (llama-server's count on Gemma 4 E2B with no records), so at 8192 a full chart has roughly 1,900 tokens and at 4096 every question the model must answer is refused. Larger values let bigger charts pass through full-chart mode but increase the KV cache memory footprint roughly linearly. Increase if you see "Patient chart exceeds the LLM context window" (HTTP 413) and have headroom for a larger KV cache; reduce on memory-constrained hardware |
 | `chartsearchai.llm.threads` | *(empty)* | *(Local engine only)* CPU threads llama-server uses for prompt processing and generation, passed as `-t` (`--threads-batch` follows it by llama-server's own default). Empty leaves the count to llama-server's auto-detect, or to a `LLAMA_ARG_THREADS` in the environment it inherits — the command every install ran before this property existed, and still the default, because pinning the count regresses prefill where logical cores outnumber physical ones (`LocalLlmEngine.buildServerCommand`). Set a positive integer to pin it, e.g. below the core count on a host whose cores the database, the JVM or other containers share, where llama.cpp's threads wait on the slowest of them at every step. Anything that is not a positive integer reads as empty. A change restarts the server on the next query. No value is recommended: measure one against [`/hostdiagnostics`](#host-diagnostics) and the answer latency before keeping it ([ADR Decision 174](docs/adr.md#decision-174-an-operator-without-a-shell-can-see-what-the-host-does-to-llama-server-and-pin-its-threads)) |
 | `chartsearchai.llm.reasoningMaxChars` | `0` | Caps the model's reasoning scratchpad at this many characters (via a grammar-enforced `maxLength` in the chart-answer schema) when greater than `0`; the answer itself is never capped. The reasoning phase is the dominant decode cost on CPU-only servers (a measured 3–27 seconds of "thinking" before any answer text), so bounding it bounds that cost. `0` (default) leaves the schema unchanged. **Caution:** truncating the chain of thought can change answers — only enable a value that has cleared the answer-quality gold standard (`eval/drift-metric/`) with no regression in mean F1, abstention accuracy, or off-topic citations versus the uncapped baseline. Gemma 4 E2B at `400` failed that gate on all three axes (measured 2026-06-12); no certified value exists, so leave at `0` unless a fresh gate run for your model and value passes |
 | `chartsearchai.warmupEnabled` | `true` | When `true`, opening a patient chart triggers a background warmup that primes the LLM prompt cache (system prompt + serialized chart) so the first AI query on that patient skips the full prefill cost. No-op when `chartsearchai.llm.engine` is `remote` (remote providers manage their own caching), and — because there is no question-independent chart prefix to prime — whenever `chartsearchai.chartMode` is `queryScoped`, **which is the default**. The gate is `LlmInferenceService.shouldRunWarmup` |
@@ -1034,13 +1035,17 @@ the same authenticated, non-proxied client as inference.
 
 Counting is available for the local engine only. Remote endpoints are not assumed
 to provide a tokenizer, and this interface does not estimate their counts.
+The model input budget is `chartsearchai.llm.contextSize` minus the 4096 tokens reserved
+for the answer. Every count includes the system prompt, question and model chat template.
 In `queryScoped` mode, the chart builder uses these counts to retain required evidence
-and fit optional records within the model input budget. If required evidence alone
-exceeds that budget, the turn fails explicitly instead of dropping required records.
-The count includes the system prompt, question and model chat template, but not the
-drug-reference records the module appends after the slice is built; the bundled-provider
-contribution measures the composed prompt and reserves room for them. Without an
-available counter, or where a count fails, the builder preserves the selected records.
+and fit optional records within the budget. This module then appends its reference
+records (active orders, drug references and safety findings), which are never dropped
+(ADR Decision 57), and counts the complete prompt. Where those records push it over the
+budget, the slice is rebuilt with their size reserved, so only optional recency and
+similarity records give way. If required evidence and those records together exceed the
+budget, the turn fails explicitly instead of dropping either. A full chart has no
+optional records, so in `fullChart` mode a complete prompt over the budget is refused.
+Without an available counter, or where a count fails, nothing is trimmed or refused here.
 
 Context selection uses QueryStore's `getContextSlice` API with the raw question and
 server-side interpretation enabled. Full-chart reads use `getPatientChartRead`.
@@ -1115,11 +1120,39 @@ Limitation codes state the cause. `unavailable` carries one of:
 
 Neither of the last two claims missing allergy or condition data.
 
-This Java API is the safety-status foundation for provider integration. Existing
-warning callers and standing chart alerts retain their interfaces and behaviour:
-`validate` still screens a question with no patient and computes no status. Publishing the
-status on provider answers and rendering it in the frontend belong to the subsequent
-integration contributions.
+Completed bundled answers now carry this status and its limitation codes through
+`ChartAnswer` and the provider envelope, including answers composed from module
+findings. Early answers state that the check is unavailable until its result is
+attached. Existing warning callers and standing chart alerts retain their
+interfaces and behaviour: `validate` still screens a question with no patient and
+computes no status. REST publication and frontend display belong to the endpoint and
+presentation contributions.
+
+## Bundled provider integration
+
+Administrators enable providers with `chartsearchai.providers.enabled`, a comma-separated
+list of ids (default `bundled`), and select the initial provider with
+`chartsearchai.providers.default` (default `bundled`). Switching providers starts a new
+conversation; it does not change the provider recorded on existing conversations.
+
+`BundledClinicalAnswerProvider` adapts the existing caching router and local/remote
+inference pipeline to the shared turn lifecycle. It emits the initial answer before
+later grounding results, retains already-completed answers when cancellation
+interrupts later work, and reports context-budget and provider failures explicitly.
+Cancellation reaches the engine response stream and the executing thread. Current
+upstream prompt-selection arguments, reference handling and clinical disclosures
+remain in the inference pipeline. Model-bound requests check the complete injected
+prompt against the input budget before any model pass. Answers composed directly
+from module findings remain available without model tokenization or inference.
+
+`ClinicalAnswerProviderRegistry` exposes configured providers and their actual
+availability. A fresh installation enables bundled inference only; missing or
+unready implementations remain visible with a reason, and a requested provider is
+never silently replaced. This contribution provides the bundled implementation and
+registry; provider discovery and conversation HTTP endpoints are separate changes.
+The approved streaming toggle and optional-model capability behavior still require
+coordination with those endpoints and the frontend; this extraction does not claim
+that acceptance.
 
 ## Conversation persistence
 

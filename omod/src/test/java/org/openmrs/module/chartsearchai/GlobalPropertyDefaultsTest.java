@@ -102,6 +102,13 @@ public class GlobalPropertyDefaultsTest {
 				"the constant every contextless test falls back to has to say what config.xml ships");
 	}
 
+	@Test
+	public void providerSettingsAreDeclaredWithTheRegistryDefaults() throws Exception {
+		Map<String, String> declared = declaredDefaults();
+		assertEquals("bundled", declared.get("chartsearchai.providers.enabled"));
+		assertEquals("bundled", declared.get("chartsearchai.providers.default"));
+	}
+
 	/** @return every {@code <property>} in {@code config.xml} that declares a {@code <defaultValue>}. */
 	private static Map<String, String> declaredDefaults() throws Exception {
 		Map<String, String> defaults = new LinkedHashMap<String, String>();

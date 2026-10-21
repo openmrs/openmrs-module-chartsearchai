@@ -9,6 +9,7 @@
  */
 package org.openmrs.module.chartsearchai.api.impl;
 
+import java.util.concurrent.CancellationException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -25,6 +26,8 @@ import java.util.function.Consumer;
 import org.openmrs.Patient;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
+import org.openmrs.module.chartsearchai.api.ChartTooLargeException;
+import org.openmrs.module.chartsearchai.api.provider.CancellationSignal;
 import org.openmrs.module.chartsearchai.api.ChartSearchService;
 import org.openmrs.module.chartsearchai.api.impl.LlmProvider.LlmResponse;
 import org.openmrs.module.chartsearchai.reference.ChartReadStatus;
@@ -84,6 +87,9 @@ public class LlmInferenceService implements ChartSearchService {
 	@Autowired
 	private DrugSafetyValidator drugSafetyValidator;
 
+	@Autowired
+	private TokenCounter tokenCounter;
+
 	/** Test seam: production wires {@link CitationGroundingVerifier} via {@link Autowired}. */
 	void setCitationGroundingVerifier(CitationGroundingVerifier citationGroundingVerifier) {
 		this.citationGroundingVerifier = citationGroundingVerifier;
@@ -97,6 +103,11 @@ public class LlmInferenceService implements ChartSearchService {
 	/** Test seam: production wires {@link DrugSafetyValidator} via {@link Autowired}. */
 	void setDrugSafetyValidator(DrugSafetyValidator drugSafetyValidator) {
 		this.drugSafetyValidator = drugSafetyValidator;
+	}
+
+	/** Test seam: production wires the engine-specific exact counter via Spring. */
+	void setTokenCounter(TokenCounter tokenCounter) {
+		this.tokenCounter = tokenCounter;
 	}
 
 	/** Test seam: production wires {@link LlmProvider} via {@link Autowired}.
@@ -128,16 +139,16 @@ public class LlmInferenceService implements ChartSearchService {
 		long cachedTokens = 0;
 		String outcome = "error";
 		try {
-			PatientChart chart = chartBuildingStrategy.buildChart(patient, question);
-			// Whether this layer's two stamped chart reads happened (issue #247). Declared here
-			// because the injector's pass is what states it; ChartAnswer.getChartReadForSafety() is
-			// canonical for the three answers and for why that pass rather than validate's.
-			ChartReadStatus chartRead = new ChartReadStatus();
+			AssembledChart assembled = assembleChart(patient, question, CancellationSignal.NONE);
+			// Whether this layer's two stamped chart reads happened (issue #247). The injector's pass
+			// is what states it; ChartAnswer.getChartReadForSafety() is canonical for the three answers
+			// and for why that pass rather than validate's.
+			ChartReadStatus chartRead = assembled.chartRead;
 			// The KV seed and scope, as searchStreaming takes them (ADR Decision 164): the chart before injection,
 			// and no scope for a query-scoped slice.
-			String uninjectedRecords = chartTextOrPlaceholder(chart);
-			String kvCacheScope = chart.isQueryScoped() ? null : kvCacheScopeFor(patient);
-			chart = drugReferenceInjector.inject(chart, patient, question, chartRead);
+			String uninjectedRecords = chartTextOrPlaceholder(assembled.uninjected);
+			String kvCacheScope = assembled.uninjected.isQueryScoped() ? null : kvCacheScopeFor(patient);
+			PatientChart chart = assembled.injected;
 			// Resolved once, off the chart that was actually assembled, and carried on the answer —
 			// so the audit row the REST layer writes states the mode instead of re-deriving it
 			// (issue #178). After inject() deliberately: that is the chart the LLM sees.
@@ -312,8 +323,9 @@ public class LlmInferenceService implements ChartSearchService {
 			// no consumer can re-derive from the chips themselves. Which arm states it, and when none
 			// does, is PairChipExtent's and ChartAnswer.getPairChipExtent()'s to say, not a sink site's.
 			PairChipExtent.Sink pairExtent = new PairChipExtent.Sink();
-			List<SafetyWarning> safetyWarnings = drugSafetyValidator.validate(response.getAnswer(), question,
-					patient, chart.getMappings(), pairExtent);
+			DrugSafetyValidator.SafetyCheckResult safetyResult = drugSafetyValidator.validateWithStatus(
+					response.getAnswer(), question, patient, chart.getMappings(), pairExtent);
+			List<SafetyWarning> safetyWarnings = safetyResult.getWarnings();
 			// MEASURED on the model's own prose, so the key reports what the MODEL stated; the answer is
 			// COMPLETED below, so what a client is handed names every order the findings it CITES cover
 			// (issue #516) — `cited`, off the injected records, and never the chips above, which include
@@ -383,7 +395,8 @@ public class LlmInferenceService implements ChartSearchService {
 					findingCitationExtent, chartRead.stated(), conditionRuleCoverage, orderStopDates,
 					findingPartnerCoverage, false, interactionClaimPairs, cautionLedOverWithholding,
 					unfoundedFindingSeverities, doseCeilingCoverage, unsupportedEndedOrderClaims,
-					unstatedSignificanceQualifiers, OwnOrderFindingStatement.statedFindings(response.getAnswer(), cited, chart.getMappings(),
+					unstatedSignificanceQualifiers, safetyResult.getStatus(), safetyResult.getIssues(),
+					OwnOrderFindingStatement.statedFindings(response.getAnswer(), cited, chart.getMappings(),
 							chart.getProposalOwnOrderFindingLines()), !chart.getHistoryQuestionDrugRows().isEmpty());
 			outcome = "ok";
 			return answer;
@@ -576,7 +589,7 @@ public class LlmInferenceService implements ChartSearchService {
 	 * gate is off or the focused chart has no records.
 	 */
 	private long maybeEmitPreliminaryReasoning(Patient patient, String question,
-			Consumer<String> previewReasoningConsumer) {
+			Consumer<String> previewReasoningConsumer, CancellationSignal cancellation) {
 		long start = System.currentTimeMillis();
 		try {
 			if (!resolveProgressiveReasoningEnabled()) {
@@ -609,7 +622,7 @@ public class LlmInferenceService implements ChartSearchService {
 				llmProvider.searchStreaming(focused.getText(), focused.getFocusIndices(), question,
 						DISCARD_TOKENS, previewReasoningConsumer, null, null, false,
 						LlmEngine.ReferenceRecords.in(ChartSearchAiUtils.referenceSlice(focused.getMappings())),
-						focused.getDrugsAlreadyOrdered());
+						focused.getDrugsAlreadyOrdered(), cancellation);
 			}
 		}
 		catch (RuntimeException e) {
@@ -659,6 +672,16 @@ public class LlmInferenceService implements ChartSearchService {
 			Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
 			Consumer<List<RecordReference>> citationsConsumer,
 			Consumer<ChartAnswer> ungroundedAnswerConsumer, Consumer<String> preliminaryReasoningConsumer) {
+		return searchStreaming(patient, question, tokenConsumer, reasoningConsumer, citationsConsumer,
+				ungroundedAnswerConsumer, preliminaryReasoningConsumer, CancellationSignal.NONE);
+	}
+
+	@Override
+	public ChartAnswer searchStreaming(Patient patient, String question,
+			Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
+			Consumer<List<RecordReference>> citationsConsumer,
+			Consumer<ChartAnswer> ungroundedAnswerConsumer, Consumer<String> preliminaryReasoningConsumer,
+			CancellationSignal cancellation) {
 		// LOG FORMAT — stable contract: same field set as search() with op=searchStreaming
 		// in the log tag, plus previewMs (progressive-reasoning preview pass) and groundMs (Tier-2
 		// grounding, timed separately so the tail is visible). Streaming is the path the frontend
@@ -673,18 +696,19 @@ public class LlmInferenceService implements ChartSearchService {
 		long cachedTokens = 0;
 		String outcome = "error";
 		try {
-			PatientChart chart = chartBuildingStrategy.buildChart(patient, question);
-			// Whether this layer's two stamped chart reads happened (issue #247). Declared here
-			// because the injector's pass is what states it; ChartAnswer.getChartReadForSafety() is
-			// canonical for the three answers and for why that pass rather than validate's.
-			ChartReadStatus chartRead = new ChartReadStatus();
+			requireActiveTurn(cancellation);
+			AssembledChart assembled = assembleChart(patient, question, cancellation);
+			// Whether this layer's two stamped chart reads happened (issue #247). The injector's pass
+			// is what states it; ChartAnswer.getChartReadForSafety() is canonical for the three answers
+			// and for why that pass rather than validate's.
+			ChartReadStatus chartRead = assembled.chartRead;
 			// The chart as warmup builds it, before the question's reference records are appended:
 			// the KV seed, so this query restores the same saved entry a chart-open warmup made and
 			// computes everything the question added on top of it (ADR Decision 157). Seeded off the
 			// injected chart instead, a drug question keys an entry of its own, made from whatever the
 			// slot last held — and the answer depends on that history again.
-			String uninjectedRecords = chartTextOrPlaceholder(chart);
-			chart = drugReferenceInjector.inject(chart, patient, question, chartRead);
+			String uninjectedRecords = chartTextOrPlaceholder(assembled.uninjected);
+			PatientChart chart = assembled.injected;
 			// One resolution for BOTH answers this method produces (issue #178). The early-done path
 			// audits the ungrounded answer and the classic path audits the returned one, so a mode
 			// each of them derived separately is two audit-write sites that can disagree — which is
@@ -736,7 +760,8 @@ public class LlmInferenceService implements ChartSearchService {
 			// the preliminary channel before the full-chart answer prefills. No-op (returns 0) when the
 			// gate is off. Runs after the full chart is built so the patient's querystore index is
 			// already warm when the preview's searchByPatient runs (a cold patient pays it once).
-			previewMs = maybeEmitPreliminaryReasoning(patient, question, preliminaryReasoningConsumer);
+			previewMs = maybeEmitPreliminaryReasoning(patient, question, preliminaryReasoningConsumer, cancellation);
+			requireActiveTurn(cancellation);
 
 			long llmStart = System.currentTimeMillis();
 			// KV scope: decided against the CHART that was built, not a re-read of the chartMode
@@ -749,7 +774,7 @@ public class LlmInferenceService implements ChartSearchService {
 			LlmResponse response = llmProvider.searchStreaming(
 					chartTextOrPlaceholder(chart), chart.getFocusIndices(), question, tokenConsumer,
 					reasoningConsumer, kvCacheScope, uninjectedRecords, enumerateFindings, referenceRecords,
-					chart.getDrugsAlreadyOrdered());
+					chart.getDrugsAlreadyOrdered(), cancellation);
 			response = readAgainstTheChart(response, chart);
 			llmMs = System.currentTimeMillis() - llmStart;
 			inputTokens = response.getInputTokens();
@@ -776,7 +801,7 @@ public class LlmInferenceService implements ChartSearchService {
 								chart.getFocusIndices(),
 								findingEnumerationRepairQuestion(owedRepair), tokenConsumer,
 								reasoningConsumer, kvCacheScope, uninjectedRecords, false, referenceRecords,
-								noDrugsAlreadyOrdered()),
+								noDrugsAlreadyOrdered(), cancellation),
 						owedRepair, chart.getMappings());
 				response = readAgainstTheChart(response, chart);
 				llmMs += System.currentTimeMillis() - repairStart;
@@ -833,6 +858,7 @@ public class LlmInferenceService implements ChartSearchService {
 					referenceSlice, null, unresolvedDrugClass, null, null, null, null, null, null,
 					chartRead.stated(), conditionRuleCoverage, orderStopDates, null, false, null,
 					cautionLedOverWithholding, null, doseCeilingCoverage, unsupportedEndedOrderClaims, null,
+					DrugSafetyValidator.STATUS_UNAVAILABLE, Collections.emptyList(),
 					OwnOrderFindingStatement.statedFindings(response.getAnswer(), cited, chart.getMappings(),
 							chart.getProposalOwnOrderFindingLines()), !chart.getHistoryQuestionDrugRows().isEmpty()));
 
@@ -910,6 +936,7 @@ public class LlmInferenceService implements ChartSearchService {
 					DosingCeilingFidelityCheck.reportUnstatedDosingCeilings(patient,
 							response.getAnswer(), cited, chart.getMappings());
 
+			requireActiveTurn(cancellation);
 			long groundStart = System.currentTimeMillis();
 			List<RecordReference> references = groundReferences(response.getAnswer(), cited,
 					chart.getMappings());
@@ -921,8 +948,9 @@ public class LlmInferenceService implements ChartSearchService {
 			// no consumer can re-derive from the chips themselves. Which arm states it, and when none
 			// does, is PairChipExtent's and ChartAnswer.getPairChipExtent()'s to say, not a sink site's.
 			PairChipExtent.Sink pairExtent = new PairChipExtent.Sink();
-			List<SafetyWarning> safetyWarnings = drugSafetyValidator.validate(response.getAnswer(), question,
-					patient, chart.getMappings(), pairExtent);
+			DrugSafetyValidator.SafetyCheckResult safetyResult = drugSafetyValidator.validateWithStatus(
+					response.getAnswer(), question, patient, chart.getMappings(), pairExtent);
+			List<SafetyWarning> safetyWarnings = safetyResult.getWarnings();
 			// MEASURED on the model's own prose, so the key reports what the MODEL stated; the answer is
 			// COMPLETED below, so what a client is handed names every order the findings it CITES cover
 			// (issue #516) — `cited`, off the injected records, and never the chips above, which include
@@ -992,7 +1020,8 @@ public class LlmInferenceService implements ChartSearchService {
 					findingCitationExtent, chartRead.stated(), conditionRuleCoverage, orderStopDates,
 					findingPartnerCoverage, false, interactionClaimPairs, cautionLedOverWithholding,
 					unfoundedFindingSeverities, doseCeilingCoverage, unsupportedEndedOrderClaims,
-					unstatedSignificanceQualifiers, OwnOrderFindingStatement.statedFindings(response.getAnswer(), cited, chart.getMappings(),
+					unstatedSignificanceQualifiers, safetyResult.getStatus(), safetyResult.getIssues(),
+					OwnOrderFindingStatement.statedFindings(response.getAnswer(), cited, chart.getMappings(),
 							chart.getProposalOwnOrderFindingLines()), !chart.getHistoryQuestionDrugRows().isEmpty());
 			outcome = "ok";
 			return answer;
@@ -1061,10 +1090,10 @@ public class LlmInferenceService implements ChartSearchService {
 		PairChipExtent.Sink pairExtent = new PairChipExtent.Sink();
 		// Every chip whose finding the composed text states is published as stated, so a client does not
 		// repeat it in full beneath the answer that just said it — asked of the module's own text.
+		DrugSafetyValidator.SafetyCheckResult safetyResult = drugSafetyValidator.validateWithStatus(
+				findingLineMarkersOf(composed, mappings), question, patient, mappings, pairExtent);
 		List<SafetyWarning> safetyWarnings = aboutTheDrugAsked(DrugReferenceInjector.withFindingCitations(
-				ModuleAnswerStatement.markStated(composed,
-						drugSafetyValidator.validate(findingLineMarkersOf(composed, mappings), question, patient, mappings,
-								pairExtent)),
+				ModuleAnswerStatement.markStated(composed, safetyResult.getWarnings()),
 				mappings), chart, question);
 		String answer = FindingPartnerCoverageCheck.withUnstatedPartnersNamed(composed,
 				extractCitedReferences(composed, null, mappings), mappings, drugSafetyValidator);
@@ -1092,11 +1121,100 @@ public class LlmInferenceService implements ChartSearchService {
 		ungroundedAnswerConsumer.accept(new ChartAnswer(answer, references, 0, 0, 0,
 				Collections.<SafetyWarning> emptyList(), searchMode, referenceSlice, null,
 				unresolvedDrugClass, null, null, null, null, null, null, chartReadForSafety,
-				conditionRuleCoverage, orderStopDates, null, true, null, null, null, doseCeilingCoverage, null, null, null, !chart.getHistoryQuestionDrugRows().isEmpty()));
+				conditionRuleCoverage, orderStopDates, null, true, null, null, null, doseCeilingCoverage, null, null,
+				DrugSafetyValidator.STATUS_UNAVAILABLE, Collections.emptyList(), null,
+				!chart.getHistoryQuestionDrugRows().isEmpty()));
 		return new ChartAnswer(answer, references, 0, 0, 0, safetyWarnings, searchMode, referenceSlice,
 				pairExtent.stated(), unresolvedDrugClass, null, null, null, null, null, null,
 				chartReadForSafety, conditionRuleCoverage, orderStopDates, null, true, null, null, null,
-				doseCeilingCoverage, null, null, null, !chart.getHistoryQuestionDrugRows().isEmpty());
+				doseCeilingCoverage, null, null, safetyResult.getStatus(), safetyResult.getIssues(), null,
+				!chart.getHistoryQuestionDrugRows().isEmpty());
+	}
+
+	private static void requireActiveTurn(CancellationSignal cancellation) {
+		if (cancellation.isCancelled()) {
+			throw new CancellationException("Turn cancelled");
+		}
+	}
+
+	/** How many times {@link #assembleChart} builds a query-scoped slice before it refuses one that
+	 *  still does not fit. Each rebuild reads QueryStore again, so the bound is small. */
+	private static final int MAX_SLICE_ASSEMBLIES = 3;
+
+	/** The chart before and after the injector appended this module's reference records, and the
+	 *  read status that injection pass stated. */
+	private static final class AssembledChart {
+
+		private final PatientChart uninjected;
+
+		private final PatientChart injected;
+
+		private final ChartReadStatus chartRead;
+
+		private AssembledChart(PatientChart uninjected, PatientChart injected, ChartReadStatus chartRead) {
+			this.uninjected = uninjected;
+			this.injected = injected;
+			this.chartRead = chartRead;
+		}
+	}
+
+	/**
+	 * Builds the chart, appends this module's reference records, and checks the exact prompt the model
+	 * will read against the input budget. A question the module answers from its own findings needs
+	 * no model prompt and is not counted.
+	 *
+	 * <p>A query-scoped slice is budgeted by the builder BEFORE the injector appends active orders,
+	 * drug references and safety findings, which ADR Decision 57 leaves uncapped. Where they push the
+	 * composed prompt over the budget, the slice is rebuilt with their size reserved, so only its
+	 * optional recency and similarity records give way and every protected and injected record stays.
+	 * The protected tiers and the reservation together exceeding the budget is the builder's
+	 * {@code InsufficientContextException}. A full chart has no optional records, so one that does not
+	 * fit is refused at once. A count that fails is no count, as an unavailable counter is: the chart
+	 * as assembled is answered unbudgeted, so this check can refuse a prompt and never fail one.
+	 *
+	 * @throws ChartTooLargeException where the composed prompt still exceeds the input budget
+	 */
+	private AssembledChart assembleChart(Patient patient, String question, CancellationSignal cancellation) {
+		int reservedTokens = 0;
+		for (int assembly = 1;; assembly++) {
+			PatientChart built = chartBuildingStrategy.buildChart(patient, question, reservedTokens);
+			requireActiveTurn(cancellation);
+			ChartReadStatus chartRead = new ChartReadStatus();
+			PatientChart injected = drugReferenceInjector.inject(built, patient, question, chartRead);
+			requireActiveTurn(cancellation);
+			AssembledChart assembled = new AssembledChart(built, injected, chartRead);
+			if (tokenCounter == null || !tokenCounter.isAvailable() || answersFromTheModule(injected)) {
+				return assembled;
+			}
+			int budget;
+			int composed;
+			int slice;
+			try {
+				budget = tokenCounter.inputBudget();
+				composed = tokenCounter.countPrompt(chartTextOrPlaceholder(injected), injected.getFocusIndices(),
+						question, severalFindingsAboutOneDrug(injected), injected.getDrugsAlreadyOrdered());
+				// The slice exactly as the builder counted it, so the difference is what injection added;
+				// counted only where a rebuild needs it.
+				slice = composed <= budget || !built.isQueryScoped() || assembly == MAX_SLICE_ASSEMBLIES ? 0
+						: tokenCounter.countPrompt(chartTextOrPlaceholder(built), Collections.<Integer>emptyList(),
+								question, false, Collections.<PatientChartSerializer.AlreadyOrderedDrug>emptyList());
+			}
+			catch (RuntimeException e) {
+				// A count the engine could not answer is no count, as an unavailable counter is
+				// (TokenCounter.countPrompt): the chart as assembled goes to the model unbudgeted.
+				log.warn("Could not count the prompt for patient [id={}]; it is not budgeted: {}",
+						patient == null ? null : patient.getPatientId(), e.getMessage());
+				return assembled;
+			}
+			if (composed <= budget) {
+				return assembled;
+			}
+			if (!built.isQueryScoped() || assembly == MAX_SLICE_ASSEMBLIES) {
+				throw new ChartTooLargeException("The complete chart, reference material, and question "
+						+ "exceed the configured model input budget.");
+			}
+			reservedTokens = Math.max(reservedTokens + composed - budget, composed - slice);
+		}
 	}
 
 	/**

@@ -122,5 +122,36 @@
       "mandatory_tokens": 101,
       "expected": "insufficient_context"
     }
+  ],
+  "provider_capabilities": [
+    {
+      "id": "provider.capabilities.single-provider-no-picker",
+      "providers": [
+        "bundled"
+      ],
+      "default_provider": "bundled",
+      "expected_picker": false
+    },
+    {
+      "id": "provider.capabilities.configured-hub-visible-when-unready",
+      "providers": [
+        "bundled",
+        "hub"
+      ],
+      "default_provider": "bundled",
+      "hub_ready": false,
+      "expected_picker": true,
+      "expected_hub_state": "disabled"
+    },
+    {
+      "id": "provider.capabilities.switch-starts-new-conversation",
+      "providers": [
+        "bundled",
+        "hub"
+      ],
+      "switch_from": "bundled",
+      "switch_to": "hub",
+      "expected": "new_conversation"
+    }
   ]
 }

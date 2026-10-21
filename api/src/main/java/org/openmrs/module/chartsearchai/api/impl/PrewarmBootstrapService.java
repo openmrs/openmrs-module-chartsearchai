@@ -200,13 +200,21 @@ public class PrewarmBootstrapService {
 					done++;
 				}
 				catch (IncompleteChartException e) {
-					// Not a failed patient: QueryStore has not finished indexing (its bootstrap, or a
-					// restart's top-up). Moving the cursor on would carry the sweep to the end having pinned
-					// nothing, so it stops here and a later start resumes at this patient.
-					log.warn("Prewarm sweep stopping at patient [id={}]: QueryStore has not finished indexing; "
-							+ "start the prewarm again once its bootstrap completes", id);
-					notYetIndexed = true;
-					break;
+					if (e.getReason() == IncompleteChartException.Reason.CHART_TRUNCATED) {
+						// This one chart exceeds the read store's retrieval cap: a failed patient like any
+						// other, not a reason to stop, or one such chart would block every later patient
+						// on every start.
+						failed++;
+						log.warn("Prewarm failed for patient [id={}]: {}", id, e.getMessage());
+					} else {
+						// Not a failed patient: QueryStore has not finished indexing (its bootstrap, or a
+						// restart's top-up). Moving the cursor on would carry the sweep to the end having
+						// pinned nothing, so it stops here and a later start resumes at this patient.
+						log.warn("Prewarm sweep stopping at patient [id={}]: QueryStore has not finished indexing; "
+								+ "start the prewarm again once its bootstrap completes", id);
+						notYetIndexed = true;
+						break;
+					}
 				}
 				catch (Exception e) {
 					failed++;

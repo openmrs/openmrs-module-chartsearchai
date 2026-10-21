@@ -56,7 +56,8 @@ public class ChartSearchAiContextFailureTest {
 
 	@Test
 	public void incompleteChartReadDoesNotRecommendALargerModelContext() {
-		assertFailure(new IncompleteChartException("internal indexing details"),
+		assertFailure(new IncompleteChartException("internal indexing details",
+				IncompleteChartException.Reason.INDEXING_UNFINISHED),
 				503, "chart could not be read completely", "increase the LLM context size");
 	}
 
@@ -64,7 +65,8 @@ public class ChartSearchAiContextFailureTest {
 	public void incompleteChartReadSendsTheClinicianToAnAdministratorRatherThanAskingThemToWait() {
 		// Indexing that is not running never finishes on its own: a completed QueryStore bootstrap is
 		// the precondition, and starting one is an administrator's action.
-		assertFailure(new IncompleteChartException("internal indexing details"),
+		assertFailure(new IncompleteChartException("internal indexing details",
+				IncompleteChartException.Reason.INDEXING_UNFINISHED),
 				503, "Ask your administrator to check that QueryStore indexing has completed", "Wait");
 	}
 

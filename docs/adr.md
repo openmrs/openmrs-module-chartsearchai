@@ -2114,6 +2114,30 @@ Three additive, data-driven extensions:
 
 **Status: Accepted** (July 2026) — implemented behind `chartsearchai.chartMode`, which defaults to `fullChart` again since 2026-10 (it shipped defaulting to `fullChart`, defaulted to `queryScoped` from 2026-07; see the two updates below). Complements — and in scoped mode disengages — the warmup/prewarm/KV-persistence machinery of Decisions 12 and 26.
 
+**Update (2026-10, the slice is composed by QueryStore).** `QueryScopeRouter` is gone: `buildScoped` asks
+QueryStore for a context slice (`getContextSlice` with `interpretQuestion`, its Decisions 17 and 18), which now owns
+what this decision assembled here. The slice carries a mandatory clinical core (every allergy and every active
+condition and diagnosis), the typed-complete types QueryStore's cue tables derive from the question, an exact tier
+(records matching a quoted phrase, ISO date, UUID, labelled identifier or namespaced code in the question), the
+similarity top-K, obs-group panel completion and, for temporal questions, the recency anchor; the mandatory, exact,
+typed and panel tiers are never dropped for budget. The similarity leg's text is QueryStore's: lab panels expanded and
+the patient the chart is about left out, and nothing else stripped. Measured with Gemma 4 12B on the five-patient HIV
+substitute cohort (the original cohort is gone), 40 scope cells, one capture per cell:
+
+- 2026-10-07, against #586's router slice: mean F1 0.891 to 0.735, absent-cell abstention 20/22 to 22/22, off-topic
+  citations 14 to 0. The loss was retrieval on one topic: "Does the patient have any kidney problems?" reached the
+  model with none of patient 39's three creatinine records, which the router slice carried; heart and mental-health
+  cells followed the prompt's rule of citing nothing after a negative category verdict.
+- 2026-10-20, through the validation harness's citation scorer on the same cohort: QueryStore's diversified
+  similarity (its #88) scored 0.761, abstention 22/22, off-topic 0; with the patient left out of the similarity text
+  (its #87) 0.825, 22/22, 0. With the full question, the twelve similarity slots were "Patient reported current ...
+  treatment: None" records; without the patient, the creatinine records rank first. Patient 39's kidney cell went
+  from one of three creatinine records cited to two; the other kidney cells were unchanged. One control, patient
+  3666's medications, cited one order per drug instead of every repeat of the same five drugs, which the per-record
+  gold scores 24/24 to 5/24.
+
+The temporal probe has not been re-run on this composition.
+
 **Update (2026-10, default flipped back to `fullChart`).** Taken by the maintainer, against this decision's own
 measurements, which still stand and were not re-run: on a CPU host a not-yet-warmed patient's first answer is
 73–74 s in full-chart mode against 12–27 s scoped, and the 40-cell adjudicated gate scored full-chart lower on mean F1,

@@ -25,6 +25,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.chartsearchai.api.ChartSearchService;
 import org.openmrs.module.chartsearchai.api.InsufficientContextException;
 import org.openmrs.module.chartsearchai.api.provider.CancellationSignal;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.AlreadyOrderedDrug;
@@ -289,7 +290,17 @@ public class LlmInferenceServiceModuleBudgetContextTest extends BaseModuleContex
 		assertModelCancellation(true);
 	}
 
+	/** Production hands the provider the router, not the inference service: its overload must forward the signal. */
+	@Test
+	public void cancellingAStalledModelThroughTheRouterReleasesTheRequest() throws Exception {
+		assertModelCancellation(true, true);
+	}
+
 	private void assertModelCancellation(boolean sendHeaders) throws Exception {
+		assertModelCancellation(sendHeaders, false);
+	}
+
+	private void assertModelCancellation(boolean sendHeaders, boolean throughTheRouter) throws Exception {
 		TurnCancellation cancellation = new TurnCancellation();
 		AtomicBoolean reachedModel = new AtomicBoolean();
 		CountDownLatch release = new CountDownLatch(1);
@@ -323,8 +334,16 @@ public class LlmInferenceServiceModuleBudgetContextTest extends BaseModuleContex
 			LlmProvider llm = new LlmProvider();
 			ReflectionTestUtils.setField(llm, "remoteEngine", new RemoteLlmEngine());
 			service.setLlmProvider(llm);
+			ChartSearchService answering = service;
+			if (throughTheRouter) {
+				// Caching off, so the call reaches the model rather than a cached answer.
+				Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_CACHE_TTL_MINUTES, "0");
+				ChartSearchServiceRouter router = new ChartSearchServiceRouter();
+				router.setLlmService(service);
+				answering = router;
+			}
 			long start = System.nanoTime();
-			TurnResult result = new BundledClinicalAnswerProvider(service).execute(
+			TurnResult result = new BundledClinicalAnswerProvider(answering).execute(
 					new TurnRequest(Context.getPatientService().getPatient(7), "Can I give her clarithromycin?",
 							"conversation", "request", null), event -> { }, cancellation).toCompletableFuture().join();
 			assertTrue(reachedModel.get(), "exercise the real model transport after chart retrieval");

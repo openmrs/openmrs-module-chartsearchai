@@ -129,11 +129,9 @@ public class ProviderRegistryConformanceTest {
 					assertFalse(hub.isReady(), id + ": unready hub must not claim readiness");
 					assertNotNull(hub.getUnavailableReason(), id);
 				}
-			} else if (fixtureCase.has("switch_to")) {
-				assertEquals("new_conversation", fixtureCase.get("expected").asText());
-				assertTrue(ClinicalAnswerProviderRegistry.switchRequiresNewConversation(
-						fixtureCase.get("switch_from").asText(), fixtureCase.get("switch_to").asText()), id);
 			}
+			// A switch case is about conversations, not the registry: openOrCreate enforces it, and
+			// ConversationServicePersistenceTest#theSharedProviderSwitchCaseStartsANewConversation checks it.
 		}
 	}
 

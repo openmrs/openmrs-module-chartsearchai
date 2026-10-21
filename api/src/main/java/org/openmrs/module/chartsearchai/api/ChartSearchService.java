@@ -2122,7 +2122,6 @@ public interface ChartSearchService {
 
 		private final int withheldInteractions;
 
-		private final String group;
 		/** Whether the MODULE put this citation on the answer rather than the model — see
 		 *  {@link #isAttachedByTheModule()} (issue #305). */
 		private final boolean attachedByTheModule;
@@ -2186,7 +2185,6 @@ public interface ChartSearchService {
 			this.grounded = grounded;
 			this.source = source;
 			this.withheldInteractions = withheldInteractions;
-			this.group = ChartSearchAiUtils.referenceGroup(resourceType);
 			this.attachedByTheModule = attachedByTheModule;
 			this.attachedFor = attachedFor == null || attachedFor.isEmpty() ? Collections.<Integer> emptyList()
 					: Collections.unmodifiableList(new ArrayList<Integer>(attachedFor));
@@ -2268,11 +2266,6 @@ public interface ChartSearchService {
 		 */
 		public int getWithheldInteractions() {
 			return withheldInteractions;
-		}
-
-		/** Server-authoritative provenance group: patient chart or module reference material. */
-		public String getGroup() {
-			return group;
 		}
 
 		/**

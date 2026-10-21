@@ -54,6 +54,8 @@ import org.openmrs.module.chartsearchai.api.provider.ProviderCapability;
 import org.openmrs.module.chartsearchai.api.provider.ProviderDescriptor;
 import org.openmrs.module.chartsearchai.api.provider.ProviderMode;
 import org.openmrs.module.chartsearchai.api.provider.TurnEvent;
+import org.openmrs.module.chartsearchai.api.provider.TurnCancellation;
+import org.openmrs.module.chartsearchai.api.provider.TurnPreemptionRegistry;
 import org.openmrs.module.chartsearchai.api.provider.TurnEventSink;
 import org.openmrs.module.chartsearchai.api.provider.TurnEventType;
 import org.openmrs.module.chartsearchai.api.provider.TurnRequest;
@@ -373,6 +375,44 @@ public class ProviderRestContractTest {
 		controller.streamProviderTurn(out, patient(), "Question", "bundled", ProviderMode.QUERY_SCOPED, null, null);
 		assertEquals(Arrays.asList("turn_started", "answer_done", "turn_error"), sseTypes(out));
 		assertEquals("provider_failure", ssePayload(out, "turn_error").path("problemCode").asText());
+	}
+
+	/** The controller registers its turn by ordinal: a newer turn arriving second wins the slot. */
+	@Test
+	public void aNewerTurnRegisteringSecondCancelsTheOlderOneAndRuns() throws Exception {
+		TurnCancellation older = assertTurnRegisteredAgainst(2, 3, false);
+		assertTrue(older.isCancelled(), "the older turn holding the slot is cancelled");
+	}
+
+	/** And an older turn arriving second comes back cancelled rather than running its older question. */
+	@Test
+	public void anOlderTurnRegisteringSecondComesBackCancelled() throws Exception {
+		TurnCancellation newer = assertTurnRegisteredAgainst(5, 3, true);
+		assertFalse(newer.isCancelled(), "the newer turn keeps the slot");
+	}
+
+	/** Streams a turn with {@code ordinal} while a turn with {@code heldOrdinal} holds its slot. */
+	private TurnCancellation assertTurnRegisteredAgainst(int heldOrdinal, int ordinal, boolean expectCancelled)
+			throws Exception {
+		ChartSearchAiRestController controller = new ChartSearchAiRestController();
+		RecordingConversationService conversations = new RecordingConversationService();
+		conversations.nextOrdinal = ordinal;
+		TurnPreemptionRegistry registry = new TurnPreemptionRegistry();
+		TurnCancellation held = registry.begin("conversation-uuid-1", heldOrdinal);
+		controller.setPreemptionRegistry(registry);
+		ScriptedProvider provider = new ScriptedProvider("bundled", true);
+		AnswerEnvelope answer = AnswerEnvelope.fromPayload(answerPayload("Answer"));
+		provider.events = Arrays.asList(TurnEvent.of(TurnEventType.TURN_STARTED, 0, "bundled"),
+				TurnEvent.withAnswer(TurnEventType.TURN_DONE, 1, "bundled", answer));
+		provider.result = TurnResult.done("bundled", ProviderMode.QUERY_SCOPED, answer);
+		controller.setConversationService(conversations);
+		controller.setProviderRegistry(stubRegistry(provider));
+
+		controller.streamProviderTurn(new ByteArrayOutputStream(), patient(), "Question", "bundled",
+				ProviderMode.QUERY_SCOPED, null, null);
+
+		assertEquals(expectCancelled, provider.capturedCancellations.get(0).isCancelled());
+		return held;
 	}
 
 	@Test
@@ -822,6 +862,10 @@ public class ProviderRestContractTest {
 
 	private static final class RecordingConversationService implements ConversationService {
 
+		/** The ordinal the next started turn carries; null, as before, unless a test sets it. */
+		Integer nextOrdinal;
+
+
 		ClinicalConversation openConversation;
 
 		int started;
@@ -885,6 +929,7 @@ public class ProviderRestContractTest {
 			started++;
 			ClinicalConversationTurn turn = new ClinicalConversationTurn();
 			turn.setUuid("turn-uuid-1");
+			turn.setOrdinal(nextOrdinal);
 			turn.setConversation(conversation);
 			turn.setQuestion(question);
 			turn.setRequestId(requestId);

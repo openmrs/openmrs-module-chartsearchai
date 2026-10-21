@@ -1343,7 +1343,9 @@ public class ChartSearchAiRestController {
 	@RequestMapping(value = "/chat", method = RequestMethod.GET)
 	@ResponseBody
 	public ResponseEntity<Object> getChat(
-			@RequestParam(value = "patient", required = true) String patientUuid,
+			// Not required at the binding: a missing patient is the handler's 400, as on /chartalerts,
+			// where Spring's refusal would reach handleUnexpected as a 500.
+			@RequestParam(value = "patient", required = false) String patientUuid,
 			@RequestParam(value = "session", required = false) String sessionUuid) {
 		Context.requirePrivilege(ChartSearchAiConstants.PRIV_QUERY_PATIENT_DATA);
 		PatientResolution resolved = resolvePatient(patientUuid);

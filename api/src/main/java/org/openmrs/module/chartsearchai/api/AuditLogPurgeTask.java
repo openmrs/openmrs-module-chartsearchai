@@ -34,11 +34,22 @@ public class AuditLogPurgeTask extends AbstractTask {
 
 	@Override
 	public void execute() {
-		purgeAuditLogs();
-		purgeConversations();
+		// Two independent retention policies: one failing (a lock timeout on its rows, say) is logged
+		// and the other still runs.
+		runPolicy("Audit log purge", this::purgeAuditLogs);
+		runPolicy("Chat history purge", this::purgeConversations);
 	}
 
-	private void purgeAuditLogs() {
+	private static void runPolicy(String name, Runnable policy) {
+		try {
+			policy.run();
+		}
+		catch (RuntimeException e) {
+			log.error("{} failed; the other retention policy still runs", name, e);
+		}
+	}
+
+	void purgeAuditLogs() {
 		int retentionDays = getRetentionDays();
 		if (retentionDays <= 0) {
 			log.info("Audit log purge disabled (retention days is 0)");
@@ -60,7 +71,7 @@ public class AuditLogPurgeTask extends AbstractTask {
 				deleted, retentionDays);
 	}
 
-	private void purgeConversations() {
+	void purgeConversations() {
 		String value = Context.getAdministrationService()
 				.getGlobalProperty(ChartSearchAiConstants.GP_CHAT_RETENTION_DAYS);
 		int days = parseRetentionDays(value, ChartSearchAiConstants.DEFAULT_CHAT_RETENTION_DAYS);

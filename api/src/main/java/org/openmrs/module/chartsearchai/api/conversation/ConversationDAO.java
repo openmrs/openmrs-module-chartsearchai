@@ -35,6 +35,13 @@ public interface ConversationDAO {
 
 	ClinicalConversation getLatestActiveConversation(Patient patient, User user);
 
+	/**
+	 * Holds the patient's row for the rest of this transaction, so two transactions opening or
+	 * replacing the patient's active conversation run one after the other and the second reads
+	 * what the first committed, also when no conversation exists yet.
+	 */
+	void lockConversationsOf(Patient patient);
+
 	ClinicalConversationTurn saveTurn(ClinicalConversationTurn turn);
 
 	/** The stored turn, re-read under a row lock; {@code null} when no such turn exists. */

@@ -13,6 +13,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -67,6 +68,9 @@ public class ConversationServiceImpl implements ConversationService {
 		require(user != null, "an authenticated user is required");
 
 		String modeName = mode == null ? null : mode.getWireName();
+		// Serialized on the patient's row: nothing in the mapping or the schema keeps two concurrent
+		// opens from each finding no active conversation and creating one, which splits the history.
+		conversationDAO.lockConversationsOf(patient);
 		ClinicalConversation current = conversationDAO.getLatestActiveConversation(patient, user);
 		if (current != null && providerId.equals(current.getProviderId())
 				&& Objects.equals(modeName, current.getProviderMode())) {
@@ -82,6 +86,7 @@ public class ConversationServiceImpl implements ConversationService {
 		User user = Context.getAuthenticatedUser();
 		require(user != null, "an authenticated user is required");
 		String modeName = mode == null ? null : mode.getWireName();
+		conversationDAO.lockConversationsOf(patient);
 		ClinicalConversation current = conversationDAO.getLatestActiveConversation(patient, user);
 		return closeAndCreate(patient, user, providerId, modeName, current);
 	}
@@ -207,17 +212,57 @@ public class ConversationServiceImpl implements ConversationService {
 	public boolean recordCheckedAnswer(ClinicalConversationTurn turn, AnswerEnvelope answer) {
 		require(turn != null && turn.getConversation() != null, "turn and conversation are required");
 		require(answer != null, "answer is required");
-		if (turn.getTerminalState() != null || !isChecked(answer)) {
+		if (!isChecked(answer)) {
+			return false;
+		}
+		// The stored row decides whether the turn is still open, as finishTurn reads it: the caller's
+		// copy can predate a settlement made elsewhere, and saving it would clear that settlement's
+		// terminal state and audit link.
+		ClinicalConversationTurn stored = conversationDAO.getTurnForUpdate(turn.getTurnId());
+		require(stored != null, "turn does not exist");
+		if (stored.getTerminalState() != null) {
 			return false;
 		}
 
-		turn.setAnswerText(answer.getText());
-		turn.setProviderPayload(serialize(answer.getPayload()));
-		turn.setPayloadMediaType(ClinicalConversationTurn.MEDIA_TYPE_JSON);
+		stored.setAnswerText(answer.getText());
+		stored.setProviderPayload(serialize(retainedPayload(answer)));
+		stored.setPayloadMediaType(ClinicalConversationTurn.MEDIA_TYPE_JSON);
 		Date now = new Date();
-		conversationDAO.touchConversation(turn.getConversation().getConversationId(), now);
-		conversationDAO.saveTurn(turn);
+		conversationDAO.touchConversation(stored.getConversation().getConversationId(), now);
+		conversationDAO.saveTurn(stored);
+		if (turn != stored) {
+			turn.setAnswerText(stored.getAnswerText());
+			turn.setProviderPayload(stored.getProviderPayload());
+			turn.setPayloadMediaType(stored.getPayloadMediaType());
+		}
 		return true;
+	}
+
+	/**
+	 * The payload a checked answer is retained with. A bundled answer carries its measurements on the
+	 * {@link ChartAnswer} it was built from, not in its wire payload; they are written alongside it
+	 * here so the audit of a turn settled from the retained answer (an optional tail that failed) keeps
+	 * the search mode, the reference slice and the token counts the delivered answer was measured with.
+	 */
+	private static Map<String, Object> retainedPayload(AnswerEnvelope answer) {
+		ChartAnswer source = answer.getSource();
+		if (source == null) {
+			return answer.getPayload();
+		}
+		Map<String, Object> payload = new LinkedHashMap<>(answer.getPayload());
+		payload.put("searchMode", source.getSearchMode());
+		ReferenceSlice slice = source.getReferenceSlice();
+		if (slice != null) {
+			payload.put("referenceSliceRecords", slice.getRecords());
+			payload.put("referenceSliceChars", slice.getCharacters());
+		}
+		if (measured(source.getInputTokens()) != null) {
+			payload.put("inputTokens", source.getInputTokens());
+		}
+		if (measured(source.getOutputTokens()) != null) {
+			payload.put("outputTokens", source.getOutputTokens());
+		}
+		return payload;
 	}
 
 	@Override
@@ -253,10 +298,15 @@ public class ConversationServiceImpl implements ConversationService {
 		audit.setAnswer(answer == null ? "" : answer.getText());
 		audit.setReferenceCount(referenceCount(answer));
 		ChartAnswer source = answer == null ? null : answer.getSource();
-		audit.setSearchMode(source == null ? ChartSearchAiConstants.SEARCH_MODE_UNKNOWN : source.getSearchMode());
+		// A retained bundled answer states its measurements in its payload (retainedPayload).
+		String retainedMode = text(answer, "searchMode");
+		audit.setSearchMode(source != null ? source.getSearchMode()
+				: retainedMode != null ? retainedMode : ChartSearchAiConstants.SEARCH_MODE_UNKNOWN);
 		ReferenceSlice slice = source == null ? null : source.getReferenceSlice();
-		audit.setReferenceSliceRecords(slice == null ? null : slice.getRecords());
-		audit.setReferenceSliceChars(slice == null ? null : slice.getCharacters());
+		audit.setReferenceSliceRecords(slice != null ? Integer.valueOf(slice.getRecords())
+				: number(answer, "referenceSliceRecords"));
+		audit.setReferenceSliceChars(slice != null ? Integer.valueOf(slice.getCharacters())
+				: number(answer, "referenceSliceChars"));
 		audit.setResponseTimeMs(responseTimeMs);
 		// The bundled answer's counts are on the ChartAnswer it was built from, as saveAuditLog reads
 		// them; only a relayed answer states them in its payload.
@@ -292,6 +342,11 @@ public class ConversationServiceImpl implements ConversationService {
 		}
 		Object references = answer.getPayload().get("references");
 		return references instanceof List ? ((List<?>) references).size() : 0;
+	}
+
+	private static String text(AnswerEnvelope answer, String field) {
+		Object value = answer == null ? null : answer.getPayload().get(field);
+		return value instanceof String ? (String) value : null;
 	}
 
 	private static Integer number(AnswerEnvelope answer, String field) {

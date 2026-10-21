@@ -81,6 +81,45 @@ public class ProviderStreamPersistenceTest extends BaseModuleWebContextSensitive
 	@Autowired
 	private AuditLogService auditLogs;
 
+	@Autowired
+	private ClinicalAnswerProviderRegistry providerRegistry;
+
+	// Request-level: the handlers behind GET /providers and GET /models, not their payload helpers.
+	@Test
+	@SuppressWarnings("unchecked")
+	public void theDiscoveryEndpointsAnswerFromTheRegistryAndTheHub() {
+		ChartSearchAiRestController controller = new ChartSearchAiRestController();
+		controller.setProviderRegistry(providerRegistry);
+		Map<String, Object> profiles = new java.util.LinkedHashMap<>();
+		profiles.put("object", "list");
+		profiles.put("data", Collections.singletonList(Collections.singletonMap("id", "product-profile-a")));
+		controller.setHubProfileService(new org.openmrs.module.chartsearchai.api.impl.HubProfileService() {
+			@Override
+			public Map<String, Object> listProfiles() {
+				return profiles;
+			}
+		});
+
+		ResponseEntity<Object> providers = controller.listProviders();
+		assertEquals(org.springframework.http.HttpStatus.OK, providers.getStatusCode());
+		Map<String, Object> body = (Map<String, Object>) providers.getBody();
+		assertEquals(providerRegistry.getDefaultProviderId(), body.get("defaultProvider"));
+		List<Map<String, Object>> listed = (List<Map<String, Object>>) body.get("providers");
+		assertTrue(listed.stream().anyMatch(entry -> "bundled".equals(entry.get("id"))), listed.toString());
+
+		ResponseEntity<Object> models = controller.listModels();
+		assertEquals(org.springframework.http.HttpStatus.OK, models.getStatusCode());
+		assertEquals(profiles, models.getBody());
+
+		controller.setHubProfileService(new org.openmrs.module.chartsearchai.api.impl.HubProfileService() {
+			@Override
+			public Map<String, Object> listProfiles() {
+				throw new org.openmrs.api.APIException("Hub profile discovery failed: HTTP 502");
+			}
+		});
+		assertEquals(org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE, controller.listModels().getStatusCode());
+	}
+
 	@Test
 	public void terminalAnswerNamesTheAuditActuallyPersistedForThatTurn() throws Exception {
 		BundledClinicalAnswerProvider provider = new BundledClinicalAnswerProvider(null) {

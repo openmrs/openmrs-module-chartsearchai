@@ -267,19 +267,30 @@ public class BundledClinicalAnswerProvider implements ClinicalAnswerProvider {
 		}
 
 		AnswerEnvelope finalEnvelope = toAnswerEnvelope(finalAnswer);
-		if (answerDoneEmitted[0]) {
-			if (groundingEnabled()) {
-				events.accept(TurnEvent.withAnswer(TurnEventType.EVIDENCE_UPDATED,
-						sequence.getAndIncrement(), PROVIDER_ID, finalEnvelope));
+		// The answer is computed: failing to deliver the events that announce it, to a client that left
+		// while grounding ran, must not turn the stored turn into an error with no answer.
+		try {
+			if (answerDoneEmitted[0]) {
+				if (groundingEnabled()) {
+					events.accept(TurnEvent.withAnswer(TurnEventType.EVIDENCE_UPDATED,
+							sequence.getAndIncrement(), PROVIDER_ID, finalEnvelope));
+				}
+			} else {
+				// The ungrounded seam did not fire, so the returned answer was already final
+				// (e.g. cached with verdicts attached when first computed).
+				events.accept(TurnEvent.withAnswer(TurnEventType.ANSWER_DONE, sequence.getAndIncrement(),
+						PROVIDER_ID, finalEnvelope));
 			}
-		} else {
-			// The ungrounded seam did not fire, so the returned answer was already final
-			// (e.g. cached with verdicts attached when first computed).
-			events.accept(TurnEvent.withAnswer(TurnEventType.ANSWER_DONE, sequence.getAndIncrement(),
-					PROVIDER_ID, finalEnvelope));
+			events.accept(TurnEvent.withAnswer(TurnEventType.TURN_DONE,
+					sequence.getAndIncrement(), PROVIDER_ID, finalEnvelope));
 		}
-		events.accept(TurnEvent.withAnswer(TurnEventType.TURN_DONE,
-				sequence.getAndIncrement(), PROVIDER_ID, finalEnvelope));
+		catch (RuntimeException e) {
+			if (cancellation.isCancelled()) {
+				log.debug("Bundled provider turn {}: the client left before the final events", request.getRequestId());
+			} else {
+				log.warn("Bundled provider turn {}: delivering the final events failed", request.getRequestId(), e);
+			}
+		}
 		return CompletableFuture.completedFuture(TurnResult.done(PROVIDER_ID, configuredMode, finalEnvelope));
 	}
 

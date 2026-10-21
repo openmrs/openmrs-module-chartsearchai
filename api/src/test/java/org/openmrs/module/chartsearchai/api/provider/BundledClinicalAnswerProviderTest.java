@@ -20,6 +20,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.Map;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -216,6 +217,30 @@ public class BundledClinicalAnswerProviderTest {
 		assertEquals(new java.util.LinkedHashSet<String>(Arrays.asList("schema_version", "status", "issues")),
 				safetyCheck.keySet());
 		assertNull(result.getProblemCode());
+	}
+
+	@Test
+	public void aClientThatLeavesBeforeTheEvidenceEventStillLeavesTheGroundedAnswerStored() throws Exception {
+		ScriptedChartSearchService service = new ScriptedChartSearchService();
+		service.ungrounded = answer("Aspirin 81mg [1]", Arrays.asList(reference(1, null)));
+		service.groundedResult = answer("Aspirin 81mg [1]", Arrays.asList(reference(1, Boolean.TRUE)));
+		AtomicBoolean gone = new AtomicBoolean();
+		// The client left while grounding ran: the keep-alive found it gone, so every later write fails.
+		TurnEventSink departed = event -> {
+			if (event.getType() == TurnEventType.EVIDENCE_UPDATED) {
+				gone.set(true);
+			}
+			if (gone.get()) {
+				throw new IllegalStateException("the client has gone");
+			}
+		};
+
+		TurnResult result = provider(service).execute(request(), departed, gone::get)
+				.toCompletableFuture().get();
+
+		assertEquals(TurnEventType.TURN_DONE, result.getTerminalState());
+		assertEquals("Aspirin 81mg [1]", result.getAnswer().getText());
+		assertEquals(Boolean.TRUE, references(result.getAnswer()).get(0).getGrounded());
 	}
 
 	/**

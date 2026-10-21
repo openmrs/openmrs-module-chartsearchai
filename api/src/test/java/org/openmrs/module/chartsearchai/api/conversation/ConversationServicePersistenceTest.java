@@ -441,6 +441,30 @@ public class ConversationServicePersistenceTest extends BaseModuleContextSensiti
 		assertNull(audit.getReferenceSliceChars());
 	}
 
+	// A retained relay answer keeps its provider's fields; none of them is this module's measurement,
+	// and a long provider-owned mode must not fail the settlement against the audit column.
+	@Test
+	public void aRetainedRelayAnswersOwnSearchModeAndSliceAreNotAudited() {
+		ClinicalConversation conversation = conversationService.openOrCreate(patient, "hub", ProviderMode.QUERY_SCOPED);
+		ClinicalConversationTurn turn = conversationService.startTurn(conversation, "retained-relay", "Question");
+		Map<String, Object> payload = new LinkedHashMap<>();
+		payload.put("answer", "Relayed answer");
+		payload.put("answerValidation", Collections.singletonMap("status", "checked"));
+		payload.put("searchMode", "a-provider-owned-mode-x");
+		payload.put("referenceSliceRecords", 4);
+		payload.put("referenceSliceChars", 90);
+		assertTrue(conversationService.recordCheckedAnswer(turn, AnswerEnvelope.fromPayload(payload)));
+		conversationService.finishTurn(turn, TurnResult.error("hub", ProviderMode.QUERY_SCOPED,
+				"provider_stream_interrupted"), 50L);
+		Context.flushSession();
+		Context.clearSession();
+		ChartSearchAuditLog audit = conversationDAO.getTurnByUuid(turn.getUuid()).getAuditLog();
+		assertEquals("Relayed answer", audit.getAnswer());
+		assertEquals(ChartSearchAiConstants.SEARCH_MODE_UNKNOWN, audit.getSearchMode());
+		assertNull(audit.getReferenceSliceRecords());
+		assertNull(audit.getReferenceSliceChars());
+	}
+
 	// Two concurrent opens for one patient must not each create an active conversation: the service
 	// takes the patient's row before it reads, so the second open reads what the first committed.
 	@Test

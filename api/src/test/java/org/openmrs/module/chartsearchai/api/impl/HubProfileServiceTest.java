@@ -103,6 +103,40 @@ public class HubProfileServiceTest extends BaseModuleContextSensitiveTest {
 	}
 
 	@Test
+	public void profileDiscoveryGivesUpOnABodyTheHubNeverFinishes() throws Exception {
+		java.util.concurrent.CountDownLatch release = new java.util.concurrent.CountDownLatch(1);
+		HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
+		server.createContext("/v1/models", exchange -> {
+			// Headers now, the body never: the request timeout no longer applies past this point.
+			exchange.sendResponseHeaders(200, 4096);
+			try {
+				release.await(30, java.util.concurrent.TimeUnit.SECONDS);
+			}
+			catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+			}
+			exchange.close();
+		});
+		server.start();
+		try {
+			Context.getAdministrationService().setGlobalProperty(
+					ChartSearchAiConstants.GP_HUB_ENDPOINT_URL,
+					"http://localhost:" + server.getAddress().getPort() + "/v1/chat/completions");
+			HubProfileService service = new HubProfileService();
+			service.bodyDeadline = java.time.Duration.ofSeconds(1);
+			long start = System.nanoTime();
+			org.openmrs.api.APIException failure = assertThrows(org.openmrs.api.APIException.class, service::listProfiles);
+			assertTrue(failure.getMessage().contains("timed out"), failure.getMessage());
+			assertTrue(java.util.concurrent.TimeUnit.NANOSECONDS.toSeconds(System.nanoTime() - start) < 10,
+					"the caller is released at the deadline, not when the Hub finishes");
+		}
+		finally {
+			release.countDown();
+			server.stop(0);
+		}
+	}
+
+	@Test
 	public void profileDiscoveryRejectsAnOversizedBody() throws Exception {
 		HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
 		server.createContext("/v1/models", exchange -> {

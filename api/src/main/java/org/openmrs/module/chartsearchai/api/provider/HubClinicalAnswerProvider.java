@@ -178,9 +178,17 @@ public class HubClinicalAnswerProvider implements ClinicalAnswerProvider {
 					TurnResult.error(PROVIDER_ID, request.getMode(), streamError.get()));
 		}
 		if (!doneSeen[0]) {
+			// A cancelled turn whose stream then ended cleanly is the preempt the exception path
+			// already handles: what it had answered stands as its outcome, not an incomplete stream.
 			AnswerEnvelope current = latestAnswer.get();
 			if (current != null) {
+				if (cancellation.isCancelled()) {
+					return completedWithPartialAnswer(events, sequence, request.getMode(), current, emitted);
+				}
 				return endedBeforeDone(events, sequence, request.getMode(), current, emitted);
+			}
+			if (cancellation.isCancelled()) {
+				return failed(events, sequence, request.getMode(), PROBLEM_CANCELLED);
 			}
 			return failed(events, sequence, request.getMode(), PROBLEM_HUB_STREAM_INCOMPLETE);
 		}

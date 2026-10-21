@@ -21095,3 +21095,32 @@ was answered by the module alone, *"Did you mean Milk thistle?"*.
 
 Pinned by `AllergyQuestionConflictingOrderContextTest.search_aQuestionAskingNothingOfDrugSafetyCarriesNoDrugSafetyFinding`
 and the cases that now assert nothing follows a medication question's answer, and `SomethingToEatOrDrinkTest`.
+
+## Decision 391: Eight wordings a clinician types are answered as the questions they ask
+
+**Status: Accepted** (October 2026) — the owner's instruction of 2026-10-21 to keep finding and fixing drug-interaction
+answers before production use.
+
+### Context
+
+Forty drug-interaction questions not among the 669 already tested, asked of 15 patients on the 3.7.1 standalone on
+2026-10-21, found eight wordings the router read as no question it answers, so the model answered them — *"Fluconazole can
+be given, with one caution"*, *"The records do not address …"*, and of *"Can I stop her aspirin before surgery?"* for a
+patient on methotrexate, *"No — Acetylsalicylic acid (aspirin) should not be given"*.
+
+### The decision
+
+Each is a wording of a question the module answers, and is answered as it is:
+
+| Wording | Answered as |
+|---|---|
+| *"Check fluconazole against her meds"* | whether it interacts with her medications |
+| *"Would amiodarone be a problem with her current meds?"* | whether it is safe with her medications |
+| *"What should I watch for if I add clarithromycin?"* | which of her medications interact with it |
+| *"Is there any contraindication to warfarin for her?"* | a proposal asking whether not to give it |
+| *"Is co-trimoxazole safe in this patient?"* | whether it is safe for her |
+| *"Will rifampicin affect her efavirenz levels?"* | whether one changes the other |
+| *"Is she on two NSAIDs?"* | whether she is on more than one of a class (Decision 379) |
+| *"Can I stop her aspirin before surgery?"* | whether to stop it, the occasion asking nothing more |
+
+Pinned by `ClinicianWordingsTest`, which asks each beside the question it is a wording of.

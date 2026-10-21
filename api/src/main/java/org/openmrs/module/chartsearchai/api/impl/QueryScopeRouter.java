@@ -410,7 +410,7 @@ public final class QueryScopeRouter {
 			"is it (?:safe|ok|okay|appropriate|fine|alright|advisable|wise) (?:for " + PATIENT + " )?to (?:(?:give|start|prescribe|"
 					+ "administer|add) (?:" + PATIENT + " )?(?:on )?|take )" + D + "(?: for " + PATIENT + ")?(?: now| today)?",
 			// "Is ibuprofen safe for her?", "Is ibuprofen appropriate for this patient?", "suitable" (ADR Decision 362)
-			"is " + D + " (?:safe|ok|okay|appropriate|suitable)(?: for " + PATIENT + ")?(?: now| today)?",
+			"is " + D + " (?:safe|ok|okay|appropriate|suitable)(?: (?:for|in) " + PATIENT + ")?(?: now| today)?",
 			// "Would ibuprofen be appropriate for her?"
 			"(?:would|will) " + D + " be (?:safe|ok|okay|appropriate|suitable)(?: for " + PATIENT + ")?",
 			// "Is ibuprofen safe to add?", "Is ibuprofen safe to give her?" — the drug before "safe to", the
@@ -473,7 +473,10 @@ public final class QueryScopeRouter {
 			// "Any contraindications to giving her metformin?" — "Is there a contraindication to giving her X?" (ADR Decision
 			// 350)
 			"(?:are there )?any contraindications? (?:to|for|against) (?:giving|starting|prescribing|adding) (?:" + PATIENT
-					+ " )?(?:on )?" + D + "(?: (?:to|for) " + PATIENT + ")?");
+					+ " )?(?:on )?" + D + "(?: (?:to|for) " + PATIENT + ")?",
+			// "Is there any contraindication to warfarin for her?" (ADR Decision 391)
+			"(?:(?:is|are) there )?(?:any |a )?contraindications? (?:to|for|against|with) " + D + "(?: (?:for|in) " + PATIENT
+					+ ")?");
 
 	/**
 	 * Whether a question asks whether NOT to give one drug, and nothing else — one of {@link #NEGATED_PROPOSAL_SHAPES}
@@ -490,6 +493,8 @@ public final class QueryScopeRouter {
 	 * <em>"No — X should not be given: it interacts with …"</em> on the 3.7.1 standalone.
 	 */
 	private static final List<Pattern> INTERACTS_WITH_HER_MEDICATIONS_SHAPES = shapes(
+			// "Check fluconazole against her meds" (ADR Decision 391)
+			"(?:please )?check " + D + " (?:against|with) (?:all of )?" + POSSESSIVE + " (?:other )?" + MEDICATIONS,
 			// "Does ibuprofen interact with her medications?", "Will ibuprofen interact with any of her current meds?", and the
 			// drug named as hers: "Does her lopinavir interact with her other medications?" (ADR Decision 292)
 			"(?:does|will|would|could|can) (?:" + POSSESSIVE + " )?" + D + " interact with (?:any of )?" + POSSESSIVE
@@ -529,6 +534,9 @@ public final class QueryScopeRouter {
 	 * (ADR Decision 319): "Yes" does not answer "which".
 	 */
 	private static final List<Pattern> WHICH_OF_HER_MEDICATIONS_INTERACT_SHAPES = shapes(
+			// "What should I watch for if I add clarithromycin?" (ADR Decision 391)
+			"what (?:should|do|would|must) (?:i|we) (?:need to )?(?:watch|look out|monitor|be careful) for if (?:i|we) (?:add|give|"
+					+ "start|prescribe) (?:" + PATIENT + " )?(?:on )?" + D,
 			"(?:which|what) (?:of )?" + POSSESSIVE + " (?:other |current |active )?(?:medications|meds|medicines|drugs|"
 					+ "prescriptions) (?:interact|interacts|interfere|interferes) with " + D,
 			"which of " + POSSESSIVE + " (?:medications|meds|medicines|drugs) (?:is|are) the problems? with " + D,
@@ -834,6 +842,9 @@ public final class QueryScopeRouter {
 			+ "(?: to (?:give|take|use|start))? (?:with|alongside) (?:any of )?" + HER_MEDICATION_GROUP;
 
 	private static final List<Pattern> SAFE_WITH_HER_MEDICATIONS_SHAPES = shapes(SAFE_WITH_HER_MEDICATIONS,
+			// "Would amiodarone be a problem with her current meds?" (ADR Decision 391)
+			"(?:would|will|could|might|is) " + D + " (?:be )?(?:a problem|an issue|a concern|problematic) (?:with|for) (?:any of )?"
+					+ POSSESSIVE + " (?:other )?" + MEDICATIONS,
 			SAFE_WITH_A_GROUP_OF_HER_MEDICATIONS,
 			// "Is her methotrexate safe?" of a drug she is not on: what a proposal asks (ADR Decision 315)
 			"is " + POSSESSIVE + " " + D + " (?:safe|ok|okay|appropriate)(?: for " + PATIENT + ")?",
@@ -871,10 +882,17 @@ public final class QueryScopeRouter {
 			+ " orders be (?:stopped|discontinued|held)(?: now)?";
 
 	/** "Is it safe to stop her nevirapine?", "Can I stop her nevirapine?" — whether to stop her drug (ADR Decision 335). */
+	/** "… before surgery", "… ahead of the procedure" — the occasion a question whether to stop her drug names, which asks
+	 *  nothing else of it (ADR Decision 391). */
+	private static final String BEFORE_AN_OCCASION = "(?: (?:before|ahead of) (?:the |her |his |their )?\\p{L}+)?";
+
 	private static final List<Pattern> STOP_HER_DRUG_SHAPES = shapes(
-			"is it (?:safe|ok|okay|alright|appropriate) to (?:stop|discontinue|hold) " + POSSESSIVE + " " + D + "(?: now)?",
-			"(?:can|could|may) (?:i|we) (?:safely )?(?:stop|discontinue|hold) " + POSSESSIVE + " " + D + "(?: now)?",
-			"(?:should|must|do) (?:i|we) (?:need to )?(?:stop|discontinue|hold) " + POSSESSIVE + " " + D + "(?: now)?",
+			"is it (?:safe|ok|okay|alright|appropriate) to (?:stop|discontinue|hold) " + POSSESSIVE + " " + D
+					+ "(?: now)?" + BEFORE_AN_OCCASION,
+			"(?:can|could|may) (?:i|we) (?:safely )?(?:stop|discontinue|hold) " + POSSESSIVE + " " + D
+					+ "(?: now)?" + BEFORE_AN_OCCASION,
+			"(?:should|must|do) (?:i|we) (?:need to )?(?:stop|discontinue|hold) " + POSSESSIVE + " " + D
+					+ "(?: now)?" + BEFORE_AN_OCCASION,
 			ONE_OF_HER_D_ORDERS_STOPPED);
 
 	/** Whether it asks whether stopping it is safe or allowed — not whether it should be stopped, which ADR Decision 259
@@ -933,9 +951,12 @@ public final class QueryScopeRouter {
 	private static final List<Pattern> BESIDE_HER_MEDICATIONS_SHAPES = shapes(
 			SAFE_WITH_HER_MEDICATIONS,
 			// "Is it safe to stop her nevirapine?" (ADR Decision 335)
-			"is it (?:safe|ok|okay|alright|appropriate) to (?:stop|discontinue|hold) " + POSSESSIVE + " " + D + "(?: now)?",
-			"(?:can|could|may) (?:i|we) (?:safely )?(?:stop|discontinue|hold) " + POSSESSIVE + " " + D + "(?: now)?",
-			"(?:should|must|do) (?:i|we) (?:need to )?(?:stop|discontinue|hold) " + POSSESSIVE + " " + D + "(?: now)?",
+			"is it (?:safe|ok|okay|alright|appropriate) to (?:stop|discontinue|hold) " + POSSESSIVE + " " + D
+					+ "(?: now)?" + BEFORE_AN_OCCASION,
+			"(?:can|could|may) (?:i|we) (?:safely )?(?:stop|discontinue|hold) " + POSSESSIVE + " " + D
+					+ "(?: now)?" + BEFORE_AN_OCCASION,
+			"(?:should|must|do) (?:i|we) (?:need to )?(?:stop|discontinue|hold) " + POSSESSIVE + " " + D
+					+ "(?: now)?" + BEFORE_AN_OCCASION,
 			ONE_OF_HER_D_ORDERS_STOPPED,
 			// "If I stop her rifampicin, which interactions go away?" (ADR Decision 333)
 			"if (?:i|we) (?:stop|discontinue|remove|hold) " + POSSESSIVE + " " + D + " (?:which|what) (?:drug )?interactions? "
@@ -1127,6 +1148,9 @@ public final class QueryScopeRouter {
 			+ " interfere with " + HER_D;
 
 	private static final List<Pattern> ONE_DRUG_CHANGES_THE_OTHER_SHAPES = shapes(DOES_ONE_CHANGE_THE_OTHER,
+			// "Will rifampicin affect her efavirenz levels?" (ADR Decision 391)
+			"(?:does|do|will|would|can|could|might) " + HER_D + " affect (?:the )?(?:" + POSSESSIVE + " )?" + D + "(?: " + MEASURE
+					+ ")?",
 			DOES_ONE_INTERFERE_WITH_THE_OTHER,
 			AVOID_ONE_WITH_THE_OTHER, WHAT_COMBINING_THEM_DOES, DOSE_BECAUSE_OF_THE_OTHER, STOP_OR_KEEP_ONE_FOR_THE_OTHER,
 			MONITORING_ON_BOTH, DANGEROUS_TOGETHER, DOSE_SAFE_WITH_THE_OTHER);
@@ -1712,9 +1736,9 @@ public final class QueryScopeRouter {
 
 	private static final List<Pattern> MORE_THAN_ONE_OF_A_DRUG_CLASS_SHAPES = shapes(
 			// "Is she on more than one steroid?"
-			"(?:is|are) " + SUBJECT + " (?:currently |still )?(?:on|taking|receiving|using) more than one(?: \\p{L}+){1,3}",
+			"(?:is|are) " + SUBJECT + " (?:currently |still )?(?:on|taking|receiving|using) (?:more than one|two|2|multiple|several)(?: \\p{L}+){1,3}",
 			// "Does she take more than one steroid?"
-			"(?:does|do) " + SUBJECT + " (?:currently |still )?(?:take|use|receive) more than one(?: \\p{L}+){1,3}");
+			"(?:does|do) " + SUBJECT + " (?:currently |still )?(?:take|use|receive) (?:more than one|two|2|multiple|several)(?: \\p{L}+){1,3}");
 
 	private static final List<Pattern> ON_A_DRUG_CLASS_SHAPES = shapes(
 			// "Is she on any NSAIDs?", "Is she currently taking an NSAID?"
@@ -1722,8 +1746,8 @@ public final class QueryScopeRouter {
 			// "Does she take any NSAIDs?"
 			"(?:does|do) " + SUBJECT + " (?:currently |still )?(?:take|use|receive) (?:any|an?|some)(?: \\p{L}+){1,3}",
 			// "Is she on more than one steroid?" (ADR Decision 379)
-			"(?:is|are) " + SUBJECT + " (?:currently |still )?(?:on|taking|receiving|using) more than one(?: \\p{L}+){1,3}",
-			"(?:does|do) " + SUBJECT + " (?:currently |still )?(?:take|use|receive) more than one(?: \\p{L}+){1,3}");
+			"(?:is|are) " + SUBJECT + " (?:currently |still )?(?:on|taking|receiving|using) (?:more than one|two|2|multiple|several)(?: \\p{L}+){1,3}",
+			"(?:does|do) " + SUBJECT + " (?:currently |still )?(?:take|use|receive) (?:more than one|two|2|multiple|several)(?: \\p{L}+){1,3}");
 
 	private static final String HER_MEDICATIONS = POSSESSIVE + " " + MEDICATIONS;
 

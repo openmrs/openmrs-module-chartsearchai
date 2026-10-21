@@ -1256,10 +1256,11 @@ The existing `/feedback` request continues to use `questionId`.
 
 Before the answer is sent, a response disconnect or unexpected execution failure
 settles an already started turn as an error in stored history. After it, the two
-differ. A disconnect cancels the turn, and a cancelled turn keeps the answer the
-client was shown as a completed turn; for the bundled provider with
-`chartsearchai.grounding.async=true` that is the ungrounded answer, whose
-`safetyStatus` is `unavailable`. An execution failure, a Hub stream ending before its
+differ. A disconnect cancels the turn, and a cancelled turn is stored as completed
+with the latest answer its provider had: for the bundled provider, the ungrounded
+answer (`safetyStatus` `unavailable`) if the client is lost at `answer_done`, the
+grounded one if it is lost during grounding, with `chartsearchai.grounding.async`
+on or off. An execution failure, a Hub stream ending before its
 terminal event included, is an error, and the answer already delivered is kept on
 the audit row only. Checked answers, original drafts and partial
 In-Depth content remain inspectable after an interrupted optional stage; unfinished

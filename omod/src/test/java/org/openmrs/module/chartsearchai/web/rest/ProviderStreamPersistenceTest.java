@@ -293,6 +293,22 @@ public class ProviderStreamPersistenceTest extends BaseModuleWebContextSensitive
 		assertTrue(conversations.priorClinicalTurns(turn.getConversation()).isEmpty());
 	}
 
+	/**
+	 * A missing patient must reach the handler, whose resolution answers 400 as /chartalerts does: with
+	 * the parameter required, Spring refuses the request before the handler runs, and that refusal
+	 * reaches handleUnexpected as a 500. This module's test servlet API cannot run MockMvc, so the
+	 * binding is read where Spring reads it.
+	 */
+	@Test
+	public void aHistoryRequestWithoutAPatientReachesTheHandler() throws Exception {
+		java.lang.reflect.Method getChat = ChartSearchAiRestController.class.getMethod("getChat", String.class,
+				String.class);
+		org.springframework.web.bind.annotation.RequestParam patient = getChat.getParameters()[0]
+				.getAnnotation(org.springframework.web.bind.annotation.RequestParam.class);
+		assertFalse(patient.required());
+		assertEquals(400, requestController().getChat(null, null).getStatusCode().value());
+	}
+
 	private ChartSearchAiRestController requestController() throws IOException {
 		peer = HttpServer.create(new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0), 0);
 		peer.createContext("/v1/chat/completions", exchange -> {

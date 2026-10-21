@@ -21485,3 +21485,21 @@ they hold substances not of the class, Decision 275's rule: N07BC, which files l
 only there, is the residue of the opioids — and D01A, which files salicylic acid and selenium sulfide among the antifungals.
 
 Pinned by `DrugClassProposalTest.fiveMoreClassesProposedStateHerOrdersAndAllergiesInTheirGroups`.
+
+## Decision 408: Three drugs listed are read as a list
+
+**Status: Accepted** (October 2026) — found on the 3.7.1 standalone on 2026-10-22.
+
+### Context
+
+A list's commas are no words to the shapes, so *"Is it safe to give her fluconazole, metronidazole and ciprofloxacin?"* reads
+*"… give her X Y and Z"*, which the together shape — *"X and Y"*, *"X with Y"* — did not admit, though *"Can I give her X, Y and
+Z?"* did (Decision 356). *"Do fluconazole, rifampicin and efavirenz interact?"* fitted no shape either. Both went to the model for
+every patient.
+
+### The decision
+
+*"Is it safe to give her X, Y and Z?"* admits the list as *"Can I give her …"* does, and *"Do X, Y and Z interact?"* is one of
+Decision 220's shapes, so each is answered by Decision 309's composition of several drugs.
+
+Pinned by `ClinicianWordingsTest.threeDrugsListedAreReadAsAList`.

@@ -242,6 +242,21 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 				&& !which.startsWith("No"), "neither lead is a Yes or a No: " + notToGive + " / " + which);
 	}
 
+	/**
+	 * Three drugs listed — "X, Y and Z" — are read as the list they are in a question whether it is safe to give them and in a
+	 * question whether they interact (ADR Decision 408): on the 3.7.1 standalone both went to the model for every patient.
+	 */
+	@Test
+	public void threeDrugsListedAreReadAsAList() {
+		String canonical = ask("Can I give her fluconazole, metronidazole and ciprofloxacin?");
+		assertNotNull(canonical, "precondition: the module answers it");
+		assertEquals(canonical, ask("Is it safe to give her fluconazole, metronidazole and ciprofloxacin?"));
+		String interact = ask("Do fluconazole, rifampicin and clarithromycin interact?");
+		assertNotNull(interact, "the module answers");
+		assertTrue(interact.contains("Fluconazole") && interact.contains("Rifampicin") && interact.contains("Clarithromycin")
+				&& !interact.contains("can be given"), interact);
+	}
+
 	private static org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart chart(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

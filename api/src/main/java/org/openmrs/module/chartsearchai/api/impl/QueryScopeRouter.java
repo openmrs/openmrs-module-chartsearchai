@@ -641,8 +641,8 @@ public final class QueryScopeRouter {
 			// to co-prescribe warfarin with her ibuprofen?" (ADR Decision 250)
 			"is it (?:safe|ok|okay|appropriate|fine|alright|advisable|wise) (?:for " + PATIENT + " )?to (?:(?:give|start|prescribe|"
 					+ "co prescribe|administer) (?:"
-					+ PATIENT + " )?(?:on )?|take )" + HER_D + " (?:and|with|alongside) " + HER_DS + "(?: together)?(?: (?:for|to) "
-					+ PATIENT + ")?(?: now| today)?",
+					+ PATIENT + " )?(?:on )?|take )" + HER_D + " (?:(?:and|with|alongside) " + HER_DS + "|(?:" + HER_D
+					+ " )+and " + HER_D + ")(?: together)?(?: (?:for|to) " + PATIENT + ")?(?: now| today)?",
 			// "Are warfarin and ibuprofen safe together?", "Is warfarin safe with ibuprofen?"
 			"are " + HER_D + " and " + HER_D + " (?:safe|ok|okay|appropriate)(?: to (?:give|take|use))?(?: together)?(?: for "
 					+ PATIENT + ")?",
@@ -1095,7 +1095,10 @@ public final class QueryScopeRouter {
 	 *  Decision 248), as does "Do clarithromycin and simvastatin clash?" (ADR Decision 256). */
 	private static final String DOES_ONE_INTERACT_WITH_THE_OTHER = "(?:(?:does|do|will|would|can) " + HER_D
 			+ " (?:interact with|affect|clash with) " + HER_D + "|(?:do|will|would|can) " + HER_D + " and " + HER_D
-			+ " (?:interact|clash)(?: with (?:each other|one another))?)";
+			+ " (?:interact|clash)(?: with (?:each other|one another))?"
+			// "Do fluconazole, rifampicin and efavirenz interact?" — a list, its commas no words (ADR Decision 408)
+			+ "|(?:do|will|would|can) (?:" + HER_D + " )+and " + HER_D + " (?:all )?(?:interact|clash)(?: with (?:each other|one "
+			+ "another))?)";
 
 	/** What a drug may change of another: its levels, its effect, its absorption (ADR Decisions 249, 251). */
 	private static final String MEASURE = "(?:levels?|concentrations?|effects?|effectiveness|efficacy|toxicity|exposure"

@@ -113,5 +113,14 @@
       "execution_complete": false,
       "expected_status": "unavailable"
     }
+  ],
+  "context_policy": [
+    {
+      "id": "context.mandatory-overflow-abstains",
+      "mode": "query_scoped",
+      "budget_tokens": 100,
+      "mandatory_tokens": 101,
+      "expected": "insufficient_context"
+    }
   ]
 }

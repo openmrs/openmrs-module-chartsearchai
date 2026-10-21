@@ -742,6 +742,17 @@ configure_retrieval_gps() {
     else
       echo "[retrieval-wiring] $_sweep_off_because, and querystore.bootstrap.autostart could not be written, so the sweep may still run and fail once per record." >&2
     fi
+  elif [ "$(gp_value 'querystore.bootstrap.autostart')" != 'true' ]; then
+    # Chart search withholds every answer until QueryStore has completed a bootstrap, and QueryStore
+    # ships autostart off, so an embedder that verified turns it on. After the first bootstrap
+    # completes, autostart is an incremental top-up from each type's cursor, not a reindex.
+    if seed_sql "$DB_NAME" -e \
+      "INSERT INTO global_property (property,property_value,uuid) VALUES ('querystore.bootstrap.autostart','true',UUID()) ON DUPLICATE KEY UPDATE property_value='true';" \
+      >/dev/null 2>&1; then
+      echo "[retrieval-wiring] the embedder is configured; querystore.bootstrap.autostart turned on so chart search has a completed bootstrap to answer from."
+    else
+      echo "[retrieval-wiring] querystore.bootstrap.autostart could not be turned on, so chart search will withhold answers until an administrator runs the QueryStore bootstrap." >&2
+    fi
   fi
 
   # Read after the switch above rather than inside the line below, so its own status is readable at

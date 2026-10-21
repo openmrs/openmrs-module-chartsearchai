@@ -367,7 +367,7 @@ public class LlmInferenceService implements ChartSearchService {
 					DrugReferenceInjector.withFindingCitations(safetyWarnings, chart.getMappings()),
 					chart.getOrderRecordNumbers(), recordsTheModelCites(response.getAnswer(), cited), chart.getMappings());
 			completedAnswer = conflicting.getAnswer();
-			safetyWarnings = aboutTheDrugAsked(conflicting.getWarnings(), chart);
+			safetyWarnings = aboutTheDrugAsked(conflicting.getWarnings(), chart, question);
 			// And the order records it cites, as the module's, by the one method that decides which indices become
 			// references; after grounding, which judges what the MODEL cited.
 			List<RecordReference> answerReferences = withReferencesTheModuleStated(references,
@@ -976,7 +976,7 @@ public class LlmInferenceService implements ChartSearchService {
 					DrugReferenceInjector.withFindingCitations(safetyWarnings, chart.getMappings()),
 					chart.getOrderRecordNumbers(), recordsTheModelCites(response.getAnswer(), cited), chart.getMappings());
 			completedAnswer = conflicting.getAnswer();
-			safetyWarnings = aboutTheDrugAsked(conflicting.getWarnings(), chart);
+			safetyWarnings = aboutTheDrugAsked(conflicting.getWarnings(), chart, question);
 			// And the order records it cites, as the module's, by the one method that decides which indices become
 			// references; after grounding, which judges what the MODEL cited.
 			List<RecordReference> answerReferences = withReferencesTheModuleStated(references,
@@ -1065,7 +1065,7 @@ public class LlmInferenceService implements ChartSearchService {
 				ModuleAnswerStatement.markStated(composed,
 						drugSafetyValidator.validate(findingLineMarkersOf(composed, mappings), question, patient, mappings,
 								pairExtent)),
-				mappings), chart);
+				mappings), chart, question);
 		String answer = FindingPartnerCoverageCheck.withUnstatedPartnersNamed(composed,
 				extractCitedReferences(composed, null, mappings), mappings, drugSafetyValidator);
 		// Issue #472's statement too, so the two paths cannot differ: a question proposing nothing about a drug
@@ -1137,9 +1137,23 @@ public class LlmInferenceService implements ChartSearchService {
 	 * <em>"Has she ever taken fluconazole?"</em> published that fluconazole interacts with her lidocaine. Taken off where the chips are final, so every check before
 	 * it still reads them.
 	 */
-	private static List<SafetyWarning> aboutTheDrugAsked(List<SafetyWarning> chips, PatientChart chart) {
+	/**
+	 * As above, and none at all where the question asks nothing of drug safety — it names no drug, asks for no safety or
+	 * interaction reading nor a screen of her medications, and asks nothing of her allergies (ADR Decision 390): "Who
+	 * prescribed her medications?" published Sarah Taylor's ten allergy chips. And where it asks whether she is allergic to
+	 * one thing it names, only what the check found of allergies: "Is she allergic to peanuts?" published that peanut
+	 * interacts with her NSAIDs.
+	 */
+	private static List<SafetyWarning> aboutTheDrugAsked(List<SafetyWarning> chips, PatientChart chart, String question) {
+		if (!asksAboutDrugSafety(question, chart)) {
+			return new ArrayList<SafetyWarning>();
+		}
+		boolean allergyToOneThing = QueryScopeRouter.asksWhetherAllergicToOneNamedThing(question);
 		List<SafetyWarning> published = new ArrayList<SafetyWarning>(chips.size());
 		for (SafetyWarning chip : chips) {
+			if (allergyToOneThing && !SafetyWarning.TYPE_CONTRAINDICATION.equals(chip.getType())) {
+				continue;
+			}
 			// And none about none of the drugs the question names (ADR Decision 387).
 			if ((!chip.isAboutADrugOtherThanTheOneProposed() || chip.isAboutAnotherOfHerMedications())
 					&& !DrugReferenceInjector.isAboutGivingTheDrugAHistoryQuestionNames(chip,
@@ -1149,6 +1163,14 @@ public class LlmInferenceService implements ChartSearchService {
 			}
 		}
 		return published;
+	}
+
+	/** Whether {@code question} asks anything of drug safety (ADR Decision 390): it names a drug the data resolved, asks for a
+	 *  safety or interaction reading or a screen of her medications, or asks about her allergies. */
+	private static boolean asksAboutDrugSafety(String question, PatientChart chart) {
+		return question != null && (!chart.getQuestionSubstances().isEmpty()
+				|| QueryScopeRouter.asksForADrugSafetyReading(question) || QueryScopeRouter.isInteractionScreening(question)
+				|| QueryScopeRouter.asksAboutAllergies(question));
 	}
 
 	/**

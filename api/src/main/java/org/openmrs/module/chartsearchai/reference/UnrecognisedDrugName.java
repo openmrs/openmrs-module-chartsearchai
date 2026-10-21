@@ -98,7 +98,10 @@ final class UnrecognisedDrugName {
 			// Or two words in a two-drug question's drug places, neither recognised (ADR Decision 382).
 			return twoIn(question, entries);
 		}
-		UnrecognisedDrugName name = new UnrecognisedDrugName(asWritten(word, question), suggestionsFor(word, entries));
+		// Something she would eat or drink is offered no drug's name: "Can she drink milk?" is no misspelled milk thistle
+		// (ADR Decision 390).
+		UnrecognisedDrugName name = new UnrecognisedDrugName(asWritten(word, question), toEatOrDrink(question, word)
+				? new ArrayList<String>() : suggestionsFor(word, entries));
 		name.inAStop = QueryScopeRouter.asksWhetherToStopHerDrug(QueryScopeRouter.words(
 				(" " + question.toLowerCase(java.util.Locale.ROOT) + " ").replaceFirst("(?<=[^\\p{L}])" + java.util.regex.Pattern
 						.quote(word) + "(?=[^\\p{L}])", " " + QueryScopeRouter.DRUG_NAME + " ")));
@@ -178,6 +181,30 @@ final class UnrecognisedDrugName {
 			}
 		}
 		return isAName(span) && !joined.contains("allerg") && !QueryScopeRouter.namesAMedicationGroup(joined);
+	}
+
+	/** The verbs that make the word in a drug's place something she would eat or drink (ADR Decision 390). */
+	private static final Set<String> EATING_OR_DRINKING = new HashSet<String>(Arrays.asList("eat", "eats", "eating", "drink",
+		"drinks", "drinking"));
+
+	/** Whether {@code question} has her eat or drink {@code word} — the word follows one of {@link #EATING_OR_DRINKING},
+	 *  an article or "some" between them at most (ADR Decision 390). */
+	private static boolean toEatOrDrink(String question, String word) {
+		List<String> words = QueryScopeRouter.words(question);
+		List<String> named = QueryScopeRouter.words(word);
+		for (int i = 0; i + named.size() <= words.size(); i++) {
+			if (!words.subList(i, i + named.size()).equals(named)) {
+				continue;
+			}
+			int before = i - 1;
+			while (before >= 0 && Arrays.asList("a", "an", "some", "any").contains(words.get(before))) {
+				before--;
+			}
+			if (before >= 0 && EATING_OR_DRINKING.contains(words.get(before))) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/** Whether the word stands in the place of a drug the question asks whether to stop (ADR Decision 335): what was not

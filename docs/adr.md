@@ -21067,3 +21067,31 @@ on a line, *"The check of Rifampicin (rifampin) against Abacavir, also named in 
 drug the question lists is passed over in silence.
 
 Pinned by `ListProposalBesideHerAllergyTest`.
+
+## Decision 390: A question asking nothing of drug safety carries no drug-safety finding, and something she would eat or drink is offered no drug's name
+
+**Status: Accepted** (October 2026) — the owner's instruction of 2026-10-21 that questions not dealing with drug interactions
+not be poisoned by drug-interaction results. It retires Decision 210's statement and narrows the chips Decision 148 publishes.
+
+### Context
+
+Over 38 questions that ask nothing about drug interactions, asked of 11 patients on the 3.7.1 standalone on 2026-10-21,
+*"Who prescribed her medications?"*, *"When did she start her current medications?"* and *"Summarize her chart."* carried
+Sarah Taylor's orders that conflict with her allergies — Decision 210's statement beside an answer naming them — and ten
+allergy chips; *"Is she allergic to peanuts?"* published that peanut interacts with her NSAIDs; and *"Can she drink milk?"*
+was answered by the module alone, *"Did you mean Milk thistle?"*.
+
+### The decision
+
+- A response publishes no chip where the question asks nothing of drug safety: it names no drug the data resolved, asks for
+  no safety or interaction reading nor a screen of her medications, and asks nothing of her allergies
+  (`LlmInferenceService.aboutTheDrugAsked`). Where it asks whether she is allergic to one thing it names, only allergy
+  findings are published.
+- `ConflictingOrderStatement` states her conflicting orders only on a question asking for her allergies; Decision 210's
+  statement beside an answer to anything else that names such an order is retired. The standing chart alerts (Decision 79)
+  remain the surface for a conflict nobody asked about.
+- A word in a drug's place that she would eat or drink — after *eat* or *drink* — is offered no drug's name, so it takes
+  Decision 384's chart answer and its line.
+
+Pinned by `AllergyQuestionConflictingOrderContextTest.search_aQuestionAskingNothingOfDrugSafetyCarriesNoDrugSafetyFinding`
+and the cases that now assert nothing follows a medication question's answer, and `SomethingToEatOrDrinkTest`.

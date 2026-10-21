@@ -16,6 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.function.Consumer;
@@ -197,6 +198,23 @@ public class AllergyQuestionConflictingOrderContextTest extends BaseModuleContex
 		// The drug asked about is what it is about: her aspirin, asked of, keeps its conflict.
 		ChartAnswer aspirin = serviceAnswering(MODEL_ANSWER).search(patient, "Is her aspirin safe?");
 		assertNotNull(theAspirinChip(aspirin), "the chip about the drug the question names");
+	}
+
+	/**
+	 * A question asking nothing of drug safety carries no drug-safety finding — no statement of the orders her records
+	 * conflict with, and no chip — whatever its answer names (ADR Decision 390). On the 3.7.1 standalone "Who prescribed her
+	 * medications?" and "Summarize her chart." carried Sarah Taylor's two orders conflicting with her allergies and ten chips.
+	 */
+	@Test
+	public void search_aQuestionAskingNothingOfDrugSafetyCarriesNoDrugSafetyFinding() throws IOException {
+		int number = theAspirinOrderRecordNumber(SLICE);
+		for (String question : Arrays.asList("Who prescribed her medications?", "Summarize her chart.",
+				"When did she start her current medications?")) {
+			String modelAnswer = "Her aspirin [" + number + "] was ordered at her last visit.";
+			ChartAnswer answer = serviceAnswering(modelAnswer).search(patient, question);
+			assertEquals(modelAnswer, answer.getAnswer(), question + " — the answer, and nothing about her allergies");
+			assertTrue(answer.getSafetyWarnings().isEmpty(), question + " — no chip: " + answer.getSafetyWarnings());
+		}
 	}
 
 	@Test
@@ -477,13 +495,12 @@ public class AllergyQuestionConflictingOrderContextTest extends BaseModuleContex
 	}
 
 	/**
-	 * ADR Decision 210: Sarah Taylor's "Is she on more than one drug from the same class?" was answered with her five
-	 * corticosteroids, citing each order — two of them drugs she is recorded allergic to — and the answer said
-	 * nothing of either allergy. Where the model's answer itself names an order her records directly conflict with,
-	 * the statement Decision 124 writes for an allergy question follows it.
+	 * Where the model's answer to a medication question names an order her records directly conflict with, nothing about
+	 * the conflict follows it, as statement or chip: the question asked nothing of drug safety (ADR Decision 390, retiring
+	 * Decision 210's statement, which Sarah Taylor's "Is she on more than one drug from the same class?" once drew).
 	 */
 	@Test
-	public void search_anAnswerNamingAnOrderHerRecordsDirectlyConflictWithStatesTheConflict() throws IOException {
+	public void search_anAnswerNamingAnOrderHerRecordsDirectlyConflictWithCarriesNothingOfTheConflict() throws IOException {
 		int number = theAspirinOrderRecordNumber(SLICE);
 		String modelAnswer = "No — her one antiplatelet is aspirin [" + number + "].";
 
@@ -491,22 +508,20 @@ public class AllergyQuestionConflictingOrderContextTest extends BaseModuleContex
 
 		RecordReference order = theOrderRecord(answer, Context.getOrderService().getOrder(111).getUuid());
 		assertEquals(number, order.getIndex(), "precondition: the same chart numbers the order alike");
-		assertEquals(modelAnswer + HEADING + "\n- " + ORDER_DISPLAY + " [" + number + "]" + OWN_ALLERGY,
-				answer.getAnswer(), "the answer named her aspirin order, so its conflict with her own allergy record follows "
-						+ "it, as on an allergy question");
-		assertTrue(theAspirinChip(answer).isStatedInTheAnswer(), "and the chip says the answer states it");
+		assertEquals(modelAnswer, answer.getAnswer(), "nothing about her allergy follows the answer");
+		assertTrue(answer.getSafetyWarnings().isEmpty(), "no chip: " + answer.getSafetyWarnings());
 		assertFalse(order.isAttachedByTheModule(), "the record stays the model's citation");
 	}
 
+
 	/**
-	 * Sarah Taylor's "Which steroids is she on?" resolved nothing before the answer — no drug, no class, no finding —
-	 * so the injector handed the chart back unrebuilt and numbered none of her orders, and an answer citing her
-	 * dexamethasone order got no statement. Since ADR Decision 379 "steroid" names a class, so the case asks a question
-	 * that still resolves nothing: "Which antimalarials is she on?". The record each of her orders is, is a fact about
-	 * her chart, not about a finding (ADR Decision 210).
+	 * A question resolving nothing before the answer — no drug, no class, no finding — and asking nothing of drug safety:
+	 * an answer citing her aspirin order is left as the model wrote it (ADR Decision 390). The record each of her orders
+	 * is, is still a fact about her chart (ADR Decision 210's numbering, which stays).
 	 */
 	@Test
-	public void search_anAnswerNamingTheConflictingOrderStatesItWhereNothingResolvedBeforeTheAnswer() throws IOException {
+	public void search_anAnswerNamingTheConflictingOrderIsLeftAsWrittenWhereNothingResolvedBeforeTheAnswer()
+			throws IOException {
 		int number = theAspirinOrderRecordNumber(SLICE);
 		String modelAnswer = "Her one steroid-sparing drug is aspirin [" + number + "].";
 
@@ -515,18 +530,18 @@ public class AllergyQuestionConflictingOrderContextTest extends BaseModuleContex
 		assertEquals(0, answer.getFindingCitationExtent().getCarried(),
 				"precondition: the pass before the answer carried no finding, so the chart was not rebuilt");
 		assertEquals(number, theOrderRecord(answer, Context.getOrderService().getOrder(111).getUuid()).getIndex(),
-				"precondition: the same chart numbers the order alike");
-		assertEquals(modelAnswer + HEADING + "\n- " + ORDER_DISPLAY + " [" + number + "]" + OWN_ALLERGY, answer.getAnswer(),
-				"the answer named her aspirin order, so its conflict follows it");
-		assertTrue(theAspirinChip(answer).isStatedInTheAnswer(), "and the chip says the answer states it");
+				"the same chart numbers the order alike");
+		assertEquals(modelAnswer, answer.getAnswer(), "nothing about her allergy follows the answer");
+		assertTrue(answer.getSafetyWarnings().isEmpty(), "no chip: " + answer.getSafetyWarnings());
 	}
+
 
 	/**
 	 * And where her chart already holds a record of every active order of hers, as a full chart does, the injector hands
-	 * the chart back without rebuilding it — the path Sarah Taylor's question took on the standalone.
+	 * the chart back without rebuilding it — and the answer is left as the model wrote it (ADR Decision 390).
 	 */
 	@Test
-	public void search_anAnswerNamingTheConflictingOrderStatesItWhereTheChartAlreadyHoldsEveryOrderOfHers()
+	public void search_anAnswerNamingTheConflictingOrderIsLeftAsWrittenWhereTheChartAlreadyHoldsEveryOrderOfHers()
 			throws IOException {
 		List<RecordMapping> records = new ArrayList<RecordMapping>();
 		records.add(DrugReferenceTestSupport.obsRecord(1, "BP 120/80"));
@@ -548,64 +563,46 @@ public class AllergyQuestionConflictingOrderContextTest extends BaseModuleContex
 
 		assertEquals(0, answer.getFindingCitationExtent().getCarried(), "precondition: the pass before the answer carried "
 				+ "no finding");
-		assertEquals(modelAnswer + HEADING + "\n- " + ORDER_DISPLAY + " [" + number + "]" + OWN_ALLERGY, answer.getAnswer(),
-				"the answer named her aspirin order, so its conflict follows it");
-		assertTrue(theAspirinChip(answer).isStatedInTheAnswer(), "and the chip says the answer states it");
+		assertEquals(modelAnswer, answer.getAnswer(), "nothing about her allergy follows the answer");
+		assertTrue(answer.getSafetyWarnings().isEmpty(), "no chip: " + answer.getSafetyWarnings());
 	}
 
-	/** The anchor is the answer naming the order: an answer to the same question that does not leaves it a chip. */
+
+	/** An answer to a medication question that names no conflicting order: nothing appended and no chip either (ADR
+	 *  Decision 390). */
 	@Test
-	public void search_anAnswerToAMedicationQuestionNotNamingTheConflictingOrderLeavesItAChip() throws IOException {
+	public void search_anAnswerToAMedicationQuestionNotNamingTheConflictingOrderCarriesNoChip() throws IOException {
 		String modelAnswer = "No — no class is duplicated [1].";
 
 		ChartAnswer answer = serviceAnswering(modelAnswer).search(patient, MEDICATION_QUESTION);
 
-		SafetyWarning chip = theAspirinChip(answer);
-		assertEquals(modelAnswer, answer.getAnswer(), "nothing is appended to an answer that names no conflicting order");
-		assertFalse(chip.isStatedInTheAnswer(), "the chip stays the carrier");
-		assertFalse(chip.isAboutAnotherOfHerMedications(), "and is not drawn apart: the question asked about her medications");
+		assertEquals(modelAnswer, answer.getAnswer(), "nothing is appended");
+		assertTrue(answer.getSafetyWarnings().isEmpty(), "no chip: " + answer.getSafetyWarnings());
 	}
 
+
 	/**
-	 * Both kinds about the order the answer names: the allergy to its own drug is stated, and the cross-reactivity
-	 * finding is drawn apart beside it — the owner ruled the box it kept open noise (ADR Decision 210). Not as "another
-	 * of her medications", which would be false of a drug the answer names, but as what it is.
+	 * A medication question asks nothing of drug safety, so neither her own allergy nor a cross-reactivity follows an
+	 * answer naming her order, as statement or chip (ADR Decision 390, retiring Decision 210's statement there).
 	 */
 	@Test
-	public void search_anAnswerNamingAnOrderDrawsItsCrossReactivityFindingApartBesideTheStatement() throws IOException {
+	public void search_anAnswerToAMedicationQuestionNamingAnOrderCarriesNeitherItsAllergyNorItsCrossReactivity()
+			throws IOException {
 		DrugReferenceTestSupport.recordFreeTextAllergy(patient, SECOND_PLACEHOLDER_CONCEPT, "Diflunisal");
 		int number = theAspirinOrderRecordNumber(CROSS_REACTIVE_SLICE);
 		String modelAnswer = "No — her one antiplatelet is aspirin [" + number + "].";
 
 		ChartAnswer answer = serviceAnswering(modelAnswer, CROSS_REACTIVE_SLICE).search(patient, MEDICATION_QUESTION);
 
-		SafetyWarning own = null;
-		SafetyWarning crossReactive = null;
-		for (SafetyWarning chip : answer.getSafetyWarnings()) {
-			if (chip.getDetail().contains("same ATC class")) {
-				crossReactive = chip;
-			} else {
-				own = chip;
-			}
-		}
-		assertEquals(2, answer.getSafetyWarnings().size(), "precondition: her own aspirin allergy and the diflunisal "
-				+ "cross-reactivity both raise a chip, chips were: " + answer.getSafetyWarnings());
-		assertNotNull(own, "precondition: one chip is her allergy to aspirin itself");
-		assertNotNull(crossReactive, "precondition: one chip is the cross-reactivity");
 		assertEquals(number, theOrderRecord(answer, Context.getOrderService().getOrder(111).getUuid()).getIndex(),
 				"precondition: the same chart numbers the order alike");
-		assertEquals(modelAnswer + HEADING + "\n- " + ORDER_DISPLAY + " [" + number + "]" + OWN_ALLERGY, answer.getAnswer(),
-				"the order once, for the allergy to its own drug alone");
-		assertTrue(own.isStatedInTheAnswer(), "the own-drug allergy is stated");
-		assertFalse(own.isCrossReactivityBesideHerStatedConflicts(), "and is not drawn apart");
-		assertFalse(crossReactive.isStatedInTheAnswer(), "the cross-reactivity is not stated");
-		assertTrue(crossReactive.isCrossReactivityBesideHerStatedConflicts(),
-				"it is drawn apart, as a cross-reactivity finding beside the conflicts the answer states");
-		assertFalse(crossReactive.isAboutAnotherOfHerMedications(),
-				"and not as another of her medications: the answer names it");
+		assertEquals(modelAnswer, answer.getAnswer(), "nothing is appended");
+		assertTrue(answer.getSafetyWarnings().isEmpty(), "no chip: " + answer.getSafetyWarnings());
 	}
 
-	/** An order only a cross-reactivity finding is about does not directly conflict, so naming it states nothing. */
+
+	/** An order only a cross-reactivity finding is about: nothing is appended, and no chip, on a medication question (ADR
+	 *  Decision 390). */
 	@Test
 	public void search_anAnswerNamingAnOrderOnlyACrossReactivityFindingIsAboutStatesNothing() throws IOException {
 		int number = theAspirinOrderRecordNumber(CROSS_REACTIVE_SLICE);
@@ -619,16 +616,12 @@ public class AllergyQuestionConflictingOrderContextTest extends BaseModuleContex
 
 		ChartAnswer answer = serviceAnswering(modelAnswer, CROSS_REACTIVE_SLICE).search(patient, MEDICATION_QUESTION);
 
-		SafetyWarning chip = theAspirinChip(answer);
-		assertTrue(chip.getDetail().contains("same ATC class") && chip.getDetail().contains("Diflunisal"),
-				"precondition: the chip is the cross-reactivity finding, was: " + chip.getDetail());
 		assertEquals(number, theOrderRecord(answer, Context.getOrderService().getOrder(111).getUuid()).getIndex(),
 				"precondition: the same chart numbers the order alike");
 		assertEquals(modelAnswer, answer.getAnswer(), "nothing is appended");
-		assertFalse(chip.isStatedInTheAnswer(), "the chip stays the carrier");
-		assertFalse(chip.isAboutAnotherOfHerMedications(), "in the safety box");
-		assertFalse(chip.isCrossReactivityBesideHerStatedConflicts(), "with no stated conflict to be beside");
+		assertTrue(answer.getSafetyWarnings().isEmpty(), "no chip: " + answer.getSafetyWarnings());
 	}
+
 
 	/**
 	 * On her allergy question the cross-reactivity finding keeps Decision 188's own line, as another of her medications

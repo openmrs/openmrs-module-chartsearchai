@@ -68,6 +68,15 @@ public class HibernateChartSearchAiDAO implements ChartSearchAiDAO {
 
 	@Override
 	public int deleteAuditLogsBefore(Date before) {
+		// Conversation turns may outlive their audit rows. Their links are nulled first, by the same cutoff
+		// in one statement, so the delete does not rely on the foreign key's ON DELETE SET NULL being in
+		// force, and no list of expired ids is bound: the first purge after retention is enabled can
+		// expire more rows than a driver binds in one statement.
+		sessionFactory.getCurrentSession()
+				.createQuery("update ClinicalConversationTurn t set t.auditLog = null where t.auditLog in "
+						+ "(select a from ChartSearchAuditLog a where a.dateCreated < :before)")
+				.setParameter("before", before)
+				.executeUpdate();
 		return sessionFactory.getCurrentSession()
 				.createQuery("delete from ChartSearchAuditLog where dateCreated < :before")
 				.setParameter("before", before)

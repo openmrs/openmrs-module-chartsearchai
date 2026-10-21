@@ -43,6 +43,7 @@ The standalone download above includes the backend module, frontend ESM, and the
 - [Provider integration contract](#provider-integration-contract)
 - [Local token counting](#local-token-counting)
 - [Safety-check execution status](#safety-check-execution-status)
+- [Conversation persistence](#conversation-persistence)
 - [License](#license)
 
 ## Try it on the demo server
@@ -1092,6 +1093,36 @@ warning callers and standing chart alerts retain their interfaces and behaviour:
 `validate` still screens a question with no patient and computes no status. Publishing the
 status on provider answers and rendering it in the frontend belong to the subsequent
 integration contributions.
+
+## Conversation persistence
+
+`ConversationService` stores conversation headers and ordered turns for the
+current OpenMRS user and patient. Reusing a conversation requires the same provider
+and mode; switching either, or explicitly starting a new conversation, closes the
+previous header. Each completed turn retains its full provider payload and copies
+provider, mode, conversation and request attribution into the audit record. The audit
+search mode and reference-slice measurements come from the bundled answer itself;
+relayed answers without these measurements record unknown mode and null counts.
+If an optional tail fails after a checked answer was shown, the audit retains that
+answer and its accounting. A turn that fails after any other answer reached the client
+records that answer on the audit row only; the turn keeps no answer, so it is never
+replayed.
+A turn and its audit row are written in one transaction: if the audit row cannot be
+written, the turn's terminal state is not stored either and the call fails, whereas
+`/search` logs a failed audit write and still returns its answer. A turn is finished
+once; a second attempt to finish it is refused.
+
+Checked or edited answers can be reused for a follow-up while In-Depth is still
+running. Failed and needs-review answers remain inspectable in storage but are
+excluded from replay. Audit retention clears the turn's audit link without deleting
+the conversation answer. The migration and Hibernate mappings are included here;
+REST history endpoints and provider execution wiring are separate contributions.
+
+`chartsearchai.chat.retentionDays` controls the daily cleanup of conversation
+content, independently of `chartsearchai.auditLogRetentionDays`. Both default to
+90 days; setting either to 0 disables only that cleanup. Turns expire from their
+completion time, or their start time if unfinished. Old empty conversations are
+then removed; independently retained audit rows remain.
 
 ## License
 

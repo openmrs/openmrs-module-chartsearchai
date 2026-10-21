@@ -243,6 +243,30 @@ public class BundledClinicalAnswerProviderTest {
 		assertEquals(Boolean.TRUE, references(result.getAnswer()).get(0).getGrounded());
 	}
 
+	@Test
+	public void aClientThatLeavesAtTheAnswerStillLeavesTheRetainedAnswerStored() throws Exception {
+		ScriptedChartSearchService service = new ScriptedChartSearchService();
+		service.ungrounded = answer("Aspirin 81mg [1]", Arrays.asList(reference(1, null)));
+		service.groundedResult = answer("Aspirin 81mg [1]", Arrays.asList(reference(1, Boolean.TRUE)));
+		AtomicBoolean gone = new AtomicBoolean();
+		// The client left as the answer was announced: that write and every later one fail, and the
+		// failure inside the pipeline's callback ends the pipeline.
+		TurnEventSink departed = event -> {
+			if (event.getType() == TurnEventType.ANSWER_DONE) {
+				gone.set(true);
+			}
+			if (gone.get()) {
+				throw new IllegalStateException("the client has gone");
+			}
+		};
+
+		TurnResult result = provider(service).execute(request(), departed, gone::get)
+				.toCompletableFuture().get();
+
+		assertEquals(TurnEventType.TURN_DONE, result.getTerminalState());
+		assertEquals("Aspirin 81mg [1]", result.getAnswer().getText());
+	}
+
 	/**
 	 * The pipeline streams THREE text channels, and the preview is not the third spelling of the
 	 * second. It reasons over an independently-numbered top-K chart

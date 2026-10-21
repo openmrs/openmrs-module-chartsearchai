@@ -255,8 +255,16 @@ public class BundledClinicalAnswerProvider implements ClinicalAnswerProvider {
 			if (cancellation.isCancelled()) {
 				if (latestAnswer.get() != null) {
 					AnswerEnvelope partialAnswer = latestAnswer.get();
-					events.accept(TurnEvent.withAnswer(TurnEventType.TURN_DONE,
-							sequence.getAndIncrement(), PROVIDER_ID, partialAnswer));
+					// Best effort, as the normal completion's final events are: a client that left keeps
+					// failing every later write, and the retained answer is still stored.
+					try {
+						events.accept(TurnEvent.withAnswer(TurnEventType.TURN_DONE,
+								sequence.getAndIncrement(), PROVIDER_ID, partialAnswer));
+					}
+					catch (RuntimeException delivery) {
+						log.debug("Bundled provider turn {}: the client left before the retained answer's final event",
+								request.getRequestId());
+					}
 					return CompletableFuture.completedFuture(
 							TurnResult.done(PROVIDER_ID, configuredMode, partialAnswer));
 				}

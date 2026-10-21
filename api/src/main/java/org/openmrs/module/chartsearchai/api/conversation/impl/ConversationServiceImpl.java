@@ -54,6 +54,9 @@ public class ConversationServiceImpl implements ConversationService {
 
 	private static final ObjectMapper MAPPER = new ObjectMapper();
 
+	/** Where a retained bundled answer's payload carries this module's search mode and slice. */
+	static final String MODULE_MEASUREMENTS = "chartsearchaiMeasurements";
+
 	@Autowired
 	private ConversationDAO conversationDAO;
 
@@ -243,6 +246,9 @@ public class ConversationServiceImpl implements ConversationService {
 	 * {@link ChartAnswer} it was built from, not in its wire payload; they are written alongside it
 	 * here so the audit of a turn settled from the retained answer (an optional tail that failed) keeps
 	 * the search mode, the reference slice and the token counts the delivered answer was measured with.
+	 * The search mode and slice are this module's own measurements and go under
+	 * {@link #MODULE_MEASUREMENTS}, so a relayed payload's fields of the same names are never read as
+	 * them.
 	 */
 	private static Map<String, Object> retainedPayload(AnswerEnvelope answer) {
 		ChartAnswer source = answer.getSource();
@@ -250,12 +256,14 @@ public class ConversationServiceImpl implements ConversationService {
 			return answer.getPayload();
 		}
 		Map<String, Object> payload = new LinkedHashMap<>(answer.getPayload());
-		payload.put("searchMode", source.getSearchMode());
+		Map<String, Object> measurements = new LinkedHashMap<>();
+		measurements.put("searchMode", source.getSearchMode());
 		ReferenceSlice slice = source.getReferenceSlice();
 		if (slice != null) {
-			payload.put("referenceSliceRecords", slice.getRecords());
-			payload.put("referenceSliceChars", slice.getCharacters());
+			measurements.put("referenceSliceRecords", slice.getRecords());
+			measurements.put("referenceSliceChars", slice.getCharacters());
 		}
+		payload.put(MODULE_MEASUREMENTS, measurements);
 		if (measured(source.getInputTokens()) != null) {
 			payload.put("inputTokens", source.getInputTokens());
 		}
@@ -300,16 +308,18 @@ public class ConversationServiceImpl implements ConversationService {
 		audit.setAnswer(answer == null ? "" : answer.getText());
 		audit.setReferenceCount(referenceCount(answer));
 		ChartAnswer source = answer == null ? null : answer.getSource();
-		// A retained bundled answer states its measurements in its payload (retainedPayload); a relayed
-		// payload's own fields are the provider's and are never read as this module's measurements.
-		String retainedMode = text(retained, "searchMode");
+		// A retained bundled answer states its measurements under MODULE_MEASUREMENTS (retainedPayload); a
+		// relayed payload's own fields are the provider's and are never read as this module's measurements.
+		Map<?, ?> measured = moduleMeasurements(retained);
+		Object storedMode = measured.get("searchMode");
+		String retainedMode = storedMode instanceof String ? (String) storedMode : null;
 		audit.setSearchMode(source != null ? source.getSearchMode()
 				: retainedMode != null ? retainedMode : ChartSearchAiConstants.SEARCH_MODE_UNKNOWN);
 		ReferenceSlice slice = source == null ? null : source.getReferenceSlice();
 		audit.setReferenceSliceRecords(slice != null ? Integer.valueOf(slice.getRecords())
-				: count(retained, "referenceSliceRecords"));
+				: count(measured.get("referenceSliceRecords")));
 		audit.setReferenceSliceChars(slice != null ? Integer.valueOf(slice.getCharacters())
-				: count(retained, "referenceSliceChars"));
+				: count(measured.get("referenceSliceChars")));
 		audit.setResponseTimeMs(responseTimeMs);
 		// The bundled answer's counts are on the ChartAnswer it was built from, as saveAuditLog reads
 		// them; only a relayed answer states them in its payload.
@@ -347,11 +357,6 @@ public class ConversationServiceImpl implements ConversationService {
 		return references instanceof List ? ((List<?>) references).size() : 0;
 	}
 
-	private static String text(AnswerEnvelope answer, String field) {
-		Object value = answer == null ? null : answer.getPayload().get(field);
-		return value instanceof String ? (String) value : null;
-	}
-
 	private static Integer number(AnswerEnvelope answer, String field) {
 		if (answer == null) {
 			return null;
@@ -360,9 +365,14 @@ public class ConversationServiceImpl implements ConversationService {
 		return value instanceof Number ? measured(((Number) value).intValue()) : null;
 	}
 
+	/** The module's own measurements a retained bundled answer was stored with; empty for any other. */
+	private static Map<?, ?> moduleMeasurements(AnswerEnvelope retained) {
+		Object value = retained == null ? null : retained.getPayload().get(MODULE_MEASUREMENTS);
+		return value instanceof Map ? (Map<?, ?>) value : Collections.emptyMap();
+	}
+
 	/** A slice count as stated: zero is a measurement here, unlike a token count. */
-	private static Integer count(AnswerEnvelope answer, String field) {
-		Object value = answer == null ? null : answer.getPayload().get(field);
+	private static Integer count(Object value) {
 		return value instanceof Number ? Integer.valueOf(((Number) value).intValue()) : null;
 	}
 

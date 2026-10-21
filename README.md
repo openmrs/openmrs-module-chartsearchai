@@ -42,6 +42,7 @@ The standalone download above includes the backend module, frontend ESM, and the
 - [Architecture](#architecture)
 - [Provider integration contract](#provider-integration-contract)
 - [Local token counting](#local-token-counting)
+- [Safety-check execution status](#safety-check-execution-status)
 - [License](#license)
 
 ## Try it on the demo server
@@ -1043,6 +1044,49 @@ The opt-in check starts and stops its own server on port 18095 (override with
 `-Dchartsearchai.test.tokenCount.port`), compares the count with inference usage,
 and verifies idle-unload scheduling. It does not use a running OpenMRS installation.
 
+## Safety-check execution status
+
+`DrugSafetyValidator.validateWithStatus` returns warnings, a `checked`, `limited`
+or `unavailable` status, and limitation codes from one invocation. An empty warning
+list alone does not show that a check ran. Status reflects available reference data,
+patient-context reads, medication mappings, enabled checks and dose information.
+It does not certify that a medication is safe. It covers only drugs recognized by
+the loaded reference data: an unrecognized drug is not checked, and an answer
+naming one beside a recognized drug can still report `checked`.
+
+Limitation codes state the cause. `unavailable` carries one of:
+
+- `check_disabled`: answer checking is switched off, or every one of its three sub-checks
+  (dose, interactions, contraindications) is;
+- `patient_context_unavailable`: no patient, or the patient's orders, allergies or conditions
+  could not be read;
+- `source_unavailable`: no reference data is loaded, or the load produced no entries;
+- `execution_failed`: the check itself failed, so its warnings are not a result.
+
+`limited` carries one or more of:
+
+- `source_data_partially_invalid`: the drug reference file loaded with a finding the loader did
+  not repair (`GET /chartsearchai/drugreferencestatus` lists them) that bears on this answer: one
+  about the file or the configuration, or one about entries of a drug this answer screened. A
+  finding about other drugs does not limit it;
+- `cross_reactivity_data_partially_invalid`: the cross-reactivity groups file loaded with a
+  finding the loader did not repair;
+- `checks_partially_disabled`: one or two sub-checks are switched off;
+- `mapping_incomplete`: an active order could not be read or resolved to a reference entry;
+- `no_applicable_check`: this answer triggered no applicable check;
+- `condition_rules_unavailable`, `interaction_reference_unavailable` and
+  `no_actionable_dose_reference`: the loaded data has no usable rules of that kind for a drug
+  the check covered;
+- `dose_not_assessable`: the answer supplied no dose and schedule that could be assessed;
+- `weight_unavailable`: a weight-based check lacked the patient's weight.
+
+Neither of the last two claims missing allergy or condition data.
+
+This Java API is the safety-status foundation for provider integration. Existing
+warning callers and standing chart alerts retain their interfaces and behaviour:
+`validate` still screens a question with no patient and computes no status. Publishing the
+status on provider answers and rendering it in the frontend belong to the subsequent
+integration contributions.
 
 ## License
 

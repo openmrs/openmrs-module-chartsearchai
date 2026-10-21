@@ -401,6 +401,46 @@ public class ConversationServicePersistenceTest extends BaseModuleContextSensiti
 		assertEquals(3, audit.getOutputTokens());
 	}
 
+	// Zero reference material is a measurement, as the live path files it, not an unmeasured slice.
+	@Test
+	public void aRetainedAnswerWithNoReferenceMaterialAuditsAZeroSlice() {
+		ClinicalConversation conversation = conversationService.openOrCreate(patient, "bundled", ProviderMode.QUERY_SCOPED);
+		ClinicalConversationTurn turn = conversationService.startTurn(conversation, "retained-zero", "Question");
+		Map<String, Object> payload = new LinkedHashMap<>();
+		payload.put("answer", "Checked answer");
+		payload.put("answerValidation", Collections.singletonMap("status", "checked"));
+		ChartAnswer source = new ChartAnswer("Checked answer", Collections.emptyList(), 12, 3, 0,
+				Collections.emptyList(), "fullChart", new ReferenceSlice(0, 0));
+		assertTrue(conversationService.recordCheckedAnswer(turn, AnswerEnvelope.fromPayload(payload, source)));
+		conversationService.finishTurn(turn, TurnResult.error("bundled", ProviderMode.QUERY_SCOPED,
+				"provider_stream_interrupted"), 50L);
+		Context.flushSession();
+		Context.clearSession();
+		ChartSearchAuditLog audit = conversationDAO.getTurnByUuid(turn.getUuid()).getAuditLog();
+		assertEquals(0, audit.getReferenceSliceRecords());
+		assertEquals(0, audit.getReferenceSliceChars());
+	}
+
+	// A relayed payload's own fields belong to its provider and never stand in for this module's measurements.
+	@Test
+	public void aRelayedPayloadsOwnSearchModeAndSliceAreNotAudited() {
+		ClinicalConversation conversation = conversationService.openOrCreate(patient, "hub", ProviderMode.QUERY_SCOPED);
+		ClinicalConversationTurn turn = conversationService.startTurn(conversation, "relayed-fields", "Question");
+		Map<String, Object> payload = new LinkedHashMap<>();
+		payload.put("answer", "Relayed answer");
+		payload.put("searchMode", "fullChart");
+		payload.put("referenceSliceRecords", 4);
+		payload.put("referenceSliceChars", 90);
+		conversationService.finishTurn(turn,
+				TurnResult.done("hub", ProviderMode.QUERY_SCOPED, AnswerEnvelope.fromPayload(payload)), 50L);
+		Context.flushSession();
+		Context.clearSession();
+		ChartSearchAuditLog audit = conversationDAO.getTurnByUuid(turn.getUuid()).getAuditLog();
+		assertEquals(ChartSearchAiConstants.SEARCH_MODE_UNKNOWN, audit.getSearchMode());
+		assertNull(audit.getReferenceSliceRecords());
+		assertNull(audit.getReferenceSliceChars());
+	}
+
 	// Two concurrent opens for one patient must not each create an active conversation: the service
 	// takes the patient's row before it reads, so the second open reads what the first committed.
 	@Test

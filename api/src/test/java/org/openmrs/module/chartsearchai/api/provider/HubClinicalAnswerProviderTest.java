@@ -14,6 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
@@ -21,7 +22,9 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -30,6 +33,9 @@ import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.Test;
 import org.openmrs.module.chartsearchai.LogCapture;
 import org.openmrs.Patient;
+import org.openmrs.Role;
+import org.openmrs.User;
+import org.openmrs.api.context.UserContext;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.api.conversation.PriorClinicalTurn;
 
@@ -41,6 +47,39 @@ import org.openmrs.module.chartsearchai.api.conversation.PriorClinicalTurn;
  */
 public class HubClinicalAnswerProviderTest {
 
+	@Test
+	public void outboundRequestKeepsTheCapturedAccountContext() throws Exception {
+		User user = new User(1);
+		user.addRole(new Role("Organizational: Doctor"));
+		AccountContext account = AccountContext.fromSession(new UserContext(null) {
+			@Override
+			public User getAuthenticatedUser() {
+				return user;
+			}
+
+			@Override
+			public Set<Role> getAllRoles() {
+				return user.getAllRoles();
+			}
+
+			@Override
+			public Locale getLocale() {
+				return Locale.ENGLISH;
+			}
+		});
+		TurnRequest request = new TurnRequest(patient(), "Question", "conversation", "request",
+				ProviderMode.QUERY_SCOPED, "profile-a", Collections.emptyList(), account);
+		ScriptedHubTransport transport = new ScriptedHubTransport();
+		transport.events = Collections.singletonList(wire("done", answerPayload("Answer")));
+		provider(transport, "http://hub.example/v1/chat/completions")
+				.execute(request, new CollectingSink(), CancellationSignal.NONE).toCompletableFuture().get();
+
+		assertEquals(1, transport.calls.get());
+		assertSame(account, transport.lastRequest.getAccountContext());
+		assertEquals(Collections.singletonList("Organizational: Doctor"),
+				transport.lastRequest.getAccountContext().getAssignedRoles());
+	}
+
 	private static Patient patient() {
 		Patient patient = new Patient();
 		patient.setUuid("patient-uuid-1");
@@ -50,7 +89,7 @@ public class HubClinicalAnswerProviderTest {
 	private static TurnRequest request(String profileId) {
 		return new TurnRequest(patient(), "What medications is this patient on?", "conversation-1",
 				"request-1", ProviderMode.QUERY_SCOPED, profileId,
-				Collections.singletonList(new PriorClinicalTurn("prior q", "prior a")));
+				Collections.singletonList(new PriorClinicalTurn("prior q", "prior a")), AccountContext.unavailable());
 	}
 
 	private static class CollectingSink implements TurnEventSink {
@@ -345,7 +384,7 @@ public class HubClinicalAnswerProviderTest {
 		CollectingSink sink = new CollectingSink();
 		TurnRequest fullChartRequest = new TurnRequest(patient(),
 				"What medications is this patient on?", "conversation-1", "request-1",
-				ProviderMode.FULL_CHART_STABLE, "product-profile-a", Collections.emptyList());
+				ProviderMode.FULL_CHART_STABLE, "product-profile-a", Collections.emptyList(), AccountContext.unavailable());
 
 		TurnResult result = provider.execute(fullChartRequest, sink,
 				CancellationSignal.NONE).toCompletableFuture().get();

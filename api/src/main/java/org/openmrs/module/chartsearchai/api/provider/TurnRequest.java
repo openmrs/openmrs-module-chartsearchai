@@ -37,24 +37,22 @@ public final class TurnRequest {
 
 	private final List<PriorClinicalTurn> priorClinicalTurns;
 
+	private final AccountContext accountContext;
+
 	/**
 	 * @param mode the caller-requested context mode, or {@code null} to use the provider's
 	 *        configured default; a provider must fail explicitly rather than silently substitute
 	 *        a mode it does not offer
-	 */
-	public TurnRequest(Patient patient, String question, String conversationId, String requestId,
-			ProviderMode mode) {
-		this(patient, question, conversationId, requestId, mode, null, Collections.emptyList());
-	}
-
-	/**
 	 * @param profileId hub product-profile id when the selected provider requires one; ignored by
 	 *        providers that have no profile concept
 	 * @param priorClinicalTurns completed successful turns already owned by OpenMRS, replayed to
 	 *        a stateless engine as prose only
+	 * @param accountContext the signed-in account's context, captured on the request thread;
+	 *        {@code null} is {@link AccountContext#unavailable()}
 	 */
 	public TurnRequest(Patient patient, String question, String conversationId, String requestId,
-			ProviderMode mode, String profileId, List<PriorClinicalTurn> priorClinicalTurns) {
+			ProviderMode mode, String profileId, List<PriorClinicalTurn> priorClinicalTurns,
+			AccountContext accountContext) {
 		this.patient = patient;
 		this.question = question;
 		this.conversationId = conversationId;
@@ -63,6 +61,7 @@ public final class TurnRequest {
 		this.profileId = profileId;
 		this.priorClinicalTurns = priorClinicalTurns == null ? Collections.emptyList()
 				: Collections.unmodifiableList(new ArrayList<>(priorClinicalTurns));
+		this.accountContext = accountContext == null ? AccountContext.unavailable() : accountContext;
 	}
 
 	public Patient getPatient() {
@@ -91,5 +90,9 @@ public final class TurnRequest {
 
 	public List<PriorClinicalTurn> getPriorClinicalTurns() {
 		return priorClinicalTurns;
+	}
+
+	public AccountContext getAccountContext() {
+		return accountContext;
 	}
 }

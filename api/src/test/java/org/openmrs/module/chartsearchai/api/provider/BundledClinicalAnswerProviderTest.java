@@ -49,7 +49,7 @@ public class BundledClinicalAnswerProviderTest {
 	}
 
 	private static TurnRequest request() {
-		return new TurnRequest(patient(), QUESTION, "conversation-1", "request-1", null);
+		return new TurnRequest(patient(), QUESTION, "conversation-1", "request-1", null, null, Collections.emptyList(), AccountContext.unavailable());
 	}
 
 	/** Collects every event the provider emits, in order. */
@@ -531,7 +531,7 @@ public class BundledClinicalAnswerProviderTest {
 					? ProviderMode.FULL_CHART_STABLE : ProviderMode.QUERY_SCOPED;
 			CollectingSink sink = new CollectingSink();
 			TurnRequest unsupportedRequest = new TurnRequest(patient(), QUESTION, "conversation-1", "request-1",
-					unsupported);
+					unsupported, null, Collections.emptyList(), AccountContext.unavailable());
 			TurnResult result = provider.execute(unsupportedRequest, sink, CancellationSignal.NONE)
 					.toCompletableFuture().get();
 			assertEquals(TurnEventType.TURN_ERROR, result.getTerminalState());

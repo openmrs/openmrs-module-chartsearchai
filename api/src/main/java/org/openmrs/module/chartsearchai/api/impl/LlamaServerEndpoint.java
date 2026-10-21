@@ -155,6 +155,10 @@ final class LlamaServerEndpoint {
 		return baseUrl() + "/v1/chat/completions";
 	}
 
+	String inputTokensUrl() {
+		return baseUrl() + "/v1/messages/count_tokens";
+	}
+
 	String healthUrl() {
 		return baseUrl() + "/health";
 	}

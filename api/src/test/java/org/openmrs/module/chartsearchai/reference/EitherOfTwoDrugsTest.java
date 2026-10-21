@@ -63,14 +63,59 @@ public class EitherOfTwoDrugsTest extends BaseModuleContextSensitiveTest {
 		assertTrue(!answer.substring(lines[0].length()).toLowerCase().contains("safer"), "neither is chosen: " + answer);
 	}
 
+	/**
+	 * ADR Decision 395: on the standalone George Anderson, allergic to ibuprofen, and Sarah Taylor, who takes it, were
+	 * answered by the model — George's "Acetaminophen is safer", choosing; Sarah's never saying she is on ibuprofen.
+	 */
+	@Test
+	public void eitherOfTwoDrugsOneHersTheOtherContraindicatedIsAnsweredForEachAndNeitherIsChosen() {
+		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
+			DrugReferenceTestSupport.activeOrder("order-apap", "Acetaminophen 500mg", "Acetaminophen"));
+		String answer = ask("Which is safer for him, ibuprofen or paracetamol?", orders,
+			new LinkedHashSet<String>(Arrays.asList("ibuprofen")));
+		assertNotNull(answer, "the module answers");
+		String[] lines = answer.split("\n");
+		assertEquals(DrugReferenceInjector.COMPARES_NO_DRUGS_LEAD, lines[0], answer);
+		assertEquals("Ibuprofen or Acetaminophen, each checked on its own.", lines[1], answer);
+		assertTrue(lines[2].startsWith("Acetaminophen is one of this patient's active medications (Acetaminophen 500mg"),
+			answer);
+		assertTrue(answer.contains("\nFor Ibuprofen:\nWhat this module's drug-safety check found about Ibuprofen:\n"
+				+ "The patient has a recorded allergy to Ibuprofen."), answer);
+		assertTrue(answer.contains("\nFor Acetaminophen:\nThe interaction check raised no finding about Acetaminophen "
+				+ "against this patient's other active medications.\n"), answer);
+		assertTrue(!answer.substring(lines[0].length()).toLowerCase().contains("safer"), "neither is chosen: " + answer);
+	}
+
+	@Test
+	public void eitherOfTwoDrugsOneOfThemHersSaysSheTakesIt() {
+		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
+			DrugReferenceTestSupport.activeOrder("order-advil", "Advil 400mg", "Ibuprofen"),
+			DrugReferenceTestSupport.activeOrder("order-mtx", "Methotrexate 2.5mg", "Methotrexate"));
+		String answer = ask("Can I give her ibuprofen or paracetamol?", orders, null);
+		assertNotNull(answer, "the module answers");
+		String[] lines = answer.split("\n");
+		assertEquals("Ibuprofen or Acetaminophen, each checked on its own.", lines[0], answer);
+		assertTrue(lines[1].startsWith("Ibuprofen is one of this patient's active medications (Advil 400mg"), answer);
+		assertTrue(answer.contains("\nFor Ibuprofen:\nWhat this module's drug-safety check found about Ibuprofen:\n"
+				+ "Ibuprofen interacts with active order Methotrexate"), answer);
+		assertTrue(answer.contains("\nFor Acetaminophen:\n"), answer);
+		assertTrue(!answer.contains("neither is one of"), answer);
+	}
+
 	private static String ask(String question) {
+		return ask(question, ORDERS, null);
+	}
+
+	private static String ask(String question, List<PatientClinicalContext.ActiveDrugOrder> orders,
+			java.util.Set<String> allergies) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
-		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {
+		for (PatientClinicalContext.ActiveDrugOrder order : orders) {
 			names.addAll(order.getNames());
 		}
 		String answer = DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.shippedServiceWithGroups())
 				.injectRecords(DrugReferenceTestSupport.oneRecordChart(),
-					DrugReferenceTestSupport.ctx(45, null, names, null, null, null, ORDERS), question).getModuleAnswer();
+					DrugReferenceTestSupport.ctx(45, null, names, null, allergies, null, orders), question)
+				.getModuleAnswer();
 		return answer == null ? null : answer.replaceAll("\\[\\d+\\]", "[n]");
 	}
 }

@@ -21185,3 +21185,25 @@ and *"Is ibuprofen safe given her kidney disease?"*.
   conditions her chart records, not the one the question names (`CONDITION_NOT_WEIGHED_OPENING`).
 
 Pinned by `ClinicianWordingsTest.aProposalWithADoseATimingOrAConditionIsAnsweredAsTheProposalSayingWhatWasNotWeighed`.
+
+## Decision 395: Either of two drugs, one of them hers, says she takes it and answers the other as its proposal
+
+**Status: Accepted** (October 2026) — found re-asking Decision 393's wordings on the 3.7.1 standalone on 2026-10-21.
+
+### Context
+
+Decision 393 answered *"Can I give her ibuprofen or paracetamol?"* and *"Which is safer for her, ibuprofen or paracetamol?"*
+only where neither drug was hers. George Anderson takes acetaminophen and is allergic to ibuprofen; Sarah Taylor takes
+ibuprofen. Both went to the model: George's *"Acetaminophen is safer for the patient"* chose a drug, and Sarah's answer
+never said she already takes ibuprofen.
+
+### The decision
+
+Where exactly one of the two is hers, `DrugReferenceInjector.composeTwoProposalsTogether` opens *"X or Y, each checked on
+its own."*, states the drug she takes with her orders of it (`OWN_MEDICATION_LEAD`), and under it what the check found
+against her other orders, with no verdict — or that it found nothing. The other drug is answered as its proposal, as
+Decision 393 answers it. The finding that her orders already carry the drug is not repeated, as her line says it. Both hers,
+or two drugs given together with one hers (Decision 306's), are unchanged.
+
+Pinned by `EitherOfTwoDrugsTest.eitherOfTwoDrugsOneHersTheOtherContraindicatedIsAnsweredForEachAndNeitherIsChosen` and
+`EitherOfTwoDrugsTest.eitherOfTwoDrugsOneOfThemHersSaysSheTakesIt`.

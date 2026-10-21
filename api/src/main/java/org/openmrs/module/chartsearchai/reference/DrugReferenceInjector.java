@@ -6832,8 +6832,22 @@ public class DrugReferenceInjector {
 		}
 		// Each drug as the question names it — a combination's name one drug (ADR Decision 272).
 		List<AskedDrug> rowOf = askedDrugs(question, questionDrugs, context, true);
-		if (rowOf.size() != 2 || !heldNoneOrInPart(rowOf.get(0), herSubstances)
-				|| !heldNoneOrInPart(rowOf.get(1), herSubstances)) {
+		if (rowOf.size() != 2) {
+			return null;
+		}
+		// Either of two, one of them hers: hers is said to be, and what was found against her other orders stated; the other
+		// is answered as its proposal (ADR Decision 395). Two drugs given together, one hers, are Decision 306's.
+		Set<AskedDrug> hersOfThem = new HashSet<AskedDrug>();
+		for (AskedDrug drug : rowOf) {
+			if (heldNoneOrInPart(drug, herSubstances)) {
+				continue;
+			}
+			if (!either || !drug.isHers(herSubstances)) {
+				return null;
+			}
+			hersOfThem.add(drug);
+		}
+		if (hersOfThem.size() == 2) {
 			return null;
 		}
 		List<String> pairLines = new ArrayList<String>();
@@ -6855,6 +6869,11 @@ public class DrugReferenceInjector {
 			Set<Object> about = subjectSubstances(finding);
 			boolean ofTheFirst = !Collections.disjoint(about, rowOf.get(0).substances);
 			boolean ofTheSecond = !Collections.disjoint(about, rowOf.get(1).substances);
+			if (finding.alreadyOrdered() != null && about.size() == 1 && (ofTheFirst || ofTheSecond)
+					&& hersOfThem.contains(rowOf.get(ofTheFirst ? 0 : 1))) {
+				// That her orders carry the drug is what her line says.
+				continue;
+			}
 			if (ofTheFirst && ofTheSecond && SafetyWarning.TYPE_INTERACTION.equals(finding.getType())) {
 				if (!either) {
 					pairLines.add(findingLine(finding, numbers.get(i), orderRecordNumbers, herOrderRecords, true));
@@ -6876,10 +6895,21 @@ public class DrugReferenceInjector {
 		if (either && QueryScopeRouter.asksWhichOfTwoDrugs(wordsBesideItsNames(question, questionDrugs))) {
 			lines.add(COMPARES_NO_DRUGS_LEAD);
 		}
-		lines.add(either ? rowOf.get(0).label + " or " + rowOf.get(1).label
+		lines.add(either && !hersOfThem.isEmpty() ? rowOf.get(0).label + " or " + rowOf.get(1).label
+				+ ", each checked on its own."
+				: either ? rowOf.get(0).label + " or " + rowOf.get(1).label
 				+ ", each as if given alone; neither is one of this patient's active medications."
 				: rowOf.get(0).label + " and " + rowOf.get(1).label
 						+ ", asked about together; neither is one of this patient's active medications.");
+		for (AskedDrug drug : rowOf) {
+			if (hersOfThem.contains(drug)) {
+				String herOrders = herStartedOrdersOf(drug, orderEntries, context, herOrderRecords);
+				if (herOrders.isEmpty()) {
+					return null;
+				}
+				lines.add(drug.label + OWN_MEDICATION_LEAD + herOrders + ".");
+			}
+		}
 		Set<AskedDrug> takenInPart = new HashSet<AskedDrug>();
 		for (AskedDrug drug : rowOf) {
 			String carried = substancesSheTakesOf(drug, herSubstances, orderEntries, herOrderRecords, context);
@@ -6897,14 +6927,16 @@ public class DrugReferenceInjector {
 			lines.add("For " + drug.label + ":");
 			if (its.isEmpty()) {
 				lines.add("The interaction check raised no finding about " + drug.label
-						+ " against this patient's active medications.");
+						+ (hersOfThem.contains(drug) ? " against this patient's other active medications."
+								: " against this patient's active medications."));
 				continue;
 			}
 			boolean withholds = false;
 			for (SafetyWarning finding : its) {
 				withholds |= licensesTheModulesNo(finding);
 			}
-			if (takenInPart.contains(drug) || !withholds && !cautionsOnlyAbout(drug.substances, its)) {
+			if (takenInPart.contains(drug) || hersOfThem.contains(drug)
+					|| !withholds && !cautionsOnlyAbout(drug.substances, its)) {
 				// Findings that make no verdict — a contraindication, a reason to withhold no rating makes: what the check
 				// found, every one, and no verdict, as Decision 257 answers one drug (ADR Decision 305). The model answered
 				// "can be given" and left a cross-reactivity out.

@@ -646,6 +646,15 @@ public class DrugReferenceInjector {
 		// scopes both its legs with this list, and since issue #354 this method also reads its
 		// EMPTINESS — a question that resolves no substance is the one that may have named a class.
 		List<DrugReference> questionDrugs = drugReferenceService.findImpliedByQuestion(question, orderEntries);
+		// A question naming a drug only to ask of its record in her chart is handed the model as a question asking nothing of
+		// drug safety is: the pass runs as for one naming no drug and asking nothing — her orders' records reconciled, no
+		// reference record, no finding about the drug (ADR Decision 399).
+		if (!questionDrugs.isEmpty()
+				&& QueryScopeRouter.asksOnlyAboutADrugsRecord(wordsBesideItsNames(question, questionDrugs))) {
+			PatientChart asked = injectRecords(chart, rawContext, "", orderHistory);
+			asked.markAsksOnlyAboutADrugsRecord();
+			return asked;
+		}
 		// Read once for the whole chart, beside the other once-per-injection global-property reads
 		// below, rather than inside the loop-bearing method it gates.
 		boolean fromQuery = ChartSearchAiUtils.getBooleanGlobalProperty(

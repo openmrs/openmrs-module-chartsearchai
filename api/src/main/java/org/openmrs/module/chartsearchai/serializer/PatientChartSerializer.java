@@ -562,6 +562,9 @@ public class PatientChartSerializer {
 		/** @see #getQuestionSubstances() */
 		private Set<Object> questionSubstances = Collections.emptySet();
 
+		/** @see #asksOnlyAboutADrugsRecord() */
+		private boolean asksOnlyAboutADrugsRecord;
+
 		/** @see #getNamedClassAtcGroup() */
 		private String namedClassAtcGroup;
 
@@ -739,6 +742,18 @@ public class PatientChartSerializer {
 		public void markQuestionSubstances(Set<Object> substances) {
 			this.questionSubstances = substances == null ? Collections.<Object> emptySet()
 					: Collections.unmodifiableSet(new LinkedHashSet<Object>(substances));
+		}
+
+		/** Records that the question named a drug only to ask of its record in her chart — ADR Decision 399, and
+		 *  {@code DrugReferenceInjector} is the only caller. */
+		public void markAsksOnlyAboutADrugsRecord() {
+			this.asksOnlyAboutADrugsRecord = true;
+		}
+
+		/** Whether the question named a drug only to ask of its record in her chart — when it was started, whether it was
+		 *  stopped (ADR Decision 399): it asks nothing of drug safety, and no chip answers it. */
+		public boolean asksOnlyAboutADrugsRecord() {
+			return asksOnlyAboutADrugsRecord;
 		}
 
 		/** The substances the question names, as the drug data keys them — ADR Decision 387 — or empty where it names none:

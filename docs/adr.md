@@ -21281,3 +21281,31 @@ Decision 181's withholding sentence where a finding licenses it — then states 
 `FOUND_LEAD_OPENING`.
 
 Pinned by `InteractionQuestionWithOnlyAnAllergyFindingTest.anAllergyAloneIsNoInteractionAndIsStatedAsWhatTheCheckFound`.
+
+## Decision 399: A question naming a drug only to ask of its record in her chart is handed the model with no drug-safety material, and carries no chip
+
+**Status: Accepted** (October 2026) — found asking ten such questions of 15 patients on the 3.7.1 standalone on 2026-10-21.
+
+### Context
+
+Decision 390 published chips only on a question asking something of drug safety, and counted naming a drug as asking. So
+*"When was her nevirapine started?"*, *"Who prescribed her rifampicin?"*, *"What is ciprofloxacin used for?"* and *"Did she
+have side effects from efavirenz?"* each carried interaction chips for 9 to 12 of the 15 patients — and the findings went
+into the prompt with the question: Sarah Taylor's *"Was aspirin stopped?"* was answered *"No, aspirin should not be given: it
+interacts with active order Ibuprofen — Major"*.
+
+### The decision
+
+`QueryScopeRouter.asksOnlyAboutADrugsRecord` reads a question naming ONE drug that opens as a question of fact — *when*, *who*,
+*how*, *what*, *was*, *did* … (`RECORD_OPENERS`) — that no one-drug shape or Decision 396's residual reading reads, and that carries no word of
+safety, giving, stopping, changing or advice (`SAFETY_STEMS`, `SAFETY_WORDS`). For such a question the pre-answer pass runs as
+for a question naming no drug and asking nothing — her orders' records reconciled, no reference record, no finding — and stamps
+the chart (`PatientChart.asksOnlyAboutADrugsRecord`), so `LlmInferenceService` publishes no chip whatever cue its words carry
+(*"stopped"* is one of Decision 177's).
+
+The word list is what such a question must LACK, so it errs toward keeping the findings: a dose — *"What dose of efavirenz is
+she on?"* — is a fact of her record but also how a proposal is asked (Decision 394), and keeps them; so does any asking modal.
+A question opening *"why"* keeps them too: why her drug was stopped may be the very allergy or interaction a finding states
+(`EndedOrderFindingReferentTest` hands the model such findings for *"Why was her ibuprofen stopped?"*).
+
+Pinned by `AllergyQuestionConflictingOrderContextTest.search_aQuestionAboutADrugsRecordInHerChartCarriesNoDrugSafetyMaterial`.

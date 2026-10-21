@@ -217,6 +217,41 @@ public class AllergyQuestionConflictingOrderContextTest extends BaseModuleContex
 		}
 	}
 
+	/**
+	 * A question naming a drug only to ask of its record in her chart — when it was started, who prescribed it, whether it
+	 * was stopped, what it is for — is handed the model with no drug-safety material, and carries no chip (ADR
+	 * Decision 399). On the 3.7.1 standalone "When was her nevirapine started?" carried an interaction chip, and Sarah
+	 * Taylor's "Was aspirin stopped?" was answered "No, aspirin should not be given: it interacts with active order
+	 * Ibuprofen — Major", the findings handed the model with the question.
+	 */
+	@Test
+	public void search_aQuestionAboutADrugsRecordInHerChartCarriesNoDrugSafetyMaterial() throws IOException {
+		int number = theAspirinOrderRecordNumber(SLICE);
+		String modelAnswer = "Her aspirin [" + number + "] was ordered at her last visit.";
+		Recorder unrelated = new Recorder(modelAnswer);
+		TestableService plain = serviceAnswering(modelAnswer);
+		plain.setLlmProvider(unrelated);
+		plain.search(patient, "Summarize her chart.");
+		for (String question : Arrays.asList("When was her aspirin started?", "Who prescribed her aspirin?",
+				"Was aspirin stopped?", "What is aspirin used for?",
+				"How long has she been on aspirin?", "Did she have side effects from aspirin?")) {
+			Recorder recorder = new Recorder(modelAnswer);
+			TestableService service = serviceAnswering(modelAnswer);
+			service.setLlmProvider(recorder);
+			ChartAnswer answer = service.search(patient, question);
+			assertEquals(modelAnswer, answer.getAnswer(), question + " — the model's answer, as it wrote it");
+			assertTrue(answer.getSafetyWarnings().isEmpty(), question + " — no chip: " + answer.getSafetyWarnings());
+			assertEquals(unrelated.records, recorder.records, question + " — the model handed the chart a question asking "
+					+ "nothing of drug safety is handed");
+		}
+		// A safety question naming the drug keeps them.
+		Recorder recorder = new Recorder(modelAnswer);
+		TestableService service = serviceAnswering(modelAnswer);
+		service.setLlmProvider(recorder);
+		service.search(patient, "When can I give her aspirin?");
+		assertTrue(!unrelated.records.equals(recorder.records), "precondition: a safety question is handed more");
+	}
+
 	@Test
 	public void search_anAllergyQuestionStatesTheConflictingOrderInTheAnswer() throws IOException {
 		ChartAnswer answer = serviceAnswering(MODEL_ANSWER).search(patient, ALLERGY_QUESTION);
@@ -733,6 +768,9 @@ public class AllergyQuestionConflictingOrderContextTest extends BaseModuleContex
 
 		private final String answer;
 
+		/** The records the last call was handed, as the model would read them. */
+		private String records;
+
 		private Recorder(String answer) {
 			this.answer = answer;
 		}
@@ -741,6 +779,7 @@ public class AllergyQuestionConflictingOrderContextTest extends BaseModuleContex
 		public LlmResponse search(String numberedRecords, List<Integer> focusIndices, String question,
 				String cacheScope, String cacheSeedRecords, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords,
 				List<AlreadyOrderedDrug> drugsAlreadyOrdered) {
+			records = numberedRecords + "\n" + referenceRecords;
 			return new LlmResponse(answer, Collections.singletonList(Integer.valueOf(1)));
 		}
 

@@ -1644,6 +1644,54 @@ public final class QueryScopeRouter {
 				|| asksWhetherSheHasTakenADrug(words) || asksAboutADrugAndHerAllergies(words) || asksAboutHerNamedDrug(words);
 	}
 
+	/** The words a question about a drug's record in her chart opens with (ADR Decision 399). Not "why": why her drug was
+	 *  stopped may be the very allergy or interaction a finding states, which the model is handed. */
+	private static final Set<String> RECORD_OPENERS = new HashSet<String>(Arrays.asList("when", "who", "how", "what",
+		"which", "did", "was", "were", "has", "have", "had", "is", "are", "does", "do"));
+
+	/**
+	 * Any word saying a question about a drug asks something of its safety, of giving it, stopping it or changing it — or
+	 * advice, which an asking modal asks — so it is no question about its record alone (ADR Decision 399). Stems: a word
+	 * opening with one is such a word.
+	 */
+	private static final List<String> SAFETY_STEMS = Arrays.asList("interact", "safe", "risk", "danger", "contraindicat",
+		"allerg", "avoid", "withhold", "combin", "together", "problem", "concern", "issue", "clash", "caution", "warn", "worr",
+		"harm", "toxic", "compatib", "appropriat", "switch", "replac", "instead", "continu", "better", "prefer", "choos",
+		"versus", "monitor", "watch", "check", "screen", "ddi", "alright", "affect", "level", "reduc", "increas", "decreas",
+		"dose", "dosage", "dosing");
+
+	/** Such words as whole words: short ones, which as stems would open words of fact — "prescribed", "address". */
+	private static final Set<String> SAFETY_WORDS = new HashSet<String>(Arrays.asList("ok", "okay", "fine", "hold", "give",
+		"giving", "add", "adding", "prescribe", "prescribing", "start", "starting", "stop", "stopping", "best", "vs", "can",
+		"could", "should", "may", "might", "would", "will", "must", "need", "needs"));
+
+	/**
+	 * Whether a question names ONE drug only to ask of its record in her chart — when it was started, who prescribed it,
+	 * whether it was stopped, what it is for, how long she has taken it (ADR Decision 399): it opens as a question of fact
+	 * ({@link #RECORD_OPENERS}), no one-drug shape or residual reading reads it, and it carries no word of safety, giving,
+	 * stopping, changing or advice ({@link #SAFETY_STEMS}, {@link #SAFETY_WORDS}). Such a question is handed the model with no drug-safety
+	 * material, which "Was aspirin stopped?" was answered from as a proposal — "No, aspirin should not be given". The dose
+	 * she is on is a fact of her record, but a dose is also how a proposal is asked (Decision 394), so it is left to the
+	 * findings: the list is what a question must lack, and errs toward keeping them.
+	 */
+	public static boolean asksOnlyAboutADrugsRecord(List<String> wordsWithTheDrugMarked) {
+		if (wordsWithTheDrugMarked == null || Collections.frequency(wordsWithTheDrugMarked, DRUG_NAME) != 1
+				|| wordsWithTheDrugMarked.isEmpty() || !RECORD_OPENERS.contains(wordsWithTheDrugMarked.get(0))) {
+			return false;
+		}
+		for (String word : wordsWithTheDrugMarked) {
+			if (SAFETY_WORDS.contains(word)) {
+				return false;
+			}
+			for (String stem : SAFETY_STEMS) {
+				if (word.startsWith(stem)) {
+					return false;
+				}
+			}
+		}
+		return !fitsAOneDrugShape(wordsWithTheDrugMarked) && residualReading(wordsWithTheDrugMarked) == Residual.NONE;
+	}
+
 	/** The possessives naming the drug as hers. */
 	private static final Set<String> RESIDUAL_POSSESSIVES = new HashSet<String>(Arrays.asList("her", "his", "their",
 		"patient's"));

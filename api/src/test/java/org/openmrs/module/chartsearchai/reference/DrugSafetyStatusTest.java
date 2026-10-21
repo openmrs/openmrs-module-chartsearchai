@@ -159,7 +159,8 @@ public class DrugSafetyStatusTest extends BaseModuleContextSensitiveTest {
 		assertTrue(referenceService.getLoadStatus().isInert());
 		DrugSafetyValidator.SafetyCheckResult result = validate(patient);
 		assertEquals(fixture.path("expected_status").asText(), result.getStatus());
-		assertTrue(result.getIssues().contains("source_unavailable"));
+		// Unavailable reports its cause alone: nothing else about this pass was measured.
+		assertEquals(Collections.singletonList("source_unavailable"), result.getIssues());
 	}
 
 	// No sub-check enabled means nothing examined the answer, so it cannot be reported as partly checked.
@@ -203,6 +204,16 @@ public class DrugSafetyStatusTest extends BaseModuleContextSensitiveTest {
 		DrugSafetyValidator.SafetyCheckResult result = validator.validateWithStatus("Ibuprofen 200 mg.",
 				"Can I take ibuprofen?", patient, Collections.emptyList(), new PairChipExtent.Sink());
 		assertEquals("limited", result.getStatus());
+		assertEquals(Collections.singletonList("dose_not_assessable"), result.getIssues());
+	}
+
+	@Test
+	public void aDoseStatedWithoutAFrequencyBesideOneWithAFrequencyIsStillNotAnAssessableDailyTotal() {
+		prepareCompletePatient();
+		DrugSafetyValidator.SafetyCheckResult result = validator.validateWithStatus(
+				"Paracetamol 500 mg four times daily. Paracetamol 1000 mg may be given for severe pain.",
+				"Can I take paracetamol?", patient, Collections.emptyList(), new PairChipExtent.Sink());
+		assertEquals("limited", result.getStatus(), result.getIssues().toString());
 		assertEquals(Collections.singletonList("dose_not_assessable"), result.getIssues());
 	}
 
@@ -330,6 +341,18 @@ public class DrugSafetyStatusTest extends BaseModuleContextSensitiveTest {
 		loadTheBundledEntriesWith("ibuprofen", null);
 		DrugSafetyValidator.SafetyCheckResult result = validate(patient);
 		assertEquals("limited", result.getStatus());
+		assertEquals(Collections.singletonList("source_data_partially_invalid"), result.getIssues());
+	}
+
+	/** The alias rule the shipped data does raise, where BLANK_ALIAS above it never fires. */
+	@Test
+	public void anEntryPublishingTheScreenedDrugsNameLimitsItsCheck() throws IOException {
+		prepareCompletePatient();
+		loadTheBundledEntriesWith(null, "{\"id\":\"zorbaprofen\",\"name\":\"Zorbaprofen\","
+				+ "\"aliases\":[\"zorbaprofen\",\"ibuprofen\"],\"atcCodes\":[],\"interactions\":[],\"contraindications\":[]}");
+		assertTrue(referenceService.getLoadStatus().getFindings().stream()
+				.anyMatch(f -> DrugReferenceValidity.ALIAS_NAMES_ANOTHER_SUBSTANCE.equals(f.getRule())));
+		DrugSafetyValidator.SafetyCheckResult result = validate(patient);
 		assertEquals(Collections.singletonList("source_data_partially_invalid"), result.getIssues());
 	}
 

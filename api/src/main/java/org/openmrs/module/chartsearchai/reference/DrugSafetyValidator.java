@@ -202,7 +202,8 @@ public class DrugSafetyValidator {
 	private static final class SafetyCoverage {
 		private final Set<String> issues = new LinkedHashSet<String>();
 		private final List<DrugReferenceValidity.Finding> entryFindings = new ArrayList<DrugReferenceValidity.Finding>();
-		private boolean unavailable;
+		/** The causes that make the check unavailable; reported alone, since nothing else was measured. */
+		private final Set<String> unavailableCauses = new LinkedHashSet<String>();
 		private boolean noCheckEnabled;
 
 		void limited(String issue) {
@@ -224,8 +225,7 @@ public class DrugSafetyValidator {
 		}
 
 		void unavailable(String issue) {
-			unavailable = true;
-			limited(issue);
+			unavailableCauses.add(issue);
 		}
 
 		/** Every sub-check is switched off, so nothing examined the answer: the same statement as the
@@ -239,9 +239,11 @@ public class DrugSafetyValidator {
 				return new SafetyCheckResult(STATUS_UNAVAILABLE, warnings,
 						java.util.Collections.singletonList("check_disabled"));
 			}
-			return new SafetyCheckResult(unavailable ? STATUS_UNAVAILABLE
-					: issues.isEmpty() ? STATUS_CHECKED : STATUS_LIMITED,
-					warnings, new ArrayList<String>(issues));
+			if (!unavailableCauses.isEmpty()) {
+				return new SafetyCheckResult(STATUS_UNAVAILABLE, warnings, new ArrayList<String>(unavailableCauses));
+			}
+			return new SafetyCheckResult(issues.isEmpty() ? STATUS_CHECKED : STATUS_LIMITED, warnings,
+					new ArrayList<String>(issues));
 		}
 	}
 
@@ -15039,20 +15041,24 @@ public class DrugSafetyValidator {
 	}
 
 	/**
+	 * @return whether every attributed dose carries a stated frequency, so a daily total can be
+	 *         assessed: one dose stated without one leaves the day's total unknown, whatever another
+	 *         sentence states.
+	 */
+	private static boolean dailyDoseStated(List<AttributedDose> doses) {
+		for (AttributedDose dose : doses) {
+			if (dose.frequencyPerDay <= 0) {
+				return false;
+			}
+		}
+		return !doses.isEmpty();
+	}
+
+	/**
 	 * @return the largest plausible daily dose (mg) among the attributed doses. When a dose is
 	 *         found without a frequency, frequency 1 is assumed (conservative — it cannot
 	 *         over-report a daily total). Null when nothing was attributed.
 	 */
-	/** @return whether any attributed dose carries a stated frequency, so a daily total can be assessed. */
-	private static boolean dailyDoseStated(List<AttributedDose> doses) {
-		for (AttributedDose dose : doses) {
-			if (dose.frequencyPerDay > 0) {
-				return true;
-			}
-		}
-		return false;
-	}
-
 	private static Double parseDailyDoseMg(List<AttributedDose> doses) {
 		Double best = null;
 		for (AttributedDose dose : doses) {

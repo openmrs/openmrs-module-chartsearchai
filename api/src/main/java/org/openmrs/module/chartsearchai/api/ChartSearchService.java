@@ -19,8 +19,10 @@ import org.openmrs.Patient;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceLoad;
+import org.openmrs.module.chartsearchai.reference.DrugSafetyValidator;
 import org.openmrs.module.chartsearchai.reference.PairChipExtent;
 import org.openmrs.module.chartsearchai.reference.SafetyWarning;
+import org.openmrs.module.chartsearchai.api.provider.CancellationSignal;
 
 /**
  * Answers natural language questions about a patient's chart using an LLM.
@@ -167,6 +169,15 @@ public interface ChartSearchService {
 			Consumer<ChartAnswer> ungroundedAnswerConsumer, Consumer<String> preliminaryReasoningConsumer) {
 		return searchStreaming(patient, question, tokenConsumer, reasoningConsumer, citationsConsumer,
 				ungroundedAnswerConsumer);
+	}
+
+	/** Cancellation-aware form used by the provider-neutral turn lifecycle. */
+	default ChartAnswer searchStreaming(Patient patient, String question, Consumer<String> tokenConsumer,
+			Consumer<String> reasoningConsumer, Consumer<List<RecordReference>> citationsConsumer,
+			Consumer<ChartAnswer> ungroundedAnswerConsumer, Consumer<String> preliminaryReasoningConsumer,
+			CancellationSignal cancellation) {
+		return searchStreaming(patient, question, tokenConsumer, reasoningConsumer, citationsConsumer,
+				ungroundedAnswerConsumer, preliminaryReasoningConsumer);
 	}
 
 	/**
@@ -1001,6 +1012,10 @@ public interface ChartSearchService {
 
 		private final List<SafetyWarning> safetyWarnings;
 
+		private final String safetyStatus;
+
+		private final List<String> safetyIssues;
+
 		private final String searchMode;
 
 		private final ChartSearchAiUtils.ReferenceSlice referenceSlice;
@@ -1108,8 +1123,8 @@ public interface ChartSearchService {
 				String unresolvedDrugClass, List<Integer> unfaithfullyRenderedCitations) {
 			this(answer, references, inputTokens, outputTokens, cachedTokens, safetyWarnings, searchMode,
 					referenceSlice, pairChipExtent, unresolvedDrugClass, unfaithfullyRenderedCitations,
-					null, null, null, null, null, null, null, null, null, false, null, null, null, null, null, null, null, false,
-					null, false);
+					null, null, null, null, null, null, null, null, null, false, null, null, null, null, null, null,
+					DrugSafetyValidator.STATUS_UNAVAILABLE, java.util.Collections.emptyList(), null, false, null, false);
 		}
 
 		/**
@@ -1151,9 +1166,11 @@ public interface ChartSearchService {
 				List<UnfoundedFindingSeverity> unfoundedFindingSeverities,
 				DrugReferenceLoad.Coverage doseCeilingCoverage,
 				List<String> unsupportedEndedOrderClaims,
-				List<Integer> unstatedSignificanceQualifiers,
+				List<Integer> unstatedSignificanceQualifiers, String safetyStatus, List<String> safetyIssues,
 				List<Integer> findingsStatedByTheModule, boolean asksWhetherSheHasTakenADrug,
 				String answerSummary, boolean answerDetailsStateLimits) {
+			this.safetyStatus = safetyStatus;
+			this.safetyIssues = java.util.Collections.unmodifiableList(new java.util.ArrayList<>(safetyIssues));
 			this.answerSummary = answerSummary;
 			this.answerDetailsStateLimits = answerSummary != null && answerDetailsStateLimits;
 			this.asksWhetherSheHasTakenADrug = asksWhetherSheHasTakenADrug;
@@ -1291,6 +1308,29 @@ public interface ChartSearchService {
 		 */
 		public List<SafetyWarning> getSafetyWarnings() {
 			return safetyWarnings;
+		}
+
+		/**
+		 * Whether the check completed within its resolved reference scope, ran with incomplete
+		 * mapping, exposure or rules, or could not run. Empty warnings alone establish none of these.
+		 */
+		public String getSafetyStatus() {
+			return safetyStatus;
+		}
+
+		/**
+		 * Provider-neutral safety envelope retained for clients that consume the dual-provider
+		 * contract: the execution status and its limitation codes. Package provenance and coverage
+		 * fields are absent because this implementation cannot establish them. The findings are not
+		 * in it: they are {@link #getSafetyWarnings()}, and the REST layer adds their wire form to this
+		 * envelope together with the interaction-pair extent that must travel with any chip list.
+		 */
+		public java.util.Map<String, Object> getSafetyCheck() {
+			java.util.Map<String, Object> safetyCheck = new java.util.LinkedHashMap<String, Object>();
+			safetyCheck.put("schema_version", "drug_safety.v1");
+			safetyCheck.put("status", safetyStatus);
+			safetyCheck.put("issues", new java.util.ArrayList<String>(safetyIssues));
+			return java.util.Collections.unmodifiableMap(safetyCheck);
 		}
 
 		/**
@@ -2119,6 +2159,7 @@ public interface ChartSearchService {
 
 		private final int withheldInteractions;
 
+		private final String group;
 		/** Whether the MODULE put this citation on the answer rather than the model — see
 		 *  {@link #isAttachedByTheModule()} (issue #305). */
 		private final boolean attachedByTheModule;
@@ -2182,6 +2223,7 @@ public interface ChartSearchService {
 			this.grounded = grounded;
 			this.source = source;
 			this.withheldInteractions = withheldInteractions;
+			this.group = ChartSearchAiUtils.referenceGroup(resourceType);
 			this.attachedByTheModule = attachedByTheModule;
 			this.attachedFor = attachedFor == null || attachedFor.isEmpty() ? Collections.<Integer> emptyList()
 					: Collections.unmodifiableList(new ArrayList<Integer>(attachedFor));
@@ -2263,6 +2305,11 @@ public interface ChartSearchService {
 		 */
 		public int getWithheldInteractions() {
 			return withheldInteractions;
+		}
+
+		/** Server-authoritative provenance group: patient chart or module reference material. */
+		public String getGroup() {
+			return group;
 		}
 
 		/**

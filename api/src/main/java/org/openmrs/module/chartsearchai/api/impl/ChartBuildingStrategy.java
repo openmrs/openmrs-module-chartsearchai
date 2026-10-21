@@ -46,6 +46,23 @@ class ChartBuildingStrategy {
 	}
 
 	/**
+	 * As {@link #buildChart(Patient, String)}, keeping {@code reservedTokens} of the model input
+	 * budget free in a query-scoped slice for reference records appended after it is built. A
+	 * full chart has no optional records to give way, so the reservation does not apply to it.
+	 * With nothing reserved this IS {@link #buildChart(Patient, String)}, which is the method a test
+	 * double overrides; only a rebuild that reserves room reaches the scoped builder's own overload.
+	 */
+	PatientChart buildChart(Patient patient, String question, int reservedTokens) {
+		if (reservedTokens <= 0) {
+			return buildChart(patient, question);
+		}
+		if (queryScopedMode()) {
+			return queryStoreChartBuilder.buildScoped(patient, question, reservedTokens);
+		}
+		return queryStoreChartBuilder.build(patient, question);
+	}
+
+	/**
 	 * Builds a small "focused" chart of only the querystore top-K records most relevant to the
 	 * question, for the progressive-reasoning preview pass. Unlike {@link #buildChart}, this is
 	 * query-dependent and is never the committed answer's context — see

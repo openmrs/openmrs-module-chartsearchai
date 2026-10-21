@@ -268,7 +268,8 @@ public class ConversationServiceImpl implements ConversationService {
 		AnswerEnvelope answer = result.getAnswer() != null ? result.getAnswer()
 				: result.getDeliveredAnswer() != null ? result.getDeliveredAnswer() : retainedAnswer(turn);
 		audit.setAnswer(answer == null ? "" : answer.getText());
-		audit.setReferenceCount(referenceCount(answer));
+		audit.setReferenceCount(answer != null && answer.getSource() != null
+				? answer.getSource().getReferences().size() : referenceCount(answer));
 		// Only the bundled answer carries this module's measurements, on the ChartAnswer it was built from; a
 		// relayed payload's own fields are the provider's and are never read as them.
 		ChartAnswer source = answer == null ? null : answer.getSource();

@@ -144,6 +144,30 @@ public class HubClinicalAnswerProviderTest {
 				TurnEventType.ANSWER_VALIDATION, TurnEventType.TURN_ERROR), sink.types());
 	}
 
+	// A Hub error after its answer settles the stages it left open, as a stream ending there does.
+	@Test
+	public void aHubErrorAfterItsAnswerSettlesTheInterruptedStagesFirst() throws Exception {
+		ScriptedHubTransport transport = new ScriptedHubTransport();
+		transport.events = Arrays.asList(wire("answer_done", answerPayload("Aspirin 81mg.")),
+				wire("error", Collections.<String, Object>singletonMap("code", "review_evidence_overflow")));
+		HubClinicalAnswerProvider provider = provider(transport,
+				"http://hub.example/v1/chat/completions");
+		CollectingSink sink = new CollectingSink();
+
+		TurnResult result = provider.execute(request("product-profile-a"), sink,
+				CancellationSignal.NONE).toCompletableFuture().get();
+
+		assertEquals(TurnEventType.TURN_ERROR, result.getTerminalState());
+		TurnEvent validation = sink.events.stream().filter(event -> event.getType() == TurnEventType.ANSWER_VALIDATION)
+				.findFirst().orElseThrow(AssertionError::new);
+		assertEquals("unavailable",
+				((Map<?, ?>) validation.getAnswer().getPayload().get("answerValidation")).get("status"));
+		assertEquals(Arrays.asList(TurnEventType.TURN_STARTED, TurnEventType.ANSWER_DONE,
+				TurnEventType.ANSWER_VALIDATION, TurnEventType.TURN_ERROR), sink.types());
+		assertTrue(TurnLifecycleValidator
+				.violations(provider.descriptor().getCapabilities(), sink.types()).isEmpty());
+	}
+
 	@Test
 	public void aTransportFailureAfterDoneDoesNotEmitASecondTerminalEvent() throws Exception {
 		ScriptedHubTransport transport = new ScriptedHubTransport();
@@ -275,6 +299,14 @@ public class HubClinicalAnswerProviderTest {
 		assertFalse(descriptor.getCapabilities().contains(ProviderCapability.TOKEN_STREAMING));
 		assertTrue(descriptor.getCapabilities().contains(ProviderCapability.INDEPTH));
 		assertTrue(descriptor.getCapabilities().contains(ProviderCapability.ANSWER_REVIEW));
+	}
+
+	@Test
+	public void descriptorIsNotReadyWhenTheHubEndpointLacksTheChatCompletionsPath() {
+		ProviderDescriptor descriptor = provider(new ScriptedHubTransport(), "http://hub.example").descriptor();
+		assertFalse(descriptor.isReady());
+		assertTrue(descriptor.getUnavailableReason().contains("/v1/chat/completions"),
+				descriptor.getUnavailableReason());
 	}
 
 	@Test

@@ -77,21 +77,24 @@ public class HubClinicalAnswerProvider implements ClinicalAnswerProvider {
 	}
 
 	/**
-	 * Ready means the Hub endpoint is configured, and nothing more: the Hub is not probed here, as the
-	 * bundled provider probes its remote engine, so an unreachable Hub surfaces when profiles are listed
-	 * or a turn runs.
+	 * Ready means the Hub endpoint is configured as its chat-completions URL, and nothing more: the Hub
+	 * is not probed here, as the bundled provider probes its remote engine, so an unreachable Hub
+	 * surfaces when profiles are listed or a turn runs. An endpoint without that path is not ready,
+	 * since profile discovery derives its URL from that path and could list nothing.
 	 */
 	@Override
 	public ProviderDescriptor descriptor() {
 		String endpoint = configuredEndpoint();
-		boolean ready = endpoint != null;
+		String unavailableReason = endpoint == null ? ChartSearchAiConstants.GP_HUB_ENDPOINT_URL + " is not set"
+				: endpoint.endsWith("/v1/chat/completions") ? null
+				: ChartSearchAiConstants.GP_HUB_ENDPOINT_URL + " must end with /v1/chat/completions";
+		boolean ready = unavailableReason == null;
 		Set<ProviderCapability> capabilities = EnumSet.of(ProviderCapability.ANSWER,
 				ProviderCapability.ANSWER_CHECK, ProviderCapability.ANSWER_REVIEW, ProviderCapability.INDEPTH,
 				ProviderCapability.GROUNDING, ProviderCapability.DRUG_SAFETY,
 				ProviderCapability.STRUCTURED_BLOCKS, ProviderCapability.MULTI_TURN_CONTEXT);
 		return new ProviderDescriptor(PROVIDER_ID, "Med-Agent Hub", true, ready, false,
-				Collections.singletonList(ProviderMode.QUERY_SCOPED), capabilities,
-				ready ? null : ChartSearchAiConstants.GP_HUB_ENDPOINT_URL + " is not set");
+				Collections.singletonList(ProviderMode.QUERY_SCOPED), capabilities, unavailableReason);
 	}
 
 	@Override
@@ -252,6 +255,12 @@ public class HubClinicalAnswerProvider implements ClinicalAnswerProvider {
 		}
 		if ("error".equals(event)) {
 			String code = problemCodeFromHubPayload(wire.getPayload());
+			// A Hub failing after its answer leaves its stages unsettled; settle them as interrupted first,
+			// as a stream ending there does, so the client does not hold them checking and pending.
+			AnswerEnvelope current = latestAnswer.get();
+			if (current != null) {
+				emitInterruptedStageOutcomes(events, sequence, current, withInterruptedStages(current), emitted);
+			}
 			events.accept(TurnEvent.error(sequence.getAndIncrement(), PROVIDER_ID, code));
 			streamError.set(code);
 			doneSeen[0] = true;

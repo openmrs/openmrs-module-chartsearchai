@@ -296,7 +296,7 @@ public class PrewarmBootstrapServiceTest {
 		public void warmup(Patient patient, boolean pin) {
 			if (incompleteFromPatientId > 0 && patient.getPatientId() >= incompleteFromPatientId) {
 				throw new IncompleteChartException("QueryStore has not completely indexed the chart for patient "
-						+ patient.getUuid() + "; the answer was withheld.");
+						+ patient.getUuid() + "; the answer was withheld.", IncompleteChartException.Reason.INDEXING_UNFINISHED);
 			}
 			if (truncatedPatientId > 0 && patient.getPatientId() == truncatedPatientId) {
 				throw new IncompleteChartException("QueryStore built the context slice from an incomplete chart for patient "

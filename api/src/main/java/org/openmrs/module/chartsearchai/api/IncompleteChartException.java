@@ -24,11 +24,6 @@ public class IncompleteChartException extends RuntimeException {
 
 	private final Reason reason;
 
-	/** An unfinished index, the condition a caller must stop on; the builder states the other explicitly. */
-	public IncompleteChartException(String message) {
-		this(message, Reason.INDEXING_UNFINISHED);
-	}
-
 	public IncompleteChartException(String message, Reason reason) {
 		super(message);
 		this.reason = reason;

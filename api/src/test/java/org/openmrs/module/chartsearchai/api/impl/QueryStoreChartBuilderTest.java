@@ -188,6 +188,17 @@ public class QueryStoreChartBuilderTest {
 				() -> builder.build(patient(1), "any allergies?"));
 	}
 
+	/** A read during a bootstrap can be truncated too; the index reason is the one a sweep stops on. */
+	@Test
+	public void build_reportsAnUnfinishedIndexOverATruncatedRead() {
+		queryStore.chartTruncated = true;
+		queryStore.projectionComplete = false;
+
+		IncompleteChartException thrown = assertThrows(IncompleteChartException.class,
+				() -> builder.build(patient(1), "any allergies?"));
+		assertEquals(IncompleteChartException.Reason.INDEXING_UNFINISHED, thrown.getReason());
+	}
+
 	@Test
 	public void build_failsExplicitlyWhenQueryStoreIsUnavailable() {
 		TestableQueryStoreChartBuilder unavailable = new TestableQueryStoreChartBuilder(null);

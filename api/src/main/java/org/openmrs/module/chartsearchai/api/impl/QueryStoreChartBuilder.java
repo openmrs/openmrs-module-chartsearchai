@@ -233,13 +233,15 @@ class QueryStoreChartBuilder {
 					patient.getPatientId(), mode, System.currentTimeMillis() - rpcStart,
 					System.currentTimeMillis() - buildStart);
 		}
-		if (chartRead.isTruncated()) {
-			throw new IncompleteChartException("QueryStore returned an incomplete chart for patient "
-					+ patient.getUuid() + "; the answer was withheld rather than treating it as complete.", IncompleteChartException.Reason.CHART_TRUNCATED);
-		}
+		// The unfinished index first: a read during a bootstrap can be truncated too (QueryStore ORs a
+		// failed cold touch into it), and only the index reason tells a sweep to stop rather than move on.
 		if (!chartRead.isProjectionComplete()) {
 			throw new IncompleteChartException("QueryStore has not completely indexed the chart for patient "
 					+ patient.getUuid() + "; the answer was withheld.", IncompleteChartException.Reason.INDEXING_UNFINISHED);
+		}
+		if (chartRead.isTruncated()) {
+			throw new IncompleteChartException("QueryStore returned an incomplete chart for patient "
+					+ patient.getUuid() + "; the answer was withheld rather than treating it as complete.", IncompleteChartException.Reason.CHART_TRUNCATED);
 		}
 		List<QueryDocument> chartDocs = chartRead.getDocuments();
 
@@ -352,15 +354,17 @@ class QueryStoreChartBuilder {
 			log.info("[timing] querystoreScopedBuild patient={} types=unresolved chartDocs=0 simHits=0 slice=0 rpcMs={} serializeMs=0 totalMs={} outcome=incomplete",
 					patient.getPatientId(), rpcMs, System.currentTimeMillis() - buildStart);
 		}
-		if (slice.isChartTruncated()) {
-			throw new IncompleteChartException("QueryStore built the context slice from an incomplete chart for patient "
-					+ patient.getUuid() + " (reported chart size " + slice.getChartSize()
-					+ ", IncompleteChartException.Reason.CHART_TRUNCATED); the answer was withheld rather than treating typed evidence as complete.");
-		}
-
+		// The unfinished index first, as on build().
 		if (!slice.isProjectionComplete()) {
 			throw new IncompleteChartException("QueryStore has not completely indexed the chart for patient "
 					+ patient.getUuid() + "; the answer was withheld.", IncompleteChartException.Reason.INDEXING_UNFINISHED);
+		}
+
+		if (slice.isChartTruncated()) {
+			throw new IncompleteChartException("QueryStore built the context slice from an incomplete chart for patient "
+					+ patient.getUuid() + " (reported chart size " + slice.getChartSize()
+					+ "); the answer was withheld rather than treating typed evidence as complete.",
+					IncompleteChartException.Reason.CHART_TRUNCATED);
 		}
 
 		List<QueryDocument> unbudgetedDocs = new ArrayList<QueryDocument>();

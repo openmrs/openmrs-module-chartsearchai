@@ -313,8 +313,19 @@ public class QueryStoreChartBuilderScopedTest {
 	public void buildScoped_withholdsASliceBuiltFromAnIncompleteChart() {
 		queryStore.chartTruncated = true;
 
-		assertThrows(IncompleteChartException.class,
+		IncompleteChartException thrown = assertThrows(IncompleteChartException.class,
 				() -> builder.buildScoped(patient(1), "What medications is the patient taking?"));
+		assertEquals(IncompleteChartException.Reason.CHART_TRUNCATED, thrown.getReason());
+	}
+
+	@Test
+	public void buildScoped_reportsAnUnfinishedIndexOverATruncatedSlice() {
+		queryStore.chartTruncated = true;
+		queryStore.projectionComplete = false;
+
+		IncompleteChartException thrown = assertThrows(IncompleteChartException.class,
+				() -> builder.buildScoped(patient(1), "any allergies?"));
+		assertEquals(IncompleteChartException.Reason.INDEXING_UNFINISHED, thrown.getReason());
 	}
 
 	@Test

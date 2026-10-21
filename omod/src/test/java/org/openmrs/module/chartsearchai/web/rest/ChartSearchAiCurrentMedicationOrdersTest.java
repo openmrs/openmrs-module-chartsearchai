@@ -169,6 +169,13 @@ public class ChartSearchAiCurrentMedicationOrdersTest {
 		assertFalse(xml.contains("orderUuid"), "was: " + xml);
 	}
 
+	@Test
+	public void anXmlClientReceivesTheOrdersOnBothSurfacesAsValuesAndNotAsBackReferences() throws Exception {
+		String xml = XmlPayloads.marshal(searchPayload(), "a chip naming its orders on both surfaces");
+
+		assertFalse(xml.contains("reference="), "was: " + xml);
+	}
+
 	/** Jackson reads the entry class's GETTERS and XStream its FIELDS, so every field needs a public getter of
 	 *  its own name — {@code ChartSearchAiChartOrderBridgeTest}'s guard, for this class. */
 	@Test

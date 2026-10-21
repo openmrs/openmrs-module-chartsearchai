@@ -30,6 +30,9 @@ import org.springframework.http.ResponseEntity;
  * them, so "eucalyptus &amp; diphenhydramine" arrives spelled {@code &amp;amp;} — and every
  * reading of the question downstream (the router's shapes, a product's joined names) then reads an
  * entity instead of the character the clinician typed.
+ *
+ * <p>The chat endpoint's case runs through the real conversation service and a real Hub transport, so it
+ * is {@code ProviderStreamPersistenceTest.theChatQuestionIsReadAsTypedEverywhereItIsRead}.
  */
 public class ChartSearchAiHtmlEscapedQuestionTest {
 

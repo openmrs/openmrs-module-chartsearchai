@@ -348,6 +348,87 @@ public class ConversationServicePersistenceTest extends BaseModuleContextSensiti
 		assertNull(composed.getAuditLog().getOutputTokens());
 	}
 
+	// A caller's copy of a turn can predate a settlement made elsewhere (a cancel from another request);
+	// recording a checked answer through it must not clear that settlement.
+	@Test
+	public void aStaleCopyCannotReopenATurnSettledElsewhere() {
+		ClinicalConversation conversation = conversationService.openOrCreate(patient, "hub", ProviderMode.QUERY_SCOPED);
+		ClinicalConversationTurn callersCopy = conversationService.startTurn(conversation, "settled-elsewhere", "Question");
+		Context.flushSession();
+		Context.clearSession();
+		conversationService.finishTurn(conversationDAO.getTurnByUuid(callersCopy.getUuid()),
+				TurnResult.error("hub", ProviderMode.QUERY_SCOPED, "turn_cancelled"), 5L);
+		Context.flushSession();
+		Context.clearSession();
+		Integer auditId = conversationDAO.getTurnByUuid(callersCopy.getUuid()).getAuditLog().getAuditLogId();
+
+		Map<String, Object> payload = new LinkedHashMap<>();
+		payload.put("answer", "Late checked answer");
+		payload.put("answerValidation", Collections.singletonMap("status", "checked"));
+		assertFalse(conversationService.recordCheckedAnswer(callersCopy, AnswerEnvelope.fromPayload(payload)));
+		Context.flushSession();
+		Context.clearSession();
+		ClinicalConversationTurn stored = conversationDAO.getTurnByUuid(callersCopy.getUuid());
+		assertEquals("turn_error", stored.getTerminalState());
+		assertEquals("turn_cancelled", stored.getProblemCode());
+		assertNotNull(stored.getAuditLog());
+		assertEquals(auditId, stored.getAuditLog().getAuditLogId());
+		assertNull(stored.getAnswerText());
+	}
+
+	// A bundled answer's measurements live on the ChartAnswer, not in its wire payload; a turn settled
+	// from the retained answer must still audit them.
+	@Test
+	public void aFailedOptionalTailAuditsTheMeasurementsOfTheRetainedBundledAnswer() {
+		ClinicalConversation conversation = conversationService.openOrCreate(patient, "bundled", ProviderMode.QUERY_SCOPED);
+		ClinicalConversationTurn turn = conversationService.startTurn(conversation, "retained-measured", "Question");
+		Map<String, Object> payload = new LinkedHashMap<>();
+		payload.put("answer", "Checked answer");
+		payload.put("answerValidation", Collections.singletonMap("status", "checked"));
+		ChartAnswer source = new ChartAnswer("Checked answer", Collections.emptyList(), 12, 3, 0,
+				Collections.emptyList(), "fullChart", new ReferenceSlice(7, 320));
+		assertTrue(conversationService.recordCheckedAnswer(turn, AnswerEnvelope.fromPayload(payload, source)));
+		conversationService.finishTurn(turn, TurnResult.error("bundled", ProviderMode.QUERY_SCOPED,
+				"provider_stream_interrupted"), 50L);
+		Context.flushSession();
+		Context.clearSession();
+		ChartSearchAuditLog audit = conversationDAO.getTurnByUuid(turn.getUuid()).getAuditLog();
+		assertEquals("Checked answer", audit.getAnswer());
+		assertEquals("fullChart", audit.getSearchMode());
+		assertEquals(7, audit.getReferenceSliceRecords());
+		assertEquals(320, audit.getReferenceSliceChars());
+		assertEquals(12, audit.getInputTokens());
+		assertEquals(3, audit.getOutputTokens());
+	}
+
+	// Two concurrent opens for one patient must not each create an active conversation: the service
+	// takes the patient's row before it reads, so the second open reads what the first committed.
+	@Test
+	public void openingAConversationHoldsThePatientRowBeforeReadingTheActiveOne() {
+		List<String> calls = new java.util.ArrayList<>();
+		ConversationDAO recorder = (ConversationDAO) java.lang.reflect.Proxy.newProxyInstance(
+				ConversationDAO.class.getClassLoader(), new Class<?>[] { ConversationDAO.class },
+				(proxy, method, args) -> {
+					calls.add(method.getName());
+					return method.invoke(conversationDAO, args);
+				});
+		Object target = org.springframework.test.util.AopTestUtils.getUltimateTargetObject(conversationService);
+		Object real = org.springframework.test.util.ReflectionTestUtils.getField(target, "conversationDAO");
+		org.springframework.test.util.ReflectionTestUtils.setField(target, "conversationDAO", recorder);
+		try {
+			conversationService.openOrCreate(patient, "hub", ProviderMode.QUERY_SCOPED);
+			assertEquals("lockConversationsOf", calls.get(0), calls.toString());
+			assertEquals("getLatestActiveConversation", calls.get(1), calls.toString());
+			calls.clear();
+			conversationService.startNew(patient, "hub", ProviderMode.QUERY_SCOPED);
+			assertEquals("lockConversationsOf", calls.get(0), calls.toString());
+			assertEquals("getLatestActiveConversation", calls.get(1), calls.toString());
+		}
+		finally {
+			org.springframework.test.util.ReflectionTestUtils.setField(target, "conversationDAO", real);
+		}
+	}
+
 	// One turn has one outcome and at most one audit row, so a second settlement (a cancel racing a finish,
 	// or a retry after a commit timeout) is refused and the first stands.
 	@Test

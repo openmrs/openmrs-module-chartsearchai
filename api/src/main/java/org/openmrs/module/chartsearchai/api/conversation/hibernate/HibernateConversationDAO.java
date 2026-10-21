@@ -74,6 +74,16 @@ public class HibernateConversationDAO implements ConversationDAO {
 	}
 
 	@Override
+	public void lockConversationsOf(Patient patient) {
+		// The row itself, in SQL: a FOR UPDATE on the Patient entity would join person and patient,
+		// which not every dialect accepts, and the lock is all that is wanted of it.
+		sessionFactory.getCurrentSession()
+				.createNativeQuery("select patient_id from patient where patient_id = :id for update")
+				.setParameter("id", patient.getPatientId())
+				.list();
+	}
+
+	@Override
 	@SuppressWarnings("unchecked")
 	public ClinicalConversation getLatestActiveConversation(Patient patient, User user) {
 		List<ClinicalConversation> results = sessionFactory.getCurrentSession()

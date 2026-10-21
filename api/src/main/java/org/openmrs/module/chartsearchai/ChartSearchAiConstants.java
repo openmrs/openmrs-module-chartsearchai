@@ -728,10 +728,10 @@ public class ChartSearchAiConstants {
 	 * retrieved chart carries no record of (issue #118).
 	 *
 	 * <p>Declared for issue #317, which added a fourth production reader — the chart builder, which
-	 * scopes the order-currency mark to this type — to three that were already spelling the string as
-	 * a literal: {@code QueryScopeRouter.typedSlice}'s MEDICATIONS and ORDERS slices, and
-	 * {@code DrugReferenceInjector}, which filters the mappings it puts to the substantiation test.
-	 * All four now read this constant, and the injector and the builder are the pair that MUST
+	 * scopes the order-currency mark to this type — to the readers that were already spelling the
+	 * string as a literal, among them {@code DrugReferenceInjector}, which filters the mappings it puts
+	 * to the substantiation test. The module's readers now share this constant, and the injector and
+	 * the builder are the pair that MUST
 	 * agree: the injector
 	 * admits a record to that corpus only where the prose and the builder's own order read both leave
 	 * it live, so a divergence would leave the #317 half of that AND looking at no records at all —

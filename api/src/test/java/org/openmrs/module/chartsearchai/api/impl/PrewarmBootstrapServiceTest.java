@@ -23,6 +23,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.Patient;
 import org.openmrs.module.chartsearchai.api.ChartSearchService;
+import org.openmrs.module.chartsearchai.api.IncompleteChartException;
 
 /**
  * Exercises the real {@link PrewarmBootstrapService#runSweep} and on-disk progress persistence,
@@ -132,6 +133,29 @@ public class PrewarmBootstrapServiceTest {
 				"at the pinned cap the sweep must stop without pinning any further entry");
 		assertEquals(PrewarmBootstrapService.STATUS_STOPPED, service.getStatus().getStatus(),
 				"hitting the cap is a stop, not a completion");
+	}
+
+	@Test
+	public void runSweep_shouldStopWithoutPassingAPatientWhoseChartQueryStoreHasNotFinishedIndexing() {
+		// An autostarted prewarm can race QueryStore's own bootstrap. A chart it has not finished
+		// indexing is not a failed patient: counting it and moving the cursor on would carry the sweep
+		// to the end having pinned nothing, and a later start would then pin nothing either.
+		service.patientIds = new ArrayList<>(java.util.Arrays.asList(1L, 2L, 3L, 4L, 5L));
+		recorder.incompleteFromPatientId = 3;
+
+		service.runSweep(PrewarmBootstrapService.SCOPE_ALL, 0L, 0L, 0L);
+
+		assertEquals(java.util.Arrays.asList(1, 2), recorder.warmedPatientIds);
+		assertEquals(PrewarmBootstrapService.STATUS_STOPPED, service.getStatus().getStatus(),
+				"an unfinished index stops the sweep; it is not a completion");
+		assertEquals(2L, service.loadProgress().cursorPatientId, "the cursor stays before the unindexed chart");
+		assertEquals(0L, service.loadProgress().failed, "an unindexed chart is not a failed patient");
+
+		recorder.incompleteFromPatientId = 0;
+		service.runSweep(PrewarmBootstrapService.SCOPE_ALL, service.loadProgress().cursorPatientId,
+				service.loadProgress().done, service.loadProgress().failed);
+		assertEquals(java.util.Arrays.asList(1, 2, 3, 4, 5), recorder.warmedPatientIds,
+				"a later start resumes at the chart that was not yet indexed");
 	}
 
 	@Test
@@ -246,8 +270,16 @@ public class PrewarmBootstrapServiceTest {
 
 		boolean allPinned = true;
 
+		/** When &gt; 0, the chart build behind warmup reports this patient and every later one as not yet
+		 *  completely indexed, as {@code QueryStoreChartBuilder} does during QueryStore's bootstrap. */
+		int incompleteFromPatientId = 0;
+
 		@Override
 		public void warmup(Patient patient, boolean pin) {
+			if (incompleteFromPatientId > 0 && patient.getPatientId() >= incompleteFromPatientId) {
+				throw new IncompleteChartException("QueryStore has not completely indexed the chart for patient "
+						+ patient.getUuid() + "; the answer was withheld.");
+			}
 			warmedPatientIds.add(patient.getPatientId());
 			if (!pin) {
 				allPinned = false;

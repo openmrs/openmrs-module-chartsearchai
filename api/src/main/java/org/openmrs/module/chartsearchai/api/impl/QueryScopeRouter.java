@@ -378,6 +378,9 @@ public final class QueryScopeRouter {
 
 	private static final String A_TIMING = "(?: " + TIMING + ")?";
 
+	/** How a proposal names a condition: "given her kidney disease", "if she has kidney disease" (ADR Decisions 394, 402). */
+	private static final String GIVEN_A_CONDITION = "(?:given (?:" + POSSESSIVE + " )?|if (?:she|he|they) (?:has|have) (?:a |an )?)";
+
 	private static final List<Pattern> PROPOSAL_SHAPES = besideHerMedications(
 			// "Can I give her ibuprofen?", "Should I start her on clarithromycin?", "Can I give
 			// ibuprofen to her?", and "… two hours after her other medicines" (ADR Decision 394)
@@ -385,8 +388,8 @@ public final class QueryScopeRouter {
 					+ PATIENT + " )?(?:on )?" + D + "(?: (?:to|for) " + PATIENT + ")?(?: now| today)?" + A_TIMING,
 			// "Is ibuprofen safe given her kidney disease?" — a condition the question names, which the check weighs only as her
 			// chart records it (ADR Decision 394)
-			"is " + D + " (?:safe|ok|okay|appropriate|suitable)(?: (?:for|in) " + PATIENT + ")? given (?:"
-					+ POSSESSIVE + " )?(?!.*allerg)\\p{L}+(?: \\p{L}+){0,3}",
+			"is " + D + " (?:safe|ok|okay|appropriate|suitable)(?: (?:for|in) " + PATIENT + ")? " + GIVEN_A_CONDITION
+					+ "(?!.*allerg)\\p{L}+(?: \\p{L}+){0,3}",
 			// "Can I restart her simvastatin?", "Is it safe to resume her simvastatin?" — giving it again (ADR Decision 342)
 			"(?:can|could|may|should) (?:i|we) (?:safely )?(?:restart|resume) (?:" + PATIENT + " (?:on )?|" + POSSESSIVE + " )?"
 					+ D + "(?: now| today)?",
@@ -558,7 +561,7 @@ public final class QueryScopeRouter {
 					+ " )?(?:current |active |other )?(?:medication|medications|meds|medicines|drugs)(?: first)? before "
 					+ "(?:starting|giving|adding|prescribing|taking) (?:" + PATIENT + " )?(?:on )?" + D,
 			// "What should I watch for if I add clarithromycin?" (ADR Decision 391)
-			"what (?:should|do|would|must) (?:i|we) (?:need to )?(?:watch|look out|monitor|be careful) for if (?:i|we) (?:add|give|"
+			"what (?:should|do|would|must) (?:i|we) (?:need to )?(?:watch|look out|monitor|be careful)(?: for)? if (?:i|we) (?:add|give|"
 					+ "start|prescribe) (?:" + PATIENT + " )?(?:on )?" + D,
 			"(?:which|what) (?:of )?" + POSSESSIVE + " (?:other |current |active )?(?:medications|meds|medicines|drugs|"
 					+ "prescriptions) (?:interact|interacts|interfere|interferes) with " + D,
@@ -1175,7 +1178,13 @@ public final class QueryScopeRouter {
 		return fitsAShape(wordsWithTheDrugsMarked, TWO_DRUGS_SHAPES) || asksWhetherToGiveDrugsTogether(wordsWithTheDrugsMarked);
 	}
 
-	private static final List<Pattern> TWO_DRUGS_INTERACT_SHAPES = shapes(DOES_ONE_INTERACT_WITH_THE_OTHER, ANY_INTERACTION_BETWEEN);
+	/** "Should I change her efavirenz if I start rifampicin?" — asked as whether the two interact, the module choosing no drug
+	 *  to change (ADR Decision 402). */
+	private static final String CHANGE_HERS_IF_STARTING = "(?:should|must|do) (?:i|we) (?:need to )?(?:change|stop|switch|adjust|"
+			+ "modify) " + HER_D + " if (?:i|we) (?:start|give|add|prescribe) (?:" + PATIENT + " )?(?:on )?" + HER_D;
+
+	private static final List<Pattern> TWO_DRUGS_INTERACT_SHAPES = shapes(DOES_ONE_INTERACT_WITH_THE_OTHER, ANY_INTERACTION_BETWEEN,
+			CHANGE_HERS_IF_STARTING);
 
 	/** "What is the mechanism of the interaction between simvastatin and clarithromycin?" — what relates the two, asked of
 	 *  the interaction itself (ADR Decision 264). */
@@ -1242,7 +1251,7 @@ public final class QueryScopeRouter {
 	 */
 	private static final List<Pattern> CHANGES_A_GROUP_OF_HER_MEDICATIONS_SHAPES = shapes(
 			"(?:does|do|will|would|can|could|might) " + D + " (?:increase|raise|elevate|boost|decrease|lower|reduce|change|alter"
-					+ "|potentiate|affect) (?:the " + MEASURE + " of )?" + HER_MEDICATION_GROUP + "(?: " + MEASURE + ")?");
+					+ "|potentiate|affect) (?:the " + MEASURE + " of )?(?:any of )?" + HER_MEDICATION_GROUP + "(?: " + MEASURE + ")?");
 
 	/**
 	 * Whether a question asks whether ONE drug changes an effect of a group of her medications, and nothing else — one of
@@ -1426,7 +1435,7 @@ public final class QueryScopeRouter {
 	 *  question writes it, or {@code null} (ADR Decision 394). */
 	public static String statedConditionAsWritten(String question, List<String> wordsWithTheDrugMarked) {
 		Matcher m = Pattern.compile("^is " + D + " (?:safe|ok|okay|appropriate|suitable)(?: (?:for|in) " + PATIENT
-				+ ")? given (?:" + POSSESSIVE + " )?(?!.*allerg)(\\p{L}+(?: \\p{L}+){0,3})$")
+				+ ")? " + GIVEN_A_CONDITION + "(?!.*allerg)(\\p{L}+(?: \\p{L}+){0,3})$")
 				.matcher(String.join(" ", wordsWithTheDrugMarked));
 		return m.find() ? asWritten(question, m.group(1)) : null;
 	}
@@ -1488,6 +1497,10 @@ public final class QueryScopeRouter {
 	 */
 	/** What may stand before a drug class named in a drug's place — "a PPI", "an NSAID", "any statin". */
 	private static final Set<String> CLASS_ARTICLES = new HashSet<String>(Arrays.asList("a", "an", "any", "some", "another"));
+
+	/** The words naming a further one of the class, before its article (ADR Decision 402). */
+	private static final Set<String> CLASS_ORDINALS = new HashSet<String>(Arrays.asList("second", "third", "additional",
+		"further", "other", "more"));
 
 	/**
 	 * Whether {@code question} proposes giving her a drug of a class, named by one of {@code classTerms} where a drug's name
@@ -1569,6 +1582,10 @@ public final class QueryScopeRouter {
 					continue;
 				}
 				List<String> marked = new ArrayList<String>(words.subList(0, i));
+				// "a second NSAID", "another additional NSAID" — a further one of the class (ADR Decision 402).
+				while (!marked.isEmpty() && CLASS_ORDINALS.contains(marked.get(marked.size() - 1))) {
+					marked.remove(marked.size() - 1);
+				}
 				if (!marked.isEmpty() && CLASS_ARTICLES.contains(marked.get(marked.size() - 1))) {
 					marked.remove(marked.size() - 1);
 				}
@@ -1618,7 +1635,7 @@ public final class QueryScopeRouter {
 		"for", "want", "wanted", "planning", "plan", "going", "need", "needs", "many", "several", "drug", "drugs", "meds",
 		"medication", "medications", "medicine", "medicines", "treatment", "treatments", "regimen", "therapy",
 		"prescriptions", "tablets", "pills", "arvs", "arv", "antiretrovirals", "antibiotic", "painkiller", "take", "takes",
-		"taking", "co", "please", "so", "and", "also", "already", "between", "about"));
+		"taking", "co", "please", "so", "and", "also", "already", "between", "about", "while", "tb", "have"));
 
 	/** Words saying the question is about the drug's interactions. */
 	private static final Set<String> RESIDUAL_INTERACTS = new HashSet<String>(Arrays.asList("interact", "interacts",
@@ -1710,6 +1727,9 @@ public final class QueryScopeRouter {
 	private static final Set<String> RESIDUAL_POSSESSIVES = new HashSet<String>(Arrays.asList("her", "his", "their",
 		"patient's"));
 
+	/** The subjects of "take" a residual proposal reads as her taking it. */
+	private static final Set<String> RESIDUAL_SUBJECTS = new HashSet<String>(Arrays.asList("she", "he", "they", "patient"));
+
 	/** The words that make the residual words a question. */
 	private static final Set<String> RESIDUAL_QUESTION = new HashSet<String>(Arrays.asList("can", "could", "may", "should",
 		"would", "will", "is", "are", "does", "do", "any"));
@@ -1753,6 +1773,11 @@ public final class QueryScopeRouter {
 			} else {
 				return Residual.NONE;
 			}
+		}
+		// "Can she take X?" — she takes it, given her; never "Can I take X?", the speaker's (ADR Decision 402).
+		for (int i = 1; i < wordsWithTheDrugMarked.size(); i++) {
+			gives |= ("take".equals(wordsWithTheDrugMarked.get(i)) || "have".equals(wordsWithTheDrugMarked.get(i)))
+					&& RESIDUAL_SUBJECTS.contains(wordsWithTheDrugMarked.get(i - 1));
 		}
 		boolean asked = false;
 		boolean aQuestion = wordsWithTheDrugMarked.size() <= 2;
@@ -2114,7 +2139,10 @@ public final class QueryScopeRouter {
 			"what (?:are|is) " + POSSESSIVE + " (?:recorded |known )?(?:drug|medication) allerg(?:y|ies)",
 			"(?:does|do) " + SUBJECT + " have (?:any )?(?:recorded |known )?(?:drug|medication) allerg(?:y|ies)",
 			"(?:please )?list " + POSSESSIVE + " (?:recorded |known )?(?:drug|medication) allerg(?:y|ies)",
-			"what (?:drugs|medications|medicines) (?:is|are) " + SUBJECT + " allergic to");
+			"what (?:drugs|medications|medicines) (?:is|are) " + SUBJECT + " allergic to",
+			// "Any drug allergies I should know about before prescribing?" (ADR Decision 402)
+			"(?:(?:are|is) there )?any (?:drug|medication) allerg(?:y|ies) (?:i|we) should know(?: about)?(?: before (?:prescribing|"
+					+ "giving|treating)(?: " + PATIENT + ")?)?");
 
 	/** Whether a question asks for her drug allergies, and nothing else ({@link #HER_DRUG_ALLERGIES_SHAPES}). Fail-CLOSED. */
 	public static boolean asksForHerDrugAllergies(String question) {

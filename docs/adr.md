@@ -21349,3 +21349,30 @@ word of safety (`DOSE_STEMS`). A dose asked of a drug proposed — *"What dose o
 the findings, as do the asking modals.
 
 Pinned by `AllergyQuestionConflictingOrderContextTest.search_theDoseSheIsOnIsAQuestionAboutHerRecord`.
+
+## Decision 402: Six more wordings a clinician types are answered as the questions they ask
+
+**Status: Accepted** (October 2026) — found asking 30 further wordings of 15 patients on the 3.7.1 standalone on 2026-10-21.
+
+### Context
+
+Each went to the model for every patient. Its answers included *"Efavirenz can be given, with one caution"* to *"Should I
+change her efavirenz if I start rifampicin?"* — for all 15 patients, most of them not on efavirenz.
+
+### The decision
+
+- A further one of a class — *"Can I give her a second NSAID?"*, *"another"*, *"an additional"* — is the class proposed
+  (Decision 347; `QueryScopeRouter.CLASS_ORDINALS`).
+- *"What should I monitor if I give her X?"* is Decision 391's *"What should I watch for if I add X?"*.
+- *"Does X increase the levels of any of her drugs?"* is Decision 281's question of her drugs.
+- Decision 396's residual reading takes *"while"*, *"TB"* and *"have"* as filler, and *"take"* or *"have"* after *she*/*he* as
+  her being given the drug — never *"Can I take X?"*, the speaker's. A bare imperative, *"Give her fluconazole?"*, stays the
+  model's: the residual reading of it also read clause fragments of other questions — *"…is there any reason not to give
+  fluconazole?"* opened *"No"* — and `aQuestionTheModuleDidNotResolveAsASuitabilityQuestionStillAsksTheModel` holds it there.
+- *"Should I change her X if I start Y?"* is whether the two interact (Decision 220's shapes), the module choosing no drug to
+  change.
+- *"Any drug allergies I should know about before prescribing?"* is Decision 366's request for her drug allergies.
+- *"Is X safe if she has kidney disease?"* names a condition as Decision 394's *"given her kidney disease"* does
+  (`GIVEN_A_CONDITION`); an allergy named so stays the model's.
+
+Pinned by `ClinicianWordingsTest.sixMoreWordingsAreAnsweredAsTheQuestionsTheyAsk`.

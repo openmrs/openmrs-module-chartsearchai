@@ -170,6 +170,32 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/**
+	 * Six more wordings are answered as the questions they ask (ADR Decision 402). On the 3.7.1 standalone each went to the
+	 * model, which answered "Should I change her efavirenz if I start rifampicin?" with "Efavirenz can be given, with one
+	 * caution" for all 15 patients, most of them not on efavirenz. "Give her fluconazole?" stays the model's: no proposal at
+	 * all, in words a proposal is made of (aQuestionTheModuleDidNotResolveAsASuitabilityQuestionStillAsksTheModel).
+	 */
+	@Test
+	public void sixMoreWordingsAreAnsweredAsTheQuestionsTheyAsk() {
+		String[][] pairs = {
+			{ "Can I give her a second NSAID?", "Can I give her an NSAID?" },
+			{ "What should I monitor if I give her clarithromycin?", "Which of her medications interact with clarithromycin?" },
+			{ "Does fluconazole increase the levels of any of her drugs?", "Does fluconazole increase the levels of her drugs?" },
+			{ "Can she take fluconazole while on her TB drugs?", "Can I give her fluconazole?" },
+			{ "Should I change her efavirenz if I start rifampicin?", "Does rifampicin interact with her efavirenz?" },
+			{ "Any drug allergies I should know about before prescribing?", "What are her drug allergies?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+		String condition = ask("Is warfarin safe if she has kidney disease?");
+		assertNotNull(condition, "the module answers");
+		assertTrue(condition.startsWith(ask("Is warfarin safe for her?")) && condition.endsWith("\n"
+				+ DrugReferenceInjector.CONDITION_NOT_WEIGHED_OPENING + "kidney disease)."), "was: " + condition);
+	}
+
 	private static org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart chart(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

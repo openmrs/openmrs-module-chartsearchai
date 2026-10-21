@@ -129,6 +129,30 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/**
+	 * Three wordings about her medications as a whole are answered as the questions they ask (ADR Decision 397): the model
+	 * answered "Should she stop any medication before starting rifampicin?" with "No — Nevirapine should not be started",
+	 * "Is there anything I should not give her?" with "No — Enalaprilat should not be given: it is a drug allergen", and
+	 * "Any reason not to continue her current medications?" differently for each patient.
+	 */
+	@Test
+	public void wordingsAboutHerMedicationsAsAWholeAreAnsweredAsTheQuestionsTheyAsk() {
+		String[][] pairs = {
+			{ "Should she stop any medication before starting rifampicin?",
+					"Which of her medications interact with rifampicin?" },
+			{ "Do I need to stop any of her medications before starting rifampicin?",
+					"Which of her medications interact with rifampicin?" },
+			{ "Is there anything I should not give her?", "What drugs should I avoid in this patient?" },
+			{ "What should I not give her?", "What drugs should I avoid in this patient?" },
+			{ "Any reason not to continue her current medications?", "Do any of her medications need to be changed?" },
+			{ "Should I stop any of her medications?", "Do any of her medications need to be changed?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+	}
+
 	private static org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart chart(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

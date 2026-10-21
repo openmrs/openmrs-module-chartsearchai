@@ -548,6 +548,11 @@ public final class QueryScopeRouter {
 	 * (ADR Decision 319): "Yes" does not answer "which".
 	 */
 	private static final List<Pattern> WHICH_OF_HER_MEDICATIONS_INTERACT_SHAPES = shapes(
+			// "Should she stop any medication before starting rifampicin?" — which of hers the drug interacts with, the
+			// module choosing none to stop (ADR Decision 397)
+			"(?:should|must|do|does) (?:i|we|she|he|they|the patient|this patient) (?:need to )?stop any (?:of " + POSSESSIVE
+					+ " )?(?:current |active |other )?(?:medication|medications|meds|medicines|drugs)(?: first)? before "
+					+ "(?:starting|giving|adding|prescribing|taking) (?:" + PATIENT + " )?(?:on )?" + D,
 			// "What should I watch for if I add clarithromycin?" (ADR Decision 391)
 			"what (?:should|do|would|must) (?:i|we) (?:need to )?(?:watch|look out|monitor|be careful) for if (?:i|we) (?:add|give|"
 					+ "start|prescribe) (?:" + PATIENT + " )?(?:on )?" + D,
@@ -1980,7 +1985,11 @@ public final class QueryScopeRouter {
 			// "Does she need any of her medications adjusted?"
 			"(?:does|do) " + SUBJECT + " need any of " + HER_MEDICATIONS + " " + CHANGED,
 			// "Do any of her medications need to be changed?"
-			"(?:do|does) any of " + HER_MEDICATIONS + " need (?:to be )?" + CHANGED);
+			"(?:do|does) any of " + HER_MEDICATIONS + " need (?:to be )?" + CHANGED,
+			// "Any reason not to continue her current medications?", "Should I stop any of her medications?" (ADR Decision
+			// 397)
+			"(?:is there )?any reason not to continue " + HER_MEDICATIONS,
+			"should (?:i|we) stop any of " + HER_MEDICATIONS);
 
 	/**
 	 * Whether a question asks which drugs to avoid in her, and nothing else — <em>"What drugs should I avoid in this
@@ -2002,7 +2011,11 @@ public final class QueryScopeRouter {
 			// "What should I avoid prescribing for her?", "What should I avoid giving him?"
 			"what should (?:i|we) avoid (?:prescribing|giving)(?: (?:for|to) " + PATIENT + "| " + PATIENT + ")?",
 			// "What drugs should she avoid?"
-			"(?:what|which) " + DRUGS_NOUN + " should " + SUBJECT + " avoid");
+			"(?:what|which) " + DRUGS_NOUN + " should " + SUBJECT + " avoid",
+			// "Is there anything I should not give her?", "What should I not give her?" (ADR Decision 397)
+			"is there (?:anything|any (?:drug|medication|medicine)) (?:that )?(?:i|we) (?:should not|shouldn't|shouldnt|"
+					+ "must not|mustn't) (?:give|prescribe)(?: to)? " + PATIENT,
+			"what should (?:i|we) not (?:give|prescribe)(?: to)? " + PATIENT);
 
 	/**
 	 * Whether a question asks about ONE drug and her allergies — <em>"Is his clarithromycin safe with his allergies?"</em>,

@@ -21238,3 +21238,24 @@ recognises: `UnrecognisedDrugName` marks each word in turn as a drug, and asks t
 (`fitsAProposalShape`, `fitsAnInteractsShape`), or *"which"* in *"Which of her medications interact?"* would read as one.
 
 Pinned by `ClinicianWordingsTest.aQuestionAboutOneDrugInAnUnknownWordingIsAnsweredAsTheProposalOrTheInteraction`.
+
+## Decision 397: Whether to stop any of her medications before a drug, what not to give her, and any reason not to continue her medications are answered as the questions they ask
+
+**Status: Accepted** (October 2026) — found asking 30 further drug-interaction wordings on the 3.7.1 standalone on 2026-10-21.
+
+### Context
+
+Three wordings about her medications as a whole went to the model for every patient, which answered each differently and
+some backwards: *"Should she stop any medication before starting rifampicin?"* — *"No — Nevirapine should not be started"*;
+*"Is there anything I should not give her?"* — *"No — Enalaprilat should not be given: it is a drug allergen"*; *"Any reason
+not to continue her current medications?"* — a reason for some patients, *"The records do not address"* for others with the
+same kind of finding.
+
+### The decision
+
+*"Should she stop any medication before starting X?"* is asked as which of her medications interact with X (Decision 319),
+the module choosing none to stop; *"Is there anything I should not give her?"* and *"What should I not give her?"* as which
+drugs to avoid (Decision 324); *"Any reason not to continue her current medications?"* and *"Should I stop any of her
+medications?"* as whether any of her medications need changing (Decision 300).
+
+Pinned by `ClinicianWordingsTest.wordingsAboutHerMedicationsAsAWholeAreAnsweredAsTheQuestionsTheyAsk`.

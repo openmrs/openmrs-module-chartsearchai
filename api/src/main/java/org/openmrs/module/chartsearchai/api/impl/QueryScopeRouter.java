@@ -371,11 +371,22 @@ public final class QueryScopeRouter {
 	 * question built from admitted words. A shape states word ORDER, so a question carrying anything
 	 * a shape does not name is not admitted.
 	 */
+	/** "… two hours after her other medicines" — when a proposal says the drug would be given, which no finding weighs (ADR
+	 *  Decision 394). */
+	private static final String TIMING = "(?:\\p{N}+|one|two|three|four|five|six|eight|twelve|a few|several) (?:hours?|minutes?"
+			+ "|days?) (?:after|before|apart from) (?:" + POSSESSIVE + " )?(?:other )?\\p{L}+(?: \\p{L}+)?";
+
+	private static final String A_TIMING = "(?: " + TIMING + ")?";
+
 	private static final List<Pattern> PROPOSAL_SHAPES = besideHerMedications(
 			// "Can I give her ibuprofen?", "Should I start her on clarithromycin?", "Can I give
-			// ibuprofen to her?"
+			// ibuprofen to her?", and "… two hours after her other medicines" (ADR Decision 394)
 			"(?:can|could|may|should) (?:i|we) (?:also )?(?:safely )?(?:give|start|prescribe|administer|add) (?:"
-					+ PATIENT + " )?(?:on )?" + D + "(?: (?:to|for) " + PATIENT + ")?(?: now| today)?",
+					+ PATIENT + " )?(?:on )?" + D + "(?: (?:to|for) " + PATIENT + ")?(?: now| today)?" + A_TIMING,
+			// "Is ibuprofen safe given her kidney disease?" — a condition the question names, which the check weighs only as her
+			// chart records it (ADR Decision 394)
+			"is " + D + " (?:safe|ok|okay|appropriate|suitable)(?: (?:for|in) " + PATIENT + ")? given (?:"
+					+ POSSESSIVE + " )?(?!.*allerg)\\p{L}+(?: \\p{L}+){0,3}",
 			// "Can I restart her simvastatin?", "Is it safe to resume her simvastatin?" — giving it again (ADR Decision 342)
 			"(?:can|could|may|should) (?:i|we) (?:safely )?(?:restart|resume) (?:" + PATIENT + " (?:on )?|" + POSSESSIVE + " )?"
 					+ D + "(?: now| today)?",
@@ -431,6 +442,9 @@ public final class QueryScopeRouter {
 	 * tells the composer to open with neither "Yes" nor "No".
 	 */
 	private static final List<Pattern> NEGATED_PROPOSAL_SHAPES = shapes(
+			// "Is there any reason I shouldn't give her ciprofloxacin?" (ADR Decision 394)
+			"is there (?:any )?reason (?:i|we) (?:shouldn't|shouldn’t|should not|shouldnt) (?:give|start|prescribe|administer|use|add) (?:"
+					+ PATIENT + " )?(?:on )?" + D + "(?: (?:to|for) " + PATIENT + ")?",
 			// "Is there any reason not to give her ibuprofen?"
 			"is there (?:any )?reason not to (?:give|start|prescribe|administer|add|use) (?:" + PATIENT + " )?(?:on )?" + D
 					+ "(?: (?:to|for) " + PATIENT + ")?",
@@ -872,6 +886,10 @@ public final class QueryScopeRouter {
 			+ "(?: to (?:give|take|use|start))? (?:with|alongside) (?:any of )?" + HER_MEDICATION_GROUP;
 
 	private static final List<Pattern> SAFE_WITH_HER_MEDICATIONS_SHAPES = shapes(SAFE_WITH_HER_MEDICATIONS,
+			// "What dose of ibuprofen is safe with her medications?" — a dose asked for, which no finding weighs (ADR Decision
+			// 394)
+			"(?:what|which) (?:dose|dosage|amount) of " + D + " (?:is|would be) (?:safe|ok|okay|appropriate) (?:with|alongside) (?:any "
+					+ "of )?" + POSSESSIVE + " (?:other )?" + MEDICATIONS,
 			// "Would amiodarone be a problem with her current meds?" (ADR Decision 391)
 			"(?:would|will|could|might|is) " + D + " (?:be )?(?:a problem|an issue|a concern|problematic) (?:with|for) (?:any of )?"
 					+ POSSESSIVE + " (?:other )?" + MEDICATIONS,
@@ -1371,8 +1389,27 @@ public final class QueryScopeRouter {
 	 * are raised; the findings weigh no dose, so the model answers such a question.
 	 */
 	public static boolean statesADose(List<String> wordsWithTheDrugMarked) {
+		// Or asks for one — "What dose of ibuprofen is safe …?" (ADR Decision 394)
 		return wordsWithTheDrugMarked != null && (withoutAStatedDose(String.join(" ", wordsWithTheDrugMarked)) != null
-				|| asksWhetherToChangeHerDrugsDose(wordsWithTheDrugMarked));
+				|| asksWhetherToChangeHerDrugsDose(wordsWithTheDrugMarked)
+				|| Pattern.compile("(?:^| )(?:what|which) (?:dose|dosage|amount) of " + D + "(?: |$)")
+						.matcher(String.join(" ", wordsWithTheDrugMarked)).find());
+	}
+
+	/** Whether {@code question} says when the drug would be given — "two hours after her other medicines" — which no
+	 *  finding weighs (ADR Decision 394). */
+	public static boolean statesATiming(String question) {
+		return question != null && Pattern.compile("(?:^| )" + TIMING + "(?: |$)")
+				.matcher(String.join(" ", words(question))).find();
+	}
+
+	/** The condition a proposal names — "kidney disease" of "Is ibuprofen safe given her kidney disease?" — as the
+	 *  question writes it, or {@code null} (ADR Decision 394). */
+	public static String statedConditionAsWritten(String question, List<String> wordsWithTheDrugMarked) {
+		Matcher m = Pattern.compile("^is " + D + " (?:safe|ok|okay|appropriate|suitable)(?: (?:for|in) " + PATIENT
+				+ ")? given (?:" + POSSESSIVE + " )?(?!.*allerg)(\\p{L}+(?: \\p{L}+){0,3})$")
+				.matcher(String.join(" ", wordsWithTheDrugMarked));
+		return m.find() ? asWritten(question, m.group(1)) : null;
 	}
 
 	private static boolean fitsAShape(List<String> words, List<Pattern> shapes) {

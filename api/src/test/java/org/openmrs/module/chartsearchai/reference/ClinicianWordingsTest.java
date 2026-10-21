@@ -71,6 +71,37 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		assertTrue(!answer.contains("should not be given"), "never a proposal's verdict: " + answer);
 	}
 
+	/**
+	 * A dose asked for, a timing, a reason not to give it and a condition the question names are answered as the proposal
+	 * they wrap, each with what the check did not weigh (ADR Decision 394): the model answered each, among them "Ciprofloxacin
+	 * can be given, with one caution" of "Can I give her ciprofloxacin two hours after her other medicines?".
+	 */
+	@Test
+	public void aProposalWithADoseATimingOrAConditionIsAnsweredAsTheProposalSayingWhatWasNotWeighed() {
+		assertEquals(ask("Is warfarin safe with her medications?"), ask("What dose of warfarin is safe with her medications?"));
+		assertTrue(chart("What dose of warfarin is safe with her medications?").statesADose(), "the dose said not checked");
+		assertEquals(ask("Is there any reason not to give her warfarin?"),
+			ask("Is there any reason I shouldn't give her warfarin?"));
+		String timed = ask("Can I give her warfarin two hours after her other medicines?");
+		assertNotNull(timed, "the module answers");
+		assertTrue(timed.startsWith(ask("Can I give her warfarin?")) && timed.endsWith("\n"
+				+ DrugReferenceInjector.TIMING_NOT_WEIGHED), "was: " + timed);
+		String condition = ask("Is warfarin safe given her kidney disease?");
+		assertNotNull(condition, "the module answers");
+		assertTrue(condition.startsWith(ask("Is warfarin safe for her?")) && condition.endsWith("\n"
+				+ DrugReferenceInjector.CONDITION_NOT_WEIGHED_OPENING + "kidney disease)."), "was: " + condition);
+	}
+
+	private static org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart chart(String question) {
+		LinkedHashSet<String> names = new LinkedHashSet<String>();
+		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {
+			names.addAll(order.getNames());
+		}
+		return DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.shippedServiceWithGroups())
+				.injectRecords(DrugReferenceTestSupport.oneRecordChart(),
+					DrugReferenceTestSupport.ctx(45, null, names, null, null, null, ORDERS), question);
+	}
+
 	private static String ask(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

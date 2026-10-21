@@ -21162,3 +21162,26 @@ patient's active medications."* A question which of them is safer, or which to c
 the same under `DrugReferenceInjector.COMPARES_NO_DRUGS_LEAD` — the module compares no drugs and chooses none.
 
 Pinned by `EitherOfTwoDrugsTest`.
+
+## Decision 394: A proposal asking a dose, naming a timing or a condition, or asking for a reason not to give the drug is answered as the proposal, saying what was not weighed
+
+**Status: Accepted** (October 2026) — found asking 30 further drug-interaction wordings on 2026-10-21.
+
+### Context
+
+Four wordings went to the model, which cleared drugs or answered backwards: *"What dose of ibuprofen is safe with her
+medications?"*, *"Can I give her ciprofloxacin two hours after her other medicines?"* (*"Ciprofloxacin can be given, with one
+caution"*), *"Is there any reason I shouldn't give her ciprofloxacin?"* (*"No — Ciprofloxacin should be given with caution"*)
+and *"Is ibuprofen safe given her kidney disease?"*.
+
+### The decision
+
+- A dose asked for is read as whether the drug is safe with her medications, and stated as a dose (`QueryScopeRouter.statesADose`),
+  so the answer closes with Decision 322's line that no dose was checked.
+- A proposal saying when the drug would be given is answered as the proposal, closing *"This check did not weigh when the drug
+  would be given."* (`DrugReferenceInjector.TIMING_NOT_WEIGHED`).
+- *"Is there any reason I shouldn't give her X?"* is a proposal asking whether not to give it, as *"…any reason not to give…"* is.
+- *"Is X safe given her Y?"* — Y not her allergies — is answered as the proposal, closing that the check weighs only the
+  conditions her chart records, not the one the question names (`CONDITION_NOT_WEIGHED_OPENING`).
+
+Pinned by `ClinicianWordingsTest.aProposalWithADoseATimingOrAConditionIsAnsweredAsTheProposalSayingWhatWasNotWeighed`.

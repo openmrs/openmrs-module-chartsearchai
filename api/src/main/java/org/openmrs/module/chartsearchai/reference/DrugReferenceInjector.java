@@ -1593,6 +1593,15 @@ public class DrugReferenceInjector {
 		if (purpose != null) {
 			moduleAnswer = moduleAnswer + "\n" + PURPOSE_NOT_WEIGHED_OPENING + purpose + ").";
 		}
+		// And when the drug would be given, or a condition the question names, which no finding weighs (ADR Decision 394).
+		if (moduleAnswer != null && QueryScopeRouter.statesATiming(question)) {
+			moduleAnswer = moduleAnswer + "\n" + TIMING_NOT_WEIGHED;
+		}
+		String condition = moduleAnswer == null || questionDrugs.isEmpty() ? null
+				: QueryScopeRouter.statedConditionAsWritten(question, wordsBesideItsNames(question, questionDrugs));
+		if (condition != null) {
+			moduleAnswer = moduleAnswer + "\n" + CONDITION_NOT_WEIGHED_OPENING + condition + ").";
+		}
 		// A form named beside the drug: the findings are the drug's and weigh no form, so no verdict rests on them and the
 		// answer says the form was not weighed (ADR Decision 334).
 		String form = moduleAnswer == null || questionDrugs.isEmpty() ? null
@@ -8327,6 +8336,14 @@ public class DrugReferenceInjector {
 
 	/** How an answer to a proposal that said what the drug is for closes, the purpose and ")." after it (ADR Decision 213). */
 	static final String PURPOSE_NOT_WEIGHED_OPENING = "This check did not weigh what the drug is for (";
+
+	/** What closes an answer to a proposal saying when the drug would be given (ADR Decision 394): no finding weighs it. */
+	static final String TIMING_NOT_WEIGHED = "This check did not weigh when the drug would be given.";
+
+	/** What opens the line closing an answer to a proposal naming a condition, the condition and ")." after it (ADR Decision
+	 *  394): the check weighs her recorded conditions, not one the question names. */
+	static final String CONDITION_NOT_WEIGHED_OPENING = "This check weighs only the conditions this patient's chart records, not"
+			+ " the one the question names (";
 
 	/** What follows the drug's name in that lead where none of her orders of it has started (ADR Decision 202). */
 	static final String NOT_YET_STARTED_LEAD = " is not yet one of this patient's active medications: ";

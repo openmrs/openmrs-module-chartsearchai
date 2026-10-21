@@ -6390,6 +6390,12 @@ public class DrugReferenceInjector {
 		if ((interact || changes) && !relatesThePair) {
 			return null;
 		}
+		// Whether they interact, where a finding relates them, is answered "Yes" over every finding about it, whatever verdict
+		// they make or none: that lead never says "No", and a finding it cannot state leaves the model the answer (ADR
+		// Decision 404). The model answered "Efavirenz can be given, with one caution".
+		if (interact) {
+			return proposed;
+		}
 		for (SafetyWarning finding : ofIt) {
 			if (licensesTheModulesNo(finding)) {
 				return proposed;

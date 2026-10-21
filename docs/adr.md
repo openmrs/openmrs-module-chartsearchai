@@ -21396,3 +21396,26 @@ on aspirin?"*, *"Why was she started on aspirin?"* and *"Why does she take aspir
 stopped?"* keeps the findings, as `EndedOrderFindingReferentTest` hands them.
 
 Pinned by `AllergyQuestionConflictingOrderContextTest.search_whySheIsOnADrugIsAQuestionAboutHerRecord`.
+
+## Decision 404: Whether two drugs interact, one or both hers, is answered where a finding relates them
+
+**Status: Accepted** (October 2026) — found re-asking Decision 402's *"Should I change her efavirenz if I start
+rifampicin?"* on the 3.7.1 standalone on 2026-10-21.
+
+### Context
+
+Dora, on rifampicin and nevirapine, asked *"Does rifampicin interact with her efavirenz?"*, and the model answered
+*"Efavirenz can be given, with one caution"*. Decision 218 answers whether a drug interacts with one of hers *"Yes"* where a
+finding relates them — but `theOneOfTwoDrugsNotHers` admitted it only where efavirenz's findings made the module's "No" or
+were cautions alone, and efavirenz's finding of one class with her nevirapine is neither. And *"Should I change her nevirapine
+if I start rifampicin?"*, both hers, went to the model: Decision 402's shape was read as whether two drugs interact, but not
+as two of hers asked about together (Decision 203).
+
+### The decision
+
+Whether they interact, where a finding relates them, is answered *"Yes"* over every finding about the drug that is not hers,
+whatever verdict they make or none: that lead never says "No", and a finding `composeFromFindings` cannot state still leaves
+the model the answer. Decision 402's *"Should I change her X if I start Y?"* is one of `TWO_DRUGS_SHAPES` too, so of two of her
+own it is answered with what relates them, as Decision 203 answers two of hers.
+
+Pinned by `OneOfTwoDrugsHersInteractTest`.

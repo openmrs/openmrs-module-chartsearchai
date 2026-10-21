@@ -1154,11 +1154,16 @@ public final class QueryScopeRouter {
 	private static final String ANY_INTERACTION_BETWEEN = "(?:are there |is there )?(?:any |an )?(?:drug )?interactions? between "
 			+ HER_D + " and " + HER_D;
 
+	/** "Should I change her efavirenz if I start rifampicin?" — asked as whether the two interact, the module choosing no drug
+	 *  to change (ADR Decision 402); of two of hers too (ADR Decision 404). */
+	private static final String CHANGE_HERS_IF_STARTING = "(?:should|must|do) (?:i|we) (?:need to )?(?:change|stop|switch|adjust|"
+			+ "modify) " + HER_D + " if (?:i|we) (?:start|give|add|prescribe) (?:" + PATIENT + " )?(?:on )?" + HER_D;
+
 	private static final List<Pattern> TWO_DRUGS_SHAPES = shapes(
 			// "Is it safe to combine ibuprofen and celecoxib?", "Is it ok to give ibuprofen with celecoxib together?"
 			"is it (?:safe|ok|okay|appropriate) to (?:combine|give|take|use) " + HER_D + " (?:and|with) " + HER_D
 					+ "(?: together)?",
-			DOES_ONE_INTERACT_WITH_THE_OTHER,
+			DOES_ONE_INTERACT_WITH_THE_OTHER, CHANGE_HERS_IF_STARTING,
 			DOES_ONE_CHANGE_THE_OTHER, AVOID_ONE_WITH_THE_OTHER, WHAT_COMBINING_THEM_DOES, DOSE_BECAUSE_OF_THE_OTHER,
 			STOP_OR_KEEP_ONE_FOR_THE_OTHER, MONITORING_ON_BOTH, DANGEROUS_TOGETHER, DOSE_SAFE_WITH_THE_OTHER,
 			// "Is ibuprofen safe with celecoxib?", "Is simvastatin ok with clopidogrel?", "Is her ibuprofen safe with her
@@ -1177,11 +1182,6 @@ public final class QueryScopeRouter {
 	public static boolean asksAboutTwoDrugsTogether(List<String> wordsWithTheDrugsMarked) {
 		return fitsAShape(wordsWithTheDrugsMarked, TWO_DRUGS_SHAPES) || asksWhetherToGiveDrugsTogether(wordsWithTheDrugsMarked);
 	}
-
-	/** "Should I change her efavirenz if I start rifampicin?" — asked as whether the two interact, the module choosing no drug
-	 *  to change (ADR Decision 402). */
-	private static final String CHANGE_HERS_IF_STARTING = "(?:should|must|do) (?:i|we) (?:need to )?(?:change|stop|switch|adjust|"
-			+ "modify) " + HER_D + " if (?:i|we) (?:start|give|add|prescribe) (?:" + PATIENT + " )?(?:on )?" + HER_D;
 
 	private static final List<Pattern> TWO_DRUGS_INTERACT_SHAPES = shapes(DOES_ONE_INTERACT_WITH_THE_OTHER, ANY_INTERACTION_BETWEEN,
 			CHANGE_HERS_IF_STARTING);

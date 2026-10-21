@@ -2509,6 +2509,38 @@ public class ChartSearchAiRestController {
 	}
 
 	/**
+	 * A copy of a chip statement's wire value that shares no object with it: maps and lists are rebuilt and
+	 * the order value objects a chip carries are copied. Strings, numbers and booleans are kept, since
+	 * XStream writes those by value.
+	 */
+	@SuppressWarnings("unchecked")
+	private static Object unshared(Object value) {
+		if (value instanceof Map) {
+			Map<String, Object> copy = new LinkedHashMap<String, Object>();
+			for (Map.Entry<String, Object> entry : ((Map<String, Object>) value).entrySet()) {
+				copy.put(entry.getKey(), unshared(entry.getValue()));
+			}
+			return copy;
+		}
+		if (value instanceof List) {
+			List<Object> copy = new ArrayList<Object>();
+			for (Object element : (List<?>) value) {
+				copy.add(unshared(element));
+			}
+			return copy;
+		}
+		if (value instanceof SafetyWarning.ChartOrderBridge) {
+			SafetyWarning.ChartOrderBridge bridge = (SafetyWarning.ChartOrderBridge) value;
+			return new SafetyWarning.ChartOrderBridge(bridge.getSubstance(), bridge.getOrderDisplay());
+		}
+		if (value instanceof SafetyWarning.CurrentMedicationOrder) {
+			SafetyWarning.CurrentMedicationOrder order = (SafetyWarning.CurrentMedicationOrder) value;
+			return new SafetyWarning.CurrentMedicationOrder(order.getOrderDisplay(), order.getOrderUuid());
+		}
+		return value;
+	}
+
+	/**
 	 * Writes an ANSWER's drug-safety chips AND the statement of how bounded the interaction list
 	 * behind them is, into one payload map. Every surface that emits an answer goes through here,
 	 * since issue #354 by way of {@link #putModuleStatements} — which composes this with the
@@ -2681,11 +2713,13 @@ public class ChartSearchAiRestController {
 		} else {
 			Map<String, Object> safetyCheckForWire =
 				new LinkedHashMap<String, Object>(safetyCheck);
-			safetyCheckForWire.put("warnings", safetyWarningsForWire);
+			// Copies sharing no object with the top-level keys: XStream writes an object's second occurrence
+			// as a back-reference, so an XML client reading the top-level chips got reference="..." instead.
+			safetyCheckForWire.put("warnings", unshared(safetyWarningsForWire));
 			// Every statement beside the chip list, under its own key; the list itself is warnings here.
 			for (Map.Entry<String, Object> statement : chipStatements.entrySet()) {
 				if (statement.getValue() != safetyWarningsForWire) {
-					safetyCheckForWire.put(statement.getKey(), statement.getValue());
+					safetyCheckForWire.put(statement.getKey(), unshared(statement.getValue()));
 				}
 			}
 			target.put("safetyCheck", safetyCheckForWire);

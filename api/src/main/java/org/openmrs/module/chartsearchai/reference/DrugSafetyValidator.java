@@ -1164,6 +1164,11 @@ public class DrugSafetyValidator {
 		// which has already paid for the walk, hands over a set it has.
 		final Set<Object> allergicSubstances = allergicSubstanceKeys(recordedAllergens);
 		Supplier<Set<Object>> allergicSubstanceSupplier = () -> allergicSubstances;
+		// The allergen arm compares against these entries too, so a loader finding on one of them
+		// limits this check exactly as a finding on a screened subject does.
+		if (coverage != null) {
+			coverage.screened(allergicSubstances);
+		}
 
 		// The patient's co-medications, resolved at most ONCE for this pass and read by every arm that
 		// needs them (issue #256). A per-pass local and never a field — see CoMedications, which also
@@ -14705,7 +14710,10 @@ public class DrugSafetyValidator {
 				if (band == null) {
 					continue;
 				}
-				if (dailyCeilingApplies(band) && parseDailyDoseMg(doses) == null) {
+				// A dose with no stated frequency is still COMPARED, at the conservative once-daily reading
+				// parseDailyDoseMg takes, but it is not an assessable daily total: "200 mg" tells the warning
+				// arm nothing about the day, so the check cannot claim the daily ceiling was screened.
+				if (dailyCeilingApplies(band) && !dailyDoseStated(doses)) {
 					coverage.limited("dose_not_assessable");
 				}
 				if (perKgCeilingPublished(band)) {
@@ -15035,6 +15043,16 @@ public class DrugSafetyValidator {
 	 *         found without a frequency, frequency 1 is assumed (conservative — it cannot
 	 *         over-report a daily total). Null when nothing was attributed.
 	 */
+	/** @return whether any attributed dose carries a stated frequency, so a daily total can be assessed. */
+	private static boolean dailyDoseStated(List<AttributedDose> doses) {
+		for (AttributedDose dose : doses) {
+			if (dose.frequencyPerDay > 0) {
+				return true;
+			}
+		}
+		return false;
+	}
+
 	private static Double parseDailyDoseMg(List<AttributedDose> doses) {
 		Double best = null;
 		for (AttributedDose dose : doses) {

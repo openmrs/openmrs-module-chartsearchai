@@ -1597,7 +1597,12 @@ public class ChartSearchAiRestController {
 									writeTurnEventOrThrow(out, outgoing, activeConversation, turn, textChannels);
 								}
 								catch (RuntimeException e) {
-									activeCancellation.cancel();
+									// A refused write means the client left: cancel, so the provider keeps
+									// what it answered. A persistence failure is not that: the client is
+									// still here and gets the provider's error for it, not silence.
+									if (e instanceof ClientDisconnectedException) {
+										activeCancellation.cancel();
+									}
 									throw e;
 								}
 							},
@@ -1614,9 +1619,11 @@ public class ChartSearchAiRestController {
 		catch (Exception e) {
 			// A broken response can interrupt execute before it returns its terminal result.
 			// Settle the stored turn before abandoning the connection; do not persist twice.
+			boolean brokenResponse = e instanceof ClientDisconnectedException
+					|| e.getCause() instanceof ClientDisconnectedException;
 			if (startedTurn != null && !persisted) {
 				String problem = cancellation != null && cancellation.isCancelled()
-						|| e.getCause() instanceof IOException ? "cancelled" : "provider_failure";
+						|| brokenResponse ? "cancelled" : "provider_failure";
 				try {
 					conversationService.finishTurn(startedTurn,
 							TurnResult.error(providerId, resolvedMode, problem, delivered.answer()),
@@ -1629,7 +1636,7 @@ public class ChartSearchAiRestController {
 			if (cancellation != null && cancellation.isCancelled()) {
 				return;
 			}
-			if (e.getCause() instanceof IOException) {
+			if (brokenResponse) {
 				log.debug("Provider chat stream ended due to client disconnect");
 				return;
 			}
@@ -1638,7 +1645,7 @@ public class ChartSearchAiRestController {
 				writeSseEvent(out, TurnEventType.TURN_ERROR.getWireName(),
 						problemCodeJson("provider_failure"));
 			}
-			catch (IOException ignored) {
+			catch (IOException | RuntimeException ignored) {
 				log.debug("Could not send turn_error after provider failure");
 			}
 		}
@@ -1761,19 +1768,23 @@ public class ChartSearchAiRestController {
 		return TurnResult.done(result.getProviderId(), result.getMode(), withModuleStatements(result.getAnswer()));
 	}
 
+	/**
+	 * Persists what the event carries, then writes it. The persistence failure propagates as
+	 * itself; only a failure of the write, whatever its type, is the client going away.
+	 */
 	private void writeTurnEventOrThrow(OutputStream out, TurnEvent event,
 			ClinicalConversation conversation, ClinicalConversationTurn turn, Map<TurnEventType, WholeCodePoints> textChannels) {
+		persistCheckedAnswer(event, turn);
 		try {
 			writeTurnEvent(out, event, conversation, turn, textChannels);
 		}
-		catch (IOException e) {
+		catch (IOException | RuntimeException e) {
 			log.debug("Client disconnected during provider turn event {}", event.getType());
-			throw new RuntimeException("Client disconnected", e);
+			throw new ClientDisconnectedException(e);
 		}
 	}
 
-	private void writeTurnEvent(OutputStream out, TurnEvent event, ClinicalConversation conversation,
-			ClinicalConversationTurn turn, Map<TurnEventType, WholeCodePoints> textChannels) throws IOException {
+	private void persistCheckedAnswer(TurnEvent event, ClinicalConversationTurn turn) {
 		TurnEventType type = event.getType();
 		if ((type == TurnEventType.ANSWER_VALIDATION || type == TurnEventType.INDEPTH_ERROR)
 				&& event.getAnswer() != null) {
@@ -1781,6 +1792,11 @@ public class ChartSearchAiRestController {
 			// the already checked/edited envelope, including its interrupted In-Depth outcome.
 			conversationService.recordCheckedAnswer(turn, event.getAnswer());
 		}
+	}
+
+	private void writeTurnEvent(OutputStream out, TurnEvent event, ClinicalConversation conversation,
+			ClinicalConversationTurn turn, Map<TurnEventType, WholeCodePoints> textChannels) throws IOException {
+		TurnEventType type = event.getType();
 		String wire = type.getWireName();
 		WholeCodePoints textChannel = textChannels.get(type);
 		if (textChannel != null) {
@@ -3337,7 +3353,7 @@ public class ChartSearchAiRestController {
 
 		private static final long serialVersionUID = 1L;
 
-		ClientDisconnectedException(IOException cause) {
+		ClientDisconnectedException(Exception cause) {
 			super("Client disconnected", cause);
 		}
 	}

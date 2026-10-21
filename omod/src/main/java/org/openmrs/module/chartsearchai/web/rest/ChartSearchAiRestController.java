@@ -1285,6 +1285,11 @@ public class ChartSearchAiRestController {
 	}
 
 	/** Test seam: production uses the default instance constructed above. */
+	/** Test seam: production wires {@link HubProfileService} via {@link Autowired}. */
+	void setHubProfileService(org.openmrs.module.chartsearchai.api.impl.HubProfileService hubProfileService) {
+		this.hubProfileService = hubProfileService;
+	}
+
 	void setPreemptionRegistry(TurnPreemptionRegistry preemptionRegistry) {
 		this.preemptionRegistry = preemptionRegistry;
 	}

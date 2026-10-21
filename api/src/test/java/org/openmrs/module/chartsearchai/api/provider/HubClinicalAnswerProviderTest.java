@@ -79,6 +79,9 @@ public class HubClinicalAnswerProviderTest {
 
 		boolean cancelOnFailure = true;
 
+		/** Cancel the turn after the events, then return cleanly: a preempt whose stream ends at EOF. */
+		boolean cancelThenEnd;
+
 		int httpStatus = 200;
 
 		String errorBody;
@@ -95,6 +98,10 @@ public class HubClinicalAnswerProviderTest {
 			}
 			for (HubWireEvent event : events) {
 				sink.accept(event);
+			}
+			if (cancelThenEnd && cancellation instanceof TurnCancellation) {
+				((TurnCancellation) cancellation).cancel();
+				return;
 			}
 			// Thrown AFTER emitting events — reproduces a real preempt: the connection is force-closed
 			// mid-stream, after some events (e.g. answer_done) already arrived. Production gets here
@@ -428,6 +435,25 @@ public class HubClinicalAnswerProviderTest {
 		provider.execute(request("product-profile-a"), sink, cancellation).toCompletableFuture().get();
 
 		assertTrue(transport.lastCancellation == cancellation);
+	}
+
+	@Test
+	public void aCancelledStreamThatEndsCleanlyAfterItsAnswerCompletesAsDoneWithThatAnswer() throws Exception {
+		// The same preempt, but the transport returns at EOF instead of failing: the answer that
+		// reached the client is still the turn's outcome, not an incomplete stream.
+		ScriptedHubTransport transport = new ScriptedHubTransport();
+		transport.events = Collections.singletonList(wire("answer_done", answerPayload("Aspirin 81mg.")));
+		transport.cancelThenEnd = true;
+		HubClinicalAnswerProvider provider = provider(transport, "http://hub.example/v1/chat/completions");
+		CollectingSink sink = new CollectingSink();
+
+		TurnResult result = provider.execute(request("product-profile-a"), sink, new TurnCancellation())
+				.toCompletableFuture().get();
+
+		assertEquals(TurnEventType.TURN_DONE, result.getTerminalState());
+		assertEquals("Aspirin 81mg.", result.getAnswer().getText());
+		assertNull(result.getProblemCode());
+		assertEquals(TurnEventType.TURN_DONE, sink.types().get(sink.types().size() - 1));
 	}
 
 	@Test

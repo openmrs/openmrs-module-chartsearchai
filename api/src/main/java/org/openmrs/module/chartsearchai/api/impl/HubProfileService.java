@@ -19,6 +19,12 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -36,6 +42,19 @@ import org.springframework.stereotype.Component;
 public class HubProfileService {
 
 	private static final ObjectMapper MAPPER = new ObjectMapper();
+
+	/**
+	 * How long the body may take once the headers have arrived. The request timeout stops applying
+	 * at the headers, so a Hub that stalls mid-body would otherwise hold the caller for good.
+	 * Package-private so a test can shorten it.
+	 */
+	Duration bodyDeadline = Duration.ofSeconds(10);
+
+	private static final ExecutorService BODY_READERS = Executors.newCachedThreadPool(runnable -> {
+		Thread thread = new Thread(runnable, "chartsearchai-hub-profile-body");
+		thread.setDaemon(true);
+		return thread;
+	});
 
 	private final HttpClient httpClient = HttpClient.newBuilder()
 			.connectTimeout(Duration.ofSeconds(5))
@@ -72,7 +91,7 @@ public class HubProfileService {
 				if (response.statusCode() < 200 || response.statusCode() >= 300) {
 					throw new APIException("Hub profile discovery failed: HTTP " + response.statusCode());
 				}
-				payload = MAPPER.readValue(body, new TypeReference<Map<String, Object>>() {});
+				payload = readWithinDeadline(body);
 			}
 			if (!(payload.get("data") instanceof List)) {
 				throw new APIException("Hub profile discovery returned no data list.");
@@ -91,6 +110,35 @@ public class HubProfileService {
 		}
 		catch (IOException | IllegalArgumentException e) {
 			throw new APIException("Hub profile discovery failed: " + e.getMessage(), e);
+		}
+	}
+
+	/** Parses the body on its own thread and gives up, closing the body, when the deadline passes. */
+	private Map<String, Object> readWithinDeadline(InputStream body) throws IOException {
+		Future<Map<String, Object>> parsed = BODY_READERS.submit(
+				() -> MAPPER.readValue(body, new TypeReference<Map<String, Object>>() {}));
+		try {
+			return parsed.get(bodyDeadline.toMillis(), TimeUnit.MILLISECONDS);
+		}
+		catch (TimeoutException e) {
+			parsed.cancel(true);
+			body.close();
+			throw new APIException("Hub profile discovery timed out after " + bodyDeadline.getSeconds()
+					+ " seconds waiting for the body.");
+		}
+		catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			throw new APIException("Hub profile discovery was interrupted.", e);
+		}
+		catch (ExecutionException e) {
+			Throwable cause = e.getCause();
+			if (cause instanceof IOException) {
+				throw (IOException) cause;
+			}
+			if (cause instanceof RuntimeException) {
+				throw (RuntimeException) cause;
+			}
+			throw new APIException("Hub profile discovery failed: " + cause, cause);
 		}
 	}
 

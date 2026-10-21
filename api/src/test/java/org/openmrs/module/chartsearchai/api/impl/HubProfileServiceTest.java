@@ -189,4 +189,18 @@ public class HubProfileServiceTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/** A refused connection carries no message on Java 17 and 21, so the failure names its type. */
+	@Test
+	public void aRefusedConnectionIsReportedByItsType() throws Exception {
+		int closedPort;
+		try (java.net.ServerSocket probe = new java.net.ServerSocket(0)) {
+			closedPort = probe.getLocalPort();
+		}
+		Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_HUB_ENDPOINT_URL,
+				"http://localhost:" + closedPort + "/v1/chat/completions");
+		org.openmrs.api.APIException failure = assertThrows(org.openmrs.api.APIException.class,
+				() -> new HubProfileService().listProfiles());
+		assertTrue(failure.getMessage().contains("ConnectException"), failure.getMessage());
+	}
+
 }

@@ -109,7 +109,8 @@ public class HubProfileService {
 					+ e.getClass().getSimpleName() + ").", e);
 		}
 		catch (IOException | IllegalArgumentException e) {
-			throw new APIException("Hub profile discovery failed: " + e.getMessage(), e);
+			// The exception, not its message: a refused connection's carries none on Java 17 and 21.
+			throw new APIException("Hub profile discovery failed: " + e, e);
 		}
 	}
 

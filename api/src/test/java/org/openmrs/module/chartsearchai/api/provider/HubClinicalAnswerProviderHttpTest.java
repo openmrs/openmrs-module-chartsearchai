@@ -60,7 +60,7 @@ public class HubClinicalAnswerProviderHttpTest extends BaseModuleContextSensitiv
 
 	private TurnResult executeOverHttp(String body, List<TurnEvent> events) throws Exception {
 		server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-		server.createContext("/chat", exchange -> {
+		server.createContext("/v1/chat/completions", exchange -> {
 			receivedRequest.set(MAPPER.readTree(exchange.getRequestBody()));
 			exchange.getResponseHeaders().set("Content-Type", "text/event-stream");
 			exchange.sendResponseHeaders(200, 0);
@@ -70,7 +70,7 @@ public class HubClinicalAnswerProviderHttpTest extends BaseModuleContextSensitiv
 		});
 		server.start();
 		Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_HUB_ENDPOINT_URL,
-				"http://127.0.0.1:" + server.getAddress().getPort() + "/chat");
+				"http://127.0.0.1:" + server.getAddress().getPort() + "/v1/chat/completions");
 		Patient patient = Context.getPatientService().getPatient(7);
 		TurnRequest request = new TurnRequest(patient, "What is recorded?", "conversation-1", "request-1",
 				ProviderMode.QUERY_SCOPED, "product-profile-a", Collections.emptyList());

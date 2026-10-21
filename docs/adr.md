@@ -1006,7 +1006,7 @@ Requires the `View AI Audit Logs` privilege. All query parameters are optional. 
   - The authenticated user and patient
   - The question asked and the LLM's response
   - The number of source references returned
-  - The search mode used: `queryScoped` (the [Decision 28](#decision-28-query-scoped-slice-charts-chartmodequeryscoped) default), or `full-chart`, or `pre-filter` for a full chart carrying a focus hint. Stated by the pipeline on the answer and written unchanged, rather than derived at the REST layer — [#178](https://github.com/openmrs/openmrs-module-chartsearchai/issues/178) was that derivation, which branched on `chartsearchai.embedding.preFilter` alone and so could never record `queryScoped` at all. A fourth value, `unknown`, is written when an answer states no mode — unreachable from the shipped pipeline, but a deployment that substitutes its own `chartSearchAi.chartSearchServiceRouter` bean can produce it, so a consumer mapping this column must handle it rather than assume three
+  - The search mode used: `queryScoped` (the [Decision 28](#decision-28-query-scoped-slice-charts-chartmodequeryscoped) default), or `full-chart`, or `pre-filter` for a full chart carrying a focus hint. Stated by the pipeline on the answer and written unchanged, rather than derived at the REST layer — [#178](https://github.com/openmrs/openmrs-module-chartsearchai/issues/178) was that derivation, which branched on `chartsearchai.embedding.preFilter` alone and so could never record `queryScoped` at all. A fourth value, `unknown`, is written when an answer states no mode: every turn relayed from an external provider files it, since that provider states none, and so can a deployment that substitutes its own `chartSearchAi.chartSearchServiceRouter` bean, so a consumer mapping this column must handle it rather than assume three
   - Response time in milliseconds
   - Input and output token counts (for monitoring LLM usage and cost)
   - How much module-supplied reference material the prompt carried: `reference_slice_records` and `reference_slice_chars`, added by [Decision 57](#decision-57-the-injected-reference-slice-gets-a-durable-observable-and-deliberately-no-cap). A different population from the reference count above, which is what the answer PUBLISHED and — since [#305](https://github.com/openmrs/openmrs-module-chartsearchai/issues/305) — not the same as what the model cited. Most injected reference material is never cited, so these are the prompt COST and that one is the answer's use of it. Both are nullable and **null is not zero**: zero says the prompt carried no reference material, null says the answer stated no measurement at all. Zero says what the prompt carried and never why — nothing matched, `drugReference.enabled` is off (the shipped default), a combination of `injectFromQuery` / `injectFromOrders` / `drugSafety.validateAnswers` is off, the injection threw and was caught, or the injector added only the patient's own active-order records — and the injector's log is the only thing separating a swallowed failure from an honest miss
@@ -8725,8 +8725,13 @@ and its return, `LlmInferenceService` runs the fidelity checks and then the grou
 
 **Decision.** `auditStreamedQueryIfUnrecorded` runs in the `finally` that already stops the
 keep-alive timer, so the row is owed on every exit of that try block that got as far as the pipeline
-producing something. It writes **through** `saveAuditLog`, which stays the only place a row is built,
-and one row per query at most.
+producing something. It writes **through** `saveAuditLog`, which stays the only place a `/search` or
+`/search/stream` row is built, and one row per query at most. A conversation turn's row is built by
+`ConversationServiceImpl.buildAudit` instead, once, when the turn finishes; a turn that fails after its
+client was sent an answer files that answer, as this stream does, and never stores it on the turn. Its
+failure semantics differ deliberately: the row is written in the transaction that settles the turn,
+so a turn is never stored as finished without its audit row, and a failed write fails the settlement
+rather than being logged and passed over as `saveAuditLog`'s is.
 
 **The flag each write site raises goes up AFTER its save returns, never before.** Everything from
 the service call onward sits inside `saveAuditLog`'s own `catch`, and nothing after that `catch` can

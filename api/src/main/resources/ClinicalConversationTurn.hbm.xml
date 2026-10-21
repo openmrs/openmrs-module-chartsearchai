@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE hibernate-mapping PUBLIC
+		"-//Hibernate/Hibernate Mapping DTD 3.0//EN"
+		"http://www.hibernate.org/dtd/hibernate-mapping-3.0.dtd">
+
+<hibernate-mapping package="org.openmrs.module.chartsearchai.model">
+
+	<class name="ClinicalConversationTurn" table="chartsearchai_conversation_turn">
+
+		<id name="turnId" column="turn_id" type="int">
+			<generator class="native"/>
+		</id>
+
+		<property name="uuid" column="uuid" type="string" length="38" not-null="true" unique="true"/>
+
+		<many-to-one name="conversation" class="ClinicalConversation"
+				column="conversation_id" not-null="true"/>
+
+		<property name="ordinal" column="ordinal" type="int" not-null="true"/>
+
+		<property name="requestId" column="request_id" type="string" length="100" not-null="true"/>
+
+		<property name="question" column="question" type="text" not-null="true"/>
+
+		<property name="answerText" column="answer_text" type="text"/>
+
+		<property name="providerPayload" column="provider_payload" type="text"/>
+
+		<property name="payloadMediaType" column="payload_media_type" type="string" length="100"/>
+
+		<property name="terminalState" column="terminal_state" type="string" length="32"/>
+
+		<property name="problemCode" column="problem_code" type="string" length="100"/>
+
+		<property name="startedAt" column="started_at" type="timestamp" not-null="true"/>
+
+		<property name="completedAt" column="completed_at" type="timestamp"/>
+
+		<many-to-one name="auditLog" class="ChartSearchAuditLog" column="audit_log_id"/>
+
+	</class>
+
+</hibernate-mapping>

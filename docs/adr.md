@@ -21568,3 +21568,24 @@ continue her X with Y?"* is Decision 380's whether to continue both. *"Do I need
 which of her medications interact with X.
 
 Pinned by `ClinicianWordingsTest.changingOrChoosingBetweenTwoDrugsIsAnsweredWithWhatRelatesThem`.
+
+## Decision 412: Eight more wordings about her own medications are answered as the questions they ask
+
+**Status: Accepted** (October 2026) — found asking such questions of 15 patients on the 3.7.1 standalone on 2026-10-22.
+
+### Context
+
+Each went to the model for every patient. George Anderson's *"What is the most serious interaction she has?"* was answered *"The
+most serious interaction recorded is an allergy to Pantoprazole"*, and Betty Williams's *"No — the most serious interaction is …"*.
+
+### The decision
+
+- *"Does she have any allergy to her current medicines?"*, *"Which of her medications is she allergic to?"*, *"Does she have any
+  drug allergies that conflict with her medications?"* and *"Any cross-reactivity with her allergies?"* are Decision 295's whether
+  she is allergic to any of her medications.
+- *"What is the most serious interaction she has?"*, *"What is the severity of her interactions?"* and *"Any contraindicated
+  combinations?"* are screens of her medications, which state each interaction's rating; and `isInteractionScreening` reads any
+  question a screen shape reads, whatever cue it lacks, as *"contraindicated combinations"* lacks one.
+- *"Is she on two drugs that do the same thing?"* is Decision 294's duplicate-therapy question.
+
+Pinned by `ClinicianWordingsTest.eightMoreWordingsAboutHerOwnMedicationsAreAnsweredAsTheQuestionsTheyAsk`.

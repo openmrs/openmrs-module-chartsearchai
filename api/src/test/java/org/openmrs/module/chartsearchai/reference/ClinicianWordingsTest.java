@@ -298,6 +298,31 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/**
+	 * Eight more wordings about her own medications — her allergies against them, the severity of their interactions, and
+	 * duplicates among them — are answered as the questions they ask (ADR Decision 412). On the 3.7.1 standalone each went to
+	 * the model, which answered George Anderson's "What is the most serious interaction she has?" with "The most serious
+	 * interaction recorded is an allergy to Pantoprazole".
+	 */
+	@Test
+	public void eightMoreWordingsAboutHerOwnMedicationsAreAnsweredAsTheQuestionsTheyAsk() {
+		String[][] pairs = {
+			{ "Does she have any allergy to her current medicines?", "Is she allergic to any of her medications?" },
+			{ "Which of her medications is she allergic to?", "Is she allergic to any of her medications?" },
+			{ "Does she have any drug allergies that conflict with her medications?",
+					"Is she allergic to any of her medications?" },
+			{ "Any cross-reactivity with her allergies?", "Is she allergic to any of her medications?" },
+			{ "What is the most serious interaction she has?", "Are there any drug interactions with her medications?" },
+			{ "What is the severity of her interactions?", "Are there any drug interactions with her medications?" },
+			{ "Any contraindicated combinations?", "Are any of her medications contraindicated together?" },
+			{ "Is she on two drugs that do the same thing?", "Is there any duplicate therapy?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+	}
+
 	private static org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart chart(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

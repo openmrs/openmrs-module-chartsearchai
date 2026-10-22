@@ -246,7 +246,10 @@ public final class QueryScopeRouter {
 				|| asksWhichDrugsToAvoid(question)
 				// And about a drug named as hers, by whatever name — "Is his clarithromycine safe?", a brand the cues do not
 				// know (ADR Decision 374).
-				|| asksAboutADrugNamedAsHersByAnyName(question));
+				|| asksAboutADrugNamedAsHersByAnyName(question)
+				// And any question a screen shape reads, whatever cue it lacks — "Any contraindicated combinations?" (ADR
+				// Decision 412).
+				|| fitsAShape(words(question), SCREEN_SHAPES));
 	}
 
 	/** Whether {@code question} asks about one word named as hers as about her drug beside her medications — {@link
@@ -280,7 +283,9 @@ public final class QueryScopeRouter {
 	 * reached the prompt. The second word keeps a duplicate RECORD — "a duplicate encounter" — from screening her drugs.
 	 */
 	private static final Pattern DUPLICATION_CUES = cues("duplicat(?:e|es|ed|ion|ions)", "same (?:drug )?class(?:es)?",
-			"doubled? up");
+			"doubled? up",
+			// "Is she on two drugs that do the same thing?" (ADR Decision 412)
+			"do(?:es)? the same (?:thing|job)");
 
 	/** What says the duplicates a {@link #DUPLICATION_CUES} word asks after are drugs, beyond the MEDICATIONS cues. */
 	private static final Pattern DUPLICATED_DRUG_CUES = cues("therap(?:y|ies)", "treatments?",
@@ -793,6 +798,12 @@ public final class QueryScopeRouter {
 			TWO_OF_HER_MEDICATION_GROUPS_INTERACT, HER_MEDICATION_GROUP_SAFE_TOGETHER,
 			// "Are there any drug interactions with her current medications?"
 			"(?:are|is) there (?:any )?(?:drug )?interactions? (?:with|between|among) " + POSSESSIVE + " " + MEDICATIONS,
+			// "What is the most serious interaction she has?", "What is the severity of her interactions?", "Any contraindicated
+			// combinations?" — the screen, which states each interaction's rating (ADR Decision 412)
+			"what (?:is|are) the (?:most (?:serious|severe|dangerous|important)|worst) (?:drug )?interactions? (?:she|he|they|the "
+					+ "patient|this patient) (?:has|have)",
+			"what (?:is|are) the severit(?:y|ies) of " + POSSESSIVE + " (?:drug )?interactions?",
+			"(?:(?:are|is) there )?any contraindicated (?:drug )?combinations?",
 			// "Any drug interactions or allergy conflicts with her current medications?" — the safety screen (ADR Decision
 			// 318)
 			"(?:(?:are|is) there )?any (?:drug )?interactions? (?:or|and) (?:drug )?(?:allergy|allergic|allergies) (?:conflicts?|"
@@ -2249,6 +2260,15 @@ public final class QueryScopeRouter {
 	private static final List<Pattern> ALLERGIC_TO_HER_MEDICATIONS_SHAPES = shapes(
 			// "Is she allergic to any of her medications?", "Is she allergic to any of her current meds?"
 			"(?:is|are) " + SUBJECT + " allergic to any of " + POSSESSIVE + " " + MEDICATIONS,
+			// "Does she have any allergy to her current medicines?", "Which of her medications is she allergic to?", "Does she
+			// have any drug allergies that conflict with her medications?", "Any cross-reactivity with her allergies?" (ADR
+			// Decision 412)
+			"(?:does|do) " + SUBJECT + " have (?:an |any )?allerg(?:y|ies) to " + POSSESSIVE + " " + MEDICATIONS,
+			"which of " + POSSESSIVE + " " + MEDICATIONS + " (?:is|are) " + SUBJECT + " allergic to",
+			"(?:does|do) " + SUBJECT + " have (?:any )?(?:drug )?allerg(?:y|ies) that (?:conflicts?|clash(?:es)?) with "
+					+ POSSESSIVE + " " + MEDICATIONS,
+			"(?:(?:is|are) there )?any cross reactivity (?:with|between) " + POSSESSIVE + " (?:drug )?allerg(?:y|ies)(?: and "
+					+ POSSESSIVE + " " + MEDICATIONS + ")?",
 			// "Does she have an allergy to any of her medications?"
 			"(?:does|do) " + SUBJECT + " have (?:an |any )?allerg(?:y|ies) to any of " + POSSESSIVE + " " + MEDICATIONS,
 			// "Is she on anything she is allergic to?", "Is she taking any medication she's allergic to?"

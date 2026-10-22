@@ -575,21 +575,31 @@ public class DrugSafetyStatusTest extends BaseModuleContextSensitiveTest {
 	// missing condition rules said nothing about this ibuprofen check.
 	@Test
 	public void aPartnerOrderTheContraindicationArmDoesNotScreenDoesNotLimitItsConditionRules() throws IOException {
-		DrugSafetyValidator.SafetyCheckResult result = ibuprofenBesideAParacetamolOrderWithoutConditionRules(null);
+		DrugSafetyValidator.SafetyCheckResult result = ibuprofenBesideAParacetamolOrderWithoutConditionRules(null,
+				"Can I take ibuprofen?");
+		assertFalse(result.getIssues().contains("condition_rules_unavailable"), result.getIssues().toString());
+	}
+
+	// A recorded allergy alone does not bring her paracetamol order before the arm: a question about ibuprofen
+	// leaves that order outside its subject matter, so the order was never screened (ADR Decision 79).
+	@Test
+	public void aPartnerOrderOutsideTheQuestionsSubjectMatterDoesNotLimitItsConditionRules() throws IOException {
+		DrugSafetyValidator.SafetyCheckResult result = ibuprofenBesideAParacetamolOrderWithoutConditionRules(
+				"penicillin", "Can I take ibuprofen?");
 		assertFalse(result.getIssues().contains("condition_rules_unavailable"), result.getIssues().toString());
 	}
 
 	@Test
 	public void aPartnerOrderScreenedAgainstHerRecordsStillReportsItsMissingConditionRules() throws IOException {
 		DrugSafetyValidator.SafetyCheckResult result = ibuprofenBesideAParacetamolOrderWithoutConditionRules(
-				"penicillin");
+				"penicillin", "Can I take ibuprofen with her current medications?");
 		assertEquals("limited", result.getStatus());
 		assertTrue(result.getIssues().contains("condition_rules_unavailable"), result.getIssues().toString());
 	}
 
-	/** Her order 111 as paracetamol, whose condition rule is removed, and optionally a recorded allergy. */
+	/** Her order 111 as paracetamol, whose condition rule is removed, optionally a recorded allergy, asked about. */
 	private DrugSafetyValidator.SafetyCheckResult ibuprofenBesideAParacetamolOrderWithoutConditionRules(
-			String allergen) throws IOException {
+			String allergen, String question) throws IOException {
 		ObjectMapper mapper = new ObjectMapper();
 		ObjectNode dataset;
 		try (InputStream input = DrugSafetyStatusTest.class.getResourceAsStream("/chartsearchai/drug-reference.json")) {
@@ -625,7 +635,8 @@ public class DrugSafetyStatusTest extends BaseModuleContextSensitiveTest {
 		assertEquals(allergen == null, context.getAllergyTokens().isEmpty());
 		assertTrue(referenceService.findForActiveOrders(context).stream()
 				.anyMatch(ref -> "paracetamol".equals(ref.getId())), "precondition: her order resolves to paracetamol");
-		return validate(patient);
+		return validator.validateWithStatus("Ibuprofen 200 mg twice daily.", question, patient,
+				Collections.emptyList(), new PairChipExtent.Sink());
 	}
 
 	@Test

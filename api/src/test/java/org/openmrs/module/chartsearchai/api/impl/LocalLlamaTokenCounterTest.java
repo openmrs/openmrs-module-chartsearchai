@@ -27,7 +27,6 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 import org.openmrs.util.OpenmrsUtil;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 
@@ -153,8 +152,7 @@ public class LocalLlamaTokenCounterTest extends BaseModuleContextSensitiveTest {
 	 */
 	@Test
 	public void realEngineCountMatchesInferenceUsageAndArmsIdleUnload() {
-		Assumptions.assumeTrue(Boolean.getBoolean("chartsearchai.test.tokenCount.enabled"),
-				"Skipping: set -Dchartsearchai.test.tokenCount.enabled=true to run");
+		LlmEndpointTestSupport.assumeOptedIn("chartsearchai.test.tokenCount.enabled");
 		String directory = System.getProperty("chartsearchai.test.tokenCount.dataDirectory");
 		assertNotNull(directory,
 				"Set dataDirectory containing model.gguf and chartsearchai/bin/llama-server");
@@ -170,6 +168,9 @@ public class LocalLlamaTokenCounterTest extends BaseModuleContextSensitiveTest {
 					ChartSearchAiConstants.GP_LLM_IDLE_TIMEOUT_MINUTES, "1");
 			Context.getAdministrationService().setGlobalProperty(
 					ChartSearchAiConstants.GP_LLM_KV_CACHE_DIR, "off");
+			// A short reasoning cap keeps the one inference quick on a slower host.
+			Context.getAdministrationService().setGlobalProperty(
+					ChartSearchAiConstants.GP_LLM_REASONING_MAX_CHARS, "200");
 			Context.getAdministrationService().setGlobalProperty(
 					ChartSearchAiConstants.GP_LLM_SERVER_PORT,
 					System.getProperty("chartsearchai.test.tokenCount.port", "18095"));

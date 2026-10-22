@@ -364,7 +364,8 @@ public class LocalLlmEngine implements LlmEngine {
 		}
 		JsonNode root = MAPPER.readTree(response.body());
 		JsonNode count = root.get("input_tokens");
-		if (count == null || !count.canConvertToInt() || count.asInt() < 0) {
+		// An integral, non-negative count only: canConvertToInt alone reads -0.5 as 0 and 41.9 as 41.
+		if (count == null || !count.isIntegralNumber() || !count.canConvertToInt() || count.asInt() < 0) {
 			throw new APIException("Local chat input token count returned malformed JSON");
 		}
 		return count.asInt();

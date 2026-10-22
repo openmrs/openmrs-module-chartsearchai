@@ -12,6 +12,7 @@ package org.openmrs.module.chartsearchai.api.provider;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -164,6 +165,33 @@ public class HubClinicalAnswerProviderTest {
 				((Map<?, ?>) validation.getAnswer().getPayload().get("answerValidation")).get("status"));
 		assertEquals(Arrays.asList(TurnEventType.TURN_STARTED, TurnEventType.ANSWER_DONE,
 				TurnEventType.ANSWER_VALIDATION, TurnEventType.TURN_ERROR), sink.types());
+		assertTrue(TurnLifecycleValidator
+				.violations(provider.descriptor().getCapabilities(), sink.types()).isEmpty());
+	}
+
+	// A Hub that announces its In-Depth inside answer_done and fails before indepth_pending still leaves the
+	// In-Depth open; it is opened and settled as interrupted, in lifecycle order, before the error.
+	@Test
+	public void aHubErrorBeforeIndepthPendingSettlesTheInDepthTheAnswerAnnounced() throws Exception {
+		Map<String, Object> answered = answerPayload("Aspirin 81mg.");
+		answered.put("answerValidation", Collections.singletonMap("status", "checked"));
+		answered.put("inDepth", Collections.singletonMap("status", "pending"));
+		ScriptedHubTransport transport = new ScriptedHubTransport();
+		transport.events = Arrays.asList(wire("answer_done", answered),
+				wire("error", Collections.<String, Object>singletonMap("code", "review_evidence_overflow")));
+		HubClinicalAnswerProvider provider = provider(transport,
+				"http://hub.example/v1/chat/completions");
+		CollectingSink sink = new CollectingSink();
+
+		TurnResult result = provider.execute(request("product-profile-a"), sink,
+				CancellationSignal.NONE).toCompletableFuture().get();
+
+		assertEquals(TurnEventType.TURN_ERROR, result.getTerminalState());
+		assertEquals(Arrays.asList(TurnEventType.TURN_STARTED, TurnEventType.ANSWER_DONE,
+				TurnEventType.INDEPTH_PENDING, TurnEventType.INDEPTH_ERROR, TurnEventType.TURN_ERROR), sink.types());
+		TurnEvent settled = sink.events.stream().filter(event -> event.getType() == TurnEventType.INDEPTH_ERROR)
+				.findFirst().orElseThrow(AssertionError::new);
+		assertNotEquals("pending", ((Map<?, ?>) settled.getAnswer().getPayload().get("inDepth")).get("status"));
 		assertTrue(TurnLifecycleValidator
 				.violations(provider.descriptor().getCapabilities(), sink.types()).isEmpty());
 	}

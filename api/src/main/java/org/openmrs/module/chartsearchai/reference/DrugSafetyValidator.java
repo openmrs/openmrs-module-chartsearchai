@@ -314,14 +314,18 @@ public class DrugSafetyValidator {
 	private static final Pattern DOSE_MG = Pattern.compile("(\\d+(?:\\.\\d+)?)\\s*mg\\b");
 
 	/**
-	 * A dose statement {@link #DOSE_MG} cannot read: a negative amount, or a mass in another unit. The
-	 * warning arm leaves these unparsed (it misses rather than misreads), so the coverage pass reads them
-	 * (a range's hyphen, {@code 500-1000 mg} or {@code 500 - 1000 mg}, follows a digit and is not a sign)
-	 * to say the dose was not assessed instead of reporting the ceiling screened. A unit followed by
-	 * {@code /} is a concentration ({@code 10 g/dL}), not a dose.
+	 * A dose statement {@link #DOSE_MG} cannot read as stated: a negative amount (hyphen or Unicode
+	 * minus), which the warning arm reads by its magnitude, or a mass in another unit, which it does not
+	 * read at all. The coverage pass reads them to say the dose was not assessed instead of reporting the
+	 * ceiling screened. A range's hyphen ({@code 500-1000 mg}, {@code 500 - 1000 mg}) follows a digit and
+	 * is not a sign; the look-behind allows up to ten spaces, Java's look-behind being bounded. A unit
+	 * per volume is a concentration ({@code 10 g/dL}, {@code 250 mg/5 ml}), not a dose; per day, per kg
+	 * or per dose is a dose.
 	 */
 	private static final Pattern UNREAD_DOSE = Pattern.compile(
-			"(?<![\\d.]\\s{0,3})-\\s*\\d+(?:\\.\\d+)?\\s*mg\\b|\\d+(?:\\.\\d+)?\\s*(?:g|gm|grams?|mcg|ug|\u00b5g|micrograms?|mgs|milligrams?)\\b(?!\\s*/)");
+			"(?<![\\d.]\\s{0,10})[-\u2212]\\s*\\d+(?:\\.\\d+)?\\s*mg\\b"
+					+ "|\\d+(?:\\.\\d+)?\\s*(?:g|gm|grams?|mcg|ug|\u00b5g|micrograms?|mgs|milligrams?)\\b"
+					+ "(?!\\s*/\\s*(?:\\d+(?:\\.\\d+)?\\s*)?(?:ml|dl|l)\\b)");
 
 	private static final Pattern EVERY_N_HOURS = Pattern.compile("(?:every\\s+(\\d+)\\s*(?:hours|hrs|hr|h)\\b|q(\\d+)h\\b|(\\d+)\\s*hourly\\b)");
 
@@ -14733,7 +14737,8 @@ public class DrugSafetyValidator {
 				if (band == null) {
 					continue;
 				}
-				// A dose the warning arm could not read was not compared at all, whatever else was stated.
+				// A dose the warning arm could not read, or read only by its magnitude, was not assessed as
+				// stated, whatever else was stated.
 				if (unreadDose && (dailyCeilingApplies(band) || perKgCeilingPublished(band))) {
 					coverage.limited("dose_not_assessable");
 				}

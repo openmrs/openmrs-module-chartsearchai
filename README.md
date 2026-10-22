@@ -1209,7 +1209,8 @@ bodies; they do not impose a whole-profile generation timeout.
 
 The adapter reads `chartsearchai.hub.endpointUrl` from OpenMRS global properties;
 it must name the Hub's `/v1/chat/completions` endpoint. An unset endpoint makes the
-provider unavailable. Hub readiness means the endpoint is configured; unlike the
+provider unavailable. Hub readiness means the endpoint is configured and names that
+path; unlike the
 bundled provider's remote engine, the Hub is not probed, so an unreachable Hub is
 reported when profiles are listed or a turn runs. The optional Bearer token belongs
 in the runtime property `chartsearchai.hub.apikey`, never in a global property.

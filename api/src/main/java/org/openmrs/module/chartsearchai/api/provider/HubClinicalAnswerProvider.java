@@ -326,9 +326,15 @@ public class HubClinicalAnswerProvider implements ClinicalAnswerProvider {
 		Object inDepth = before.getPayload().get("inDepth");
 		boolean inDepthInterrupted = inDepth instanceof Map
 				&& "pending".equals(((Map<String, Object>) inDepth).get("status"));
-		if (inDepthInterrupted && emitted.contains(TurnEventType.INDEPTH_PENDING)
-				&& !emitted.contains(TurnEventType.INDEPTH_DONE)
+		if (inDepthInterrupted && !emitted.contains(TurnEventType.INDEPTH_DONE)
 				&& !emitted.contains(TurnEventType.INDEPTH_ERROR)) {
+			// The Hub may announce its In-Depth inside answer_done and fail before indepth_pending; the
+			// lifecycle opens an In-Depth before settling it, so the delivered envelope opens it here.
+			if (!emitted.contains(TurnEventType.INDEPTH_PENDING)) {
+				events.accept(TurnEvent.withAnswer(TurnEventType.INDEPTH_PENDING,
+						sequence.getAndIncrement(), PROVIDER_ID, before));
+				emitted.add(TurnEventType.INDEPTH_PENDING);
+			}
 			events.accept(TurnEvent.withAnswer(TurnEventType.INDEPTH_ERROR,
 					sequence.getAndIncrement(), PROVIDER_ID, settled));
 			emitted.add(TurnEventType.INDEPTH_ERROR);

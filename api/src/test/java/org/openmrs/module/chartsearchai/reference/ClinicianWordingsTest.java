@@ -257,6 +257,22 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 				&& !interact.contains("can be given"), interact);
 	}
 
+	/**
+	 * A question naming two drugs lists neither of them (ADR Decision 409): the reader of a list tries each closing fragment of
+	 * the question as a proposal, and Decision 405's reading of a drug and a word saying it is safe read the fragment "safe
+	 * with nevirapine" as one — so "Is fluconazole safe with nevirapine?" was answered "… The chart holds no active order for
+	 * Fluconazole." on the 3.7.1 standalone, for every patient on nevirapine.
+	 */
+	@Test
+	public void aQuestionNamingTwoDrugsListsNeither() {
+		for (String question : new String[] { "Is fluconazole safe with nevirapine?", "Is warfarin safe with aspirin?" }) {
+			assertTrue(chart(question).getListedDrugsWithNoActiveOrder().isEmpty(), question + " lists no drug: "
+					+ chart(question).getListedDrugsWithNoActiveOrder());
+		}
+		assertTrue(!chart("The patient is currently on Lamivudine, is it safe to give fluconazole?")
+				.getListedDrugsWithNoActiveOrder().isEmpty(), "precondition: a list before a proposal is read");
+	}
+
 	private static org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart chart(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

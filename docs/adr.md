@@ -21503,3 +21503,23 @@ every patient.
 Decision 220's shapes, so each is answered by Decision 309's composition of several drugs.
 
 Pinned by `ClinicianWordingsTest.threeDrugsListedAreReadAsAList`.
+
+## Decision 409: The reader of a list asks the shapes alone
+
+**Status: Accepted** (October 2026) — found in the full 669-question run on the 3.7.1 standalone on 2026-10-22.
+
+### Context
+
+`DrugReferenceInjector.listedBeforeTheProposal` (#515) tries each closing fragment of a question as a proposal and reads every
+drug named before the first that is one as listed. Decision 405 let a drug, the patient and a word saying it is safe be read as a
+whole question, and the fragment *"safe with nevirapine"* is such words: *"Is fluconazole safe with nevirapine?"* listed
+fluconazole, and was answered with *"The chart holds no active order for Fluconazole."* appended for every patient on nevirapine —
+a line about nothing the question asked. 748 answers to 17 such two-drug questions moved, the pair line of several re-owned by
+the drug named second.
+
+### The decision
+
+The list reader asks `QueryScopeRouter.fitsAProposalShape` — the shapes alone — as `UnrecognisedDrugName` does since Decision 396:
+the residual reading is of a whole question and never of a fragment of one.
+
+Pinned by `ClinicianWordingsTest.aQuestionNamingTwoDrugsListsNeither`.

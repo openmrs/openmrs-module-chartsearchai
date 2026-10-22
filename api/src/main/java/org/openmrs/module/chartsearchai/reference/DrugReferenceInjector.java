@@ -5103,7 +5103,9 @@ public class DrugReferenceInjector {
 			// Never a question asking whether NOT to give the drug: the list answer opens "No if the patient is on …",
 			// which would answer it backwards (ADR Decision 181).
 			if (from == 0 || named[from]
-					|| !QueryScopeRouter.asksWhetherToGiveADrug(markedWordsFrom(folded, named, from))
+					// The shapes alone: a closing FRAGMENT is no whole question, which is all the residual reading reads (ADR
+					// Decision 409) — "safe with nevirapine" read as one listed the fluconazole before it.
+					|| !QueryScopeRouter.fitsAProposalShape(markedWordsFrom(folded, named, from))
 					|| QueryScopeRouter.asksWhetherNotToGiveADrug(markedWordsFrom(folded, named, from))) {
 				continue;
 			}

@@ -1059,8 +1059,18 @@ public class DrugSafetyValidator {
 					coverage.limited("mapping_incomplete");
 				}
 			}
-			for (List<DrugReference> rows : resolvedRows.values()) {
-				if (warnContra && rows.stream().noneMatch(DrugReferenceLoad.Arm.CONDITION_RULES::publishedBy)) {
+			// Condition rules are measured where the contraindication arm screens: every drug in play, and
+			// her other orders only when the chart records something the order-driven arm can screen them
+			// against. A partner order that arm never reaches cannot limit the check by lacking rules.
+			Set<Object> inPlaySubstances = new HashSet<Object>();
+			for (DrugReference played : inPlay) {
+				inPlaySubstances.add(played.substanceGroupKey());
+			}
+			boolean ordersScreenable = hasContraindicationRecords(context);
+			for (Map.Entry<Object, List<DrugReference>> group : resolvedRows.entrySet()) {
+				List<DrugReference> rows = group.getValue();
+				if (warnContra && (ordersScreenable || inPlaySubstances.contains(group.getKey()))
+						&& rows.stream().noneMatch(DrugReferenceLoad.Arm.CONDITION_RULES::publishedBy)) {
 					coverage.limited("condition_rules_unavailable");
 				}
 				if (warnInteractions && rows.stream().noneMatch(DrugReferenceLoad.Arm.INTERACTIONS::publishedBy)

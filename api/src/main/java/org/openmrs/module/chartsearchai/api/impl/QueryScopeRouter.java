@@ -572,12 +572,26 @@ public final class QueryScopeRouter {
 			"(?:please )?check (?:for )?(?:any )?ddis? (?:for|with|of|on) " + D,
 			D + " (?:with|and) " + POSSESSIVE + " " + MEDICATIONS);
 
+	/** An alternative to one drug, asked for (ADR Decision 418): no finding chooses one, and the answer says so. */
+	private static final String AN_ALTERNATIVE_TO = "(?:(?:is|are) there (?:a |an |any )?(?:safer |better )?alternatives? (?:to|for) (?:"
+			+ POSSESSIVE + " )?" + D + "(?: (?:for|in) " + PATIENT + ")?"
+			+ "|what (?:else )?(?:can|could|should|may) (?:i|we) (?:use|give|prescribe) instead of (?:" + POSSESSIVE + " )?" + D
+			+ "|(?:can|could|should|may) (?:i|we) replace (?:" + POSSESSIVE + " )?" + D + " with something (?:safer|else|better))";
+
+	/** Whether {@code words} ask for an alternative to their one drug (ADR Decision 418). */
+	public static boolean asksForAnAlternativeTo(List<String> wordsWithTheDrugMarked) {
+		return fitsAShape(wordsWithTheDrugMarked, shapes(AN_ALTERNATIVE_TO));
+	}
+
 	/**
 	 * Which of her medications interact with ONE drug — "Which of her medications interact with rifampicin?", "Which of her
 	 * drugs is the problem with warfarin?" — answered with the findings relating it to them and neither "Yes" nor "No"
 	 * (ADR Decision 319): "Yes" does not answer "which".
 	 */
 	private static final List<Pattern> WHICH_OF_HER_MEDICATIONS_INTERACT_SHAPES = shapes(
+			// "Is there a safer alternative to fluconazole?", "What can I use instead of fluconazole?" — what was found about it,
+			// under a lead choosing no alternative (ADR Decision 418)
+			AN_ALTERNATIVE_TO,
 			// "If I start fluconazole, what interactions should I expect?" (ADR Decision 414)
 			"if (?:i|we) (?:start|give|add|prescribe) (?:" + PATIENT + " )?(?:on )?" + D + " what (?:drug )?interactions (?:should|"
 					+ "would|might|could|do) (?:i|we) expect",
@@ -841,6 +855,8 @@ public final class QueryScopeRouter {
 					+ "treatment)",
 			"(?:please )?(?:review|check) " + POSSESSIVE + " (?:current |active )?(?:medications|meds|medicines|drugs|prescriptions|"
 					+ "regimen|treatment)",
+			// "Do a medication review" (ADR Decision 418)
+			"(?:please )?(?:do|perform|run) a (?:medication|medicine|drug|med) review",
 			"which of " + POSSESSIVE + " (?:medications|meds|medicines|drugs) (?:is|are) causing (?:the|this|an?) interactions?",
 			"why (?:does|do) (?:she|he|they|the patient|this patient) have (?:a |any )?(?:drug |safety |interaction )?warnings?",
 			"what (?:does|do) (?:the|this|that) (?:drug |safety |interaction )?warnings? mean",
@@ -1221,6 +1237,15 @@ public final class QueryScopeRouter {
 	private static final String ANY_INTERACTION_BETWEEN = "(?:are there |is there )?(?:any |an )?(?:drug )?interactions? between "
 			+ HER_D + " and " + HER_D;
 
+	/** How to manage the interaction of two drugs (ADR Decision 418): no finding advises it, and the answer says so. */
+	private static final String MANAGE_THE_INTERACTION = "(?:how (?:do|should|can|would) (?:i|we) manage|what (?:should|do|can|would)"
+			+ " (?:i|we) do about) (?:the|this|that) interactions? between " + HER_D + " and " + HER_D;
+
+	/** Whether {@code words} ask how to manage the interaction of two drugs (ADR Decision 418). */
+	public static boolean asksHowToManageAnInteraction(List<String> wordsWithTheDrugsMarked) {
+		return fitsAShape(wordsWithTheDrugsMarked, shapes(MANAGE_THE_INTERACTION));
+	}
+
 	/** Which of two drugs to stop, or which causes their interaction (ADR Decision 411). */
 	private static final String WHICH_OF_TWO_TO_STOP = "(?:which (?:drug |one |medication |medicine |of them |of the two )?"
 			+ "(?:should|do|must) (?:i|we) (?:stop|change|discontinue|hold|switch) " + HER_D + " or " + HER_D
@@ -1239,7 +1264,10 @@ public final class QueryScopeRouter {
 			+ PATIENT + " )?(?:on )?" + HER_D
 			// "Which drug should I stop, aspirin or ibuprofen?", "Is aspirin or ibuprofen causing the interaction?" — what relates
 			// them, under a lead choosing neither (ADR Decision 411)
-			+ "|" + WHICH_OF_TWO_TO_STOP;
+			+ "|" + WHICH_OF_TWO_TO_STOP
+			// "Explain the interaction between X and Y", "How do I manage the interaction between X and Y?" (ADR Decision 418)
+			+ "|(?:please )?explain the interactions? between " + HER_D + " and " + HER_D
+			+ "|" + MANAGE_THE_INTERACTION;
 
 	private static final List<Pattern> TWO_DRUGS_SHAPES = shapes(
 			// "Is it safe to combine ibuprofen and celecoxib?", "Is it ok to give ibuprofen with celecoxib together?"
@@ -2374,7 +2402,7 @@ public final class QueryScopeRouter {
 			"(?:which|what) " + CHOSEN + " (?:is|are|would be|will be|might be|could be) (?:the )?(?:most )?" + SAFE_WORD
 					+ "(?: (?:option|choice))?" + FOR_HER,
 			// "What is the safest painkiller for her?", "Which is the best antibiotic to give her?"
-			"(?:which|what) (?:is|are|would be) (?:the )?(?:most )?" + SAFE_WORD + " (?:\\p{L}+ ){0,2}" + DRUG_NOUN + FOR_HER,
+			"(?:which|what) (?:is|are|would be) (?:the |a |an )?(?:most )?" + SAFE_WORD + " (?:\\p{L}+ ){0,2}" + DRUG_NOUN + FOR_HER,
 			// "What painkiller can I safely give her?", "What can I give her?", "Which antibiotic should I use for her?"
 			"(?:which|what) (?:" + CHOSEN + " )?(?:can|could|should|may) (?:i|we) (?:safely )?" + GIVE_WORD
 					+ "(?: (?:to )?" + PATIENT + ")?(?: on)?(?: safely)?(?: (?:for|to) " + PATIENT + ")?",

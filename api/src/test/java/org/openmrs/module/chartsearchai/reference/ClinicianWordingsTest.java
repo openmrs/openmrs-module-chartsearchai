@@ -444,6 +444,38 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/**
+	 * Explaining or managing an interaction, an alternative to a drug, a safer drug of a kind and a medication review are
+	 * answered with what the check found, under a lead saying what it does not do (ADR Decision 418). On the 3.7.1 standalone
+	 * "How do I manage the interaction between aspirin and ibuprofen?" was answered "No — Acetylsalicylic acid (aspirin) should
+	 * not be given" for patients on neither.
+	 */
+	@Test
+	public void explainingManagingOrReplacingIsAnsweredWithWhatTheCheckFound() {
+		String pair = ask("Does warfarin interact with metronidazole?");
+		assertNotNull(pair, "precondition: the module answers it");
+		assertEquals(pair, ask("Explain the interaction between warfarin and metronidazole"));
+		for (String question : new String[] { "How do I manage the interaction between warfarin and metronidazole?",
+				"What should I do about the interaction between warfarin and metronidazole?" }) {
+			assertEquals(DrugReferenceInjector.MANAGES_NO_INTERACTION_LEAD + "\n" + pair, ask(question), question);
+		}
+		String which = ask("Which of her medications interact with warfarin?");
+		assertNotNull(which, "precondition: the module answers it");
+		for (String question : new String[] { "Is there a safer alternative to warfarin?", "What can I use instead of warfarin?",
+				"Is there an alternative to warfarin for her?" }) {
+			assertEquals(DrugReferenceInjector.CHOOSES_NO_ALTERNATIVE_LEAD + "\n" + which, ask(question), question);
+		}
+		// Named as hers, of a patient not on it: that she is not on it, first (ADR Decision 260).
+		assertEquals(DrugReferenceInjector.CHOOSES_NO_ALTERNATIVE_LEAD + "\nWarfarin is not one of this patient's active "
+				+ "medications.\n" + which, ask("Can I replace her warfarin with something safer?"));
+		String choice = ask("What is the safest painkiller for her?");
+		assertNotNull(choice, "precondition: the module answers it");
+		assertEquals(choice, ask("What is a safer painkiller for her?"));
+		String screen = ask("Review her medications");
+		assertNotNull(screen, "precondition: the module answers it");
+		assertEquals(screen, ask("Do a medication review"));
+	}
+
 	private static org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart chart(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

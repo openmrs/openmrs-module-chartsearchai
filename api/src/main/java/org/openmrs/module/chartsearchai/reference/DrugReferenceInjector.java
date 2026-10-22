@@ -1613,6 +1613,15 @@ public class DrugReferenceInjector {
 		if (purpose != null) {
 			moduleAnswer = moduleAnswer + "\n" + PURPOSE_NOT_WEIGHED_OPENING + purpose + ").";
 		}
+		// How to manage an interaction, or an alternative to a drug: what the check found, under a lead saying it advises
+		// neither (ADR Decision 418).
+		if (moduleAnswer != null && !questionDrugs.isEmpty()
+				&& QueryScopeRouter.asksHowToManageAnInteraction(wordsBesideItsNames(question, questionDrugs))) {
+			moduleAnswer = MANAGES_NO_INTERACTION_LEAD + "\n" + moduleAnswer;
+		} else if (moduleAnswer != null && !questionDrugs.isEmpty()
+				&& QueryScopeRouter.asksForAnAlternativeTo(wordsBesideItsNames(question, questionDrugs))) {
+			moduleAnswer = CHOOSES_NO_ALTERNATIVE_LEAD + "\n" + moduleAnswer;
+		}
 		// Which of two to stop, or which causes their interaction: what relates them, under a lead choosing neither (ADR
 		// Decision 411).
 		if (moduleAnswer != null && !questionDrugs.isEmpty() && !moduleAnswer.startsWith(COMPARES_NO_DRUGS_LEAD)
@@ -8040,6 +8049,14 @@ public class DrugReferenceInjector {
 
 	/** How the answer to a question asking the module to choose a drug for her opens (ADR Decision 293): no finding
 	 *  chooses a drug or clears one, and the screen that follows is of the medications she already takes. */
+	/** What opens the answer to how to manage an interaction (ADR Decision 418): no finding advises it. */
+	public static final String MANAGES_NO_INTERACTION_LEAD = "This check does not advise how to manage an interaction: it states"
+			+ " what the data relates.";
+
+	/** What opens the answer to an alternative to a drug, asked for (ADR Decision 418): no finding chooses one. */
+	public static final String CHOOSES_NO_ALTERNATIVE_LEAD = "This check does not choose an alternative to a drug: it states"
+			+ " what it found about the drug asked about.";
+
 	static final String CHOOSES_NO_DRUG_LEAD = "This check does not choose a medication to give this patient, and states"
 			+ " none as safe: it screens only the medications this patient is already taking.";
 

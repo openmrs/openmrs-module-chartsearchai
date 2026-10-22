@@ -21708,3 +21708,27 @@ question as about her active orders only where its words carry a medication cue,
 in whatever words it is asked.
 
 Pinned by `ScreenBesideHerOwnConflictsTest.aScreenInWordsOfNoMedicationCueStatesHisOwnConflictsToo`.
+
+## Decision 418: Explaining or managing an interaction, or an alternative to a drug, is answered with what the check found under a lead saying what it does not do
+
+**Status: Accepted** (October 2026) — found asking follow-up questions of 15 patients on the 3.7.1 standalone on 2026-10-23.
+
+### Context
+
+*"How do I manage the interaction between aspirin and ibuprofen?"* was answered *"No — Acetylsalicylic acid (aspirin) should not be
+given"* for patients on neither, and *"Explain the interaction between aspirin and ibuprofen"* and *"What should I do about the
+interaction between rifampicin and nevirapine?"* went to the model too. *"Is there a safer alternative to fluconazole?"*, *"What can I
+use instead of fluconazole?"* and *"Can I replace her ibuprofen with something safer?"* were answered *"The records do not address a
+safer alternative"* or *"No — Fluconazole should not be given"*. *"What is a safer painkiller for her?"* and *"Do a medication review"*
+went to the model with nothing to answer from.
+
+### The decision
+
+- *"Explain the interaction between X and Y"* is whether the two interact (Decision 220's shapes).
+- *"How do I manage / What should I do about the interaction between X and Y?"* is the same, under
+  `DrugReferenceInjector.MANAGES_NO_INTERACTION_LEAD`: the data relates the pair and advises no management.
+- An alternative to X — *"Is there a safer alternative to X?"*, *"What can I use instead of X?"*, *"Can I replace her X with something
+  safer?"* — is which of her medications interact with X (Decision 319), under `CHOOSES_NO_ALTERNATIVE_LEAD`.
+- *"What is a safer painkiller for her?"* is Decision 293's choice of drug, *"a"* beside *"the"*; *"Do a medication review"* a screen.
+
+Pinned by `ClinicianWordingsTest.explainingManagingOrReplacingIsAnsweredWithWhatTheCheckFound`.

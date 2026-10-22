@@ -1056,6 +1056,9 @@ public class DrugSafetyValidator {
 		// exist. This bean is a Spring singleton, so a field memo is one unsynchronized structure shared
 		// by every concurrent request.
 		Map<Object, List<DrugReference>> resolvedRows = resolvedSubstanceRows(inPlay, orderEntries);
+		// Whether one of her other orders lacks condition rules; it limits the check only once the
+		// order-driven arm below has screened her orders, which is not known yet.
+		boolean ordersLackConditionRules = false;
 		if (coverage != null) {
 			coverage.screened(resolvedRows.keySet());
 			if (!warnDose && !warnInteractions && !warnContra) {
@@ -1068,19 +1071,22 @@ public class DrugSafetyValidator {
 					coverage.limited("mapping_incomplete");
 				}
 			}
-			// Condition rules are measured where the contraindication arm screens: every drug in play, and
-			// her other orders only when the chart records something the order-driven arm can screen them
-			// against. A partner order that arm never reaches cannot limit the check by lacking rules.
+			// Condition rules are measured where the contraindication arm screens: every drug in play here,
+			// and her other orders only where the order-driven arm below compared them with her records (its
+			// subject-matter gate decides that). A partner order that arm never reaches cannot limit the
+			// check by lacking rules.
 			Set<Object> inPlaySubstances = new HashSet<Object>();
 			for (DrugReference played : inPlay) {
 				inPlaySubstances.add(played.substanceGroupKey());
 			}
-			boolean ordersScreenable = hasContraindicationRecords(context);
 			for (Map.Entry<Object, List<DrugReference>> group : resolvedRows.entrySet()) {
 				List<DrugReference> rows = group.getValue();
-				if (warnContra && (ordersScreenable || inPlaySubstances.contains(group.getKey()))
-						&& rows.stream().noneMatch(DrugReferenceLoad.Arm.CONDITION_RULES::publishedBy)) {
-					coverage.limited("condition_rules_unavailable");
+				if (warnContra && rows.stream().noneMatch(DrugReferenceLoad.Arm.CONDITION_RULES::publishedBy)) {
+					if (inPlaySubstances.contains(group.getKey())) {
+						coverage.limited("condition_rules_unavailable");
+					} else {
+						ordersLackConditionRules = true;
+					}
 				}
 				if (warnInteractions && rows.stream().noneMatch(DrugReferenceLoad.Arm.INTERACTIONS::publishedBy)
 						&& rows.stream().noneMatch(DrugReferenceLoad.Arm.ATC_CODES::publishedBy)) {
@@ -1359,6 +1365,9 @@ public class DrugSafetyValidator {
 					recordedAllergens, SubjectMatter.of(scope, question, answer,
 							attribution.citedChartRecords, attribution.referenceMaterial),
 					allergicSubstanceSupplier, bridgedOrders);
+		}
+		if (coverage != null && ordersScreened && ordersLackConditionRules) {
+			coverage.limited("condition_rules_unavailable");
 		}
 		// LAST, so the patient's own findings lead: a chip about their allergy or their active order
 		// is a fact about them, and outranks a reference lookup about a pair they may not be on.

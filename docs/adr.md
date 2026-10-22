@@ -21612,3 +21612,30 @@ nevirapine"*, *"fluconazole with her meds"*, *"DDI check fluconazole"* and *"Am 
   X"* whether X interacts with her medications; *"Tell me about X"* which of her medications interact with X (Decision 319).
 
 Pinned by `ClinicianWordingsTest.terseAndInformalWordingsAreAnsweredAsTheQuestionsTheyAsk`.
+
+## Decision 414: Technical, conditional and sequential wordings are answered as the questions they ask
+
+**Status: Accepted** (October 2026) — found asking 30 further wordings of 15 patients on the 3.7.1 standalone on 2026-10-22.
+
+### Context
+
+*"Can I give fluconazole after she finishes rifampicin?"* was answered *"No — Fluconazole should not be given"* for patients on no
+rifampicin, and *"Is it safe to give fluconazole and then rifampicin later?"* alike. *"Is fluconazole hepatotoxic with her other
+meds?"* carried no word of Decision 399's safety list, so it was read as a question about the drug's record and answered *"The
+records do not address fluconazole hepatotoxicity"* for every patient. Ten more — *"Can fluconazole be coadministered with her
+drugs?"*, *"Is concomitant use of fluconazole safe for this patient?"*, *"If I gave her fluconazole, would it interact with
+anything?"*, *"Is there a risk of QT prolongation if I give her fluconazole?"*, *"Will fluconazole increase bleeding risk?"* among
+them — went to the model, which cleared drugs as before.
+
+### The decision
+
+- One drug given after another — *"after she finishes Y"*, *"and then Y later"* — is whether the two interact, closing Decision
+  394's line that the check did not weigh when the drug would be given (`QueryScopeRouter.SEQUENCE`).
+- A named effect — QT prolongation, bleeding risk, hepatotoxicity with her medications — is Decision 243's negated proposal: what
+  the check found, with no *"Yes"* or *"No"*, since the findings are not weighed effect by effect.
+- *"If I start X, what interactions should I expect?"* is which of her medications interact with X.
+- Decision 396's residual reading takes *coadminister*, *receive*, *gave* as words of giving, *recommended* as one of safety,
+  and *verify*, *concomitant*, *this patient's* as filler.
+- A question naming her medications is never one about a drug's record alone.
+
+Pinned by `ClinicianWordingsTest.technicalConditionalAndSequentialWordingsAreAnsweredAsTheQuestionsTheyAsk`.

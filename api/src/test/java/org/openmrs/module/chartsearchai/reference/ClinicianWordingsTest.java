@@ -349,6 +349,41 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		assertTrue(!chart("Is she able to take warfarin?").asksOnlyAboutADrugsRecord(), "no question about its record alone");
 	}
 
+	/**
+	 * Technical, conditional and sequential wordings are answered as the questions they ask (ADR Decision 414). On the 3.7.1
+	 * standalone "Can I give fluconazole after she finishes rifampicin?" was answered "No — Fluconazole should not be given"
+	 * for patients on no rifampicin, and "Is fluconazole hepatotoxic with her other meds?" was read as a question about the
+	 * drug's record and handed the model nothing to answer it from.
+	 */
+	@Test
+	public void technicalConditionalAndSequentialWordingsAreAnsweredAsTheQuestionsTheyAsk() {
+		String[][] pairs = {
+			{ "Can warfarin be coadministered with her drugs?", "Can I give her warfarin?" },
+			{ "Is concomitant use of warfarin safe for this patient?", "Can I give her warfarin?" },
+			{ "Verify warfarin is safe for her", "Can I give her warfarin?" },
+			{ "Is warfarin compatible with this patient's regimen?", "Can I give her warfarin?" },
+			{ "Can the patient receive warfarin?", "Can I give her warfarin?" },
+			{ "Is warfarin recommended for her?", "Can I give her warfarin?" },
+			{ "If I gave her warfarin, would it interact with anything?", "Does warfarin interact with her medications?" },
+			{ "If I start warfarin, what interactions should I expect?", "Which of her medications interact with warfarin?" },
+			{ "Is there a risk of QT prolongation if I give her warfarin?", "Is there any reason not to give her warfarin?" },
+			{ "Will warfarin increase bleeding risk?", "Is there any reason not to give her warfarin?" },
+			{ "Is warfarin hepatotoxic with her other meds?", "Is there any reason not to give her warfarin?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+		String pair = ask("Does fluconazole interact with rifampicin?");
+		assertNotNull(pair, "precondition: the module answers it");
+		for (String question : new String[] { "Can I give fluconazole after she finishes rifampicin?",
+				"Is it safe to give fluconazole and then rifampicin later?" }) {
+			assertEquals(pair + "\n" + DrugReferenceInjector.TIMING_NOT_WEIGHED, ask(question), question);
+		}
+		assertTrue(!chart("Is warfarin hepatotoxic with her other meds?").asksOnlyAboutADrugsRecord(),
+			"a question naming her medications is no question about the drug's record alone");
+	}
+
 	private static org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart chart(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

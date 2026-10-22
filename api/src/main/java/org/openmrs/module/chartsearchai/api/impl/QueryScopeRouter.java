@@ -455,6 +455,14 @@ public final class QueryScopeRouter {
 			"how (?:safe|risky|dangerous) is " + D + "(?: (?:for|in) " + PATIENT + ")?",
 			"how (?:safe|risky|dangerous) (?:is it )?to (?:give|start|prescribe|add) (?:" + PATIENT + " )?(?:on )?" + D,
 			"rate the risk of (?:giving|starting|prescribing|adding) (?:" + PATIENT + " )?(?:on )?" + D,
+			// "Is there a risk of QT prolongation if I give her fluconazole?", "Will fluconazole increase bleeding risk?", "Is
+			// fluconazole hepatotoxic with her other meds?" — an effect the findings do not weigh one by one, answered with what
+			// they found and no "Yes" or "No" (ADR Decision 414)
+			"is there (?:a |any )?(?:increased )?risk of (?:\\p{L}+ ){1,3}(?:if|when) (?:i|we) (?:give|add|start|prescribe) (?:"
+					+ PATIENT + " )?(?:on )?" + D,
+			"(?:will|would|could|does|can) " + D + " (?:increase|raise|worsen) (?:" + POSSESSIVE + " |the )?(?:\\p{L}+ ){1,2}risk",
+			"is " + D + " (?:hepatotoxic|nephrotoxic|cardiotoxic|ototoxic|myelotoxic) (?:with|alongside) " + POSSESSIVE
+					+ " (?:other )?" + MEDICATIONS,
 			// "Is fluconazole not safe for her?", "Can't I give her fluconazole?" — asked in the negative, answered with no "Yes"
 			// or "No" (ADR Decision 406)
 			"is " + D + " (?:not (?:safe|ok|okay|appropriate|suitable)|unsafe)(?: (?:for|in) " + PATIENT + ")?",
@@ -570,6 +578,9 @@ public final class QueryScopeRouter {
 	 * (ADR Decision 319): "Yes" does not answer "which".
 	 */
 	private static final List<Pattern> WHICH_OF_HER_MEDICATIONS_INTERACT_SHAPES = shapes(
+			// "If I start fluconazole, what interactions should I expect?" (ADR Decision 414)
+			"if (?:i|we) (?:start|give|add|prescribe) (?:" + PATIENT + " )?(?:on )?" + D + " what (?:drug )?interactions (?:should|"
+					+ "would|might|could|do) (?:i|we) expect",
 			// "Tell me about fluconazole" — what it does among her medications, with no "Yes" or "No" (ADR Decision 413)
 			"(?:please )?tell me about " + D,
 			// "Do I need to adjust any doses if I start rifampicin?" (ADR Decision 411)
@@ -1239,7 +1250,13 @@ public final class QueryScopeRouter {
 	private static final List<Pattern> TWO_DRUGS_INTERACT_SHAPES = shapes(DOES_ONE_INTERACT_WITH_THE_OTHER, ANY_INTERACTION_BETWEEN,
 			CHANGE_HERS_IF_STARTING,
 			// "Fluconazole and nevirapine", "Fluconazole plus nevirapine" — two names and a joining word alone (ADR Decision 413)
-			HER_D + " (?:and|plus|with) " + HER_D);
+			HER_D + " (?:and|plus|with) " + HER_D,
+			// "Can I give fluconazole after she finishes rifampicin?", "Is it safe to give fluconazole and then rifampicin later?"
+			// — what relates the two; when each is given is a timing no finding weighs (ADR Decision 414)
+			"(?:can|could|may) (?:i|we) (?:give|start) (?:" + PATIENT + " )?(?:on )?" + HER_D + " after (?:she|he|they) (?:finishes|"
+					+ "stops|completes|has (?:finished|stopped|completed)|is done with) " + HER_D,
+			"is it (?:safe|ok|okay|fine) to (?:give|start) (?:" + PATIENT + " )?(?:on )?" + HER_D + " and then " + HER_D
+					+ "(?: later)?");
 
 	/** "What is the mechanism of the interaction between simvastatin and clarithromycin?" — what relates the two, asked of
 	 *  the interaction itself (ADR Decision 264). */
@@ -1482,9 +1499,14 @@ public final class QueryScopeRouter {
 	/** Whether {@code question} says when the drug would be given — "two hours after her other medicines" — which no
 	 *  finding weighs (ADR Decision 394). */
 	public static boolean statesATiming(String question) {
-		return question != null && Pattern.compile("(?:^| )" + TIMING + "(?: |$)")
+		return question != null && Pattern.compile("(?:^| )(?:" + TIMING + "|" + SEQUENCE + ")(?: |$)")
 				.matcher(String.join(" ", words(question))).find();
 	}
+
+	/** One drug given after another — "after she finishes rifampicin", "and then rifampicin later" — a timing no finding
+	 *  weighs (ADR Decision 414). */
+	private static final String SEQUENCE = "(?:after (?:she|he|they) (?:finishes|stops|completes|has (?:finished|stopped|"
+			+ "completed)|is done with)|and then \\p{L}+(?: \\p{L}+)? later)";
 
 	/** The condition a proposal names — "kidney disease" of "Is ibuprofen safe given her kidney disease?" — as the
 	 *  question writes it, or {@code null} (ADR Decision 394). */
@@ -1693,7 +1715,9 @@ public final class QueryScopeRouter {
 		"taking", "co", "please", "so", "and", "also", "already", "between", "about", "while", "tb", "have",
 		// a greeting or a preamble before the proposal (ADR Decision 405)
 		"hi", "hello", "hey", "doctor", "here", "check", "if", "whether", "am", "i'm", "thinking", "considering", "wondering",
-		"you", "choice", "option"));
+		"you", "choice", "option",
+		// technical and conditional wordings (ADR Decision 414)
+		"verify", "concomitant", "patient's"));
 
 	/** Words saying the question is about the drug's interactions. */
 	private static final Set<String> RESIDUAL_INTERACTS = new HashSet<String>(Arrays.asList("interact", "interacts",
@@ -1703,12 +1727,12 @@ public final class QueryScopeRouter {
 	private static final Set<String> RESIDUAL_SAFE = new HashSet<String>(Arrays.asList("safe", "safely", "ok", "okay",
 		"fine", "alright", "issue", "issues", "problem", "problems", "concern", "concerns", "risk", "risks", "risky",
 		"compatible", "contraindicated", "contraindication", "contraindications", "appropriate", "worried", "worry",
-		"worrying", "safety", "good", "suitable", "reasonable", "able"));
+		"worrying", "safety", "good", "suitable", "reasonable", "able", "recommended"));
 
 	/** Words proposing to give the drug, where an asking word opens the question. */
 	private static final Set<String> RESIDUAL_GIVE = new HashSet<String>(Arrays.asList("give", "giving", "given", "start",
 		"starting", "started", "prescribe", "prescribing", "prescribed", "add", "adding", "added", "administer", "use",
-		"taken", "recommend", "recommended"));
+		"taken", "recommend", "gave", "receive", "coadminister", "coadministered", "administered"));
 
 	/** The asking words a proposal may open with. */
 	private static final Set<String> RESIDUAL_ASKING = new HashSet<String>(Arrays.asList("can", "could", "may", "should",
@@ -1775,6 +1799,10 @@ public final class QueryScopeRouter {
 		boolean ofHers = String.join(" ", wordsWithTheDrugMarked).matches(".*\\b(?:(?:she|he|they) (?:is |are )?(?:on|taking|"
 				+ "receiving|getting)\\b|(?:is|are) (?:she|he|they) (?:on|taking|receiving|getting)\\b|"
 				+ "(?:her|his|their) " + Pattern.quote(DRUG_NAME) + ").*");
+		// Nor one naming her medications, which asks of the drug among them (ADR Decision 414).
+		if (String.join(" ", wordsWithTheDrugMarked).matches(".*\\b" + POSSESSIVE + " (?:other )?" + MEDICATIONS + "\\b.*")) {
+			return false;
+		}
 		if ("why".equals(wordsWithTheDrugMarked.get(0))) {
 			for (String word : wordsWithTheDrugMarked) {
 				for (String stem : ENDED_STEMS) {

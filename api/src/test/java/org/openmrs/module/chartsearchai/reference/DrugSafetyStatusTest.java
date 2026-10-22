@@ -392,6 +392,36 @@ public class DrugSafetyStatusTest extends BaseModuleContextSensitiveTest {
 		assertEquals(Collections.singletonList("source_data_partially_invalid"), result.getIssues());
 	}
 
+	@Test
+	public void aDerivativeMergedIntoTheScreenedSubstanceLimitsItsCheck() throws IOException {
+		DrugSafetyValidator.SafetyCheckResult result = screeningOver(
+				"chartsearchai-test/ddi-derivative-merged-into-one-substance.json", "estradiol");
+		assertTrue(referenceService.getLoadStatus().getFindings().stream().anyMatch(
+				f -> DrugReferenceValidity.DERIVATIVE_MERGED_WITH_ITS_PARENT_SUBSTANCE.equals(f.getRule())));
+		assertTrue(result.getIssues().contains("source_data_partially_invalid"), result.getIssues().toString());
+	}
+
+	@Test
+	public void aSubstanceNameTheBridgeContradictsLimitsTheCheckOfThatRow() throws IOException {
+		DrugSafetyValidator.SafetyCheckResult result = screeningOver(
+				"chartsearchai-test/ddi-substance-name-contradicted-by-the-bridge.json", "sulfamethoxazole");
+		assertTrue(referenceService.getLoadStatus().getFindings().stream().anyMatch(
+				f -> DrugReferenceValidity.SUBSTANCE_NAME_CONTRADICTED_BY_THE_BRIDGE.equals(f.getRule())));
+		assertTrue(result.getIssues().contains("source_data_partially_invalid"), result.getIssues().toString());
+	}
+
+	/** A question about {@code drug} for her complete chart, over a DDInter-shaped fixture. */
+	private DrugSafetyValidator.SafetyCheckResult screeningOver(String fixture, String drug) throws IOException {
+		prepareCompletePatient();
+		set(ChartSearchAiConstants.GP_DRUG_REFERENCE_SOURCE_FORMAT, ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_DDINTER);
+		set(ChartSearchAiConstants.GP_DRUG_REFERENCE_DATA_FILE_PATH,
+				DrugReferenceTestSupport.copyDatasetToAppData(fixture, "status-" + drug + "-slice.json", created));
+		referenceService = new DrugReferenceService();
+		validator = DrugReferenceTestSupport.validator(referenceService);
+		return validator.validateWithStatus("", "Can I take " + drug + "?", patient, Collections.emptyList(),
+				new PairChipExtent.Sink());
+	}
+
 	/** The bundled dataset as an operator file, optionally with a blank alias on one entry and one entry more. */
 	private void loadTheBundledEntriesWith(String blankAliasOn, String extraEntry) throws IOException {
 		ObjectMapper mapper = new ObjectMapper();
@@ -493,6 +523,63 @@ public class DrugSafetyStatusTest extends BaseModuleContextSensitiveTest {
 		assertEquals("limited", result.getStatus());
 		assertTrue(result.getIssues().contains("condition_rules_unavailable"));
 		assertTrue(result.getIssues().contains("no_actionable_dose_reference"));
+	}
+
+	// With no recorded allergy or condition the order-driven arm never screens her paracetamol order, so its
+	// missing condition rules said nothing about this ibuprofen check.
+	@Test
+	public void aPartnerOrderTheContraindicationArmDoesNotScreenDoesNotLimitItsConditionRules() throws IOException {
+		DrugSafetyValidator.SafetyCheckResult result = ibuprofenBesideAParacetamolOrderWithoutConditionRules(null);
+		assertFalse(result.getIssues().contains("condition_rules_unavailable"), result.getIssues().toString());
+	}
+
+	@Test
+	public void aPartnerOrderScreenedAgainstHerRecordsStillReportsItsMissingConditionRules() throws IOException {
+		DrugSafetyValidator.SafetyCheckResult result = ibuprofenBesideAParacetamolOrderWithoutConditionRules(
+				"penicillin");
+		assertEquals("limited", result.getStatus());
+		assertTrue(result.getIssues().contains("condition_rules_unavailable"), result.getIssues().toString());
+	}
+
+	/** Her order 111 as paracetamol, whose condition rule is removed, and optionally a recorded allergy. */
+	private DrugSafetyValidator.SafetyCheckResult ibuprofenBesideAParacetamolOrderWithoutConditionRules(
+			String allergen) throws IOException {
+		ObjectMapper mapper = new ObjectMapper();
+		ObjectNode dataset;
+		try (InputStream input = DrugSafetyStatusTest.class.getResourceAsStream("/chartsearchai/drug-reference.json")) {
+			dataset = (ObjectNode) mapper.readTree(input);
+		}
+		for (JsonNode entry : dataset.get("entries")) {
+			if ("paracetamol".equals(entry.path("id").asText())) {
+				ArrayNode allergyOnly = mapper.createArrayNode();
+				for (JsonNode rule : entry.path("contraindications")) {
+					if ("allergy".equals(rule.path("type").asText())) {
+						allergyOnly.add(rule);
+					}
+				}
+				((ObjectNode) entry).set("contraindications", allergyOnly);
+			}
+		}
+		set(ChartSearchAiConstants.GP_DRUG_REFERENCE_DATA_FILE_PATH, DrugReferenceTestSupport.writeDatasetToAppData(
+				"status-paracetamol-without-condition-rules.json", mapper.writeValueAsString(dataset), created));
+		referenceService = new DrugReferenceService();
+		validator = DrugReferenceTestSupport.validator(referenceService);
+		DrugReferenceTestSupport.nameTheConcept(88, "Other non-coded drug");
+		Context.getAdministrationService().executeSQL("update drug_order set drug_inventory_id = null,"
+				+ " drug_non_coded = 'Paracetamol' where order_id = 111", false);
+		Context.flushSession();
+		Context.clearSession();
+		patient = Context.getPatientService().getPatient(7);
+		if (allergen != null) {
+			DrugReferenceTestSupport.recordFreeTextAllergy(patient, 88, allergen);
+			patient = Context.getPatientService().getPatient(7);
+		}
+		PatientClinicalContext context = PatientClinicalContextBuilder.build(patient);
+		assertTrue(context.getConditionTokens().isEmpty());
+		assertEquals(allergen == null, context.getAllergyTokens().isEmpty());
+		assertTrue(referenceService.findForActiveOrders(context).stream()
+				.anyMatch(ref -> "paracetamol".equals(ref.getId())), "precondition: her order resolves to paracetamol");
+		return validate(patient);
 	}
 
 	@Test

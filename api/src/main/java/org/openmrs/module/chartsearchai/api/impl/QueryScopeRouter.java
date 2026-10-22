@@ -1826,6 +1826,50 @@ public final class QueryScopeRouter {
 	}
 
 	/**
+	 * An allergy a question SUPPOSES beside its proposal, and the proposal without it (ADR Decision 410): <em>"Is ibuprofen ok
+	 * if she is allergic to aspirin?"</em> is the proposal <em>"Is ibuprofen ok?"</em> beside the supposed allergy <em>"aspirin"</em>.
+	 */
+	public static final class SupposedAllergy {
+
+		/** The question without the clause supposing the allergy. */
+		public final String proposal;
+
+		/** The allergy as the question wrote it. */
+		public final String allergen;
+
+		SupposedAllergy(String proposal, String allergen) {
+			this.proposal = proposal;
+			this.allergen = allergen;
+		}
+	}
+
+	/** The clauses supposing an allergy, each closing the question: the proposal before it, the allergen in it. */
+	private static final List<Pattern> SUPPOSED_ALLERGY_CLAUSES = Arrays.asList(
+		Pattern.compile("(?i)^(.+?),?\\s+(?:if|when|given that)\\s+(?:she|he|they|the patient)\\s+(?:is|are|was|were)\\s+"
+				+ "allergic\\s+to\\s+(.+?)[?.!\\s]*$"),
+		Pattern.compile("(?i)^(.+?),?\\s+(?:if|when|given that)\\s+(?:she|he|they|the patient)\\s+(?:has|have)\\s+(?:a\\s+|an\\s+)?"
+				+ "(.+?)\\s+allergy[?.!\\s]*$"),
+		Pattern.compile("(?i)^(.+?)\\s+(?:to|for|in)\\s+(?:someone|somebody|anyone|a patient|a person|patients|people)\\s+"
+				+ "(?:who\\s+(?:is|are)\\s+|that\\s+(?:is|are)\\s+)?allergic\\s+to\\s+(.+?)[?.!\\s]*$"),
+		Pattern.compile("(?i)^(.+?)\\s+(?:to|for|in)\\s+(?:a|an)\\s+(.+?)[-\\s]allergic\\s+(?:patient|person|woman|man)[?.!\\s]*$"));
+
+	/** The allergy {@code question} supposes beside its proposal and the proposal without it, or {@code null} (ADR Decision
+	 *  410). Never her own: "if she is allergic" asks of an allergy her chart may not record, and the answer says it weighs
+	 *  only those it does. */
+	public static SupposedAllergy supposedAllergy(String question) {
+		if (question == null) {
+			return null;
+		}
+		for (Pattern clause : SUPPOSED_ALLERGY_CLAUSES) {
+			Matcher m = clause.matcher(question.trim());
+			if (m.matches()) {
+				return new SupposedAllergy(m.group(1).trim() + "?", m.group(2).trim());
+			}
+		}
+		return null;
+	}
+
+	/**
 	 * The purpose a proposal closes with — <em>"pain"</em>, <em>"her knee pain"</em> — where {@link #asksWhetherToGiveADrug}
 	 * admits it only once that purpose is set aside, or {@code null}. The findings do not weigh what a drug is for, so an
 	 * answer to such a proposal says so (ADR Decision 213).

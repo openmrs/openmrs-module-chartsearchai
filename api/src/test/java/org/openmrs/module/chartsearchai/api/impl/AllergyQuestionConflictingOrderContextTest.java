@@ -310,6 +310,19 @@ public class AllergyQuestionConflictingOrderContextTest extends BaseModuleContex
 		assertTrue(!unrelated.records.equals(recorder.records), "why it was stopped keeps them");
 	}
 
+	/** A proposal beside an allergy the question supposes is no question about her allergies, so no statement of the orders
+	 *  her records conflict with follows it (ADR Decision 410): on the 3.7.1 standalone "Can I give cephalexin to a
+	 *  penicillin-allergic patient?" closed with Kevin's clarithromycin order and his allergy to it. */
+	@Test
+	public void search_aProposalBesideASupposedAllergyStatesNoConflictingOrder() throws IOException {
+		String modelAnswer = "The records do not address it.";
+		for (String question : Arrays.asList("Can I give her cephalexin to a penicillin-allergic patient?",
+				"Can I give her ceftriaxone if she is allergic to penicillin?")) {
+			ChartAnswer answer = serviceAnswering(modelAnswer).search(patient, question);
+			assertTrue(!answer.getAnswer().contains(HEADING.trim()), question + " — was: " + answer.getAnswer());
+		}
+	}
+
 	@Test
 	public void search_anAllergyQuestionStatesTheConflictingOrderInTheAnswer() throws IOException {
 		ChartAnswer answer = serviceAnswering(MODEL_ANSWER).search(patient, ALLERGY_QUESTION);

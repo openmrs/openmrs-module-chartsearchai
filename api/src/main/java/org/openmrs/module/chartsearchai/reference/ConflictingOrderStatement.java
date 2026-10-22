@@ -305,7 +305,9 @@ public final class ConflictingOrderStatement {
 		return question != null && QueryScopeRouter.asksAboutAllergies(question)
 				&& !QueryScopeRouter.asksAboutMedications(question)
 				&& !QueryScopeRouter.asksForADrugSafetyReading(question)
-				&& !QueryScopeRouter.asksWhetherAllergicToOneNamedThing(question);
+				&& !QueryScopeRouter.asksWhetherAllergicToOneNamedThing(question)
+				// Nor a proposal beside an allergy it supposes, which asks nothing of hers (ADR Decision 410).
+				&& QueryScopeRouter.supposedAllergy(question) == null;
 	}
 
 }

@@ -21523,3 +21523,27 @@ The list reader asks `QueryScopeRouter.fitsAProposalShape` — the shapes alone 
 the residual reading is of a whole question and never of a fragment of one.
 
 Pinned by `ClinicianWordingsTest.aQuestionNamingTwoDrugsListsNeither`.
+
+## Decision 410: A proposal beside an allergy the question supposes is answered as the proposal, saying the supposed allergy was not weighed
+
+**Status: Accepted** (October 2026) — found asking such questions of 15 patients on the 3.7.1 standalone on 2026-10-22.
+
+### Context
+
+*"Is ibuprofen ok if she is allergic to aspirin?"* put aspirin in play as a drug asked about, and the model answered from the
+question-pair finding: Mogan Kamwara, on no aspirin and allergic to nothing, was told *"No — Ibuprofen should not be given:
+Acetylsalicylic acid (aspirin) interacts with Ibuprofen, a Major problem"*. *"Can I give her ceftriaxone if she is allergic to
+penicillin?"* and *"Can I give cephalexin to a penicillin-allergic patient?"* were read as questions about her allergies, and closed
+with Decision 124's statement of her orders conflicting with her records — Kevin's clarithromycin, which nothing asked about.
+
+### The decision
+
+`QueryScopeRouter.supposedAllergy` reads a closing clause supposing an allergy — *"if she is allergic to X"*, *"if she has a X
+allergy"*, *"to someone allergic to X"*, *"to a X-allergic patient"* — and the proposal before it. The pre-answer pass runs over
+the proposal alone, so the supposed allergen is no drug in play, and a composed answer closes *"This check weighs only the
+allergies this patient's chart records, not the one the question supposes (X)."*
+(`DrugReferenceInjector.SUPPOSED_ALLERGY_NOT_WEIGHED_OPENING`). Her recorded allergies are weighed as any proposal weighs them. No
+cross-reactivity with the supposed allergy is claimed: the findings state relationships to her records, and a supposed allergy
+is not one. `ConflictingOrderStatement.asksOnlyForAllergies` does not read such a question as one about her allergies.
+
+Pinned by `SupposedAllergyTest` and `AllergyQuestionConflictingOrderContextTest.search_aProposalBesideASupposedAllergyStatesNoConflictingOrder`.

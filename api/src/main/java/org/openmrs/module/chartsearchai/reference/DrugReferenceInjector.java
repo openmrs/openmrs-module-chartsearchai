@@ -645,6 +645,17 @@ public class DrugReferenceInjector {
 		// Resolved ONCE for the pass and handed down, never derived twice (issue #151): matchingEntries
 		// scopes both its legs with this list, and since issue #354 this method also reads its
 		// EMPTINESS — a question that resolves no substance is the one that may have named a class.
+		// An allergy the question SUPPOSES beside its proposal is no drug in play and no allergy of hers: the proposal is
+		// answered without it, closing that the check weighs only her recorded allergies (ADR Decision 410).
+		QueryScopeRouter.SupposedAllergy supposed = QueryScopeRouter.supposedAllergy(question);
+		if (supposed != null) {
+			PatientChart asked = injectRecords(chart, rawContext, supposed.proposal, orderHistory);
+			if (asked.getModuleAnswer() != null) {
+				asked.markModuleAnswer(asked.getModuleAnswer() + "\n" + SUPPOSED_ALLERGY_NOT_WEIGHED_OPENING + supposed.allergen
+						+ ").");
+			}
+			return asked;
+		}
 		List<DrugReference> questionDrugs = drugReferenceService.findImpliedByQuestion(question, orderEntries);
 		// A question naming a drug only to ask of its record in her chart is handed the model as a question asking nothing of
 		// drug safety is: the pass runs as for one naming no drug and asking nothing — her orders' records reconciled, no
@@ -8404,6 +8415,11 @@ public class DrugReferenceInjector {
 	 *  394): the check weighs her recorded conditions, not one the question names. */
 	static final String CONDITION_NOT_WEIGHED_OPENING = "This check weighs only the conditions this patient's chart records, not"
 			+ " the one the question names (";
+
+	/** What opens the line closing an answer to a proposal beside an allergy the question supposes, the allergy and ")." after
+	 *  it (ADR Decision 410): the check weighs her recorded allergies, not one the question supposes. */
+	public static final String SUPPOSED_ALLERGY_NOT_WEIGHED_OPENING = "This check weighs only the allergies this patient's chart"
+			+ " records, not the one the question supposes (";
 
 	/** What follows the drug's name in that lead where none of her orders of it has started (ADR Decision 202). */
 	static final String NOT_YET_STARTED_LEAD = " is not yet one of this patient's active medications: ";

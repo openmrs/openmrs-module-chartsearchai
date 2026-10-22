@@ -450,6 +450,11 @@ public final class QueryScopeRouter {
 	 * tells the composer to open with neither "Yes" nor "No".
 	 */
 	private static final List<Pattern> NEGATED_PROPOSAL_SHAPES = shapes(
+			// "How safe is fluconazole for her?", "How risky is fluconazole for her?", "Rate the risk of giving her fluconazole"
+			// — what the check found, with no "Yes" or "No" (ADR Decision 413)
+			"how (?:safe|risky|dangerous) is " + D + "(?: (?:for|in) " + PATIENT + ")?",
+			"how (?:safe|risky|dangerous) (?:is it )?to (?:give|start|prescribe|add) (?:" + PATIENT + " )?(?:on )?" + D,
+			"rate the risk of (?:giving|starting|prescribing|adding) (?:" + PATIENT + " )?(?:on )?" + D,
 			// "Is fluconazole not safe for her?", "Can't I give her fluconazole?" — asked in the negative, answered with no "Yes"
 			// or "No" (ADR Decision 406)
 			"is " + D + " (?:not (?:safe|ok|okay|appropriate|suitable)|unsafe)(?: (?:for|in) " + PATIENT + ")?",
@@ -553,7 +558,11 @@ public final class QueryScopeRouter {
 			// caution" (ADR Decision 349)
 			D,
 			// "Check interactions for amoxicillin", "Check for drug interactions with amoxicillin" (ADR Decision 350)
-			"(?:please )?check (?:for )?(?:any )?(?:drug )?interactions (?:for|with|of|on) " + D + "(?: please)?");
+			"(?:please )?check (?:for )?(?:any )?(?:drug )?interactions (?:for|with|of|on) " + D + "(?: please)?",
+			// "DDI check fluconazole", "Check DDI for ciprofloxacin", "fluconazole with her meds" (ADR Decision 413)
+			"(?:please )?(?:ddis?|(?:drug )?interactions?) check (?:for |on |of )?" + D,
+			"(?:please )?check (?:for )?(?:any )?ddis? (?:for|with|of|on) " + D,
+			D + " (?:with|and) " + POSSESSIVE + " " + MEDICATIONS);
 
 	/**
 	 * Which of her medications interact with ONE drug — "Which of her medications interact with rifampicin?", "Which of her
@@ -561,6 +570,8 @@ public final class QueryScopeRouter {
 	 * (ADR Decision 319): "Yes" does not answer "which".
 	 */
 	private static final List<Pattern> WHICH_OF_HER_MEDICATIONS_INTERACT_SHAPES = shapes(
+			// "Tell me about fluconazole" — what it does among her medications, with no "Yes" or "No" (ADR Decision 413)
+			"(?:please )?tell me about " + D,
 			// "Do I need to adjust any doses if I start rifampicin?" (ADR Decision 411)
 			"(?:do|should|must) (?:i|we) (?:need to )?(?:adjust|change|reduce|increase|lower) any (?:doses?|of " + POSSESSIVE
 					+ " " + MEDICATIONS + "(?: doses?)?) if (?:i|we) (?:start|give|add|prescribe) (?:" + PATIENT + " )?(?:on )?" + D,
@@ -1226,7 +1237,9 @@ public final class QueryScopeRouter {
 	}
 
 	private static final List<Pattern> TWO_DRUGS_INTERACT_SHAPES = shapes(DOES_ONE_INTERACT_WITH_THE_OTHER, ANY_INTERACTION_BETWEEN,
-			CHANGE_HERS_IF_STARTING);
+			CHANGE_HERS_IF_STARTING,
+			// "Fluconazole and nevirapine", "Fluconazole plus nevirapine" — two names and a joining word alone (ADR Decision 413)
+			HER_D + " (?:and|plus|with) " + HER_D);
 
 	/** "What is the mechanism of the interaction between simvastatin and clarithromycin?" — what relates the two, asked of
 	 *  the interaction itself (ADR Decision 264). */
@@ -1690,7 +1703,7 @@ public final class QueryScopeRouter {
 	private static final Set<String> RESIDUAL_SAFE = new HashSet<String>(Arrays.asList("safe", "safely", "ok", "okay",
 		"fine", "alright", "issue", "issues", "problem", "problems", "concern", "concerns", "risk", "risks", "risky",
 		"compatible", "contraindicated", "contraindication", "contraindications", "appropriate", "worried", "worry",
-		"worrying", "safety", "good", "suitable", "reasonable"));
+		"worrying", "safety", "good", "suitable", "reasonable", "able"));
 
 	/** Words proposing to give the drug, where an asking word opens the question. */
 	private static final Set<String> RESIDUAL_GIVE = new HashSet<String>(Arrays.asList("give", "giving", "given", "start",
@@ -1738,7 +1751,7 @@ public final class QueryScopeRouter {
 
 	/** Such words as whole words: short ones, which as stems would open words of fact — "prescribed", "address". */
 	private static final Set<String> SAFETY_WORDS = new HashSet<String>(Arrays.asList("ok", "okay", "fine", "hold", "give",
-		"giving", "add", "adding", "prescribe", "prescribing", "start", "starting", "stop", "stopping", "best", "vs", "can",
+		"giving", "add", "adding", "prescribe", "prescribing", "start", "starting", "stop", "stopping", "best", "vs", "can", "able",
 		"could", "should", "may", "might", "would", "will", "must", "need", "needs"));
 
 	/**
@@ -1793,7 +1806,7 @@ public final class QueryScopeRouter {
 
 	/** The words that make the residual words a question. */
 	private static final Set<String> RESIDUAL_QUESTION = new HashSet<String>(Arrays.asList("can", "could", "may", "should",
-		"would", "will", "is", "are", "does", "do", "any"));
+		"would", "will", "is", "are", "does", "do", "any", "am"));
 
 	/**
 	 * How a question about ONE drug that no shape fits is read (ADR Decision 396): {@link Residual#INTERACTS} where it says

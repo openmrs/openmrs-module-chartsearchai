@@ -21589,3 +21589,26 @@ most serious interaction recorded is an allergy to Pantoprazole"*, and Betty Wil
 - *"Is she on two drugs that do the same thing?"* is Decision 294's duplicate-therapy question.
 
 Pinned by `ClinicianWordingsTest.eightMoreWordingsAboutHerOwnMedicationsAreAnsweredAsTheQuestionsTheyAsk`.
+
+## Decision 413: Terse and informal wordings are answered as the questions they ask
+
+**Status: Accepted** (October 2026) — found asking 30 further wordings of 15 patients on the 3.7.1 standalone on 2026-10-22.
+
+### Context
+
+*"Is she able to take fluconazole?"* carried no word of Decision 399's safety list, so it was read as a question about the drug's
+record and answered *"The records do not address fluconazole"* for every patient. *"Tell me about fluconazole"* was answered
+*"Fluconazole can be given"* or with its reference record's interactions with drugs she does not take (*"Major interactions with
+ivosidenib, ketoconazole …"*). *"How safe is fluconazole for her?"*, *"Rate the risk of giving her fluconazole"*, *"Fluconazole and
+nevirapine"*, *"fluconazole with her meds"*, *"DDI check fluconazole"* and *"Am I able to give her fluconazole?"* went to the model.
+
+### The decision
+
+- *"able"* is a word saying the drug may be given — to Decision 396's residual reading, where *"am"* asks too, and to
+  `asksOnlyAboutADrugsRecord`, which no longer reads such a question as one about the record.
+- *"How safe / risky is X for her?"* and *"Rate the risk of giving her X"* are Decision 243's negated proposals, answered with what
+  the check found and no *"Yes"* or *"No"*, which *"how"* does not take.
+- *"X and Y"*, *"X plus Y"*, *"X with Y"* alone are whether the two interact; *"X with her meds"*, *"DDI check X"* and *"Check DDI for
+  X"* whether X interacts with her medications; *"Tell me about X"* which of her medications interact with X (Decision 319).
+
+Pinned by `ClinicianWordingsTest.terseAndInformalWordingsAreAnsweredAsTheQuestionsTheyAsk`.

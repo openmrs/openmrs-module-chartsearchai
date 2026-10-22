@@ -323,6 +323,32 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/**
+	 * Terse and informal wordings are answered as the questions they ask (ADR Decision 413). On the 3.7.1 standalone "Is she
+	 * able to take fluconazole?" was read as a question about the drug's record and answered "The records do not address
+	 * fluconazole" for every patient, and "Tell me about fluconazole" with interactions with drugs she does not take.
+	 */
+	@Test
+	public void terseAndInformalWordingsAreAnsweredAsTheQuestionsTheyAsk() {
+		String[][] pairs = {
+			{ "Is she able to take warfarin?", "Can I give her warfarin?" },
+			{ "Am I able to give her warfarin?", "Can I give her warfarin?" },
+			{ "How safe is warfarin for her?", "Is there any reason not to give her warfarin?" },
+			{ "How risky is warfarin for her?", "Is there any reason not to give her warfarin?" },
+			{ "Rate the risk of giving her warfarin", "Is there any reason not to give her warfarin?" },
+			{ "Warfarin and metronidazole", "Does warfarin interact with metronidazole?" },
+			{ "warfarin with her meds", "Does warfarin interact with her medications?" },
+			{ "DDI check warfarin", "Does warfarin interact with her medications?" },
+			{ "Check DDI for warfarin", "Does warfarin interact with her medications?" },
+			{ "Tell me about warfarin", "Which of her medications interact with warfarin?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+		assertTrue(!chart("Is she able to take warfarin?").asksOnlyAboutADrugsRecord(), "no question about its record alone");
+	}
+
 	private static org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart chart(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

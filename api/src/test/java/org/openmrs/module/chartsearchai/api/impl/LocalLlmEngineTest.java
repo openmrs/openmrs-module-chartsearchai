@@ -97,7 +97,9 @@ public class LocalLlmEngineTest {
 				{ "500", "{\"input_tokens\":41}" },
 				{ "200", "{}" },
 				{ "200", "{\"tokens\":[1,2,3]}" },
-				{ "200", "{\"input_tokens\":-1}" } };
+				{ "200", "{\"input_tokens\":-1}" },
+				{ "200", "{\"input_tokens\":-0.5}" },
+				{ "200", "{\"input_tokens\":41.9}" } };
 		for (String[] c : cases) {
 			status.set(Integer.valueOf(c[0]));
 			reply.set(c[1]);

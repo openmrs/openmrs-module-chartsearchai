@@ -12,6 +12,7 @@ package org.openmrs.module.chartsearchai.api.impl;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Arrays;
@@ -19,6 +20,9 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
 import org.openmrs.api.context.Context;
@@ -29,6 +33,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import org.junit.jupiter.api.Test;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 
 /**
  * The counting cases that run without a server override the engine's I/O methods only
@@ -145,6 +150,167 @@ public class LocalLlamaTokenCounterTest extends BaseModuleContextSensitiveTest {
 		engine.shutdown();
 	}
 
+	@Test
+	public void anIdleTimerThatExpiresDuringACallWaitsOutTheRemainderInsteadOfClosing() {
+		AtomicLong now = new AtomicLong(0);
+		AtomicInteger closes = new AtomicInteger();
+		LocalLlmEngine engine = new LocalLlmEngine() {
+			@Override
+			public synchronized void close() {
+				closes.incrementAndGet();
+			}
+		};
+		engine.clock = now::get;
+		ReflectionTestUtils.setField(engine, "lastActivityNanos", 0L);
+
+		// The call completed half a minute before the startup timer's callback took the lock.
+		now.set(TimeUnit.SECONDS.toNanos(90));
+		ReflectionTestUtils.setField(engine, "lastActivityNanos", TimeUnit.SECONDS.toNanos(60));
+		engine.unloadIfIdle(1);
+		assertEquals(0, closes.get(), "a call that finished inside the interval must keep the server");
+		ScheduledFuture<?> remainder = (ScheduledFuture<?>) ReflectionTestUtils.getField(engine, "idleUnloadFuture");
+		assertNotNull(remainder, "the remainder of the interval must be rescheduled");
+		assertTrue(remainder.getDelay(TimeUnit.SECONDS) > 25 && remainder.getDelay(TimeUnit.SECONDS) <= 30);
+
+		// Nothing happened for the full interval: the server is unloaded.
+		remainder.cancel(false);
+		now.set(TimeUnit.SECONDS.toNanos(120));
+		engine.unloadIfIdle(1);
+		assertEquals(1, closes.get(), "a full idle interval since the last activity unloads the server");
+	}
+
+	/** Captures what the engine schedules, so a test runs the real callback at a time it chooses. */
+	private static final class CapturingTimer extends java.util.concurrent.ScheduledThreadPoolExecutor {
+
+		final List<Runnable> scheduled = new java.util.ArrayList<>();
+
+		final List<ScheduledFuture<?>> futures = new java.util.ArrayList<>();
+
+		CapturingTimer() {
+			super(1);
+		}
+
+		@Override
+		public ScheduledFuture<?> schedule(Runnable command, long delay, TimeUnit unit) {
+			scheduled.add(command);
+			ScheduledFuture<?> future = super.schedule(() -> { }, 1, TimeUnit.DAYS);
+			futures.add(future);
+			return future;
+		}
+	}
+
+	/** The scheduled callback itself, not only the method it calls, waits out a call that just finished. */
+	@Test
+	public void theScheduledIdleCallbackKeepsAServerACallJustUsed() throws Exception {
+		Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_LLM_IDLE_TIMEOUT_MINUTES, "1");
+		AtomicLong now = new AtomicLong(0);
+		AtomicInteger closes = new AtomicInteger();
+		LocalLlmEngine engine = new LocalLlmEngine() {
+			@Override
+			public synchronized void close() {
+				closes.incrementAndGet();
+			}
+		};
+		CapturingTimer timer = new CapturingTimer();
+		ReflectionTestUtils.setField(engine, "idleTimer", timer);
+		engine.clock = now::get;
+		try {
+			ReflectionTestUtils.invokeMethod(engine, "resetIdleTimer");
+			Runnable callback = timer.scheduled.get(0);
+			// A call completed at 60 s; the timer armed at 0 fires at 90 s.
+			ReflectionTestUtils.setField(engine, "lastActivityNanos", TimeUnit.SECONDS.toNanos(60));
+			now.set(TimeUnit.SECONDS.toNanos(90));
+			callback.run();
+			assertEquals(0, closes.get(), "the callback must wait out the interval since the last activity");
+		}
+		finally {
+			timer.shutdownNow();
+		}
+	}
+
+	/** A count, like an inference, restarts the idle interval: the timer it replaces is cancelled. */
+	@Test
+	public void aCountReplacesTheIdleTimerItFindsArmed() throws Exception {
+		Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_LLM_IDLE_TIMEOUT_MINUTES, "1");
+		java.io.File model = new java.io.File(OpenmrsUtil.getApplicationDataDirectory(), "count-timer-test.gguf");
+		model.createNewFile();
+		Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_LLM_MODEL_FILE_PATH,
+				"count-timer-test.gguf");
+		com.sun.net.httpserver.HttpServer server = com.sun.net.httpserver.HttpServer.create(
+				new java.net.InetSocketAddress(LlamaServerEndpoint.LOOPBACK_HOST, 0), 0);
+		server.createContext("/v1/messages/count_tokens", exchange -> {
+			byte[] body = "{\"input_tokens\":5}".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+			exchange.sendResponseHeaders(200, body.length);
+			try (java.io.OutputStream out = exchange.getResponseBody()) {
+				out.write(body);
+			}
+		});
+		server.start();
+		LocalLlmEngine engine = new LocalLlmEngine();
+		CapturingTimer timer = new CapturingTimer();
+		ReflectionTestUtils.setField(engine, "idleTimer", timer);
+		try {
+			// A server already running with the configured command, so the count does not launch one.
+			String modelPath = ChartSearchAiUtils.resolveModelPath("count-timer-test.gguf",
+					ChartSearchAiConstants.GP_LLM_MODEL_FILE_PATH);
+			int port = server.getAddress().getPort();
+			engine.recordLaunch(modelPath, engine.resolveKvCacheDir(), null,
+					engine.currentServerCommand("/bin/llama-server", modelPath, port, null));
+			ReflectionTestUtils.setField(engine, "serverProcess", new AliveProcess());
+			ReflectionTestUtils.setField(engine, "endpoint", LlamaServerEndpoint.open(port));
+
+			assertEquals(5, engine.countChatInputTokens("system", "user"));
+			assertEquals(5, engine.countChatInputTokens("system", "user"));
+
+			assertEquals(2, timer.futures.size(), "each count arms the idle timer");
+			assertTrue(timer.futures.get(0).isCancelled(), "and the second replaces the first");
+		}
+		finally {
+			ReflectionTestUtils.setField(engine, "serverProcess", null);
+			timer.shutdownNow();
+			server.stop(0);
+			model.delete();
+		}
+	}
+
+	/** A process that reports itself alive and does nothing else. */
+	private static final class AliveProcess extends Process {
+
+		@Override
+		public java.io.OutputStream getOutputStream() {
+			return java.io.OutputStream.nullOutputStream();
+		}
+
+		@Override
+		public java.io.InputStream getInputStream() {
+			return java.io.InputStream.nullInputStream();
+		}
+
+		@Override
+		public java.io.InputStream getErrorStream() {
+			return java.io.InputStream.nullInputStream();
+		}
+
+		@Override
+		public int waitFor() {
+			return 0;
+		}
+
+		@Override
+		public int exitValue() {
+			throw new IllegalThreadStateException("running");
+		}
+
+		@Override
+		public void destroy() {
+		}
+
+		@Override
+		public boolean isAlive() {
+			return true;
+		}
+	}
+
 	/**
 	 * Opt-in: launches the real local engine from a tester-prepared application-data directory.
 	 * The module spawns this server itself, so it is not one of the tester-started servers
@@ -186,6 +352,13 @@ public class LocalLlamaTokenCounterTest extends BaseModuleContextSensitiveTest {
 			List<Integer> focus = Collections.singletonList(1);
 			List<AlreadyOrderedDrug> orders = Collections.singletonList(new AlreadyOrderedDrug(
 					"aspirin", Collections.singletonList("aspirin 75 mg daily"), 1, "an existing order"));
+			// Invalid timeout fails after cold startup, before any generation request is sent.
+			assertThrows(IllegalArgumentException.class, () -> engine.infer("system", chart, 0));
+			ScheduledFuture<?> failedCallIdle = (ScheduledFuture<?>)
+					ReflectionTestUtils.getField(engine, "idleUnloadFuture");
+			assertNotNull(failedCallIdle, "A failed first inference must not leave a loaded server indefinitely");
+			assertFalse(failedCallIdle.isDone());
+			engine.close();
 			int count = counter.countPrompt(chart, focus, "Can I add aspirin?", true, orders);
 			assertTrue(count > 0);
 			ScheduledFuture<?> idle = (ScheduledFuture<?>)

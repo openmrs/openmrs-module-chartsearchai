@@ -21690,3 +21690,21 @@ medications. 5 substances in them were checked against each other"* of a screen 
   her medications need changing.
 
 Pinned by `ClinicianWordingsTest.whetherHerMedicationsAreAllRightIsTheScreen`.
+
+## Decision 417: A screen asked in words of no medication cue states her own conflicts as any screen does
+
+**Status: Accepted** (October 2026) — found re-asking Decision 416's screens on the 3.7.1 standalone on 2026-10-23.
+
+### Context
+
+*"Are there any issues with her treatment?"* — a screen since Decision 416 — left out the findings about her own orders that
+*"Are her current medications ok?"* stated: Agnes Adams's NSAID allergy beside her aspirin order, Kevin's clarithromycin allergy
+beside his clarithromycin order, Betty's and Sarah's unrated contraindications. `DrugSafetyValidator.SubjectMatter` counts a
+question as about her active orders only where its words carry a medication cue, and *"treatment"* carries none.
+
+### The decision
+
+`SubjectMatter.coversActiveOrders` holds for any screen of her medications (`QueryScopeRouter.asksOnlyToScreenHerMedications`),
+in whatever words it is asked.
+
+Pinned by `ScreenBesideHerOwnConflictsTest.aScreenInWordsOfNoMedicationCueStatesHisOwnConflictsToo`.

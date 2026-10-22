@@ -61,6 +61,21 @@ public class ScreenBesideHerOwnConflictsTest extends BaseModuleContextSensitiveT
 		assertEquals(DrugReferenceInjector.SCREEN_SCOPE, lines[4], "was: " + answer);
 	}
 
+	/** A screen asked in words of no medication cue — "his treatment" — states his own conflicts as any screen does (ADR
+	 *  Decision 417): on the 3.7.1 standalone "Are there any issues with her treatment?" left out Agnes Adams's NSAID allergy
+	 *  beside her aspirin order, which "Are her current medications ok?" stated. */
+	@Test
+	public void aScreenInWordsOfNoMedicationCueStatesHisOwnConflictsToo() {
+		String answer = screen("Are there any issues with his treatment?", "dexamethasone",
+			DrugReferenceTestSupport.activeOrder("order-dex", "Dexamethasone", "Dexamethasone"),
+			DrugReferenceTestSupport.activeOrder("order-pred", "Prednisone", "Prednisone"));
+		assertEquals(screen("Are his current medications ok?", "dexamethasone",
+			DrugReferenceTestSupport.activeOrder("order-dex", "Dexamethasone", "Dexamethasone"),
+			DrugReferenceTestSupport.activeOrder("order-pred", "Prednisone", "Prednisone")), answer);
+		assertEquals(true, answer != null && answer.contains("The patient has a recorded allergy to Dexamethasone."),
+			"was: " + answer);
+	}
+
 	/** A question asking the module to choose a drug for him states his own conflicts too, though it names no medication
 	 *  word the router's medication cues know (ADR Decision 293): on the 3.7.1 standalone "What painkiller can I safely
 	 *  give her?" left out the ten allergy findings about Sarah Taylor's own corticosteroids that "Which pain medication is

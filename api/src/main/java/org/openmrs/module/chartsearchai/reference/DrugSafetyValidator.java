@@ -2593,6 +2593,8 @@ public class DrugSafetyValidator {
 			// is no medication cue (ADR Decision 293).
 			this.coversActiveOrders = QueryScopeRouter.asksAboutMedications(question)
 					|| QueryScopeRouter.asksWhichDrugToGiveHer(question)
+					// And any screen of her medications, in whatever words — "her treatment" (ADR Decision 417).
+					|| QueryScopeRouter.asksOnlyToScreenHerMedications(question)
 					// And about a drug named as hers, by whatever name — her own order, a brand the data does not carry
 					// (ADR Decision 374).
 					|| question != null && QueryScopeRouter.asksAboutADrugNamedAsHersByAnyName(question);

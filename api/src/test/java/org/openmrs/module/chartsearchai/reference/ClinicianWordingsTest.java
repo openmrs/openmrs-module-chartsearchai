@@ -273,6 +273,31 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 				.getListedDrugsWithNoActiveOrder().isEmpty(), "precondition: a list before a proposal is read");
 	}
 
+	/**
+	 * Questions about changing one drug for another, or choosing which of two to stop, are answered with what relates them and
+	 * no choice (ADR Decision 411). On the 3.7.1 standalone "Should I reduce her simvastatin if I give clarithromycin?" was
+	 * answered "No — Simvastatin should not be given" for all 15 patients, and "Which drug should I stop, aspirin or ibuprofen?"
+	 * chose one.
+	 */
+	@Test
+	public void changingOrChoosingBetweenTwoDrugsIsAnsweredWithWhatRelatesThem() {
+		String[][] pairs = {
+			{ "Should I reduce her simvastatin if I give clarithromycin?", "Does her simvastatin interact with clarithromycin?" },
+			{ "Do I need to adjust any doses if I start rifampicin?", "Which of her medications interact with rifampicin?" },
+			{ "Can she continue her aspirin with ibuprofen?", "Can she continue her aspirin and ibuprofen?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+		String pair = ask("Does her aspirin interact with her ibuprofen?");
+		assertNotNull(pair, "precondition: the module answers it");
+		for (String question : new String[] { "Which drug should I stop, aspirin or ibuprofen?",
+				"Is aspirin or ibuprofen causing the interaction?" }) {
+			assertEquals(DrugReferenceInjector.COMPARES_NO_DRUGS_LEAD + "\n" + pair, ask(question), question);
+		}
+	}
+
 	private static org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart chart(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

@@ -1613,6 +1613,12 @@ public class DrugReferenceInjector {
 		if (purpose != null) {
 			moduleAnswer = moduleAnswer + "\n" + PURPOSE_NOT_WEIGHED_OPENING + purpose + ").";
 		}
+		// Which of two to stop, or which causes their interaction: what relates them, under a lead choosing neither (ADR
+		// Decision 411).
+		if (moduleAnswer != null && !questionDrugs.isEmpty() && !moduleAnswer.startsWith(COMPARES_NO_DRUGS_LEAD)
+				&& QueryScopeRouter.asksWhichOfTwoToStop(wordsBesideItsNames(question, questionDrugs))) {
+			moduleAnswer = COMPARES_NO_DRUGS_LEAD + "\n" + moduleAnswer;
+		}
 		// And when the drug would be given, or a condition the question names, which no finding weighs (ADR Decision 394).
 		if (moduleAnswer != null && QueryScopeRouter.statesATiming(question)) {
 			moduleAnswer = moduleAnswer + "\n" + TIMING_NOT_WEIGHED;

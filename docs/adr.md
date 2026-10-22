@@ -21547,3 +21547,24 @@ cross-reactivity with the supposed allergy is claimed: the findings state relati
 is not one. `ConflictingOrderStatement.asksOnlyForAllergies` does not read such a question as one about her allergies.
 
 Pinned by `SupposedAllergyTest` and `AllergyQuestionConflictingOrderContextTest.search_aProposalBesideASupposedAllergyStatesNoConflictingOrder`.
+
+## Decision 411: Changing one drug for another, or choosing which of two to stop, is answered with what relates them and no choice
+
+**Status: Accepted** (October 2026) — found asking such questions of 15 patients on the 3.7.1 standalone on 2026-10-22.
+
+### Context
+
+*"Should I reduce her simvastatin if I give clarithromycin?"* was answered *"No — Simvastatin should not be given"* for all 15
+patients — backwards, and of a drug most of them do not take. *"Which drug should I stop, aspirin or ibuprofen?"* chose one
+(*"No — Acetylsalicylic acid (aspirin) should not be given"*), as did *"Is aspirin or ibuprofen causing the interaction?"*; *"Can she
+continue her aspirin with ibuprofen?"* and *"Do I need to adjust any doses if I start rifampicin?"* went to the model too.
+
+### The decision
+
+Decision 402's *"Should I change her X if I start Y?"* takes *reduce*, *lower*, *decrease*, *increase*, *hold* and *pause*, and *"her X
+dose"*; *"Which drug should I stop, X or Y?"* and *"Is X or Y causing the interaction?"* are read alike, as whether the two interact,
+and their answer opens with Decision 393's lead that the check chooses neither (`QueryScopeRouter.asksWhichOfTwoToStop`). *"Can she
+continue her X with Y?"* is Decision 380's whether to continue both. *"Do I need to adjust any doses if I start X?"* is Decision 319's
+which of her medications interact with X.
+
+Pinned by `ClinicianWordingsTest.changingOrChoosingBetweenTwoDrugsIsAnsweredWithWhatRelatesThem`.

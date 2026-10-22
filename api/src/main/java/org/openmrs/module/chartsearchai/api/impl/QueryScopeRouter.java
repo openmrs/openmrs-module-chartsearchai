@@ -556,6 +556,9 @@ public final class QueryScopeRouter {
 	 * (ADR Decision 319): "Yes" does not answer "which".
 	 */
 	private static final List<Pattern> WHICH_OF_HER_MEDICATIONS_INTERACT_SHAPES = shapes(
+			// "Do I need to adjust any doses if I start rifampicin?" (ADR Decision 411)
+			"(?:do|should|must) (?:i|we) (?:need to )?(?:adjust|change|reduce|increase|lower) any (?:doses?|of " + POSSESSIVE
+					+ " " + MEDICATIONS + "(?: doses?)?) if (?:i|we) (?:start|give|add|prescribe) (?:" + PATIENT + " )?(?:on )?" + D,
 			// "Is there no interaction between fluconazole and her meds?" — which interact, with no "Yes" or "No" (ADR Decision
 			// 406)
 			"(?:is|are) there no (?:drug )?interactions? (?:between " + D + " and " + POSSESSIVE + " " + MEDICATIONS + "|with " + D
@@ -1010,10 +1013,11 @@ public final class QueryScopeRouter {
 	/** "Should she keep taking both aspirin and Advil?", "Can I continue her aspirin and her Advil?", "Is it safe to keep
 	 *  giving her aspirin and Advil?" — whether to continue TWO drugs (ADR Decision 380). */
 	private static final List<Pattern> CONTINUE_BOTH_SHAPES = shapes(
-			"(?:can|could|may|should) " + SUBJECT + " (?:continue|keep taking|keep on) (?:both )?" + HER_D + " and " + HER_D
+			"(?:can|could|may|should) " + SUBJECT + " (?:continue|keep taking|keep on) (?:both )?" + HER_D + " (?:and|with|alongside) "
+					+ HER_D
 					+ "(?: together)?(?: now)?",
 			"(?:can|could|may|should) (?:i|we) (?:safely )?(?:continue|keep giving) (?:" + PATIENT + " )?(?:both )?" + HER_D
-					+ " and " + HER_D + "(?: together)?(?: now)?",
+					+ " (?:and|with|alongside) " + HER_D + "(?: together)?(?: now)?",
 			"is it (?:safe|ok|okay|alright|appropriate|fine) (?:for " + PATIENT + " )?to (?:continue|keep (?:giving|taking)) "
 					+ "(?:" + PATIENT + " )?(?:both )?" + HER_D + " and " + HER_D + "(?: together)?(?: now)?");
 
@@ -1166,10 +1170,25 @@ public final class QueryScopeRouter {
 	private static final String ANY_INTERACTION_BETWEEN = "(?:are there |is there )?(?:any |an )?(?:drug )?interactions? between "
 			+ HER_D + " and " + HER_D;
 
+	/** Which of two drugs to stop, or which causes their interaction (ADR Decision 411). */
+	private static final String WHICH_OF_TWO_TO_STOP = "(?:which (?:drug |one |medication |medicine |of them |of the two )?"
+			+ "(?:should|do|must) (?:i|we) (?:stop|change|discontinue|hold|switch) " + HER_D + " or " + HER_D
+			+ "|(?:is|are) " + HER_D + " or " + HER_D + " (?:causing|responsible for) (?:the|this|that) interactions?)";
+
+	/** Whether {@code words} ask which of two drugs to stop, or which causes their interaction (ADR Decision 411): no finding
+	 *  chooses one, and the answer says so. */
+	public static boolean asksWhichOfTwoToStop(List<String> wordsWithTheDrugsMarked) {
+		return fitsAShape(wordsWithTheDrugsMarked, shapes(WHICH_OF_TWO_TO_STOP));
+	}
+
 	/** "Should I change her efavirenz if I start rifampicin?" — asked as whether the two interact, the module choosing no drug
 	 *  to change (ADR Decision 402); of two of hers too (ADR Decision 404). */
 	private static final String CHANGE_HERS_IF_STARTING = "(?:should|must|do) (?:i|we) (?:need to )?(?:change|stop|switch|adjust|"
-			+ "modify) " + HER_D + " if (?:i|we) (?:start|give|add|prescribe) (?:" + PATIENT + " )?(?:on )?" + HER_D;
+			+ "modify|reduce|lower|decrease|increase|hold|pause) " + HER_D + "(?: dose)? if (?:i|we) (?:start|give|add|prescribe) (?:"
+			+ PATIENT + " )?(?:on )?" + HER_D
+			// "Which drug should I stop, aspirin or ibuprofen?", "Is aspirin or ibuprofen causing the interaction?" — what relates
+			// them, under a lead choosing neither (ADR Decision 411)
+			+ "|" + WHICH_OF_TWO_TO_STOP;
 
 	private static final List<Pattern> TWO_DRUGS_SHAPES = shapes(
 			// "Is it safe to combine ibuprofen and celecoxib?", "Is it ok to give ibuprofen with celecoxib together?"

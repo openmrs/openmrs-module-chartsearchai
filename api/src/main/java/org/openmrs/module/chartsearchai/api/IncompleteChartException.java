@@ -16,7 +16,11 @@ public class IncompleteChartException extends RuntimeException {
 
 	/** Which of the two incompleteness conditions the read met; callers treat them differently. */
 	public enum Reason {
-		/** This one chart exceeds the read store's retrieval cap: a fact about the patient, stable across restarts. */
+		/**
+		 * The read store returned less than the whole chart: this chart exceeds its retrieval cap, which is stable
+		 * across restarts, or the read stopped short (failed shards, a timeout, early termination, a failed cold
+		 * projection), which a later read may not repeat.
+		 */
 		CHART_TRUNCATED,
 		/** The read store has not finished indexing: transient, and true of every later chart as well. */
 		INDEXING_UNFINISHED

@@ -384,6 +384,38 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 			"a question naming her medications is no question about the drug's record alone");
 	}
 
+	/**
+	 * Colloquial and non-native wordings are answered as the questions they ask (ADR Decision 415). On the 3.7.1 standalone "Is
+	 * fluconazole allowed for her?" was read as a question about the drug's record and handed the model nothing to answer it
+	 * from, and twelve more went to the model.
+	 */
+	@Test
+	public void colloquialWordingsAreAnsweredAsTheQuestionsTheyAsk() {
+		String[][] pairs = {
+			{ "Is warfarin allowed for her?", "Can I give her warfarin?" },
+			{ "Can she be put on warfarin?", "Can I give her warfarin?" },
+			{ "Can we put her on warfarin?", "Can I give her warfarin?" },
+			{ "Will warfarin harm her?", "Can I give her warfarin?" },
+			{ "Is it proper to give her warfarin?", "Can I give her warfarin?" },
+			{ "Can the client take warfarin?", "Can I give her warfarin?" },
+			{ "Can my patient take warfarin?", "Can I give her warfarin?" },
+			{ "Can warfarin go with her drugs?", "Can I give her warfarin?" },
+			{ "Does warfarin go well with her medicines?", "Can I give her warfarin?" },
+			{ "Can warfarin be mixed with her drugs?", "Can I give her warfarin?" },
+			{ "Is it safe to combine her drugs with warfarin?", "Can I give her warfarin?" },
+			{ "Will warfarin disturb her medicines?", "Does warfarin interact with her medications?" },
+			{ "Can I mix warfarin and metronidazole?", "Can I give her warfarin and metronidazole together?" },
+			{ "Is warfarin and metronidazole ok together?", "Can I give her warfarin and metronidazole together?" },
+			{ "Warfarin and metronidazole, can they be given together?",
+					"Can I give her warfarin and metronidazole together?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+		assertTrue(!chart("Is warfarin allowed for her?").asksOnlyAboutADrugsRecord(), "no question about its record alone");
+	}
+
 	private static org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart chart(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

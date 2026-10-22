@@ -674,8 +674,11 @@ public final class QueryScopeRouter {
 					+ PATIENT + " )?(?:on )?|take )" + HER_D + " (?:(?:and|with|alongside) " + HER_DS + "|(?:" + HER_D
 					+ " )+and " + HER_D + ")(?: together)?(?: (?:for|to) " + PATIENT + ")?(?: now| today)?",
 			// "Are warfarin and ibuprofen safe together?", "Is warfarin safe with ibuprofen?"
-			"are " + HER_D + " and " + HER_D + " (?:safe|ok|okay|appropriate)(?: to (?:give|take|use))?(?: together)?(?: for "
+			"(?:are|is) " + HER_D + " and " + HER_D + " (?:safe|ok|okay|appropriate|fine)(?: to (?:give|take|use))?(?: together)?(?: for "
 					+ PATIENT + ")?",
+			// "Fluconazole and rifampicin, can they be given together?" (ADR Decision 415)
+			HER_D + " and " + HER_D + " (?:can|could|may|should) they be (?:safely )?(?:given|taken|used|combined|mixed)"
+					+ "(?: together)?(?: (?:to|for) " + PATIENT + ")?",
 			"is " + HER_D + " (?:safe|ok|okay|appropriate) (?:with|alongside) " + HER_DS + "(?: for " + PATIENT + ")?",
 			// "Is warfarin compatible with his amiodarone?", "Are warfarin and amiodarone compatible?", "Can metronidazole be
 			// combined with his warfarin?", "Can I combine X with Y?" — asked as whether one is safe with the other (ADR
@@ -683,7 +686,7 @@ public final class QueryScopeRouter {
 			"is " + HER_D + " compatible with " + HER_DS + "(?: for " + PATIENT + ")?",
 			"are " + HER_D + " and " + HER_D + " compatible(?: (?:together|with each other|for " + PATIENT + "))?",
 			"(?:can|could|may|should) " + HER_D + " be (?:safely )?combined with " + HER_DS + "(?: (?:in|for) " + PATIENT + ")?",
-			"(?:can|could|may|should) (?:i|we) (?:safely )?combine " + HER_D + " (?:and|with) " + HER_DS + "(?: (?:in|for) "
+			"(?:can|could|may|should) (?:i|we) (?:safely )?(?:combine|mix) " + HER_D + " (?:and|with) " + HER_DS + "(?: (?:in|for) "
 					+ PATIENT + ")?",
 			// "Can I give clarithromycin to a patient on simvastatin?" — given with it (ADR Decision 352)
 			"(?:can|could|may|should) (?:i|we) (?:safely )?(?:give|start|prescribe|administer) " + HER_D + " to (?:a|the|this) "
@@ -1717,22 +1720,26 @@ public final class QueryScopeRouter {
 		"hi", "hello", "hey", "doctor", "here", "check", "if", "whether", "am", "i'm", "thinking", "considering", "wondering",
 		"you", "choice", "option",
 		// technical and conditional wordings (ADR Decision 414)
-		"verify", "concomitant", "patient's"));
+		"verify", "concomitant", "patient's",
+		// colloquial and non-native wordings (ADR Decision 415)
+		"client", "my", "on", "we"));
 
 	/** Words saying the question is about the drug's interactions. */
 	private static final Set<String> RESIDUAL_INTERACTS = new HashSet<String>(Arrays.asList("interact", "interacts",
-		"interacting", "interaction", "interactions", "ddi", "ddis", "clash", "clashes", "clashing"));
+		"interacting", "interaction", "interactions", "ddi", "ddis", "clash", "clashes", "clashing", "disturb", "disturbs"));
 
 	/** Words saying the question is about whether the drug is safe to give. */
 	private static final Set<String> RESIDUAL_SAFE = new HashSet<String>(Arrays.asList("safe", "safely", "ok", "okay",
 		"fine", "alright", "issue", "issues", "problem", "problems", "concern", "concerns", "risk", "risks", "risky",
 		"compatible", "contraindicated", "contraindication", "contraindications", "appropriate", "worried", "worry",
-		"worrying", "safety", "good", "suitable", "reasonable", "able", "recommended"));
+		"worrying", "safety", "good", "suitable", "reasonable", "able", "recommended", "allowed", "harm", "harmful", "proper",
+		"well"));
 
 	/** Words proposing to give the drug, where an asking word opens the question. */
 	private static final Set<String> RESIDUAL_GIVE = new HashSet<String>(Arrays.asList("give", "giving", "given", "start",
 		"starting", "started", "prescribe", "prescribing", "prescribed", "add", "adding", "added", "administer", "use",
-		"taken", "recommend", "gave", "receive", "coadminister", "coadministered", "administered"));
+		"taken", "recommend", "gave", "receive", "coadminister", "coadministered", "administered", "put", "go", "mix", "mixed",
+		"combine", "combined"));
 
 	/** The asking words a proposal may open with. */
 	private static final Set<String> RESIDUAL_ASKING = new HashSet<String>(Arrays.asList("can", "could", "may", "should",
@@ -1776,6 +1783,7 @@ public final class QueryScopeRouter {
 	/** Such words as whole words: short ones, which as stems would open words of fact — "prescribed", "address". */
 	private static final Set<String> SAFETY_WORDS = new HashSet<String>(Arrays.asList("ok", "okay", "fine", "hold", "give",
 		"giving", "add", "adding", "prescribe", "prescribing", "start", "starting", "stop", "stopping", "best", "vs", "can", "able",
+		"allowed", "harm", "proper", "put", "mix", "mixed", "combine",
 		"could", "should", "may", "might", "would", "will", "must", "need", "needs"));
 
 	/**
@@ -1830,7 +1838,8 @@ public final class QueryScopeRouter {
 		"patient's"));
 
 	/** The subjects of "take" a residual proposal reads as her taking it. */
-	private static final Set<String> RESIDUAL_SUBJECTS = new HashSet<String>(Arrays.asList("she", "he", "they", "patient"));
+	private static final Set<String> RESIDUAL_SUBJECTS = new HashSet<String>(Arrays.asList("she", "he", "they", "patient",
+		"client"));
 
 	/** The words that make the residual words a question. */
 	private static final Set<String> RESIDUAL_QUESTION = new HashSet<String>(Arrays.asList("can", "could", "may", "should",

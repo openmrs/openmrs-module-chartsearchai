@@ -21639,3 +21639,25 @@ them — went to the model, which cleared drugs as before.
 - A question naming her medications is never one about a drug's record alone.
 
 Pinned by `ClinicianWordingsTest.technicalConditionalAndSequentialWordingsAreAnsweredAsTheQuestionsTheyAsk`.
+
+## Decision 415: Colloquial and non-native wordings are answered as the questions they ask
+
+**Status: Accepted** (October 2026) — found asking 30 wordings as clinicians in the module's deployments write them, of 15
+patients on the 3.7.1 standalone on 2026-10-22.
+
+### Context
+
+*"Is fluconazole allowed for her?"* carried no word of Decision 399's safety list, so it was read as a question about the drug's
+record and answered *"The records do not address fluconazole"* for every patient. Fourteen more went to the model: *"Can she be
+put on fluconazole?"*, *"Can my patient take fluconazole?"*, *"Can the client take fluconazole?"*, *"Will fluconazole harm her?"*,
+*"Does fluconazole go well with her medicines?"*, *"Will fluconazole disturb her medicines?"*, *"Can I mix fluconazole and
+rifampicin?"*, *"Is fluconazole and rifampicin ok together?"*, *"Fluconazole and rifampicin can they be given together?"* among them.
+
+### The decision
+
+Decision 396's residual reading takes *put*, *go*, *mix*, *combine* as words of giving; *allowed*, *harm*, *proper*, *well* as
+words of safety, which `asksOnlyAboutADrugsRecord` heeds too; *disturb* as a word of interaction; *client*, *my* and *we* as
+filler, *the client* as the patient taking it. The together shapes take *"mix"* beside *"combine"*, *"Is X and Y ok together?"*
+beside *"Are X and Y …"*, and *"X and Y, can they be given together?"*.
+
+Pinned by `ClinicianWordingsTest.colloquialWordingsAreAnsweredAsTheQuestionsTheyAsk`.

@@ -162,21 +162,25 @@ public class LocalLlamaTokenCounterTest extends BaseModuleContextSensitiveTest {
 		};
 		engine.clock = now::get;
 		ReflectionTestUtils.setField(engine, "lastActivityNanos", 0L);
+		try {
+			// The call completed half a minute before the startup timer's callback took the lock.
+			now.set(TimeUnit.SECONDS.toNanos(90));
+			ReflectionTestUtils.setField(engine, "lastActivityNanos", TimeUnit.SECONDS.toNanos(60));
+			engine.unloadIfIdle(1);
+			assertEquals(0, closes.get(), "a call that finished inside the interval must keep the server");
+			ScheduledFuture<?> remainder = (ScheduledFuture<?>) ReflectionTestUtils.getField(engine, "idleUnloadFuture");
+			assertNotNull(remainder, "the remainder of the interval must be rescheduled");
+			assertTrue(remainder.getDelay(TimeUnit.SECONDS) > 25 && remainder.getDelay(TimeUnit.SECONDS) <= 30);
 
-		// The call completed half a minute before the startup timer's callback took the lock.
-		now.set(TimeUnit.SECONDS.toNanos(90));
-		ReflectionTestUtils.setField(engine, "lastActivityNanos", TimeUnit.SECONDS.toNanos(60));
-		engine.unloadIfIdle(1);
-		assertEquals(0, closes.get(), "a call that finished inside the interval must keep the server");
-		ScheduledFuture<?> remainder = (ScheduledFuture<?>) ReflectionTestUtils.getField(engine, "idleUnloadFuture");
-		assertNotNull(remainder, "the remainder of the interval must be rescheduled");
-		assertTrue(remainder.getDelay(TimeUnit.SECONDS) > 25 && remainder.getDelay(TimeUnit.SECONDS) <= 30);
-
-		// Nothing happened for the full interval: the server is unloaded.
-		remainder.cancel(false);
-		now.set(TimeUnit.SECONDS.toNanos(120));
-		engine.unloadIfIdle(1);
-		assertEquals(1, closes.get(), "a full idle interval since the last activity unloads the server");
+			// Nothing happened for the full interval: the server is unloaded.
+			remainder.cancel(false);
+			now.set(TimeUnit.SECONDS.toNanos(120));
+			engine.unloadIfIdle(1);
+			assertEquals(1, closes.get(), "a full idle interval since the last activity unloads the server");
+		}
+		finally {
+			engine.shutdown();
+		}
 	}
 
 	/** Captures what the engine schedules, so a test runs the real callback at a time it chooses. */
@@ -217,8 +221,10 @@ public class LocalLlamaTokenCounterTest extends BaseModuleContextSensitiveTest {
 		try {
 			ReflectionTestUtils.invokeMethod(engine, "resetIdleTimer");
 			Runnable callback = timer.scheduled.get(0);
-			// A call completed at 60 s; the timer armed at 0 fires at 90 s.
-			ReflectionTestUtils.setField(engine, "lastActivityNanos", TimeUnit.SECONDS.toNanos(60));
+			// A call completed at 60 s, refreshing the activity the way every finished call does;
+			// the timer armed at 0 still fires at 90 s.
+			now.set(TimeUnit.SECONDS.toNanos(60));
+			ReflectionTestUtils.invokeMethod(engine, "resetIdleTimer");
 			now.set(TimeUnit.SECONDS.toNanos(90));
 			callback.run();
 			assertEquals(0, closes.get(), "the callback must wait out the interval since the last activity");

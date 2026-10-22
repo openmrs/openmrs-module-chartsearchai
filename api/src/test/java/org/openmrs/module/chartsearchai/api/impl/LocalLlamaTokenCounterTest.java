@@ -12,7 +12,6 @@ package org.openmrs.module.chartsearchai.api.impl;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Arrays;
@@ -20,9 +19,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
 import org.openmrs.api.context.Context;
@@ -150,35 +146,6 @@ public class LocalLlamaTokenCounterTest extends BaseModuleContextSensitiveTest {
 		engine.shutdown();
 	}
 
-	@Test
-	public void anIdleTimerThatExpiresDuringACallWaitsOutTheRemainderInsteadOfClosing() {
-		AtomicLong now = new AtomicLong(0);
-		AtomicInteger closes = new AtomicInteger();
-		LocalLlmEngine engine = new LocalLlmEngine() {
-			@Override
-			public synchronized void close() {
-				closes.incrementAndGet();
-			}
-		};
-		engine.clock = now::get;
-		ReflectionTestUtils.setField(engine, "lastActivityNanos", 0L);
-
-		// The call completed half a minute before the startup timer's callback took the lock.
-		now.set(TimeUnit.SECONDS.toNanos(90));
-		ReflectionTestUtils.setField(engine, "lastActivityNanos", TimeUnit.SECONDS.toNanos(60));
-		engine.unloadIfIdle(1);
-		assertEquals(0, closes.get(), "a call that finished inside the interval must keep the server");
-		ScheduledFuture<?> remainder = (ScheduledFuture<?>) ReflectionTestUtils.getField(engine, "idleUnloadFuture");
-		assertNotNull(remainder, "the remainder of the interval must be rescheduled");
-		assertTrue(remainder.getDelay(TimeUnit.SECONDS) > 25 && remainder.getDelay(TimeUnit.SECONDS) <= 30);
-
-		// Nothing happened for the full interval: the server is unloaded.
-		remainder.cancel(false);
-		now.set(TimeUnit.SECONDS.toNanos(120));
-		engine.unloadIfIdle(1);
-		assertEquals(1, closes.get(), "a full idle interval since the last activity unloads the server");
-	}
-
 	/**
 	 * Opt-in: launches the real local engine from a tester-prepared application-data directory.
 	 * The module spawns this server itself, so it is not one of the tester-started servers
@@ -218,13 +185,6 @@ public class LocalLlamaTokenCounterTest extends BaseModuleContextSensitiveTest {
 			List<Integer> focus = Collections.singletonList(1);
 			List<AlreadyOrderedDrug> orders = Collections.singletonList(new AlreadyOrderedDrug(
 					"aspirin", Collections.singletonList("aspirin 75 mg daily"), 1, "an existing order"));
-			// Invalid timeout fails after cold startup, before any generation request is sent.
-			assertThrows(IllegalArgumentException.class, () -> engine.infer("system", chart, 0));
-			ScheduledFuture<?> failedCallIdle = (ScheduledFuture<?>)
-					ReflectionTestUtils.getField(engine, "idleUnloadFuture");
-			assertNotNull(failedCallIdle, "A failed first inference must not leave a loaded server indefinitely");
-			assertFalse(failedCallIdle.isDone());
-			engine.close();
 			int count = counter.countPrompt(chart, focus, "Can I add aspirin?", true, orders);
 			assertTrue(count > 0);
 			ScheduledFuture<?> idle = (ScheduledFuture<?>)

@@ -829,6 +829,21 @@ public final class QueryScopeRouter {
 					+ "patient|this patient) (?:has|have)",
 			"what (?:is|are) the severit(?:y|ies) of " + POSSESSIVE + " (?:drug )?interactions?",
 			"(?:(?:are|is) there )?any contraindicated (?:drug )?combinations?",
+			// "Are her current medications ok?", "Any red flags in her medications?", "Review her medications", "Which of her drugs
+			// is causing the interaction?", "Why does she have a drug warning?" — whether her medications as a whole are all
+			// right is the screen of them (ADR Decision 416)
+			"(?:are|is) " + POSSESSIVE + " (?:current |active )?(?:medications|meds|medicines|drugs|prescriptions|regimen|treatment)"
+					+ " (?:ok|okay|fine|alright|all right|appropriate|safe)",
+			"is (?:everything|it all|all) (?:ok|okay|fine|alright|all right) with " + POSSESSIVE + " (?:current )?(?:medications|"
+					+ "meds|medicines|drugs|prescriptions|regimen|treatment)",
+			"(?:(?:are|is) there )?any (?:red flags?|warnings?|safety (?:issues?|concerns?|problems?)|issues?|problems?|concerns?)"
+					+ " (?:in|with) " + POSSESSIVE + " (?:current |active )?(?:medications|meds|medicines|drugs|prescriptions|regimen|"
+					+ "treatment)",
+			"(?:please )?(?:review|check) " + POSSESSIVE + " (?:current |active )?(?:medications|meds|medicines|drugs|prescriptions|"
+					+ "regimen|treatment)",
+			"which of " + POSSESSIVE + " (?:medications|meds|medicines|drugs) (?:is|are) causing (?:the|this|an?) interactions?",
+			"why (?:does|do) (?:she|he|they|the patient|this patient) have (?:a |any )?(?:drug |safety |interaction )?warnings?",
+			"what (?:does|do) (?:the|this|that) (?:drug |safety |interaction )?warnings? mean",
 			// "Any drug interactions or allergy conflicts with her current medications?" — the safety screen (ADR Decision
 			// 318)
 			"(?:(?:are|is) there )?any (?:drug )?interactions? (?:or|and) (?:drug )?(?:allergy|allergic|allergies) (?:conflicts?|"
@@ -2232,6 +2247,9 @@ public final class QueryScopeRouter {
 			// "Any reason not to continue her current medications?", "Should I stop any of her medications?" (ADR Decision
 			// 397)
 			"(?:is there )?any reason not to continue " + HER_MEDICATIONS,
+			// "Do any of her drugs need dose adjustment?", "Should any of her medicines be stopped?" (ADR Decision 416)
+			"(?:do|does) any of " + HER_MEDICATIONS + " need (?:a )?dos(?:e|ing) (?:adjustments?|changes?)",
+			"should any of " + HER_MEDICATIONS + " be " + CHANGED,
 			"should (?:i|we) stop any of " + HER_MEDICATIONS);
 
 	/**

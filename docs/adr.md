@@ -21661,3 +21661,32 @@ filler, *the client* as the patient taking it. The together shapes take *"mix"* 
 beside *"Are X and Y …"*, and *"X and Y, can they be given together?"*.
 
 Pinned by `ClinicianWordingsTest.colloquialWordingsAreAnsweredAsTheQuestionsTheyAsk`.
+
+## Decision 416: Whether her medications as a whole are all right is the screen, and the screen's silence is stated only where it ran
+
+**Status: Accepted** (October 2026) — found asking such questions of 15 patients on the 3.7.1 standalone on 2026-10-22.
+
+### Context
+
+*"Are her current medications ok?"*, *"Is everything ok with her medications?"*, *"Any red flags in her medications?"* and *"Review
+her medications"* ran no screen: patients with a Major interaction among their orders — Helen's salicylic acid with methotrexate,
+Michael's simvastatin with clarithromycin — were told *"The records do not address the safety of the current medications"*.
+Writing the screen shapes for them uncovered a worse fault. *"Are there any issues with her treatment?"* was read as a screen by
+the router, but `UnrecognisedDrugName` read *"treatment"* as a word standing in a drug's place, which stands the screening arm
+down — and the injector, which asked only the router, stated *"No interactions were found among this patient's active
+medications. 5 substances in them were checked against each other"* of a screen that never ran, for a chart with six.
+
+### The decision
+
+- `DrugSafetyValidator.screensHerOrders` is the one answer to whether the screening arm screens her orders; the arm asks it, and
+  so does the injector's statement that the screen related nothing (Decision 87). Never a statement of a screen's silence from a
+  re-derivation of when it runs.
+- A word of medication — *"her treatment"*, *"her regimen"* — is never a word standing in a drug's place
+  (`QueryScopeRouter.namesAMedicationGroup`).
+- *"Are her (current) medications ok / fine / safe?"*, *"Is everything ok with her medications?"*, *"Any red flags / issues /
+  problems in her medications or treatment?"*, *"Review her medications"*, *"Which of her drugs is causing the interaction?"*,
+  *"Why does she have a drug warning?"* and *"What does the interaction warning mean?"* are screens of her medications.
+- *"Do any of her drugs need dose adjustment?"* and *"Should any of her medicines be stopped?"* are Decision 300's whether any of
+  her medications need changing.
+
+Pinned by `ClinicianWordingsTest.whetherHerMedicationsAreAllRightIsTheScreen`.

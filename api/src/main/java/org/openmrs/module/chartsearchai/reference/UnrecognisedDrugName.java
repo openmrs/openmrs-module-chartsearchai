@@ -342,6 +342,11 @@ final class UnrecognisedDrugName {
 				if (marked.size() == 1) {
 					continue;
 				}
+				// Nor a word of medication — "her treatment", "her regimen" — which names her medications and no drug (ADR
+				// Decision 416): read as a drug's name, "Are there any issues with her treatment?" stood the screen down.
+				if (QueryScopeRouter.namesAMedicationGroup(String.join(" ", span))) {
+					continue;
+				}
 				// Or whether to stop it, named as hers (ADR Decision 335) — or whether her drug is safe, or what interacts with
 				// it (ADR Decision 374).
 				// The shapes alone: the residual reading is of a name the data recognises (ADR Decision 396).

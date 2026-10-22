@@ -752,8 +752,8 @@ public class DrugReferenceInjector {
 				&& (nothingButOrdersSharingASubstance(findings)
 						// Her own conflicts beside it, on any screen question: stated after it (ADR Decisions 236, 303).
 						|| warnsOnInteractions() && nothingButOrdersSharingASubstanceOrHerOwnConflicts(findings))
-				&& questionDrugs.isEmpty()
-				&& QueryScopeRouter.isInteractionScreening(question)
+				// Only where the screen ran: the validator's own answer, never one derived here (ADR Decision 416).
+				&& DrugSafetyValidator.screensHerOrders(question, questionDrugs, context, drugReferenceService)
 				&& screenedSubstances.size() >= 2 && context.activeDrugOrdersRead();
 		// A question listing drugs her chart holds no active order for is stated even where nothing else
 		// resolved (issue #515), so its chart is rebuilt to carry the stamp.

@@ -1185,17 +1185,7 @@ public class DrugSafetyValidator {
 		// And where the question names two of her orders by their own names, which the reference data does not carry: it is
 		// about those two, and the screen is what relates them (ADR Decision 265). So for one of them named alone, whose word
 		// in a drug's place names her order and is no unrecognised drug (ADR Decision 273).
-		boolean wordInADrugsPlace = warnInteractions && questionDrugs.isEmpty()
-				&& UnrecognisedDrugName.namesAWordInADrugsPlace(question);
-		boolean oneOfHerOrdersByName = wordInADrugsPlace
-				&& DrugReferenceInjector.asksAboutOneOfHerOrdersByName(question, context, drugReferenceService) != null;
-		// Two words in a two-drug question's drug places stand in them too (ADR Decision 382): where they are two of her
-		// orders by their own names, the screen is still what relates them.
-		boolean twoOfHerOrdersByName = warnInteractions && questionDrugs.isEmpty()
-				&& DrugReferenceInjector.asksAboutTwoOfHerOrdersByName(question, context, drugReferenceService);
-		if (warnInteractions && questionDrugs.isEmpty()
-				&& (QueryScopeRouter.isInteractionScreening(question) || twoOfHerOrdersByName || oneOfHerOrdersByName)
-				&& (oneOfHerOrdersByName || twoOfHerOrdersByName || !wordInADrugsPlace)) {
+		if (warnInteractions && screensHerOrders(question, questionDrugs, context, drugReferenceService)) {
 			int screenedFrom = warnings.size();
 			pairExtent = addActiveOrderPairInteractions(warnings, subjects, context, severityFloor,
 					orderEntries, interactionPairs, coMedications, statedChips, bridgedOrders);
@@ -10906,6 +10896,30 @@ public class DrugSafetyValidator {
 	}
 
 	/** Most severe first; stable, so equally severe pairs keep dataset order. */
+	/**
+	 * Whether the screening arm screens her orders against each other for {@code question} — the ONE answer to that
+	 * question, which the injector's statement that the screen related nothing asks too (ADR Decision 416): the two
+	 * disagreed, and "Are there any issues with her treatment?" was answered "No interactions were found among this
+	 * patient's active medications" by a screen that never ran. A question naming no drug that asks to be screened, unless a
+	 * word stands in a drug's place — a drug's name the data does not carry — where the question is about that drug; and
+	 * where the question names one or two of her orders by their own names, which the reference data does not carry, the
+	 * screen is what relates them (ADR Decisions 265, 273, 382).
+	 */
+	static boolean screensHerOrders(String question, Collection<DrugReference> questionDrugs, PatientClinicalContext context,
+			DrugReferenceService service) {
+		if (!questionDrugs.isEmpty()) {
+			return false;
+		}
+		boolean wordInADrugsPlace = UnrecognisedDrugName.namesAWordInADrugsPlace(question);
+		boolean oneOfHerOrdersByName = wordInADrugsPlace
+				&& DrugReferenceInjector.asksAboutOneOfHerOrdersByName(question, context, service) != null;
+		// Two words in a two-drug question's drug places stand in them too (ADR Decision 382): where they are two of her
+		// orders by their own names, the screen is still what relates them.
+		boolean twoOfHerOrdersByName = DrugReferenceInjector.asksAboutTwoOfHerOrdersByName(question, context, service);
+		return (QueryScopeRouter.isInteractionScreening(question) || twoOfHerOrdersByName || oneOfHerOrdersByName)
+				&& (oneOfHerOrdersByName || twoOfHerOrdersByName || !wordInADrugsPlace);
+	}
+
 	private static final Comparator<ScreenedPair> SCREENED_PAIR_SEVERITY_DESCENDING = new Comparator<ScreenedPair>() {
 
 		@Override

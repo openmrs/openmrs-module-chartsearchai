@@ -416,6 +416,34 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		assertTrue(!chart("Is warfarin allowed for her?").asksOnlyAboutADrugsRecord(), "no question about its record alone");
 	}
 
+	/**
+	 * A question whether her medications as a whole are all right is the screen of them (ADR Decision 416). On the 3.7.1
+	 * standalone "Are her current medications ok?" and "Any red flags in her medications?" ran no screen, and patients with a
+	 * Major interaction among their orders were told "The records do not address the safety of the current medications".
+	 */
+	@Test
+	public void whetherHerMedicationsAreAllRightIsTheScreen() {
+		String screen = ask("Are there any drug interactions with her medications?");
+		assertNotNull(screen, "precondition: the module answers it");
+		for (String question : new String[] { "Are her current medications ok?", "Is everything ok with her medications?",
+				"Any red flags in her medications?", "Are there any issues with her treatment?", "Review her medications",
+				"Which of her drugs is causing the interaction?", "Why does she have a drug warning?",
+				"What does the interaction warning mean?" }) {
+			String answer = ask(question);
+			assertNotNull(answer, "the module answers " + question);
+			assertTrue(answer.startsWith(screen.split("\n")[0]), question + " — the screen, was: " + answer);
+		}
+		// And never "No interactions were found" from a screen that did not run: a word in a drug's place stands it down.
+		String unrecognised = ask("Are there any issues with her blorfen?");
+		assertTrue(unrecognised == null || !unrecognised.contains("No interactions were found"), "was: " + unrecognised);
+		String changing = ask("Do any of her medications need to be changed?");
+		assertNotNull(changing, "precondition: the module answers it");
+		for (String question : new String[] { "Do any of her drugs need dose adjustment?",
+				"Should any of her medicines be stopped?" }) {
+			assertEquals(changing, ask(question), question);
+		}
+	}
+
 	private static org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart chart(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

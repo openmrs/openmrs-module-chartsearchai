@@ -150,43 +150,12 @@ public class LocalLlamaTokenCounterTest extends BaseModuleContextSensitiveTest {
 		engine.shutdown();
 	}
 
-	@Test
-	public void anIdleTimerThatExpiresDuringACallWaitsOutTheRemainderInsteadOfClosing() {
-		AtomicLong now = new AtomicLong(0);
-		AtomicInteger closes = new AtomicInteger();
-		LocalLlmEngine engine = new LocalLlmEngine() {
-			@Override
-			public synchronized void close() {
-				closes.incrementAndGet();
-			}
-		};
-		engine.clock = now::get;
-		ReflectionTestUtils.setField(engine, "lastActivityNanos", 0L);
-		try {
-			// The call completed half a minute before the startup timer's callback took the lock.
-			now.set(TimeUnit.SECONDS.toNanos(90));
-			ReflectionTestUtils.setField(engine, "lastActivityNanos", TimeUnit.SECONDS.toNanos(60));
-			engine.unloadIfIdle(1);
-			assertEquals(0, closes.get(), "a call that finished inside the interval must keep the server");
-			ScheduledFuture<?> remainder = (ScheduledFuture<?>) ReflectionTestUtils.getField(engine, "idleUnloadFuture");
-			assertNotNull(remainder, "the remainder of the interval must be rescheduled");
-			assertTrue(remainder.getDelay(TimeUnit.SECONDS) > 25 && remainder.getDelay(TimeUnit.SECONDS) <= 30);
-
-			// Nothing happened for the full interval: the server is unloaded.
-			remainder.cancel(false);
-			now.set(TimeUnit.SECONDS.toNanos(120));
-			engine.unloadIfIdle(1);
-			assertEquals(1, closes.get(), "a full idle interval since the last activity unloads the server");
-		}
-		finally {
-			engine.shutdown();
-		}
-	}
-
 	/** Captures what the engine schedules, so a test runs the real callback at a time it chooses. */
 	private static final class CapturingTimer extends java.util.concurrent.ScheduledThreadPoolExecutor {
 
 		final List<Runnable> scheduled = new java.util.ArrayList<>();
+
+		final List<Long> delaysSeconds = new java.util.ArrayList<>();
 
 		final List<ScheduledFuture<?>> futures = new java.util.ArrayList<>();
 
@@ -197,16 +166,57 @@ public class LocalLlamaTokenCounterTest extends BaseModuleContextSensitiveTest {
 		@Override
 		public ScheduledFuture<?> schedule(Runnable command, long delay, TimeUnit unit) {
 			scheduled.add(command);
+			delaysSeconds.add(unit.toSeconds(delay));
 			ScheduledFuture<?> future = super.schedule(() -> { }, 1, TimeUnit.DAYS);
 			futures.add(future);
 			return future;
 		}
 	}
 
-	/** The scheduled callback itself, not only the method it calls, waits out a call that just finished. */
-	@Test
-	public void theScheduledIdleCallbackKeepsAServerACallJustUsed() throws Exception {
+	/** A count endpoint answering 5 tokens, standing in for the running local server. */
+	private static com.sun.net.httpserver.HttpServer startCountServer() throws java.io.IOException {
+		com.sun.net.httpserver.HttpServer server = com.sun.net.httpserver.HttpServer.create(
+				new java.net.InetSocketAddress(LlamaServerEndpoint.LOOPBACK_HOST, 0), 0);
+		server.createContext("/v1/messages/count_tokens", exchange -> {
+			byte[] body = "{\"input_tokens\":5}".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+			exchange.sendResponseHeaders(200, body.length);
+			try (java.io.OutputStream out = exchange.getResponseBody()) {
+				out.write(body);
+			}
+		});
+		server.start();
+		return server;
+	}
+
+	/** Records a server already running with the configured command, so a count does not launch one. */
+	private static void attachRunningServer(LocalLlmEngine engine, com.sun.net.httpserver.HttpServer server) {
+		String modelPath = ChartSearchAiUtils.resolveModelPath("count-timer-test.gguf",
+				ChartSearchAiConstants.GP_LLM_MODEL_FILE_PATH);
+		int port = server.getAddress().getPort();
+		engine.recordLaunch(modelPath, engine.resolveKvCacheDir(), null,
+				engine.currentServerCommand("/bin/llama-server", modelPath, port, null));
+		ReflectionTestUtils.setField(engine, "serverProcess", new AliveProcess());
+		ReflectionTestUtils.setField(engine, "endpoint", LlamaServerEndpoint.open(port));
+	}
+
+	private static java.io.File configureIdleTestModel() throws java.io.IOException {
 		Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_LLM_IDLE_TIMEOUT_MINUTES, "1");
+		java.io.File model = new java.io.File(OpenmrsUtil.getApplicationDataDirectory(), "count-timer-test.gguf");
+		model.createNewFile();
+		Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_LLM_MODEL_FILE_PATH,
+				"count-timer-test.gguf");
+		return model;
+	}
+
+	/**
+	 * A timer that fires while a later call is in flight runs after that call: the callback waits
+	 * out the rest of the interval since the call, then unloads once a full interval passes with
+	 * nothing. Both calls are real counts, so a call that stopped refreshing the activity fails it.
+	 */
+	@Test
+	public void theIdleCallbackWaitsOutACallThatFinishedAfterItWasArmed() throws Exception {
+		java.io.File model = configureIdleTestModel();
+		com.sun.net.httpserver.HttpServer server = startCountServer();
 		AtomicLong now = new AtomicLong(0);
 		AtomicInteger closes = new AtomicInteger();
 		LocalLlmEngine engine = new LocalLlmEngine() {
@@ -219,51 +229,42 @@ public class LocalLlamaTokenCounterTest extends BaseModuleContextSensitiveTest {
 		ReflectionTestUtils.setField(engine, "idleTimer", timer);
 		engine.clock = now::get;
 		try {
-			ReflectionTestUtils.invokeMethod(engine, "resetIdleTimer");
-			Runnable callback = timer.scheduled.get(0);
-			// A call completed at 60 s, refreshing the activity the way every finished call does;
-			// the timer armed at 0 still fires at 90 s.
+			attachRunningServer(engine, server);
+			assertEquals(5, engine.countChatInputTokens("system", "user"));
+			Runnable armedFirst = timer.scheduled.get(0);
 			now.set(TimeUnit.SECONDS.toNanos(60));
-			ReflectionTestUtils.invokeMethod(engine, "resetIdleTimer");
+			assertEquals(5, engine.countChatInputTokens("system", "user"));
+
+			// The first timer expired during the second count and took the lock after it, at 90 s.
 			now.set(TimeUnit.SECONDS.toNanos(90));
-			callback.run();
-			assertEquals(0, closes.get(), "the callback must wait out the interval since the last activity");
+			armedFirst.run();
+			assertEquals(0, closes.get(), "a count that finished inside the interval must keep the server");
+			assertEquals(3, timer.scheduled.size(), "the remainder of the interval must be rescheduled");
+			assertEquals(30L, timer.delaysSeconds.get(2));
+
+			// Nothing happened for a full interval since the second count: the server is unloaded.
+			now.set(TimeUnit.SECONDS.toNanos(120));
+			timer.scheduled.get(2).run();
+			assertEquals(1, closes.get(), "a full idle interval since the last activity unloads the server");
 		}
 		finally {
+			ReflectionTestUtils.setField(engine, "serverProcess", null);
 			timer.shutdownNow();
+			server.stop(0);
+			model.delete();
 		}
 	}
 
 	/** A count, like an inference, restarts the idle interval: the timer it replaces is cancelled. */
 	@Test
 	public void aCountReplacesTheIdleTimerItFindsArmed() throws Exception {
-		Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_LLM_IDLE_TIMEOUT_MINUTES, "1");
-		java.io.File model = new java.io.File(OpenmrsUtil.getApplicationDataDirectory(), "count-timer-test.gguf");
-		model.createNewFile();
-		Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_LLM_MODEL_FILE_PATH,
-				"count-timer-test.gguf");
-		com.sun.net.httpserver.HttpServer server = com.sun.net.httpserver.HttpServer.create(
-				new java.net.InetSocketAddress(LlamaServerEndpoint.LOOPBACK_HOST, 0), 0);
-		server.createContext("/v1/messages/count_tokens", exchange -> {
-			byte[] body = "{\"input_tokens\":5}".getBytes(java.nio.charset.StandardCharsets.UTF_8);
-			exchange.sendResponseHeaders(200, body.length);
-			try (java.io.OutputStream out = exchange.getResponseBody()) {
-				out.write(body);
-			}
-		});
-		server.start();
+		java.io.File model = configureIdleTestModel();
+		com.sun.net.httpserver.HttpServer server = startCountServer();
 		LocalLlmEngine engine = new LocalLlmEngine();
 		CapturingTimer timer = new CapturingTimer();
 		ReflectionTestUtils.setField(engine, "idleTimer", timer);
 		try {
-			// A server already running with the configured command, so the count does not launch one.
-			String modelPath = ChartSearchAiUtils.resolveModelPath("count-timer-test.gguf",
-					ChartSearchAiConstants.GP_LLM_MODEL_FILE_PATH);
-			int port = server.getAddress().getPort();
-			engine.recordLaunch(modelPath, engine.resolveKvCacheDir(), null,
-					engine.currentServerCommand("/bin/llama-server", modelPath, port, null));
-			ReflectionTestUtils.setField(engine, "serverProcess", new AliveProcess());
-			ReflectionTestUtils.setField(engine, "endpoint", LlamaServerEndpoint.open(port));
+			attachRunningServer(engine, server);
 
 			assertEquals(5, engine.countChatInputTokens("system", "user"));
 			assertEquals(5, engine.countChatInputTokens("system", "user"));

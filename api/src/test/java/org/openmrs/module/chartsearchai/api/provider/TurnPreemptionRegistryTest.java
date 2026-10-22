@@ -82,15 +82,54 @@ public class TurnPreemptionRegistryTest {
 	}
 
 	@Test
-	public void endClearsTheEntryWhenItIsStillCurrent() {
+	public void endReleasesTheFinishedTurnsCancellation() {
 		TurnPreemptionRegistry registry = new TurnPreemptionRegistry();
 		TurnCancellation first = registry.begin("conversation-1", 1);
 
 		registry.end("conversation-1", first);
 		registry.begin("conversation-1", 1);
 
-		// Nothing was left registered for "conversation-1" after end(), so this second begin()
-		// must not find (and cancel) anything.
+		// end() kept the ordinal but released the finished turn's signal, so this second begin()
+		// has nothing to cancel.
 		assertFalse(first.isCancelled());
+	}
+
+	@Test
+	public void aFinishedTurnPastItsRetentionIsSweptOnceTheRegistryGrows() {
+		long[] now = {0};
+		TurnPreemptionRegistry registry = new TurnPreemptionRegistry(() -> now[0], 1);
+		registry.end("conversation-1", registry.begin("conversation-1", 2));
+
+		now[0] = TurnPreemptionRegistry.FINISHED_RETENTION_NANOS + 1;
+		registry.end("conversation-2", registry.begin("conversation-2", 1));
+
+		assertFalse(registry.begin("conversation-1", 1).isCancelled(),
+				"a conversation whose finished turn was swept starts afresh");
+	}
+
+	@Test
+	public void aFinishedTurnWithinItsRetentionSurvivesTheSweep() {
+		long[] now = {0};
+		TurnPreemptionRegistry registry = new TurnPreemptionRegistry(() -> now[0], 1);
+		registry.end("conversation-1", registry.begin("conversation-1", 2));
+
+		now[0] = TurnPreemptionRegistry.FINISHED_RETENTION_NANOS;
+		registry.end("conversation-2", registry.begin("conversation-2", 1));
+
+		assertTrue(registry.begin("conversation-1", 1).isCancelled(),
+				"an older turn arriving within the retention is still cancelled");
+	}
+
+	@Test
+	public void aRunningTurnIsNeverSwept() {
+		long[] now = {0};
+		TurnPreemptionRegistry registry = new TurnPreemptionRegistry(() -> now[0], 1);
+		TurnCancellation running = registry.begin("conversation-1", 1);
+
+		now[0] = TurnPreemptionRegistry.FINISHED_RETENTION_NANOS * 2;
+		registry.begin("conversation-2", 1);
+		registry.begin("conversation-1", 2);
+
+		assertTrue(running.isCancelled(), "the running turn kept its slot, so the newer one cancels it");
 	}
 }

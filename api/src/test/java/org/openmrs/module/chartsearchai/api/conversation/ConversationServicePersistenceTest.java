@@ -238,6 +238,32 @@ public class ConversationServicePersistenceTest extends BaseModuleContextSensiti
 		assertEquals("Kampala clinic", prior.get(1).getAnswer());
 	}
 
+	// Replay follows the ordinal, not the order the rows were written: a turn whose ordinal is later replays
+	// later even where its row came first.
+	@Test
+	public void turnsReplayByOrdinalRatherThanByTheOrderTheirRowsWereWritten() {
+		ClinicalConversation conversation = conversationService.openOrCreate(patient, "hub",
+				ProviderMode.QUERY_SCOPED);
+		ClinicalConversationTurn written = conversationService.startTurn(conversation, "request-written-first",
+				"Written first?");
+		conversationService.finishTurn(written, TurnResult.done("hub", ProviderMode.QUERY_SCOPED,
+				AnswerEnvelope.fromPayload(Collections.singletonMap("answer", "first row"))), 1000L);
+		ClinicalConversationTurn next = conversationService.startTurn(conversation, "request-written-second",
+				"Written second?");
+		conversationService.finishTurn(next, TurnResult.done("hub", ProviderMode.QUERY_SCOPED,
+				AnswerEnvelope.fromPayload(Collections.singletonMap("answer", "second row"))), 1000L);
+		Context.flushSession();
+		Context.getAdministrationService().executeSQL("update chartsearchai_conversation_turn set ordinal = "
+				+ (next.getOrdinal() + 10) + " where uuid = '" + written.getUuid() + "'", false);
+		Context.clearSession();
+
+		List<PriorClinicalTurn> prior = conversationService.priorClinicalTurns(
+				conversationDAO.getTurnByUuid(next.getUuid()).getConversation());
+		assertEquals(2, prior.size());
+		assertEquals("Written second?", prior.get(0).getQuestion());
+		assertEquals("Written first?", prior.get(1).getQuestion());
+	}
+
 	@Test
 	public void editedCheckedAnswerReplacesTheDraftInFollowUpContext() throws Exception {
 		ClinicalConversation conversation = conversationService.openOrCreate(patient, "hub",

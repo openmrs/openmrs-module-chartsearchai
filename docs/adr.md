@@ -2135,8 +2135,10 @@ substitute cohort (the original cohort is gone), 40 scope cells, one capture per
   from one of three creatinine records cited to two; the other kidney cells were unchanged. One control, patient
   3666's medications, cited one order per drug instead of every repeat of the same five drugs, which the per-record
   gold scores 24/24 to 5/24.
-
-The temporal probe has not been re-run on this composition.
+- 2026-10-21, on the restacked tips (QueryStore 057eae4, its #98 against #97 at 0d6d2c0): mean F1 0.801 against
+  0.819, abstention 22/22 against 21/22, off-topic citations 0 against 3, and the temporal probe 14/15 in both, the
+  one review case patient 5587's three weights at the same newest timestamp, as in the earlier runs. The loss was
+  three medications cells citing the newest order of each drug where #97 cited every repeat.
 
 **Update (2026-10, default flipped back to `fullChart`).** Taken by the maintainer, against this decision's own
 measurements, which still stand and were not re-run: on a CPU host a not-yet-warmed patient's first answer is

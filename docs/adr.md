@@ -8728,7 +8728,8 @@ keep-alive timer, so the row is owed on every exit of that try block that got as
 producing something. It writes **through** `saveAuditLog`, which stays the only place a `/search` or
 `/search/stream` row is built, and one row per query at most. A conversation turn's row is built by
 `ConversationServiceImpl.buildAudit` instead, once, when the turn finishes; a turn that fails after its
-client was sent an answer files that answer, as this stream does, and never stores it on the turn. Its
+client was sent an unchecked answer files that answer, as this stream does, and never stores it on the
+turn, while a checked answer the turn already retained stays on the failed turn. Its
 failure semantics differ deliberately: the row is written in the transaction that settles the turn,
 so a turn is never stored as finished without its audit row, and a failed write fails the settlement
 rather than being logged and passed over as `saveAuditLog`'s is.

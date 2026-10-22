@@ -212,6 +212,33 @@ public class ConversationServicePersistenceTest extends BaseModuleContextSensiti
 	}
 
 	@Test
+	public void twoTurnsTakeIncreasingOrdinalsAndReplayInThatOrderAfterReload() {
+		ClinicalConversation conversation = conversationService.openOrCreate(patient, "hub",
+				ProviderMode.QUERY_SCOPED);
+		ClinicalConversationTurn first = conversationService.startTurn(conversation, "request-first",
+				"What was the most recent visit date?");
+		conversationService.finishTurn(first, TurnResult.done("hub", ProviderMode.QUERY_SCOPED,
+				AnswerEnvelope.fromPayload(Collections.singletonMap("answer", "2026-01-26"))), 1000L);
+		ClinicalConversationTurn second = conversationService.startTurn(conversation, "request-second",
+				"Which clinic was it at?");
+		conversationService.finishTurn(second, TurnResult.done("hub", ProviderMode.QUERY_SCOPED,
+				AnswerEnvelope.fromPayload(Collections.singletonMap("answer", "Kampala clinic"))), 1000L);
+		Context.flushSession();
+		Context.clearSession();
+
+		ClinicalConversationTurn reloadedFirst = conversationDAO.getTurnByUuid(first.getUuid());
+		ClinicalConversationTurn reloadedSecond = conversationDAO.getTurnByUuid(second.getUuid());
+		assertTrue(reloadedSecond.getOrdinal() > reloadedFirst.getOrdinal(),
+				reloadedFirst.getOrdinal() + " then " + reloadedSecond.getOrdinal());
+		List<PriorClinicalTurn> prior = conversationService.priorClinicalTurns(reloadedSecond.getConversation());
+		assertEquals(2, prior.size());
+		assertEquals("What was the most recent visit date?", prior.get(0).getQuestion());
+		assertEquals("2026-01-26", prior.get(0).getAnswer());
+		assertEquals("Which clinic was it at?", prior.get(1).getQuestion());
+		assertEquals("Kampala clinic", prior.get(1).getAnswer());
+	}
+
+	@Test
 	public void editedCheckedAnswerReplacesTheDraftInFollowUpContext() throws Exception {
 		ClinicalConversation conversation = conversationService.openOrCreate(patient, "hub",
 				ProviderMode.QUERY_SCOPED);

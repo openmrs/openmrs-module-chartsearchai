@@ -1077,7 +1077,9 @@ Limitation codes state the cause. `unavailable` carries one of:
 - `condition_rules_unavailable`, `interaction_reference_unavailable` and
   `no_actionable_dose_reference`: the loaded data has no usable rules of that kind for a drug
   the check covered;
-- `dose_not_assessable`: the answer supplied no dose and schedule that could be assessed;
+- `dose_not_assessable`: a dose the answer states could not be assessed as written (no
+  frequency, another unit, a negative amount), or the answer stated no dose at all, even where
+  another of its doses was assessed;
 - `weight_unavailable`: a weight-based check lacked the patient's weight.
 
 Neither of the last two claims missing allergy or condition data.

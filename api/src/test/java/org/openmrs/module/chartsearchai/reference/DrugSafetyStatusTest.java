@@ -254,6 +254,52 @@ public class DrugSafetyStatusTest extends BaseModuleContextSensitiveTest {
 	}
 
 	@Test
+	public void aNegativeDoseWrittenWithTheUnicodeMinusIsNotAssessed() {
+		prepareCompletePatient();
+		DrugSafetyValidator.SafetyCheckResult result = validator.validateWithStatus(
+				"Paracetamol 500 mg four times daily. Paracetamol \u22121000 mg four times daily.",
+				"Can I take paracetamol?", patient, Collections.emptyList(), new PairChipExtent.Sink());
+		assertEquals("limited", result.getStatus(), result.getIssues().toString());
+		assertEquals(Collections.singletonList("dose_not_assessable"), result.getIssues());
+	}
+
+	@Test
+	public void aDailyDoseInAnotherUnitIsNotAssessed() {
+		prepareCompletePatient();
+		DrugSafetyValidator.SafetyCheckResult result = validator.validateWithStatus(
+				"Paracetamol 500 mg four times daily. Paracetamol 5 g/day.", "Can I take paracetamol?", patient,
+				Collections.emptyList(), new PairChipExtent.Sink());
+		assertEquals("limited", result.getStatus(), result.getIssues().toString());
+		assertEquals(Collections.singletonList("dose_not_assessable"), result.getIssues());
+	}
+
+	@Test
+	public void aConcentrationPerVolumeIsNotADose() {
+		prepareCompletePatient();
+		DrugSafetyValidator.SafetyCheckResult plain = validator.validateWithStatus(
+				"Paracetamol 500 mg four times daily.", "Can I take paracetamol?", patient,
+				Collections.emptyList(), new PairChipExtent.Sink());
+		DrugSafetyValidator.SafetyCheckResult withStrength = validator.validateWithStatus(
+				"Paracetamol 500 mg four times daily, from the 0.5 g/10 ml suspension.", "Can I take paracetamol?",
+				patient, Collections.emptyList(), new PairChipExtent.Sink());
+		assertEquals(plain.getStatus(), withStrength.getStatus(), withStrength.getIssues().toString());
+		assertEquals(plain.getIssues(), withStrength.getIssues());
+	}
+
+	@Test
+	public void aRangeWithWideSpacingIsStillARange() {
+		prepareCompletePatient();
+		DrugSafetyValidator.SafetyCheckResult upper = validator.validateWithStatus(
+				"Paracetamol 1000 mg four times daily.", "Can I take paracetamol?", patient,
+				Collections.emptyList(), new PairChipExtent.Sink());
+		DrugSafetyValidator.SafetyCheckResult spaced = validator.validateWithStatus(
+				"Paracetamol 500     - 1000 mg four times daily.", "Can I take paracetamol?", patient,
+				Collections.emptyList(), new PairChipExtent.Sink());
+		assertEquals(upper.getStatus(), spaced.getStatus(), spaced.getIssues().toString());
+		assertEquals(upper.getIssues(), spaced.getIssues());
+	}
+
+	@Test
 	public void aDefectTheLoaderReportsOnARecordedAllergenLimitsTheCheck() throws IOException {
 		prepareCompletePatient();
 		org.openmrs.Concept otherNonCoded = Context.getConceptService().getConcept(88);

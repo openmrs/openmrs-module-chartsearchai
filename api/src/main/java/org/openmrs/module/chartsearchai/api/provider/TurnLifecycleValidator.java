@@ -28,10 +28,11 @@ import java.util.Set;
  *   <li>{@code turn_done}, {@code answer_validation}, {@code evidence_updated} and In-Depth
  *       events require a preceding {@code answer_done}; {@code turn_error} does not, because a
  *       turn may fail before any answer exists.</li>
- *   <li>Events follow the canonical stage order; only the delta events may repeat. The optional
- *       progressive PREVIEW stream ({@code preliminary_delta}) precedes committed reasoning and
- *       may not resume once it has begun, because committed reasoning replaces the preview rather
- *       than continuing it; the reasoning stream in turn ends once answer deltas begin.</li>
+ *   <li>Events follow the canonical stage order; only the delta events and {@code heartbeat} may
+ *       repeat. The optional progressive PREVIEW stream ({@code preliminary_delta}) precedes
+ *       committed reasoning and may not resume once it has begun, because committed reasoning
+ *       replaces the preview rather than continuing it; the reasoning stream in turn ends once
+ *       answer deltas begin.</li>
  *   <li>Optional events require their advertised capability: deltas require
  *       {@code token_streaming}; {@code answer_validation} requires {@code answer_check} or
  *       {@code answer_review}; {@code evidence_updated} requires {@code grounding};

@@ -32,6 +32,18 @@ public class TurnCancellationTest {
 	}
 
 	@Test
+	public void anUnboundResourceIsNotClosedByALaterCancel() {
+		TurnCancellation cancellation = new TurnCancellation();
+		CountingCloseable resource = new CountingCloseable();
+		cancellation.bindCloseable(resource);
+		cancellation.unbindCloseable(resource);
+
+		cancellation.cancel();
+
+		assertEquals(0, resource.closes.get());
+	}
+
+	@Test
 	public void startsNotCancelled() {
 		assertFalse(new TurnCancellation().isCancelled());
 	}

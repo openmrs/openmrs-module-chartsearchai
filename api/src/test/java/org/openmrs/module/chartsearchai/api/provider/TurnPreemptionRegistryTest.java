@@ -70,6 +70,18 @@ public class TurnPreemptionRegistryTest {
 	}
 
 	@Test
+	public void anOlderTurnRegisteringAfterTheNewerOneFinishedIsStillCancelled() {
+		TurnPreemptionRegistry registry = new TurnPreemptionRegistry();
+		TurnCancellation newer = registry.begin("conversation-1", 2);
+		registry.end("conversation-1", newer);
+
+		TurnCancellation older = registry.begin("conversation-1", 1);
+
+		assertTrue(older.isCancelled(),
+				"a turn older than one that already ran must not run its question");
+	}
+
+	@Test
 	public void endClearsTheEntryWhenItIsStillCurrent() {
 		TurnPreemptionRegistry registry = new TurnPreemptionRegistry();
 		TurnCancellation first = registry.begin("conversation-1", 1);

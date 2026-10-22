@@ -88,7 +88,7 @@ public class TurnLifecycleConformanceTest {
 		assertTrue(seenEvents.contains("turn_started"));
 	}
 
-	// --- Rejection rules the fixture's accept-only cases do not pin down ---
+	// --- Rejection rules the fixture's cases do not pin down ---
 
 	private static final Set<ProviderCapability> FULL_CAPABILITIES = EnumSet.allOf(ProviderCapability.class);
 

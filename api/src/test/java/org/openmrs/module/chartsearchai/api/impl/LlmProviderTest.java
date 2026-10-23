@@ -612,14 +612,18 @@ public class LlmProviderTest {
 	public void extractResponse_shouldReportANonConformantCitationsArrayAtWarn() {
 		// Silence was the defect, so recovering the indices is only half the fix: an operator whose
 		// model is off-schema has to be able to find that out. Asserted on the LEVEL rather than the
-		// message, per LogCapture's javadoc — a re-wording must not be able to drop the guard.
+		// message, per LogCapture's javadoc - a re-wording must not be able to drop the guard.
 		String offSchema = "{\"answer\": \"CD4 is 988.0 [9].\", \"citations\": [\"9\"]}";
 		try (LogCapture capture = LogCapture.on(LlmAnswerExtractor.class.getName())) {
 			assertEquals(Arrays.asList(9), LlmProvider.extractResponse(offSchema).getCitations());
 			assertTrue(capture.hasEventAtOrAbove(Level.WARN),
 					"a citations array that does not honour the integer schema must be reported, not "
-							+ "silently repaired — the repair is a guess about a model that is "
+							+ "silently repaired - the repair is a guess about a model that is "
 							+ "misbehaving in other ways too. Captured: " + capture.describeAll());
+
+			// CWE-532 Regression Test: Ensure raw text/PHI does not leak into the log
+			assertFalse(capture.describeAll().contains("CD4 is 988.0"),
+					"Security Regression: The log warning must not contain raw patient text.");
 		}
 		String conformant = "{\"answer\": \"CD4 is 988.0 [9].\", \"citations\": [9]}";
 		try (LogCapture capture = LogCapture.on(LlmAnswerExtractor.class.getName())) {
@@ -666,7 +670,7 @@ public class LlmProviderTest {
 
 	@Test
 	public void extractResponse_shouldReportAScalarCitationsValueAtWarn() {
-		// Silence was the defect, so recovering the index is only half the fix — same argument as
+		// Silence was the defect, so recovering the index is only half the fix - same argument as
 		// #220's entry-typing WARN. Asserted on the LEVEL, per LogCapture's javadoc, so a re-wording
 		// cannot drop the guard.
 		try (LogCapture capture = LogCapture.on(LlmAnswerExtractor.class.getName())) {
@@ -676,6 +680,10 @@ public class LlmProviderTest {
 					"a citations field the server should have constrained to an array must be "
 							+ "reported when it is coerced, not silently repaired. Captured: "
 							+ capture.describeAll());
+
+			// CWE-532 Regression Test: Ensure the raw text/PHI does not leak into the log
+			assertFalse(capture.describeAll().contains("TB is active"),
+					"Security Regression: The log warning must not contain raw patient text.");
 		}
 	}
 

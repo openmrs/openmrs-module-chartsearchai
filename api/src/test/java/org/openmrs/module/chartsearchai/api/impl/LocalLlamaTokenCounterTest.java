@@ -255,6 +255,138 @@ public class LocalLlamaTokenCounterTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/**
+	 * A timer that fires while a count is in flight takes the engine lock after it: run on its own
+	 * thread mid-call, the callback waits for the count, sees the activity it refreshed and keeps the
+	 * server. Without the lock it would read the stale activity and unload right after the call.
+	 */
+	@Test
+	public void theIdleCallbackFiringDuringACountWaitsForIt() throws Exception {
+		java.io.File model = configureIdleTestModel();
+		java.util.concurrent.CountDownLatch secondArrived = new java.util.concurrent.CountDownLatch(1);
+		java.util.concurrent.CountDownLatch releaseSecond = new java.util.concurrent.CountDownLatch(1);
+		AtomicInteger requests = new AtomicInteger();
+		com.sun.net.httpserver.HttpServer server = com.sun.net.httpserver.HttpServer.create(
+				new java.net.InetSocketAddress(LlamaServerEndpoint.LOOPBACK_HOST, 0), 0);
+		server.setExecutor(java.util.concurrent.Executors.newCachedThreadPool());
+		server.createContext("/v1/messages/count_tokens", exchange -> {
+			if (requests.incrementAndGet() == 2) {
+				secondArrived.countDown();
+				try {
+					releaseSecond.await(10, TimeUnit.SECONDS);
+				}
+				catch (InterruptedException e) {
+					Thread.currentThread().interrupt();
+				}
+			}
+			byte[] body = "{\"input_tokens\":5}".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+			exchange.sendResponseHeaders(200, body.length);
+			try (java.io.OutputStream out = exchange.getResponseBody()) {
+				out.write(body);
+			}
+		});
+		server.start();
+		AtomicLong now = new AtomicLong(0);
+		AtomicInteger closes = new AtomicInteger();
+		LocalLlmEngine engine = new LocalLlmEngine() {
+			@Override
+			public synchronized void close() {
+				closes.incrementAndGet();
+			}
+		};
+		CapturingTimer timer = new CapturingTimer();
+		ReflectionTestUtils.setField(engine, "idleTimer", timer);
+		engine.clock = now::get;
+		try {
+			attachRunningServer(engine, server);
+			assertEquals(5, engine.countChatInputTokens("system", "user"));
+			Runnable armedFirst = timer.scheduled.get(0);
+
+			// The second count runs at 90 s, past the first timer's interval, and is held in flight
+			// (on this thread, which holds the OpenMRS context). The first timer fires meanwhile, on
+			// its own thread, and the count is let go once that thread waits on the engine.
+			now.set(TimeUnit.SECONDS.toNanos(90));
+			Thread callback = new Thread(armedFirst);
+			Thread fireDuringTheCount = new Thread(() -> {
+				try {
+					if (secondArrived.await(10, TimeUnit.SECONDS)) {
+						callback.start();
+						long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+						while (callback.getState() != Thread.State.BLOCKED && callback.isAlive()
+								&& System.nanoTime() < deadline) {
+							Thread.sleep(5);
+						}
+					}
+				}
+				catch (InterruptedException e) {
+					Thread.currentThread().interrupt();
+				}
+				finally {
+					releaseSecond.countDown();
+				}
+			});
+			fireDuringTheCount.start();
+			assertEquals(5, engine.countChatInputTokens("system", "user"));
+			fireDuringTheCount.join(10_000);
+			callback.join(10_000);
+			assertFalse(callback.isAlive(), "the callback ran once the count let the engine go");
+
+			assertEquals(0, closes.get(), "a count in flight when the timer fired must keep the server");
+			assertEquals(60L, timer.delaysSeconds.get(timer.delaysSeconds.size() - 1),
+					"the callback waits out a full interval from the count it waited for");
+		}
+		finally {
+			ReflectionTestUtils.setField(engine, "serverProcess", null);
+			timer.shutdownNow();
+			server.stop(0);
+			model.delete();
+		}
+	}
+
+	/**
+	 * Starting the server arms the idle timer itself, so a server whose first call fails still
+	 * unloads. A stand-in {@code llama-server} passes readiness and answers no call, which drives
+	 * the engine's real start path in the default build (the real-engine test is opt-in).
+	 */
+	@Test
+	public void startingTheServerArmsTheIdleTimerBeforeAnyCallSucceeds() throws Exception {
+		java.io.File model = configureIdleTestModel();
+		int port;
+		try (java.net.ServerSocket probe = new java.net.ServerSocket(0, 1,
+				java.net.InetAddress.getByName(LlamaServerEndpoint.LOOPBACK_HOST))) {
+			port = probe.getLocalPort();
+		}
+		Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_LLM_SERVER_PORT,
+				String.valueOf(port));
+		java.io.File binDir = new java.io.File(OpenmrsUtil.getApplicationDataDirectory(), "chartsearchai/bin");
+		binDir.mkdirs();
+		java.io.File script = new java.io.File(binDir, "llama-server");
+		String testClasses = new java.io.File(StandInLlamaServer.class.getProtectionDomain().getCodeSource()
+				.getLocation().toURI()).getAbsolutePath();
+		java.nio.file.Files.write(script.toPath(), ("#!/bin/sh\nexec \"" + System.getProperty("java.home")
+				+ "/bin/java\" -cp \"" + testClasses + "\" " + StandInLlamaServer.class.getName() + " \"$@\"\n")
+				.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+		script.setExecutable(true);
+		LocalLlmEngine engine = new LocalLlmEngine();
+		CapturingTimer timer = new CapturingTimer();
+		ReflectionTestUtils.setField(engine, "idleTimer", timer);
+		try {
+			try {
+				engine.infer("system", "user", 5);
+			}
+			catch (RuntimeException expected) {
+				// The stand-in answers no completion; only the start is under test.
+			}
+			assertEquals(1, timer.scheduled.size(), "the start arms the idle timer though no call succeeded");
+		}
+		finally {
+			engine.shutdown();
+			timer.shutdownNow();
+			script.delete();
+			model.delete();
+		}
+	}
+
 	/** A count, like an inference, restarts the idle interval: the timer it replaces is cancelled. */
 	@Test
 	public void aCountReplacesTheIdleTimerItFindsArmed() throws Exception {

@@ -21759,3 +21759,22 @@ for 2 weeks?"* closed *"This check did not weigh what the drug is for (2 weeks)"
   medications interact with X.
 
 Pinned by `ClinicianWordingsTest.aProposalWithAStatementARouteOrADurationIsTheProposalSayingWhatWasNotWeighed`.
+
+## Decision 420: "What about X?" is the proposal, answered with no "Yes" or "No"
+
+**Status: Accepted** (October 2026) — found re-asking Decision 419's wordings of 15 patients on the 3.7.1 standalone on 2026-10-24.
+
+### Context
+
+Decision 405 made *"What about X?"* no question about the drug's record, but no shape read it as anything else, so it stayed
+with the model. With Decision 419 setting aside *"She has a fungal infection."*, *"What about fluconazole?"* was what reached the
+router, and the model answered *"Fluconazole can be given, with one caution"* for five patients — the clearance the module never
+gives — and *"The records do not address the suitability of Fluconazole"* for four more.
+
+### The decision
+
+*"What about X?"*, *"How about X?"*, *"What about X for her?"* and *"What about giving (starting) her X?"* are proposals of X with no
+yes-or-no question in them, so they are Decision 181's negated shapes: answered with what the check found and no "Yes" or "No"
+lead, as *"How safe is X?"* is (Decision 413). Not *"What about her X?"*, which asks of her order.
+
+Pinned by `ClinicianWordingsTest.whatAboutADrugIsTheProposalWithNoYesOrNo`.

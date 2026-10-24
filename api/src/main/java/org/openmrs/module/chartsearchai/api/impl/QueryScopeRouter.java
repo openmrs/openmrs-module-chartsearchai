@@ -455,6 +455,10 @@ public final class QueryScopeRouter {
 			"how (?:safe|risky|dangerous) is " + D + "(?: (?:for|in) " + PATIENT + ")?",
 			"how (?:safe|risky|dangerous) (?:is it )?to (?:give|start|prescribe|add) (?:" + PATIENT + " )?(?:on )?" + D,
 			"rate the risk of (?:giving|starting|prescribing|adding) (?:" + PATIENT + " )?(?:on )?" + D,
+			// "What about fluconazole?", "How about starting her on fluconazole?" — a proposal that is no yes-or-no question
+			// (ADR Decision 420)
+			"(?:what|how) about (?:(?:giving|starting|prescribing|adding|using) (?:" + PATIENT + " )?(?:on )?)?" + D
+					+ "(?: (?:for|in) " + PATIENT + ")?",
 			// "Is there a risk of QT prolongation if I give her fluconazole?", "Will fluconazole increase bleeding risk?", "Is
 			// fluconazole hepatotoxic with her other meds?" — an effect the findings do not weigh one by one, answered with what
 			// they found and no "Yes" or "No" (ADR Decision 414)

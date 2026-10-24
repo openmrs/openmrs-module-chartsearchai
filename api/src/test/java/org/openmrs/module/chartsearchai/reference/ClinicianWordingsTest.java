@@ -513,6 +513,23 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/**
+	 * "What about fluconazole?" proposes the drug, and is answered with what the check found and no "Yes" or "No" (ADR
+	 * Decision 420). On the 3.7.1 standalone "She has a fungal infection. What about fluconazole?" went to the model, which
+	 * answered "Fluconazole can be given, with one caution" for five patients.
+	 */
+	@Test
+	public void whatAboutADrugIsTheProposalWithNoYesOrNo() {
+		String notToGive = ask("Is there any reason not to give her warfarin?");
+		assertNotNull(notToGive, "precondition: the module answers it");
+		for (String question : new String[] { "What about warfarin?", "How about warfarin?", "What about warfarin for her?",
+				"What about giving her warfarin?", "How about starting warfarin?" }) {
+			assertEquals(notToGive, ask(question), question);
+		}
+		assertEquals(notToGive + "\n" + DrugReferenceInjector.STATEMENT_NOT_WEIGHED_OPENING + "She has a fungal infection).",
+			ask("She has a fungal infection. What about warfarin?"));
+	}
+
 	private static org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart chart(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

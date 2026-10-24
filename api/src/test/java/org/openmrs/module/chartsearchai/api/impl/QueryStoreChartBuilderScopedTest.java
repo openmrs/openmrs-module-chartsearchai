@@ -309,6 +309,24 @@ public class QueryStoreChartBuilderScopedTest {
 				"the null-patient degraded empty must be stamped");
 	}
 
+	/**
+	 * A caller without Get Allergies gets the slice minus every allergy; the chart names the type to
+	 * the model, so "any allergies?" is not answered as "No allergies are recorded" (ADR Decision 91).
+	 */
+	@Test
+	public void buildScoped_namesTheTypesTheCallerCannotReadToTheModel() {
+		// What QueryStore's chart read gives such a caller: no allergy records, and the type named.
+		queryStore.stubChart.removeIf(doc -> "allergy".equals(doc.getResourceType()));
+		queryStore.withheldTypes = Collections.singleton("allergy");
+
+		PatientChart chart = builder.buildScoped(patient(1), "any allergies?");
+
+		assertEquals(Collections.singleton("allergy"), chart.getWithheldTypes());
+		assertFalse(mappedUuids(chart).contains("a-1"), "the refused allergy is not in the slice");
+		assertTrue(chart.getText().startsWith("Not visible to this user: their account cannot read allergy records"),
+				chart.getText());
+	}
+
 	@Test
 	public void buildScoped_withholdsASliceBuiltFromAnIncompleteChart() {
 		queryStore.chartTruncated = true;

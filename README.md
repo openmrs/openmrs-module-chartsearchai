@@ -345,6 +345,8 @@ That role pays a second, less obvious cost, because the mark makes the chart byt
 
 Retrieval indexing is owned entirely by the [openmrs-module-querystore](https://github.com/openmrs/openmrs-module-querystore) module, which keeps the retrieval index current via core events. There is no chartsearchai-side index to build or maintain; see the querystore repo for indexing details.
 
+**A record type the asking user cannot read is named to the model, not read as empty.** QueryStore leaves out of the chart, in both chart modes, every core type the user holds no core read privilege for, and names it (a user without `Get Allergies` gets no allergy records). The chart the model reads then opens by naming those types, so asked "any allergies?" it says they are not visible to this user rather than that none are recorded, and the rest of the chart still answers ([ADR Decision 91](docs/adr.md#decision-91-a-chart-the-module-could-not-read-says-so-in-the-log-and-on-the-answer)'s rule).
+
 **Chart search needs a completed QueryStore bootstrap.** Until every resource type has finished its initial bootstrap, every answer is withheld with an incomplete-chart response (HTTP 503 on blocking search), in both chart modes: QueryStore's lazy projection of a patient on first access skips a patient who already has some documents, so without a completed bootstrap a chart can be partial. On the Docker path `backend-init.sh` turns `querystore.bootstrap.autostart` on whenever the embedder verifies, so the first start runs the bootstrap and later starts top it up from each type's cursor. On any other install, run it once: `POST /ws/rest/v1/querystore/reindex` with `{"scope":"all"}`, and follow its progress at `GET /ws/rest/v1/querystore/indexingstatus`.
 
 ## Query behavior

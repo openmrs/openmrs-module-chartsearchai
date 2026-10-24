@@ -262,6 +262,7 @@ class QueryStoreChartBuilder {
 		List<SerializedRecord> records = toSerializedRecords(patient, chartDocs);
 		long serializeStart = System.currentTimeMillis();
 		PatientChart chart = chartSerializer.serialize(patient, records, focusUuids, resolveDedupGroupLabels());
+		chart.markWithheldTypes(chartRead.getWithheldTypes());
 		long serializeMs = System.currentTimeMillis() - serializeStart;
 		long totalMs = System.currentTimeMillis() - buildStart;
 		log.info("[timing] querystoreBuild patient={} mode={} hits={} focusHits={} rpcMs={} serializeMs={} totalMs={} outcome=ok",
@@ -402,6 +403,8 @@ class QueryStoreChartBuilder {
 		// instead of asserting typed completeness.
 		//
 		chart.markCompleteFor(slice.getEffectiveTypes());
+		// The types the caller cannot read are named to the model rather than read as empty (ADR Decision 91).
+		chart.markWithheldTypes(slice.getWithheldTypes());
 		return markScoped(chart);
 	}
 

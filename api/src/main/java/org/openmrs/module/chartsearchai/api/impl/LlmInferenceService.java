@@ -403,7 +403,7 @@ public class LlmInferenceService implements ChartSearchService {
 					OwnOrderFindingStatement.statedFindings(response.getAnswer(), cited, chart.getMappings(),
 							chart.getProposalOwnOrderFindingLines()), !chart.getHistoryQuestionDrugRows().isEmpty(),
 					// A list the model wrote is shown as its own heading and its count (ADR Decision 528).
-					ModelAnswerList.summaryOf(response.getAnswer()), false);
+					ModelAnswerList.summaryOf(response.getAnswer()), false, chart.getWithheldTypes());
 			outcome = "ok";
 			return answer;
 		}
@@ -875,7 +875,7 @@ public class LlmInferenceService implements ChartSearchService {
 					DrugSafetyValidator.STATUS_UNAVAILABLE, Collections.emptyList(),
 					OwnOrderFindingStatement.statedFindings(response.getAnswer(), cited, chart.getMappings(),
 							chart.getProposalOwnOrderFindingLines()), !chart.getHistoryQuestionDrugRows().isEmpty(),
-					ModelAnswerList.summaryOf(response.getAnswer()), false));
+					ModelAnswerList.summaryOf(response.getAnswer()), false, chart.getWithheldTypes()));
 
 			// After the user-visible handoff, before grounding: the exact comparisons over what the
 			// answer did with the records it cites — the class-code defects a set-membership
@@ -1039,7 +1039,7 @@ public class LlmInferenceService implements ChartSearchService {
 					OwnOrderFindingStatement.statedFindings(response.getAnswer(), cited, chart.getMappings(),
 							chart.getProposalOwnOrderFindingLines()), !chart.getHistoryQuestionDrugRows().isEmpty(),
 					// A list the model wrote is shown as its own heading and its count (ADR Decision 528).
-					ModelAnswerList.summaryOf(response.getAnswer()), false);
+					ModelAnswerList.summaryOf(response.getAnswer()), false, chart.getWithheldTypes());
 			outcome = "ok";
 			return answer;
 		}
@@ -1147,12 +1147,12 @@ public class LlmInferenceService implements ChartSearchService {
 				unresolvedDrugClass, null, null, null, null, null, null, chartReadForSafety,
 				conditionRuleCoverage, orderStopDates, null, true, null, null, null, doseCeilingCoverage, null, null,
 				DrugSafetyValidator.STATUS_UNAVAILABLE, Collections.emptyList(), null,
-				!chart.getHistoryQuestionDrugRows().isEmpty(), summary, detailsStateLimits));
+				!chart.getHistoryQuestionDrugRows().isEmpty(), summary, detailsStateLimits, chart.getWithheldTypes()));
 		return new ChartAnswer(answer, references, 0, 0, 0, safetyWarnings, searchMode, referenceSlice,
 				pairExtent.stated(), unresolvedDrugClass, null, null, null, null, null, null,
 				chartReadForSafety, conditionRuleCoverage, orderStopDates, null, true, null, null, null,
 				doseCeilingCoverage, null, null, safetyResult.getStatus(), safetyResult.getIssues(), null,
-				!chart.getHistoryQuestionDrugRows().isEmpty(), summary, detailsStateLimits);
+				!chart.getHistoryQuestionDrugRows().isEmpty(), summary, detailsStateLimits, chart.getWithheldTypes());
 	}
 
 	private static void requireActiveTurn(CancellationSignal cancellation) {

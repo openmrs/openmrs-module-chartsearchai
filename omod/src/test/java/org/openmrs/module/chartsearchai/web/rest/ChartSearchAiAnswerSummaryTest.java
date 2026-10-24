@@ -83,7 +83,7 @@ public class ChartSearchAiAnswerSummaryTest {
 				Collections.<ChartSearchService.RecordReference> emptyList(), 0, 0, 0,
 				Collections.<SafetyWarning> emptyList(), null, null, null, null, null, null, null, null,
 				null, null, null, null, null, null, true, null, null, null, null, null, null,
-				DrugSafetyValidator.STATUS_UNAVAILABLE, Collections.emptyList(), null, false, summary, limits);
+				DrugSafetyValidator.STATUS_UNAVAILABLE, Collections.emptyList(), null, false, summary, limits, null);
 	}
 
 	@SuppressWarnings("unchecked")

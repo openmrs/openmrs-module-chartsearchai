@@ -78,7 +78,7 @@ public class ChartSearchAiUnstatedSignificanceQualifiersTest {
 				Collections.<ChartSearchService.RecordReference> emptyList(), 0, 0, 0,
 				Collections.<SafetyWarning> emptyList(), null, null, null, null, null, null, null,
 				null, null, null, null, null, null, null, false, null, null, null, null, null, stated,
-				DrugSafetyValidator.STATUS_UNAVAILABLE, Collections.emptyList(), null, false, null, false);
+				DrugSafetyValidator.STATUS_UNAVAILABLE, Collections.emptyList(), null, false, null, false, null);
 	}
 
 	@SuppressWarnings("unchecked")

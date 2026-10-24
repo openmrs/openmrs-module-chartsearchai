@@ -1014,6 +1014,9 @@ public interface ChartSearchService {
 
 		private final String safetyStatus;
 
+		/** @see #getWithheldTypes() */
+		private final java.util.Set<String> withheldTypes;
+
 		private final List<String> safetyIssues;
 
 		private final String searchMode;
@@ -1124,7 +1127,7 @@ public interface ChartSearchService {
 			this(answer, references, inputTokens, outputTokens, cachedTokens, safetyWarnings, searchMode,
 					referenceSlice, pairChipExtent, unresolvedDrugClass, unfaithfullyRenderedCitations,
 					null, null, null, null, null, null, null, null, null, false, null, null, null, null, null, null,
-					DrugSafetyValidator.STATUS_UNAVAILABLE, java.util.Collections.emptyList(), null, false, null, false);
+					DrugSafetyValidator.STATUS_UNAVAILABLE, java.util.Collections.emptyList(), null, false, null, false, null);
 		}
 
 		/**
@@ -1168,7 +1171,10 @@ public interface ChartSearchService {
 				List<String> unsupportedEndedOrderClaims,
 				List<Integer> unstatedSignificanceQualifiers, String safetyStatus, List<String> safetyIssues,
 				List<Integer> findingsStatedByTheModule, boolean asksWhetherSheHasTakenADrug,
-				String answerSummary, boolean answerDetailsStateLimits) {
+				String answerSummary, boolean answerDetailsStateLimits, java.util.Set<String> withheldTypes) {
+			// Null survives as null, the rule every list above shares: no chart behind the answer to say.
+			this.withheldTypes = withheldTypes == null ? null
+					: java.util.Collections.unmodifiableSet(new java.util.TreeSet<String>(withheldTypes));
 			this.safetyStatus = safetyStatus;
 			this.safetyIssues = java.util.Collections.unmodifiableList(new java.util.ArrayList<>(safetyIssues));
 			this.answerSummary = answerSummary;
@@ -1308,6 +1314,16 @@ public interface ChartSearchService {
 		 */
 		public List<SafetyWarning> getSafetyWarnings() {
 			return safetyWarnings;
+		}
+
+		/**
+		 * The core record types QueryStore left out of the chart behind this answer because the asking
+		 * user holds no read privilege for them, sorted; the model was told the same (ADR Decision 91's
+		 * rule: a chart the module could not read is not a chart that records nothing). Empty is a
+		 * chart that withheld nothing; null is an answer with no chart behind it to say.
+		 */
+		public java.util.Set<String> getWithheldTypes() {
+			return withheldTypes;
 		}
 
 		/**

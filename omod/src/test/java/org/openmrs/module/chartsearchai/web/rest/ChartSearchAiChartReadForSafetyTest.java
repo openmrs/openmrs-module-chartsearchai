@@ -245,7 +245,7 @@ public class ChartSearchAiChartReadForSafetyTest {
 					Collections.<ChartSearchService.RecordReference> emptyList(), 0, 0, 0,
 					Collections.<SafetyWarning> emptyList(), null, null, null, null, null, null, null,
 					null, null, null, stated, null, null, null, false, null, null, null, null, null, null,
-					DrugSafetyValidator.STATUS_UNAVAILABLE, Collections.emptyList(), null, false, null, false);
+					DrugSafetyValidator.STATUS_UNAVAILABLE, Collections.emptyList(), null, false, null, false, null);
 		}
 
 		@Override

@@ -262,11 +262,13 @@ public class DrugSafetyStatusTest extends BaseModuleContextSensitiveTest {
 				Collections.emptyList(), new PairChipExtent.Sink());
 		for (String answer : Arrays.asList(
 				"Paracetamol 1000 mg four times daily, up to a maximum of 4,000 mg per day.",
-				"Paracetamol 1000 mg four times daily, to a maximum daily dose of 4,000 mg.")) {
+				"Paracetamol 1000 mg four times daily, to a maximum daily dose of 4,000 mg.",
+				"Paracetamol 1000 mg four times daily, up to a maximum of 4000 mg per day.")) {
 			DrugSafetyValidator.SafetyCheckResult recited = validator.validateWithStatus(answer,
 					"Can I give her paracetamol?", patient, Collections.emptyList(), new PairChipExtent.Sink());
 			assertEquals(plain.getStatus(), recited.getStatus(), answer + " " + recited.getIssues());
 			assertEquals(plain.getIssues(), recited.getIssues(), answer);
+			assertEquals(plain.getWarnings().size(), recited.getWarnings().size(), answer + " " + recited.getWarnings());
 		}
 	}
 

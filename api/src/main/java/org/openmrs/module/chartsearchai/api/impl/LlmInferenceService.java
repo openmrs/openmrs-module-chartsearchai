@@ -1178,10 +1178,12 @@ public class LlmInferenceService implements ChartSearchService {
 	/**
 	 * Substitutes a placeholder when the chart has no records, so the LLM
 	 * produces a query-specific "no records" answer instead of one based
-	 * on demographics alone.
+	 * on demographics alone. The withheld-types opening stays in front of it: a chart empty because the
+	 * user may read none of what was asked is not a chart that records nothing.
 	 */
 	private static String chartTextOrPlaceholder(PatientChart chart) {
-		return chart.getMappings().isEmpty() ? "(No relevant records found)" : chart.getText();
+		return chart.getMappings().isEmpty() ? chart.getWithheldTypesNotice() + "(No relevant records found)"
+				: chart.getText();
 	}
 
 	/**

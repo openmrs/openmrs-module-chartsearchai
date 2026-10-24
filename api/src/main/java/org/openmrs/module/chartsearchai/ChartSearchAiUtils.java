@@ -446,9 +446,8 @@ public class ChartSearchAiUtils {
 	 *
 	 * <p><b>{@link ChartSearchAiConstants#RESOURCE_TYPE_ORDER} is deliberately OUT</b>, because the
 	 * same type covers {@code "Test order:"} and {@code "Referral order:"} — admitting it would admit
-	 * a lab order as evidence of a medication one. And this is not
-	 * {@code QueryScopeRouter.typedSlice}'s MEDICATIONS slice: that is a RETRIEVAL scope and cannot
-	 * carry {@code active_drug_order}, a type retrieval never returns. &rarr; ADR Decision 76,
+	 * a lab order as evidence of a medication one. And this is not QueryStore's medication retrieval
+	 * scope: that scope cannot carry {@code active_drug_order}, a type retrieval never returns. &rarr; ADR Decision 76,
 	 * canonical for both arguments and for what admitting the dispense type gives up.
 	 *
 	 * @param resourceType the cited record's resource type, may be null

@@ -155,6 +155,42 @@ public class LlmInferenceServiceCitationWiringTest {
 		assertMappingsSeenIncludeIndex(8);
 	}
 
+	/** A chart empty because the user may read none of what was asked still names the withheld types. */
+	@Test
+	public void search_anEmptyChartKeepsTheWithheldTypesInFrontOfItsPlaceholder() {
+		service.setChartBuildingStrategy(new ChartBuildingStrategy() {
+
+			@Override
+			PatientChart buildChart(Patient patient, String question) {
+				PatientChart empty = new PatientChart("", Collections.<RecordMapping> emptyList(),
+						Collections.<Integer> emptyList());
+				empty.markWithheldTypes(Collections.singleton("allergy"));
+				return empty;
+			}
+
+			@Override
+			boolean usePreFilter() {
+				return false;
+			}
+		});
+		List<String> recordsSent = new java.util.ArrayList<String>();
+		service.setLlmProvider(new LlmProvider() {
+
+			@Override
+			public LlmResponse search(String numberedRecords, List<Integer> focusIndices, String question,
+					String cacheScope, String cacheSeedRecords, boolean enumerateFindings,
+					LlmEngine.ReferenceRecords referenceRecords, List<AlreadyOrderedDrug> drugsAlreadyOrdered) {
+				recordsSent.add(numberedRecords);
+				return new LlmResponse("Allergy records are not visible to this user.", Collections.<Integer> emptyList());
+			}
+		});
+
+		service.search(patient(), "any allergies?");
+
+		assertEquals(Collections.singletonList(PatientChart.withheldTypesNote(Collections.singleton("allergy"))
+				+ "(No relevant records found)"), recordsSent);
+	}
+
 	private void assertMappingsSeenIncludeIndex(int index) {
 		// Both overloads are stubbed, so this cannot pass by production having reached neither — which
 		// is exactly what a one-overload stub allows once production prefers the other (issue #336).

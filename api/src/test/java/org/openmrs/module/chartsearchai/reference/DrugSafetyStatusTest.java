@@ -270,6 +270,34 @@ public class DrugSafetyStatusTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/** A dose given as a volume of a stated concentration is read by the warning arm as the strength:
+	 *  15 ml of 500 mg/5 ml four times daily is 6 g a day, read as 2 g. */
+	@Test
+	public void aDoseGivenAsAVolumeOfAStatedConcentrationIsNotAssessed() {
+		prepareCompletePatient();
+		DrugSafetyValidator.SafetyCheckResult result = validator.validateWithStatus(
+				"Paracetamol 500 mg/5 ml oral suspension, 15 ml four times daily.", "Can I give her paracetamol?",
+				patient, Collections.emptyList(), new PairChipExtent.Sink());
+		assertEquals("limited", result.getStatus(), result.getIssues().toString());
+		assertTrue(result.getIssues().contains("dose_not_assessable"), result.getIssues().toString());
+	}
+
+	/** A volume is a dose only beside a stated concentration, and not when it is a recited ceiling. */
+	@Test
+	public void aVolumeWithoutAConcentrationOrAsACeilingIsNotADose() {
+		prepareCompletePatient();
+		DrugSafetyValidator.SafetyCheckResult plain = validator.validateWithStatus(
+				"Paracetamol 1000 mg four times daily.", "Can I give her paracetamol?", patient,
+				Collections.emptyList(), new PairChipExtent.Sink());
+		for (String answer : Arrays.asList("Paracetamol 1000 mg four times daily, her eGFR is 85 mL/min.",
+				"Paracetamol 1000 mg four times daily, or the 500 mg/5 ml suspension up to 40 ml per day.")) {
+			DrugSafetyValidator.SafetyCheckResult result = validator.validateWithStatus(answer,
+					"Can I give her paracetamol?", patient, Collections.emptyList(), new PairChipExtent.Sink());
+			assertEquals(plain.getStatus(), result.getStatus(), answer + " " + result.getIssues());
+			assertEquals(plain.getIssues(), result.getIssues(), answer);
+		}
+	}
+
 	@Test
 	public void aDoseInAnotherUnitBesideAReadableOneIsNotAssessed() {
 		prepareCompletePatient();

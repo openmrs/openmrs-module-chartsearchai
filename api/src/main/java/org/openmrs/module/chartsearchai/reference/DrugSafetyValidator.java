@@ -331,6 +331,13 @@ public class DrugSafetyValidator {
 					+ "|\\d+(?:\\.\\d+)?\\s*(?:g|gm|grams?|mcg|ug|\u00b5g|micrograms?|mgs|milligrams?)\\b"
 					+ "(?!\\s*/\\s*(?:\\d+(?:\\.\\d+)?\\s*)?(?:ml|dl|l)\\b)");
 
+	/** A strength per volume ({@code 500 mg/5 ml}, {@code 250 mg in 5 ml}): beside it, a volume is a dose. */
+	private static final Pattern CONCENTRATION = Pattern.compile(
+			"\\d+(?:\\.\\d+)?\\s*(?:mg|g|mcg)\\s*(?:/|per\\b|in\\b)\\s*(?:\\d+(?:\\.\\d+)?\\s*)?ml\\b");
+
+	/** A volume in millilitres, a dose the warning arm cannot read when its clause states a concentration. */
+	private static final Pattern VOLUME = Pattern.compile("\\d+(?:\\.\\d+)?\\s*(?:mls?|millilit(?:re|er)s?)\\b");
+
 	private static final Pattern EVERY_N_HOURS = Pattern.compile("(?:every\\s+(\\d+)\\s*(?:hours|hrs|hr|h)\\b|q(\\d+)h\\b|(\\d+)\\s*hourly\\b)");
 
 	// Frequency word-forms, word-boundary anchored so "bd"/"od" do not match inside larger words
@@ -15073,7 +15080,8 @@ public class DrugSafetyValidator {
 
 	/**
 	 * @return whether a clause naming one of {@code rows} states a dose {@link #DOSE_MG} cannot read
-	 *         ({@link #UNREAD_DOSE}), other than a ceiling the answer recites
+	 *         ({@link #UNREAD_DOSE}, or a {@link #VOLUME} beside a {@link #CONCENTRATION}), other than a
+	 *         ceiling the answer recites
 	 */
 	private static boolean statesAnUnreadDose(String lowerAnswer, List<DrugReference> rows) {
 		for (String rawClause : CLAUSE_DELIMITER.split(lowerAnswer)) {
@@ -15085,6 +15093,15 @@ public class DrugSafetyValidator {
 			while (m.find()) {
 				if (!precededByLimitCue(clause, m.start())) {
 					return true;
+				}
+			}
+			if (CONCENTRATION.matcher(clause).find()) {
+				String volumes = CONCENTRATION.matcher(clause).replaceAll(" ");
+				Matcher v = VOLUME.matcher(volumes);
+				while (v.find()) {
+					if (!precededByLimitCue(volumes, v.start())) {
+						return true;
+					}
 				}
 			}
 		}

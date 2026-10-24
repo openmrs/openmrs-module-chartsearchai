@@ -75,7 +75,7 @@ public class ChartSearchAiAsksWhetherSheHasTakenADrugTest {
 				Collections.<SafetyWarning> emptyList(), null, null, null, null, null, null, null, null,
 				null, null, null, null, null, null, false, null, null, null, null, null, null,
 				org.openmrs.module.chartsearchai.reference.DrugSafetyValidator.STATUS_UNAVAILABLE,
-				Collections.emptyList(), null, history);
+				Collections.emptyList(), null, history, null);
 	}
 
 	@SuppressWarnings("unchecked")

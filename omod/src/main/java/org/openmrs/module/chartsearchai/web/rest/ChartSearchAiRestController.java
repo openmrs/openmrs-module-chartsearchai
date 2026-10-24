@@ -2010,6 +2010,10 @@ public class ChartSearchAiRestController {
 		target.put("interactionClaimPairs",
 				serializeInteractionClaimPairs(answer.getInteractionClaimPairs()));
 		target.put("chartReadForSafety", answer.getChartReadForSafety());
+		// The record types the user could not read, so a client can say why they are absent. Copied out of
+		// the unmodifiable set for the XML-marshalling reason chartOrderBridges is; null survives as null.
+		java.util.Set<String> withheldTypes = answer.getWithheldTypes();
+		target.put("withheldTypes", withheldTypes == null ? null : new ArrayList<String>(withheldTypes));
 		putConditionRuleCoverage(target, answer.getConditionRuleCoverage());
 		// The dose-ceiling arm's verdict, in the same vocabulary (ChartAnswer.getDoseCeilingCoverage).
 		DrugReferenceLoad.Coverage doseCeilingCoverage = answer.getDoseCeilingCoverage();

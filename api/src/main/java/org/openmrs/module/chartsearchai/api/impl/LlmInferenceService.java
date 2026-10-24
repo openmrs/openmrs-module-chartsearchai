@@ -397,7 +397,7 @@ public class LlmInferenceService implements ChartSearchService {
 					unfoundedFindingSeverities, doseCeilingCoverage, unsupportedEndedOrderClaims,
 					unstatedSignificanceQualifiers, safetyResult.getStatus(), safetyResult.getIssues(),
 					OwnOrderFindingStatement.statedFindings(response.getAnswer(), cited, chart.getMappings(),
-							chart.getProposalOwnOrderFindingLines()), !chart.getHistoryQuestionDrugRows().isEmpty());
+							chart.getProposalOwnOrderFindingLines()), !chart.getHistoryQuestionDrugRows().isEmpty(), chart.getWithheldTypes());
 			outcome = "ok";
 			return answer;
 		}
@@ -860,7 +860,7 @@ public class LlmInferenceService implements ChartSearchService {
 					cautionLedOverWithholding, null, doseCeilingCoverage, unsupportedEndedOrderClaims, null,
 					DrugSafetyValidator.STATUS_UNAVAILABLE, Collections.emptyList(),
 					OwnOrderFindingStatement.statedFindings(response.getAnswer(), cited, chart.getMappings(),
-							chart.getProposalOwnOrderFindingLines()), !chart.getHistoryQuestionDrugRows().isEmpty()));
+							chart.getProposalOwnOrderFindingLines()), !chart.getHistoryQuestionDrugRows().isEmpty(), chart.getWithheldTypes()));
 
 			// After the user-visible handoff, before grounding: the exact comparisons over what the
 			// answer did with the records it cites — the class-code defects a set-membership
@@ -1022,7 +1022,7 @@ public class LlmInferenceService implements ChartSearchService {
 					unfoundedFindingSeverities, doseCeilingCoverage, unsupportedEndedOrderClaims,
 					unstatedSignificanceQualifiers, safetyResult.getStatus(), safetyResult.getIssues(),
 					OwnOrderFindingStatement.statedFindings(response.getAnswer(), cited, chart.getMappings(),
-							chart.getProposalOwnOrderFindingLines()), !chart.getHistoryQuestionDrugRows().isEmpty());
+							chart.getProposalOwnOrderFindingLines()), !chart.getHistoryQuestionDrugRows().isEmpty(), chart.getWithheldTypes());
 			outcome = "ok";
 			return answer;
 		}
@@ -1123,12 +1123,12 @@ public class LlmInferenceService implements ChartSearchService {
 				unresolvedDrugClass, null, null, null, null, null, null, chartReadForSafety,
 				conditionRuleCoverage, orderStopDates, null, true, null, null, null, doseCeilingCoverage, null, null,
 				DrugSafetyValidator.STATUS_UNAVAILABLE, Collections.emptyList(), null,
-				!chart.getHistoryQuestionDrugRows().isEmpty()));
+				!chart.getHistoryQuestionDrugRows().isEmpty(), chart.getWithheldTypes()));
 		return new ChartAnswer(answer, references, 0, 0, 0, safetyWarnings, searchMode, referenceSlice,
 				pairExtent.stated(), unresolvedDrugClass, null, null, null, null, null, null,
 				chartReadForSafety, conditionRuleCoverage, orderStopDates, null, true, null, null, null,
 				doseCeilingCoverage, null, null, safetyResult.getStatus(), safetyResult.getIssues(), null,
-				!chart.getHistoryQuestionDrugRows().isEmpty());
+				!chart.getHistoryQuestionDrugRows().isEmpty(), chart.getWithheldTypes());
 	}
 
 	private static void requireActiveTurn(CancellationSignal cancellation) {

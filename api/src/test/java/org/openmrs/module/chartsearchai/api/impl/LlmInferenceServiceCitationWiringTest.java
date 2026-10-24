@@ -195,6 +195,24 @@ public class LlmInferenceServiceCitationWiringTest {
 				+ "(No relevant records found)"), recordsSent);
 	}
 
+	/** The answer carries the types the chart withheld, on the blocking and the streaming path. */
+	@Test
+	public void bothPathsCarryTheTypesTheChartWithheldOnTheAnswer() {
+		service.setChartBuildingStrategy(new StubStrategy() {
+
+			@Override
+			PatientChart buildChart(Patient patient, String question) {
+				PatientChart chart = super.buildChart(patient, question);
+				chart.markWithheldTypes(Collections.singleton("allergy"));
+				return chart;
+			}
+		});
+
+		assertEquals(Collections.singleton("allergy"), service.search(patient(), "any allergies?").getWithheldTypes());
+		assertEquals(Collections.singleton("allergy"),
+				service.searchStreaming(patient(), "any allergies?", token -> { }).getWithheldTypes());
+	}
+
 	/** An answer the module composed from its own findings still carries the check's status (README). */
 	@Test
 	public void searchStreaming_aModuleComposedAnswerCarriesTheCheckStatus() {
@@ -297,7 +315,7 @@ public class LlmInferenceServiceCitationWiringTest {
 		}
 	}
 
-	private static final class StubStrategy extends ChartBuildingStrategy {
+	private static class StubStrategy extends ChartBuildingStrategy {
 
 		@Override
 		PatientChart buildChart(Patient patient, String question) {

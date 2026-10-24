@@ -101,7 +101,7 @@ public class ChartSearchAiFindingCitationsTest {
 				Collections.<Integer> emptyList(), Collections.<Integer> emptyList(),
 				Collections.<ChartSearchService.UnstatedFindingSeverity> emptyList(), null, null, stated,
 				null, null, null, null, false, null, null, null, null, null, null,
-				DrugSafetyValidator.STATUS_UNAVAILABLE, Collections.emptyList(), null, false);
+				DrugSafetyValidator.STATUS_UNAVAILABLE, Collections.emptyList(), null, false, null);
 	}
 
 	@SuppressWarnings("unchecked")

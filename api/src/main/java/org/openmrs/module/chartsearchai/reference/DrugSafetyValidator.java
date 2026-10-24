@@ -1036,7 +1036,10 @@ public class DrugSafetyValidator {
 		// Whether the question PROPOSES the drug it resolved (issue #548): read off the question alone, so
 		// both passes of a request agree, and ahead of the loop because it is about the whole question.
 		boolean proposes = DrugReferenceInjector.questionProposes(question,
-			new ArrayList<DrugReference>(questionDrugs));
+			new ArrayList<DrugReference>(questionDrugs))
+				// or a combination she takes only part of, asked whether it is safe with her medications (ADR Decision 421)
+				|| DrugReferenceInjector.proposesAProductPartlyHers(question, new ArrayList<DrugReference>(questionDrugs),
+					herOrderSubstances.keySet(), context);
 
 		for (DrugReference ref : inPlay) {
 			// Whether this drug in play is a medication she is already taking, and so what every finding

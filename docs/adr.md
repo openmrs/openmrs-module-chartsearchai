@@ -21778,3 +21778,23 @@ yes-or-no question in them, so they are Decision 181's negated shapes: answered 
 lead, as *"How safe is X?"* is (Decision 413). Not *"What about her X?"*, which asks of her order.
 
 Pinned by `ClinicianWordingsTest.whatAboutADrugIsTheProposalWithNoYesOrNo`.
+
+## Decision 421: A combination she takes part of, asked whether it is safe with her medications, is the proposal
+
+**Status: Accepted** (October 2026) — found re-asking Decision 419's wordings of 15 patients on the 3.7.1 standalone on 2026-10-24.
+
+### Context
+
+*"Is rifampicin/isoniazid safe with her ARVs?"* was answered by the module for 14 patients and by the model for the one already on
+rifampicin, which never said she takes it. Decision 330 answers a combination carrying a drug she takes, but only where a proposal
+grammar admits the question; and the validator raised no *"already in active order"* finding, since of a drug she is on
+*"safe with her medications"* asks about her medication (Decision 202).
+
+### The decision
+
+`DrugReferenceInjector.proposesAProductPartlyHers`: a combination named as one product, some but not all of whose substances she
+takes, asked whether it is safe with her medications or a group of them and not named as hers (Decision 377's), proposes the product, as of a drug she is not on
+(Decision 299). The validator reads it for the duplication finding and Decision 330's answer for the question, so the two agree.
+A product all of whose substances she takes is still her own medication asked about.
+
+Pinned by `ProductCarryingHerOwnDrugTest.aProductCarryingHerDrugAskedSafeWithHerMedicationsStatesWhatTheCheckFound`.

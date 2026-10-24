@@ -64,6 +64,24 @@ public class ProductCarryingHerOwnDrugTest extends BaseModuleContextSensitiveTes
 		}
 	}
 
+	/**
+	 * A combination she takes part of, asked whether it is safe with her medications or a group of them, is the proposal it
+	 * is (ADR Decision 421). On the 3.7.1 standalone "Is rifampicin/isoniazid safe with her ARVs?" went to the model for a
+	 * patient on rifampicin, which never said she already takes it.
+	 */
+	@Test
+	public void aProductCarryingHerDrugAskedSafeWithHerMedicationsStatesWhatTheCheckFound() {
+		PatientClinicalContext.ActiveDrugOrder[] orders = {
+			DrugReferenceTestSupport.activeOrder("order-rif", "Rifampicin 600mg", "Rifampicin"),
+			DrugReferenceTestSupport.activeOrder("order-nvp", "Nevirapine 200mg", "Nevirapine") };
+		String proposed = ask("Can I give her rifampicin/isoniazid?", orders);
+		assertNotNull(proposed, "precondition: the module answers the proposal");
+		assertTrue(proposed.contains("\nRifampicin (rifampin) is already in active order Rifampicin 600mg"), proposed);
+		assertEquals(proposed, ask("Is rifampicin/isoniazid safe with her medications?", orders));
+		String group = ask("Is rifampicin/isoniazid safe with her ARVs?", orders);
+		assertTrue(group != null && group.endsWith(proposed.substring(proposed.indexOf('\n'))), "was: " + group);
+	}
+
 	private static String ask(String question, PatientClinicalContext.ActiveDrugOrder... given) {
 		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(given);
 		LinkedHashSet<String> names = new LinkedHashSet<String>();

@@ -4788,6 +4788,24 @@ public class DrugReferenceInjector {
 	}
 
 	/**
+	 * Whether {@code question} asks whether a combination it names as one product, some but not all of whose substances are
+	 * {@code herSubstances}, is safe with her medications, not naming it as hers (ADR Decision 421): of a product she is not wholly on that asks
+	 * what a proposal asks, as of a drug she is not on (ADR Decision 299); of her own it asks about her medication (ADR
+	 * Decision 202).
+	 */
+	static boolean proposesAProductPartlyHers(String question, List<DrugReference> questionDrugs, Set<?> herSubstances,
+			PatientClinicalContext context) {
+		if (combinationAskedAbout(question, questionDrugs, context) == null
+				|| !QueryScopeRouter.asksWhetherADrugIsSafeWithHerMedications(wordsBesideItsNames(question, questionDrugs))) {
+			return false;
+		}
+		AskedDrug product = askedDrugs(question, questionDrugs, context, false).get(0);
+		// Not one named as hers, which asks of an order of it (ADR Decision 377).
+		return !namedAsHers(question, product) && !Collections.disjoint(product.substances, herSubstances)
+				&& !herSubstances.containsAll(product.substances);
+	}
+
+	/**
 	 * {@link #questionProposes}, or a question whether a drug none of {@code herSubstances} is is safe with her medications
 	 * (ADR Decision 299): of a drug she is not on, that asks what a proposal asks. Of her own drug it asks about her
 	 * medication (ADR Decision 202), so it is no proposal there, and {@link #questionProposes}'s other readers never see it.
@@ -8150,7 +8168,8 @@ public class DrugReferenceInjector {
 		if (product == null || context == null || !context.chartReadForSafety()
 				|| !ChartSearchAiUtils.getBooleanGlobalProperty(ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
 						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS)
-				|| !QueryScopeRouter.asksWhetherToGiveADrug(wordsBesideItsNames(question, questionDrugs))) {
+				|| !QueryScopeRouter.asksWhetherToGiveADrug(wordsBesideItsNames(question, questionDrugs))
+						&& !proposesAProductPartlyHers(question, questionDrugs, herSubstances, context)) {
 			return null;
 		}
 		Set<Object> substances = askedDrugs(question, questionDrugs, context, false).get(0).substances;

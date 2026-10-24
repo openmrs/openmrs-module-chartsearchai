@@ -331,9 +331,11 @@ public class DrugSafetyValidator {
 					+ "|\\d+(?:\\.\\d+)?\\s*(?:g|gm|grams?|mcg|ug|\u00b5g|micrograms?|mgs|milligrams?)\\b"
 					+ "(?!\\s*/\\s*(?:\\d+(?:\\.\\d+)?\\s*)?(?:ml|dl|l)\\b)");
 
-	/** A strength per volume ({@code 500 mg/5 ml}, {@code 250 mg in 5 ml}): beside it, a volume is a dose. */
+	/** A strength per volume ({@code 500 mg/5 ml}, {@code 250 mg in 5 millilitres}): beside it, a volume is
+	 *  a dose. It takes every spelling of the unit {@link #VOLUME} does. */
 	private static final Pattern CONCENTRATION = Pattern.compile(
-			"\\d+(?:\\.\\d+)?\\s*(?:mg|g|mcg)\\s*(?:/|per\\b|in\\b)\\s*(?:\\d+(?:\\.\\d+)?\\s*)?ml\\b");
+			"\\d+(?:\\.\\d+)?\\s*(?:mg|g|mcg)\\s*(?:/|per\\b|in\\b)\\s*(?:\\d+(?:\\.\\d+)?\\s*)?"
+					+ "(?:mls?|millilit(?:re|er)s?)\\b");
 
 	/** A volume in millilitres, a dose the warning arm cannot read when its clause states a concentration. */
 	private static final Pattern VOLUME = Pattern.compile("\\d+(?:\\.\\d+)?\\s*(?:mls?|millilit(?:re|er)s?)\\b");

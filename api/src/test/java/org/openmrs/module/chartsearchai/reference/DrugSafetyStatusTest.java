@@ -275,11 +275,13 @@ public class DrugSafetyStatusTest extends BaseModuleContextSensitiveTest {
 	@Test
 	public void aDoseGivenAsAVolumeOfAStatedConcentrationIsNotAssessed() {
 		prepareCompletePatient();
-		DrugSafetyValidator.SafetyCheckResult result = validator.validateWithStatus(
-				"Paracetamol 500 mg/5 ml oral suspension, 15 ml four times daily.", "Can I give her paracetamol?",
-				patient, Collections.emptyList(), new PairChipExtent.Sink());
-		assertEquals("limited", result.getStatus(), result.getIssues().toString());
-		assertTrue(result.getIssues().contains("dose_not_assessable"), result.getIssues().toString());
+		for (String answer : Arrays.asList("Paracetamol 500 mg/5 ml oral suspension, 15 ml four times daily.",
+				"Paracetamol 500 mg/5 millilitres oral suspension, 15 ml four times daily.")) {
+			DrugSafetyValidator.SafetyCheckResult result = validator.validateWithStatus(answer,
+					"Can I give her paracetamol?", patient, Collections.emptyList(), new PairChipExtent.Sink());
+			assertEquals("limited", result.getStatus(), answer + " " + result.getIssues());
+			assertTrue(result.getIssues().contains("dose_not_assessable"), answer + " " + result.getIssues());
+		}
 	}
 
 	/** A volume is a dose only beside a stated concentration, and not when it is a recited ceiling. */

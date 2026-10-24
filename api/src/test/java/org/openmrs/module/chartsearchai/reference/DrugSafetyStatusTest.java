@@ -19,6 +19,7 @@ import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 import java.io.InputStream;
+import java.util.Arrays;
 import java.util.Collections;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -226,6 +227,19 @@ public class DrugSafetyStatusTest extends BaseModuleContextSensitiveTest {
 				Collections.emptyList(), new PairChipExtent.Sink());
 		assertEquals("limited", result.getStatus(), result.getIssues().toString());
 		assertTrue(result.getIssues().contains("dose_not_assessable"), result.getIssues().toString());
+	}
+
+	/** Spelled out, a dose per kilogram is the same dose the warning arm misreads as a total. */
+	@Test
+	public void aDoseInMilligramsPerKilogramSpelledOutIsNotAssessed() {
+		prepareCompletePatient();
+		for (String answer : Arrays.asList("Paracetamol 100 mg per kg four times daily.",
+				"Paracetamol 100 mg/kilogram four times daily.")) {
+			DrugSafetyValidator.SafetyCheckResult result = validator.validateWithStatus(answer,
+					"Can I give her paracetamol?", patient, Collections.emptyList(), new PairChipExtent.Sink());
+			assertEquals("limited", result.getStatus(), answer + " " + result.getIssues());
+			assertTrue(result.getIssues().contains("dose_not_assessable"), answer + " " + result.getIssues());
+		}
 	}
 
 	@Test

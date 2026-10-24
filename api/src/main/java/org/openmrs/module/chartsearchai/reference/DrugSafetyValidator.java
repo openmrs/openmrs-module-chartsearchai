@@ -320,12 +320,12 @@ public class DrugSafetyValidator {
 	 * ceiling screened. A range's hyphen ({@code 500-1000 mg}, {@code 500 - 1000 mg}) follows a digit and
 	 * is not a sign; the look-behind allows up to ten spaces, Java's look-behind being bounded. A unit
 	 * per volume is a concentration ({@code 10 g/dL}, {@code 250 mg/5 ml}), not a dose; per day, per kg
-	 * or per dose is a dose. A dose in mg per kg ({@code 100 mg/kg}) is one the warning arm misreads,
-	 * as that many milligrams in total, so it is not assessed as stated either.
+	 * or per dose is a dose. A dose in mg per kg ({@code 100 mg/kg}, {@code 100 mg per kg}) is one the
+	 * warning arm misreads, as that many milligrams in total, so it is not assessed as stated either.
 	 */
 	private static final Pattern UNREAD_DOSE = Pattern.compile(
 			"(?<![\\d.]\\s{0,10})[-\u2212]\\s*\\d+(?:\\.\\d+)?\\s*mg\\b"
-					+ "|\\d+(?:\\.\\d+)?\\s*mg\\s*/\\s*kg\\b"
+					+ "|\\d+(?:\\.\\d+)?\\s*mg\\s*(?:/|per\\b)\\s*(?:kg|kilo)"
 					+ "|\\d+(?:\\.\\d+)?\\s*(?:g|gm|grams?|mcg|ug|\u00b5g|micrograms?|mgs|milligrams?)\\b"
 					+ "(?!\\s*/\\s*(?:\\d+(?:\\.\\d+)?\\s*)?(?:ml|dl|l)\\b)");
 

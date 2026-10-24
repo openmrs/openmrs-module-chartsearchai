@@ -897,7 +897,7 @@ No chunking is used. Each patient record (obs, condition, diagnosis, allergy, or
 
 ### REST endpoints
 
-The module exposes nine endpoints under `/ws/rest/v1/chartsearchai`, all on one controller (`ChartSearchAiRestController`), registered under the OpenMRS `webservices.rest` module namespace. Every one gates on a privilege as the first statement of its handler, so an unprivileged caller gets 401/403 before any argument is validated.
+The module's endpoints are under `/ws/rest/v1/chartsearchai`, all on one controller (`ChartSearchAiRestController`), registered under the OpenMRS `webservices.rest` module namespace. Every one gates on a privilege as the first statement of its handler, so an unprivileged caller gets 401/403 before any argument is validated.
 
 | Method | Path | Privilege |
 |---|---|---|
@@ -910,8 +910,13 @@ The module exposes nine endpoints under `/ws/rest/v1/chartsearchai`, all on one 
 | GET | `/prewarmstatus` | `Manage AI Prewarm` |
 | GET | `/chartalerts` | `AI Query Patient Data` |
 | GET | `/drugreferencestatus` | core `Get Global Properties` |
+| GET | `/providers` | `AI Query Patient Data` |
+| GET | `/models` | `AI Query Patient Data` |
+| GET | `/chat` | `AI Query Patient Data` |
+| POST | `/chat/new` | `AI Query Patient Data` |
+| POST | `/chat/stream` | `AI Query Patient Data` |
 
-`Manage AI Prewarm` is deliberately not the clinician privilege: a sweep prefills every patient's chart and monopolises the single inference slot, so it is a system operation. `/drugreferencestatus` gates on core's `Get Global Properties` because it discloses configuration, not patient data — see [Decision 32](#decision-32-observable-drug-reference-load-status).
+`Manage AI Prewarm` is deliberately not the clinician privilege: a sweep prefills every patient's chart and monopolises the single inference slot, so it is a system operation. `/drugreferencestatus` gates on core's `Get Global Properties` because it discloses configuration, not patient data — see [Decision 32](#decision-32-observable-drug-reference-load-status). The five conversation endpoints take the clinician privilege, and with a Med Agent Hub configured it is also what lets a user send a patient's uuid, question and prior turns to that Hub; README's Conversation endpoints section describes them.
 
 #### Synchronous endpoint
 

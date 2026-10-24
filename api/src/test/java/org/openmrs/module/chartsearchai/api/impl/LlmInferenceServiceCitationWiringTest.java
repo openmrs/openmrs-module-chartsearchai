@@ -195,6 +195,23 @@ public class LlmInferenceServiceCitationWiringTest {
 				+ "(No relevant records found)"), recordsSent);
 	}
 
+	/** An answer the module composed from its own findings still carries the check's status (README). */
+	@Test
+	public void searchStreaming_aModuleComposedAnswerCarriesTheCheckStatus() {
+		service.setDrugReferenceInjector(new DrugReferenceInjector() {
+
+			@Override
+			public PatientChart inject(PatientChart chart, org.openmrs.Patient patient, String question,
+					org.openmrs.module.chartsearchai.reference.ChartReadStatus readStatus) {
+				chart.markModuleAnswer("Persistent fetal circulation [8].");
+				return chart;
+			}
+		});
+		ChartAnswer answer = service.searchStreaming(patient(), "any infections?", token -> { });
+		assertTrue(answer.isAnsweredByTheModule(), "precondition: the module composed this answer");
+		assertEquals("limited", answer.getSafetyStatus());
+	}
+
 	private void assertMappingsSeenIncludeIndex(int index) {
 		// Both overloads are stubbed, so this cannot pass by production having reached neither — which
 		// is exactly what a one-overload stub allows once production prefers the other (issue #336).

@@ -1197,6 +1197,12 @@ public class ChartSearchAiRestController {
 			entry.put("referenceSliceRecords", auditLog.getReferenceSliceRecords());
 			entry.put("referenceSliceChars", auditLog.getReferenceSliceChars());
 			entry.put("searchMode", auditLog.getSearchMode());
+			// Conversation turns' attribution: providerId separates a relayed turn's unknown mode
+			// from an unfinished query's, which /search and /search/stream rows leave null.
+			entry.put("providerId", auditLog.getProviderId());
+			entry.put("providerMode", auditLog.getProviderMode());
+			entry.put("conversationUuid", auditLog.getConversationUuid());
+			entry.put("requestId", auditLog.getRequestId());
 			entry.put("responseTimeMs", auditLog.getResponseTimeMs());
 			entry.put("inputTokens", auditLog.getInputTokens());
 			entry.put("outputTokens", auditLog.getOutputTokens());

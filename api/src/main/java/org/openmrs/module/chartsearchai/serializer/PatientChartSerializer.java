@@ -611,11 +611,21 @@ public class PatientChartSerializer {
 		 * could not read is not a chart that records nothing).
 		 */
 		public String getText() {
-			return withheldTypes.isEmpty() ? text : withheldTypesNote(withheldTypes) + text;
+			return getWithheldTypesNotice() + text;
+		}
+
+		/** The chart's records as rendered, without the withheld-types opening: what a rebuild extends. */
+		public String getRecordsText() {
+			return text;
+		}
+
+		/** The withheld-types opening {@link #getText()} carries, or an empty string when nothing was withheld. */
+		public String getWithheldTypesNotice() {
+			return withheldTypes.isEmpty() ? "" : withheldTypesNote(withheldTypes);
 		}
 
 		/** The opening line {@link #getText()} gives a chart with withheld types, the types in sorted order. */
-		static String withheldTypesNote(Set<String> types) {
+		public static String withheldTypesNote(Set<String> types) {
 			List<String> labels = new ArrayList<String>();
 			for (String type : new java.util.TreeSet<String>(types)) {
 				labels.add(type.replace('_', ' '));

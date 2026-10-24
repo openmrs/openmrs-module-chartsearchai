@@ -83,6 +83,8 @@ public class QueryStoreChartBuilderBudgetTest {
 
 		int promptCountCalls;
 
+		final List<String> countedRecords = new ArrayList<String>();
+
 		/** The count that fails, 1-based, as a llama-server without the count route fails each one. */
 		int failingCount;
 
@@ -104,6 +106,7 @@ public class QueryStoreChartBuilderBudgetTest {
 		public int countPrompt(String numberedRecords, List<Integer> focusIndices, String question,
 				boolean enumerateFindings, List<AlreadyOrderedDrug> drugsAlreadyOrdered) {
 			promptCountCalls++;
+			countedRecords.add(numberedRecords);
 			if (failingCount > 0 && promptCountCalls >= failingCount) {
 				throw new org.openmrs.api.APIException("Local chat input token count returned HTTP 404");
 			}
@@ -132,6 +135,20 @@ public class QueryStoreChartBuilderBudgetTest {
 			uuids.add(mapping.getResourceUuid());
 		}
 		return uuids;
+	}
+
+	/** The budget counts the text the model reads, the withheld-types opening included. */
+	@Test
+	public void theBudgetCountsTheWithheldTypesOpening() {
+		queryStore.withheldTypes = Collections.singleton("allergy");
+		queryStore.stubChart = new ArrayList<QueryDocument>(java.util.Arrays.asList(
+				doc("patient", "p-1", "Patient: Jane Doe", LocalDate.of(2026, 7, 1))));
+
+		builder.buildScoped(patient(), "any allergies?");
+
+		assertFalse(tokenCounter.countedRecords.isEmpty(), "precondition: the slice was counted");
+		assertTrue(tokenCounter.countedRecords.get(0).startsWith(
+				PatientChart.withheldTypesNote(Collections.singleton("allergy"))), tokenCounter.countedRecords.get(0));
 	}
 
 	@Test

@@ -373,7 +373,8 @@ class QueryStoreChartBuilder {
 			unbudgetedDocs.add(record.getDocument());
 		}
 		OrderCurrency orderCurrency = readOrderCurrency(patient, unbudgetedDocs);
-		List<ContextSliceRecord> budgeted = applyContextBudget(patient, question, slice.getRecords(), orderCurrency);
+		List<ContextSliceRecord> budgeted = applyContextBudget(patient, question, slice.getRecords(), orderCurrency,
+				slice.getWithheldTypes());
 
 		List<QueryDocument> sliceDocs = new ArrayList<QueryDocument>(budgeted.size());
 		int simHits = 0;
@@ -433,13 +434,13 @@ class QueryStoreChartBuilder {
 	 * injected prompt and rebuilds the slice with that room reserved.
 	 */
 	private List<ContextSliceRecord> applyContextBudget(Patient patient, String question,
-			List<ContextSliceRecord> records, OrderCurrency orderCurrency) {
+			List<ContextSliceRecord> records, OrderCurrency orderCurrency, Set<String> withheldTypes) {
 		TokenCounter counter = tokenCounter;
 		if (counter == null || !counter.isAvailable()) {
 			return records;
 		}
 		try {
-			return budgetedRecords(counter, patient, question, records, orderCurrency);
+			return budgetedRecords(counter, patient, question, records, orderCurrency, withheldTypes);
 		}
 		catch (InsufficientContextException e) {
 			throw e;
@@ -455,10 +456,10 @@ class QueryStoreChartBuilder {
 
 	/** {@link #applyContextBudget} once a counter is available; a failed count propagates to it. */
 	private List<ContextSliceRecord> budgetedRecords(TokenCounter counter, Patient patient, String question,
-			List<ContextSliceRecord> records, OrderCurrency orderCurrency) {
+			List<ContextSliceRecord> records, OrderCurrency orderCurrency, Set<String> withheldTypes) {
 		int budget = counter.inputBudget();
 
-		if (counter.countPrompt(renderedTextOf(patient, records, orderCurrency),
+		if (counter.countPrompt(renderedTextOf(patient, records, orderCurrency, withheldTypes),
 				Collections.<Integer>emptyList(), question, false, Collections.emptyList()) <= budget) {
 			return records;
 		}
@@ -469,7 +470,7 @@ class QueryStoreChartBuilder {
 				protectedRecords.add(record);
 			}
 		}
-		int protectedTokens = counter.countPrompt(renderedTextOf(patient, protectedRecords, orderCurrency),
+		int protectedTokens = counter.countPrompt(renderedTextOf(patient, protectedRecords, orderCurrency, withheldTypes),
 				Collections.<Integer>emptyList(), question, false, Collections.emptyList());
 		if (protectedTokens > budget) {
 			List<String> protectedIds = new ArrayList<String>();
@@ -511,7 +512,7 @@ class QueryStoreChartBuilder {
 			candidate.addAll(optional.subList(0, size));
 			Collections.sort(candidate,
 					(left, right) -> Integer.compare(positions.get(left), positions.get(right)));
-			if (counter.countPrompt(renderedTextOf(patient, candidate, orderCurrency),
+			if (counter.countPrompt(renderedTextOf(patient, candidate, orderCurrency, withheldTypes),
 				Collections.<Integer>emptyList(), question, false, Collections.emptyList()) <= budget) {
 				low = size;
 			} else {
@@ -546,13 +547,17 @@ class QueryStoreChartBuilder {
 		return record.getRank() == null ? Integer.MAX_VALUE : record.getRank().intValue();
 	}
 
-	private String renderedTextOf(Patient patient, List<ContextSliceRecord> records, OrderCurrency orderCurrency) {
+	/** The text the model would read for {@code records}, the withheld-types opening included. */
+	private String renderedTextOf(Patient patient, List<ContextSliceRecord> records, OrderCurrency orderCurrency,
+			Set<String> withheldTypes) {
 		List<QueryDocument> docs = new ArrayList<QueryDocument>(records.size());
 		for (ContextSliceRecord record : records) {
 			docs.add(record.getDocument());
 		}
-		return chartSerializer.serialize(patient, toSerializedRecords(docs, orderCurrency),
-				Collections.<String>emptySet(), false, false).getText();
+		PatientChart rendered = chartSerializer.serialize(patient, toSerializedRecords(docs, orderCurrency),
+				Collections.<String>emptySet(), false, false);
+		rendered.markWithheldTypes(withheldTypes);
+		return rendered.getText();
 	}
 
 

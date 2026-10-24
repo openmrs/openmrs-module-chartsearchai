@@ -819,7 +819,8 @@ public class DrugReferenceInjector {
 			return chart;
 		}
 
-		StringBuilder text = new StringBuilder(chart.getText());
+		// The records alone: the withheld-types opening is the stamp's, carried below, not text to copy.
+		StringBuilder text = new StringBuilder(chart.getRecordsText());
 		List<RecordMapping> mappings = new ArrayList<RecordMapping>(chart.getMappings());
 		int index = mappings.size() + 1;
 

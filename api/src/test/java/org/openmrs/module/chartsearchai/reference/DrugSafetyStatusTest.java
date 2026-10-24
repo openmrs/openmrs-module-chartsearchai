@@ -217,6 +217,17 @@ public class DrugSafetyStatusTest extends BaseModuleContextSensitiveTest {
 		assertEquals(Collections.singletonList("dose_not_assessable"), result.getIssues());
 	}
 
+	/** The warning arm reads "100 mg/kg" as 100 mg in total, so the stated dose was not assessed. */
+	@Test
+	public void aDoseInMilligramsPerKilogramIsNotAssessed() {
+		prepareCompletePatient();
+		DrugSafetyValidator.SafetyCheckResult result = validator.validateWithStatus(
+				"Paracetamol 100 mg/kg four times daily.", "Can I give her paracetamol?", patient,
+				Collections.emptyList(), new PairChipExtent.Sink());
+		assertEquals("limited", result.getStatus(), result.getIssues().toString());
+		assertTrue(result.getIssues().contains("dose_not_assessable"), result.getIssues().toString());
+	}
+
 	@Test
 	public void aDoseInAnotherUnitBesideAReadableOneIsNotAssessed() {
 		prepareCompletePatient();

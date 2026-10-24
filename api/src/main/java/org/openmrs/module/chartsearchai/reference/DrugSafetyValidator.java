@@ -160,6 +160,93 @@ import org.springframework.stereotype.Service;
 @Service("chartSearchAi.drugSafetyValidator")
 public class DrugSafetyValidator {
 
+	public static final String STATUS_CHECKED = "checked";
+
+	public static final String STATUS_LIMITED = "limited";
+
+	public static final String STATUS_UNAVAILABLE = "unavailable";
+
+	public static final class SafetyCheckResult {
+
+		private final String status;
+
+		private final List<SafetyWarning> warnings;
+
+		private final List<String> issues;
+
+		public SafetyCheckResult(String status, List<SafetyWarning> warnings) {
+			this(status, warnings, java.util.Collections.emptyList());
+		}
+
+		public SafetyCheckResult(String status, List<SafetyWarning> warnings, List<String> issues) {
+			this.status = status;
+			this.issues = java.util.Collections.unmodifiableList(new ArrayList<String>(issues));
+			this.warnings = java.util.Collections.unmodifiableList(
+					new ArrayList<SafetyWarning>(warnings));
+		}
+
+		public String getStatus() {
+			return status;
+		}
+
+		public List<SafetyWarning> getWarnings() {
+			return warnings;
+		}
+
+		public List<String> getIssues() {
+			return issues;
+		}
+	}
+
+	/** Completeness measured by the same invocation that produces the warnings, never shared state. */
+	private static final class SafetyCoverage {
+		private final Set<String> issues = new LinkedHashSet<String>();
+		private final List<DrugReferenceValidity.Finding> entryFindings = new ArrayList<DrugReferenceValidity.Finding>();
+		/** The causes that make the check unavailable; reported alone, since nothing else was measured. */
+		private final Set<String> unavailableCauses = new LinkedHashSet<String>();
+		private boolean noCheckEnabled;
+
+		void limited(String issue) {
+			issues.add(issue);
+		}
+
+		/** A loader finding about entries, which limits this check only if the pass screens one of them. */
+		void limitedWhereScreened(DrugReferenceValidity.Finding finding) {
+			entryFindings.add(finding);
+		}
+
+		/** The substances this pass screened, keyed as {@link DrugReference#substanceGroupKey()} keys them. */
+		void screened(Set<Object> substances) {
+			for (DrugReferenceValidity.Finding finding : entryFindings) {
+				if (finding.concernsAnyOf(substances)) {
+					limited("source_data_partially_invalid");
+				}
+			}
+		}
+
+		void unavailable(String issue) {
+			unavailableCauses.add(issue);
+		}
+
+		/** Every sub-check is switched off, so nothing examined the answer: the same statement as the
+		 *  answer check itself being off, and the only one made. */
+		void noCheckEnabled() {
+			noCheckEnabled = true;
+		}
+
+		SafetyCheckResult result(List<SafetyWarning> warnings) {
+			if (noCheckEnabled) {
+				return new SafetyCheckResult(STATUS_UNAVAILABLE, warnings,
+						java.util.Collections.singletonList("check_disabled"));
+			}
+			if (!unavailableCauses.isEmpty()) {
+				return new SafetyCheckResult(STATUS_UNAVAILABLE, warnings, new ArrayList<String>(unavailableCauses));
+			}
+			return new SafetyCheckResult(issues.isEmpty() ? STATUS_CHECKED : STATUS_LIMITED, warnings,
+					new ArrayList<String>(issues));
+		}
+	}
+
 	private static final Logger log = LoggerFactory.getLogger(DrugSafetyValidator.class);
 
 	/**
@@ -225,6 +312,22 @@ public class DrugSafetyValidator {
 	}
 
 	private static final Pattern DOSE_MG = Pattern.compile("(\\d+(?:\\.\\d+)?)\\s*mg\\b");
+
+	/**
+	 * A dose statement {@link #DOSE_MG} cannot read as stated: a negative amount (hyphen or Unicode
+	 * minus), which the warning arm reads by its magnitude, or a mass in another unit, which it does not
+	 * read at all. The coverage pass reads them to say the dose was not assessed instead of reporting the
+	 * ceiling screened. A range's hyphen ({@code 500-1000 mg}, {@code 500 - 1000 mg}) follows a digit and
+	 * is not a sign; the look-behind allows up to ten spaces, Java's look-behind being bounded. A unit
+	 * per volume is a concentration ({@code 10 g/dL}, {@code 250 mg/5 ml}), not a dose; per day, per kg
+	 * or per dose is a dose. A dose in mg per kg ({@code 100 mg/kg}) is one the warning arm misreads,
+	 * as that many milligrams in total, so it is not assessed as stated either.
+	 */
+	private static final Pattern UNREAD_DOSE = Pattern.compile(
+			"(?<![\\d.]\\s{0,10})[-\u2212]\\s*\\d+(?:\\.\\d+)?\\s*mg\\b"
+					+ "|\\d+(?:\\.\\d+)?\\s*mg\\s*/\\s*kg\\b"
+					+ "|\\d+(?:\\.\\d+)?\\s*(?:g|gm|grams?|mcg|ug|\u00b5g|micrograms?|mgs|milligrams?)\\b"
+					+ "(?!\\s*/\\s*(?:\\d+(?:\\.\\d+)?\\s*)?(?:ml|dl|l)\\b)");
 
 	private static final Pattern EVERY_N_HOURS = Pattern.compile("(?:every\\s+(\\d+)\\s*(?:hours|hrs|hr|h)\\b|q(\\d+)h\\b|(\\d+)\\s*hourly\\b)");
 
@@ -332,6 +435,67 @@ public class DrugSafetyValidator {
 		catch (RuntimeException e) {
 			log.warn("Drug-safety validation failed; returning no warnings — the answer path is never broken", e);
 			return new ArrayList<SafetyWarning>();
+		}
+	}
+
+	/**
+	 * The same pass as {@link #validate(String, String, Patient, List, PairChipExtent.Sink)}, also
+	 * stating how completely it checked. Two differences, both because a status is a claim: a null
+	 * patient is {@code unavailable} ({@code patient_context_unavailable}) rather than screened as a
+	 * chart read by nothing, and the coverage reads this method adds are made only here, so a caller
+	 * that publishes no status does not pay for them.
+	 */
+	public SafetyCheckResult validateWithStatus(String answer, String question, Patient patient,
+			List<RecordMapping> mappings, PairChipExtent.Sink pairExtentSink) {
+		try {
+			if (!ChartSearchAiUtils.isDrugReferenceEnabled()
+					|| !ChartSearchAiUtils.getBooleanGlobalProperty(
+							ChartSearchAiConstants.GP_DRUG_SAFETY_VALIDATE_ANSWERS,
+							ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_VALIDATE_ANSWERS)) {
+				return new SafetyCheckResult(STATUS_UNAVAILABLE, new ArrayList<SafetyWarning>(),
+						java.util.Collections.singletonList("check_disabled"));
+			}
+			if (patient == null) {
+				return new SafetyCheckResult(STATUS_UNAVAILABLE, new ArrayList<SafetyWarning>(),
+						java.util.Collections.singletonList("patient_context_unavailable"));
+			}
+			SafetyCoverage coverage = new SafetyCoverage();
+			DrugReferenceLoad load = drugReferenceService.getLoadStatus();
+			if (!load.isLoaded() || load.isInert()) {
+				coverage.unavailable("source_unavailable");
+			}
+			for (DrugReferenceValidity.Finding finding : load.getFindings()) {
+				if (finding.getRemedy() == DrugReferenceValidity.Remedy.REPAIRED) {
+					continue;
+				}
+				// A finding about the document or the configuration bears on every screen; one about entries
+				// only on a screen of their substances, which the pass decides once it has resolved them.
+				if (finding.isAboutEntries()) {
+					coverage.limitedWhereScreened(finding);
+				} else {
+					coverage.limited("source_data_partially_invalid");
+				}
+			}
+			PatientClinicalContext context = PatientClinicalContextBuilder.build(patient);
+			if (!context.chartReadForSafety()) {
+				coverage.unavailable("patient_context_unavailable");
+			}
+			if (!context.activeDrugIdentitiesComplete()) {
+				coverage.limited("mapping_incomplete");
+			}
+			for (DrugReferenceValidity.Finding finding : drugReferenceService.getCrossReactivityLoadStatus().getFindings()) {
+				if (finding.getRemedy() != DrugReferenceValidity.Remedy.REPAIRED) {
+					coverage.limited("cross_reactivity_data_partially_invalid");
+				}
+			}
+			List<SafetyWarning> warnings = validate(answer, question, context, mappings, null,
+					pairExtentSink, SubjectMatterScope.OF_THE_RESPONSE, null, coverage);
+			return coverage.result(warnings);
+		}
+		catch (RuntimeException e) {
+			log.warn("Drug-safety validation failed; returning unavailable status — the answer path is never broken", e);
+			return new SafetyCheckResult(STATUS_UNAVAILABLE, new ArrayList<SafetyWarning>(),
+					java.util.Collections.singletonList("execution_failed"));
 		}
 	}
 
@@ -689,14 +853,24 @@ public class DrugSafetyValidator {
 			SubjectMatterScope.OF_THE_RESPONSE, null);
 	}
 
+
+	List<SafetyWarning> validate(String answer, String question, PatientClinicalContext rawContext,
+			List<RecordMapping> mappings, List<DrugReference> resolvedOrderEntries,
+			PairChipExtent.Sink pairExtentSink, SubjectMatterScope scope,
+			ListedDrugsWithNoActiveOrder.Sink listedSink) {
+		return validate(answer, question, rawContext, mappings, resolvedOrderEntries,
+				pairExtentSink, scope, listedSink, null);
+	}
+
 	/**
 	 * The widest arity, and the one that builds the pass's shared state — every other delegates to it.
 	 *
-	 * <p><b>Two structural guards delimit this body by a literal needle, and each spells ALL THREE
-	 * lines of this declaration.</b> No shorter prefix is spelled, and a needle matching more than once is a hard failure in each guard's own unique-offset check ({@code SourceScan.uniqueOffset} for {@code CoMedicationResolutionPerPassTest}, and {@code ChipSubjectOneResolutionTest}'s own copy of it, which ADR Decision 54 records as deliberately not migrated). The first line alone matches every arity above that opens identically, so it names the METHOD and cannot delimit it. <b>The THIRD line is what makes the needle unique, and only since issue #280</b> — before it, the two-line prefix already was, by the one character separating this line's comma from the five-argument seam's {@code )}, and spelling the third line bought loudness alone. The delegate this issue added below wraps its first two lines exactly as this one does, so a needle stopping at line two would now match twice and hard-fail. What has not changed is the instruction: move this declaration and the needles
-	 * move with it — {@code ChipSubjectOneResolutionTest} and {@code CoMedicationResolutionPerPassTest},
-	 * which say so themselves.
+	 * <p>The structural guards in {@code ChipSubjectOneResolutionTest} and
+	 * {@code CoMedicationResolutionPerPassTest} match all four declaration lines. The fourth
+	 * distinguishes this implementation from the delegate above; update both needles if this
+	 * declaration changes.
 	 *
+
 	 * @param resolvedOrderEntries the patient's active orders ALREADY resolved to their reference
 	 *        entries by a caller that needed them itself, or {@code null} from a caller that has not
 	 *        resolved them — which is every caller but {@code DrugReferenceInjector.injectRecords}.
@@ -755,10 +929,10 @@ public class DrugSafetyValidator {
 	 *        {@code null} from a caller that does not publish it — every caller but the injector's
 	 *        pre-answer pass, which holds her orders resolved and stamps the answer on its chart.
 	 */
-	List<SafetyWarning> validate(String answer, String question, PatientClinicalContext rawContext,
+	private List<SafetyWarning> validate(String answer, String question, PatientClinicalContext rawContext,
 			List<RecordMapping> mappings, List<DrugReference> resolvedOrderEntries,
 			PairChipExtent.Sink pairExtentSink, SubjectMatterScope scope,
-			ListedDrugsWithNoActiveOrder.Sink listedSink) {
+			ListedDrugsWithNoActiveOrder.Sink listedSink, SafetyCoverage coverage) {
 		List<SafetyWarning> warnings = new ArrayList<SafetyWarning>();
 		// The patient's active orders resolved to their reference entries — at most ONE dataset sweep
 		// per validate, and none at all where the caller has already made it (issue #255) — feeding
@@ -879,6 +1053,44 @@ public class DrugSafetyValidator {
 		// exist. This bean is a Spring singleton, so a field memo is one unsynchronized structure shared
 		// by every concurrent request.
 		Map<Object, List<DrugReference>> resolvedRows = resolvedSubstanceRows(inPlay, orderEntries);
+		// Whether one of her other orders lacks condition rules; it limits the check only once the
+		// order-driven arm below has screened her orders, which is not known yet.
+		boolean ordersLackConditionRules = false;
+		if (coverage != null) {
+			coverage.screened(resolvedRows.keySet());
+			if (!warnDose && !warnInteractions && !warnContra) {
+				coverage.noCheckEnabled();
+			} else if (!warnDose || !warnInteractions || !warnContra) {
+				coverage.limited("checks_partially_disabled");
+			}
+			for (PatientClinicalContext.ActiveDrugOrder order : context.getActiveDrugOrders()) {
+				if (orderEntries.stream().noneMatch(ref -> resolvesFrom(ref, order, bridgedOrders))) {
+					coverage.limited("mapping_incomplete");
+				}
+			}
+			// Condition rules are measured where the contraindication arm screens: every drug in play here,
+			// and her other orders only where the order-driven arm below compared them with her records (its
+			// subject-matter gate decides that). A partner order that arm never reaches cannot limit the
+			// check by lacking rules.
+			Set<Object> inPlaySubstances = new HashSet<Object>();
+			for (DrugReference played : inPlay) {
+				inPlaySubstances.add(played.substanceGroupKey());
+			}
+			for (Map.Entry<Object, List<DrugReference>> group : resolvedRows.entrySet()) {
+				List<DrugReference> rows = group.getValue();
+				if (warnContra && rows.stream().noneMatch(DrugReferenceLoad.Arm.CONDITION_RULES::publishedBy)) {
+					if (inPlaySubstances.contains(group.getKey())) {
+						coverage.limited("condition_rules_unavailable");
+					} else {
+						ordersLackConditionRules = true;
+					}
+				}
+				if (warnInteractions && rows.stream().noneMatch(DrugReferenceLoad.Arm.INTERACTIONS::publishedBy)
+						&& rows.stream().noneMatch(DrugReferenceLoad.Arm.ATC_CODES::publishedBy)) {
+					coverage.limited("interaction_reference_unavailable");
+				}
+			}
+		}
 		// The rows a substance is NAMED by, which is a strictly smaller question than the rows it is RULED
 		// over, and since issue #238 a different set: the question's and the patient's own, never the
 		// ANSWER's. Of every input the naming decision reads this is the one that varied between the two
@@ -981,6 +1193,11 @@ public class DrugSafetyValidator {
 		// which has already paid for the walk, hands over a set it has.
 		final Set<Object> allergicSubstances = allergicSubstanceKeys(recordedAllergens);
 		Supplier<Set<Object>> allergicSubstanceSupplier = () -> allergicSubstances;
+		// The allergen arm compares against these entries too, so a loader finding on one of them
+		// limits this check exactly as a finding on a screened subject does.
+		if (coverage != null) {
+			coverage.screened(allergicSubstances);
+		}
 
 		// The patient's co-medications, resolved at most ONCE for this pass and read by every arm that
 		// needs them (issue #256). A per-pass local and never a field — see CoMedications, which also
@@ -1109,7 +1326,7 @@ public class DrugSafetyValidator {
 				}
 			}
 			if (dosePending.remove(substance)) {
-				addOverdose(warnings, rows, subjects, context, lower, all, herOrder);
+				addOverdose(warnings, rows, subjects, context, lower, all, herOrder, coverage);
 			}
 		}
 		// The patient's own prescriptions against their own allergy and condition records — the one
@@ -1120,6 +1337,10 @@ public class DrugSafetyValidator {
 		// pairs are her own orders on both sides — but because they are a lookup OVER her medication
 		// list rather than a finding AGAINST her records, they are the two that grow quadratically, and
 		// they are the two a cap can truncate (maxPairChips, #131).
+		// Whether the order-driven arm below compared any of her orders with her records. It and the screen of
+		// her orders further down run with nothing in play, so the no_applicable_check decision at the end of
+		// this pass has to wait for both answers rather than be read off inPlay here.
+		boolean ordersScreened = false;
 		if (warnContra && hasContraindicationRecords(context)) {
 			// The corpus is parsed HERE only where the arm can actually reach a chip. Asking the
 			// precondition at the call site as well as inside the arm is one predicate and two callers,
@@ -1134,10 +1355,13 @@ public class DrugSafetyValidator {
 			if (attribution == null) {
 				attribution = attributionTexts(answer, mappings);
 			}
-			addActiveOrderContraindications(contraindications, inPlay, context, orderEntries,
+			ordersScreened = addActiveOrderContraindications(contraindications, inPlay, context, orderEntries,
 					recordedAllergens, SubjectMatter.of(scope, question, answer,
 							attribution.citedChartRecords, attribution.referenceMaterial),
 					allergicSubstanceSupplier, bridgedOrders);
+		}
+		if (coverage != null && ordersScreened && ordersLackConditionRules) {
+			coverage.limited("condition_rules_unavailable");
 		}
 		// LAST, so the patient's own findings lead: a chip about their allergy or their active order
 		// is a fact about them, and outranks a reference lookup about a pair they may not be on.
@@ -1185,7 +1409,11 @@ public class DrugSafetyValidator {
 		// And where the question names two of her orders by their own names, which the reference data does not carry: it is
 		// about those two, and the screen is what relates them (ADR Decision 265). So for one of them named alone, whose word
 		// in a drug's place names her order and is no unrecognised drug (ADR Decision 273).
+		// Whether the screen below put two of her orders to each other, set inside its own gate so the
+		// no_applicable_check decision cannot read a copy of that gate that has fallen behind it.
+		boolean ordersPairScreened = false;
 		if (warnInteractions && screensHerOrders(question, questionDrugs, context, drugReferenceService)) {
+			ordersPairScreened = context.getActiveDrugOrders().size() > 1;
 			int screenedFrom = warnings.size();
 			pairExtent = addActiveOrderPairInteractions(warnings, subjects, context, severityFloor,
 					orderEntries, interactionPairs, coMedications, statedChips, bridgedOrders);
@@ -1236,6 +1464,15 @@ public class DrugSafetyValidator {
 		// asked it for a screen and "no pairs" is a direct answer to that; ADR Decision 65 carries it.
 		if (pairExtent == null && questionDrugScreened && hasActiveMedicationRecords(context)) {
 			pairExtent = PairChipExtent.of(questionDrugPairs, questionDrugPairs, questionDrugBelowFloor);
+		}
+		// Decided AFTER every arm, not off inPlay before any ran: the order-driven contraindication arm
+		// runs with nothing in play by design (issue #143), so a question about her medications or her
+		// allergies can raise an allergy chip about one of her orders, and the same pass must not then
+		// say no applicable check ran. It is the arm's own answer that counts, whether or not it found
+		// anything: an order compared with her recorded allergies and cleared was checked.
+		if (coverage != null && !ordersScreened
+				&& (resolvedRows.isEmpty() || (inPlay.isEmpty() && !ordersPairScreened))) {
+			coverage.limited("no_applicable_check");
 		}
 		// A screen asked only about her interactions draws her contraindications apart: they are findings about her
 		// medications, not what was asked (ADR Decision 190). In place, so every position the passes number is kept.
@@ -4023,12 +4260,14 @@ public class DrugSafetyValidator {
 		}
 	}
 
-	private void addContraindications(ContraindicationChips chips, DrugReference ref,
+	/** @return whether any matched rule of {@code ref} was evaluated, i.e. passed the subject-matter gate. */
+	private boolean addContraindications(ContraindicationChips chips, DrugReference ref,
 			PatientClinicalContext context, SubjectMatter askedAbout,
 			Supplier<Set<Object>> allergicSubstances, boolean subjectIsACurrentMedication) {
 		if (context == null) {
-			return;
+			return false;
 		}
+		boolean evaluated = false;
 		// The row this response names ref's substance by (issue #206), which is not necessarily the row the
 		// RULE is authored on. Both readings are needed and they are different questions: the rule is a
 		// fact about the row that publishes it — which is what selfNamedAllergyRule and
@@ -4145,6 +4384,7 @@ public class DrugSafetyValidator {
 			if (askedAbout != null && !askedAbout.names(c)) {
 				continue;
 			}
+			evaluated = true;
 			// Resolved after the match rather than above the loop: the shipped ddinter source emits no
 			// contraindications at all, so hoisting would fold a substance's rows for every drug in play of
 			// every request, for a loop that then does nothing. SubstanceSubjects memoises per substance, so
@@ -4213,6 +4453,7 @@ public class DrugSafetyValidator {
 							uncorroborated, subjectIsACurrentMedication,
 							matchedContraindicationRecords(c, context)));
 		}
+		return evaluated;
 	}
 
 	/**
@@ -11837,13 +12078,16 @@ public class DrugSafetyValidator {
 	 * bound). A combination product naming several used to be on that list and is not since issues
 	 * #193/#195.
 	 */
-	private void addActiveOrderContraindications(ContraindicationChips chips, Set<DrugReference> inPlay,
+	private boolean addActiveOrderContraindications(ContraindicationChips chips, Set<DrugReference> inPlay,
 			PatientClinicalContext context, List<DrugReference> orderEntries,
 			List<RecordedAllergen> recordedAllergens, SubjectMatter askedAbout,
 			Supplier<Set<Object>> allergicSubstances, BridgedOrders bridged) {
 		if (!hasContraindicationRecords(context)) {
-			return;
+			return false;
 		}
+		// Whether any of her orders was compared with her records at all, which is what the caller's
+		// no_applicable_check decision reads and a different question from whether a chip was raised.
+		boolean screened = false;
 		// The recorded allergies THIS response is about, resolved once per pass rather than once per
 		// order: it is a function of the response and of the patient's allergy list, neither of which
 		// varies inside the loop. A per-call local and never a field, for issue #172's reason — this
@@ -11903,6 +12147,7 @@ public class DrugSafetyValidator {
 			if (askedAbout.names(ref)) {
 				addContraindications(chips, ref, context, null, allergicSubstances, currentMedication);
 				addAllergyContraindications(chips, ref, recordedAllergens, currentMedication);
+				screened = true;
 				continue;
 			}
 			if (allergensAskedAbout == null) {
@@ -11914,9 +12159,15 @@ public class DrugSafetyValidator {
 			// strength of the question's wording — hedging a clause a recorded allergy really does
 			// support. The narrowing below is about which allergy records may SPEAK in this response;
 			// this is about what the chart holds, and the two are different questions.
-			addContraindications(chips, ref, context, askedAbout, allergicSubstances, currentMedication);
+			// Screened where a rule of this order passed the subject-matter gate, or a recorded allergy the
+			// response is about was there to compare it with; an order every gate turned away was not.
+			if (addContraindications(chips, ref, context, askedAbout, allergicSubstances, currentMedication)
+					| !allergensAskedAbout.isEmpty()) {
+				screened = true;
+			}
 			addAllergyContraindications(chips, ref, allergensAskedAbout, currentMedication);
 		}
+		return screened;
 	}
 
 	/**
@@ -14355,7 +14606,7 @@ public class DrugSafetyValidator {
 	 */
 	private void addOverdose(List<SafetyWarning> warnings, List<DrugReference> rows,
 			SubstanceSubjects subjects, PatientClinicalContext context, String lowerAnswer,
-			List<DrugReference> allEntries, boolean herOrder) {
+			List<DrugReference> allEntries, boolean herOrder, SafetyCoverage coverage) {
 		// The same choice of representative row the other arms make, recorded names and all (issues #194,
 		// #206): a dose warning, an interaction chip and a contraindication chip about ONE substance in
 		// ONE response must not call it three things, which is exactly the divergence anchoring only some
@@ -14375,12 +14626,48 @@ public class DrugSafetyValidator {
 		// hoisting the guard with it would make those installs pay, on every request, for a check their
 		// data can never answer.
 		if (!anyActionableBand(rows, context)) {
+			if (coverage != null) {
+				// A band whose only ceiling is per-kg is actionable once a weight is known, so for a patient
+				// without one the check is switched off by the missing weight, not by missing rules.
+				boolean perKgBandWithoutWeight = rows.stream()
+						.map(row -> row.bandForAge(context.getAgeYears()))
+						.anyMatch(band -> band != null && perKgCeilingWantsAWeight(band, context));
+				coverage.limited(perKgBandWithoutWeight ? "weight_unavailable" : "no_actionable_dose_reference");
+			}
 			return;
 		}
 		// ONE reading of the answer for the whole substance (issue #245), before any row is consulted —
 		// the dose a clinician stated is a fact about the drug, not about the row that happens to publish
 		// the band it is about to be compared against.
 		List<AttributedDose> doses = attributedDoses(lowerAnswer, rows, allEntries);
+		if (coverage != null) {
+			boolean unreadDose = statesAnUnreadDose(lowerAnswer, rows);
+			for (DrugReference row : rows) {
+				DrugReference.AgeBand band = row.bandForAge(context.getAgeYears());
+				if (band == null) {
+					continue;
+				}
+				// A dose the warning arm could not read, or read only by its magnitude, was not assessed as
+				// stated, whatever else was stated.
+				if (unreadDose && (dailyCeilingApplies(band) || perKgCeilingPublished(band))) {
+					coverage.limited("dose_not_assessable");
+				}
+				// A dose with no stated frequency is still COMPARED, at the conservative once-daily reading
+				// parseDailyDoseMg takes, but it is not an assessable daily total: "200 mg" tells the warning
+				// arm nothing about the day, so the check cannot claim the daily ceiling was screened.
+				if (dailyCeilingApplies(band) && !dailyDoseStated(doses)) {
+					coverage.limited("dose_not_assessable");
+				}
+				if (perKgCeilingPublished(band)) {
+					if (perKgCeilingWantsAWeight(band, context)) {
+						coverage.limited("weight_unavailable");
+					}
+					if (parseMaxPerDoseMg(doses) == null) {
+						coverage.limited("dose_not_assessable");
+					}
+				}
+			}
+		}
 		if (addOverdose(warnings, subject, subject, doses, context, herOrder)) {
 			return;
 		}
@@ -14416,7 +14703,7 @@ public class DrugSafetyValidator {
 	 *         <p>The patient-INDEPENDENT half of this question — does the band publish a ceiling at all? —
 	 *         is named separately as {@link #publishesACeiling}, because a load-time reader can decide
 	 *         that half and no more (see {@link DrugReferenceLoad.Arm#DOSE_CEILINGS}). It is not asked
-	 *         here: {@code dailyArm || weightArm} below already implies it, so a guard would be a branch
+	 *         here: {@code dailyCeilingApplies || perKgCeilingApplies} below already implies it, so a guard would be a branch
 	 *         no input can reach. The shared premise is that a band with neither ceiling is useless to
 	 *         both readers, and it is stated rather than enforced twice.
 	 */
@@ -14426,10 +14713,29 @@ public class DrugSafetyValidator {
 		if (band == null) {
 			return null;
 		}
+		return dailyCeilingApplies(band) || perKgCeilingApplies(band, context) ? band : null;
+	}
+
+	/** The daily leg of {@link #actionableBand}: the band publishes a daily ceiling. */
+	private static boolean dailyCeilingApplies(DrugReference.AgeBand band) {
+		return band.getMaxDailyDoseMg() > 0;
+	}
+
+	/** Whether the band publishes a per-kg ceiling, which the per-kg leg can use only with a weight. */
+	private static boolean perKgCeilingPublished(DrugReference.AgeBand band) {
+		return band.getMgPerKgMax() > 0;
+	}
+
+	/** The per-kg leg of {@link #actionableBand}: a per-kg ceiling and a known weight to scale it by. */
+	private static boolean perKgCeilingApplies(DrugReference.AgeBand band, PatientClinicalContext context) {
 		Double weightKg = context != null ? context.getWeightKg() : null;
-		boolean dailyArm = band.getMaxDailyDoseMg() > 0;
-		boolean weightArm = weightKg != null && weightKg > 0 && band.getMgPerKgMax() > 0;
-		return dailyArm || weightArm ? band : null;
+		return perKgCeilingPublished(band) && weightKg != null && weightKg > 0;
+	}
+
+	/** A per-kg ceiling the per-kg leg cannot use for want of the patient's weight: what the safety status
+	 *  reports as {@code weight_unavailable}, asked through the same two legs {@link #actionableBand} is. */
+	private static boolean perKgCeilingWantsAWeight(DrugReference.AgeBand band, PatientClinicalContext context) {
+		return perKgCeilingPublished(band) && !perKgCeilingApplies(band, context);
 	}
 
 	/**
@@ -14447,13 +14753,13 @@ public class DrugSafetyValidator {
 	 *
 	 *         <p><b>{@link #actionableBand} does not call this</b>, and a reader looking for the arm's
 	 *         own use of it will not find one: {@code publishesACeiling} is strictly weaker than that
-	 *         method's {@code dailyArm || weightArm}, so a guard there could only return null on inputs
+	 *         method's {@code dailyCeilingApplies || perKgCeilingApplies}, so a guard there could only return null on inputs
 	 *         that already did. The shared premise is stated in that method's javadoc instead of being
 	 *         enforced by a branch no input reaches. So this has exactly one production caller, the
 	 *         load-time report, and it is that report's cases which pin it.
 	 */
 	static boolean publishesACeiling(DrugReference.AgeBand band) {
-		return band.getMaxDailyDoseMg() > 0 || band.getMgPerKgMax() > 0;
+		return dailyCeilingApplies(band) || perKgCeilingPublished(band);
 	}
 
 	/**
@@ -14660,6 +14966,26 @@ public class DrugSafetyValidator {
 		return out;
 	}
 
+	/**
+	 * @return whether a clause naming one of {@code rows} states a dose {@link #DOSE_MG} cannot read
+	 *         ({@link #UNREAD_DOSE}), other than a ceiling the answer recites
+	 */
+	private static boolean statesAnUnreadDose(String lowerAnswer, List<DrugReference> rows) {
+		for (String rawClause : CLAUSE_DELIMITER.split(lowerAnswer)) {
+			String clause = DrugReference.foldedLower(rawClause);
+			if (!namesSubstance(clause, rows)) {
+				continue;
+			}
+			Matcher m = UNREAD_DOSE.matcher(clause);
+			while (m.find()) {
+				if (!precededByLimitCue(clause, m.start())) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
 	/** One dose statement attributed to a drug: per-administration mg + the clause's stated
 	 *  doses-per-day ({@code 0} = no frequency stated). */
 	private static final class AttributedDose {
@@ -14672,6 +14998,20 @@ public class DrugSafetyValidator {
 			this.perDoseMg = perDoseMg;
 			this.frequencyPerDay = frequencyPerDay;
 		}
+	}
+
+	/**
+	 * @return whether every attributed dose carries a stated frequency, so a daily total can be
+	 *         assessed: one dose stated without one leaves the day's total unknown, whatever another
+	 *         sentence states.
+	 */
+	private static boolean dailyDoseStated(List<AttributedDose> doses) {
+		for (AttributedDose dose : doses) {
+			if (dose.frequencyPerDay <= 0) {
+				return false;
+			}
+		}
+		return !doses.isEmpty();
 	}
 
 	/**

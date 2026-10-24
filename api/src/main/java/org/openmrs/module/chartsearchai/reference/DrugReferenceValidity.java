@@ -11,6 +11,7 @@ package org.openmrs.module.chartsearchai.reference;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -251,11 +252,14 @@ public final class DrugReferenceValidity {
 
 		private final String detail;
 
-		private Finding(String rule, Remedy remedy, int occurrences, String detail) {
+		private final List<DrugReference> entries;
+
+		private Finding(String rule, Remedy remedy, int occurrences, String detail, List<DrugReference> entries) {
 			this.rule = rule;
 			this.remedy = remedy;
 			this.occurrences = occurrences;
 			this.detail = detail;
+			this.entries = entries == null ? null : Collections.unmodifiableList(entries);
 		}
 
 		/** @return the rule that fired — one of this class's constants. */
@@ -276,6 +280,31 @@ public final class DrugReferenceValidity {
 		/** @return what is wrong and where, naming the rows or files an operator has to look at. */
 		public String getDetail() {
 			return detail;
+		}
+
+		/**
+		 * @return whether this finding is about entries of the loaded data, rather than the document or the
+		 *         configuration. Unlike {@link #getDetail()}'s bounded sample, every affected entry is kept.
+		 */
+		public boolean isAboutEntries() {
+			return entries != null;
+		}
+
+		/**
+		 * @param substances substance identities, as {@link DrugReference#substanceGroupKey()} keys them
+		 * @return whether any entry this finding is about is a row of one of them; {@code false} for a
+		 *         finding about the document or the configuration, which is about no entry
+		 */
+		public boolean concernsAnyOf(Set<Object> substances) {
+			if (entries == null) {
+				return false;
+			}
+			for (DrugReference entry : entries) {
+				if (substances.contains(entry.substanceGroupKey())) {
+					return true;
+				}
+			}
+			return false;
 		}
 
 		/** @return this finding as a JSON-serializable map, for a caller that reports the load. */
@@ -304,8 +333,14 @@ public final class DrugReferenceValidity {
 
 	private final List<Finding> findings = new ArrayList<Finding>();
 
+	/** A finding about the document or the configuration, which concerns no entry. */
 	private void report(String rule, Remedy remedy, int occurrences, String detail) {
-		findings.add(new Finding(rule, remedy, occurrences, detail));
+		findings.add(new Finding(rule, remedy, occurrences, detail, null));
+	}
+
+	/** A finding about these entries of the loaded data, every one of them, whatever the detail samples. */
+	private void report(String rule, Remedy remedy, int occurrences, String detail, Collection<DrugReference> entries) {
+		findings.add(new Finding(rule, remedy, occurrences, detail, new ArrayList<DrugReference>(entries)));
 	}
 
 	/** @return every rule that fired in this load, in the order the loader applied them; never null. */
@@ -579,11 +614,13 @@ public final class DrugReferenceValidity {
 		if (rows <= 0) {
 			return;
 		}
+		// About entries, and concerning none of them: a dropped row stated a relationship no screen can use, so
+		// no screen is the less complete for its absence.
 		report(SELF_PAIRED_INTERACTION_ROWS, Remedy.DROPPED, rows,
 				rows + " interaction row(s) pair a drug with itself or with another route/formulation "
 						+ "row of the same substance, and a drug cannot interact with itself, so they were "
 						+ "dropped. The fix is in the dataset; the count is how a refresh introducing more "
-						+ "of them becomes visible.");
+						+ "of them becomes visible.", Collections.<DrugReference> emptyList());
 	}
 
 	// ------------------------------------------------------------------
@@ -710,6 +747,7 @@ public final class DrugReferenceValidity {
 	private void dropNullElements(List<DrugReference> entries) {
 		int nulls = 0;
 		Set<String> affected = new LinkedHashSet<String>();
+		Set<DrugReference> affectedEntries = new LinkedHashSet<DrugReference>();
 		for (DrugReference entry : entries) {
 			int dropped = 0;
 			List<String> aliases = withoutNulls(entry.getAliases());
@@ -745,6 +783,7 @@ public final class DrugReferenceValidity {
 			if (dropped > 0) {
 				nulls += dropped;
 				affected.add(String.valueOf(entry.getName()));
+				affectedEntries.add(entry);
 			}
 		}
 		if (nulls > 0) {
@@ -753,7 +792,7 @@ public final class DrugReferenceValidity {
 							+ "value, and the consumers of an alias, a code, an age band or a rule "
 							+ "dereference it — the safety arms then raise no warning at all for the "
 							+ "request, rather than one fewer. The fix is in the file. Entries: "
-							+ sample(affected));
+							+ sample(affected), affectedEntries);
 		}
 	}
 
@@ -850,6 +889,9 @@ public final class DrugReferenceValidity {
 		Set<String> blankIn = new LinkedHashSet<String>();
 		Set<String> unnamedIn = new LinkedHashSet<String>();
 		Set<String> unnameableIn = new LinkedHashSet<String>();
+		Set<DrugReference> blankEntries = new LinkedHashSet<DrugReference>();
+		Set<DrugReference> unnamedEntries = new LinkedHashSet<DrugReference>();
+		Set<DrugReference> unnameableEntries = new LinkedHashSet<DrugReference>();
 		for (DrugReference entry : entries) {
 			List<String> usable = new ArrayList<String>(entry.getAliases().size() + 1);
 			for (String alias : entry.getAliases()) {
@@ -859,6 +901,7 @@ public final class DrugReferenceValidity {
 				else {
 					blanks++;
 					blankIn.add(String.valueOf(entry.getName()));
+					blankEntries.add(entry);
 				}
 			}
 			if (usable.size() != entry.getAliases().size()) {
@@ -892,10 +935,12 @@ public final class DrugReferenceValidity {
 				// nothing at all.
 				unnameable++;
 				unnameableIn.add(entry.getName());
+				unnameableEntries.add(entry);
 			}
 			else if (own != null && !entry.isNamed(own)) {
 				unnamed++;
 				unnamedIn.add(entry.getName());
+				unnamedEntries.add(entry);
 				usable.add(own);
 				entry.setAliases(usable);
 			}
@@ -905,13 +950,13 @@ public final class DrugReferenceValidity {
 					blanks + " alias(es) naming nothing (blank, or nothing but combining marks) were "
 							+ "dropped: such a token matches at a word boundary in text it has nothing to "
 							+ "do with, so the entry's rules would fire for a patient with an unrelated "
-							+ "allergy. Entries: " + sample(blankIn));
+							+ "allergy. Entries: " + sample(blankIn), blankEntries);
 		}
 		if (unnamed > 0) {
 			report(ENTRY_NOT_NAMED_BY_ITS_OWN_ALIASES, Remedy.REPAIRED, unnamed,
 					unnamed + " entr(ies) whose aliases omitted their own name were given it, so the "
 							+ "strongest claimant on a name is always among the entries that name "
-							+ "matches. Entries: " + sample(unnamedIn));
+							+ "matches. Entries: " + sample(unnamedIn), unnamedEntries);
 		}
 		if (unnameable > 0) {
 			report(ENTRY_NOT_NAMED_BY_ITS_OWN_ALIASES, Remedy.REPORTED, unnameable,
@@ -923,7 +968,7 @@ public final class DrugReferenceValidity {
 							+ "name-driven arm, so the entry is findable only by whatever other aliases it "
 							+ "carries and by nothing at all where it carries none; fix the name in the "
 							+ "file. Entries: "
-							+ sample(unnameableIn));
+							+ sample(unnameableIn), unnameableEntries);
 		}
 	}
 
@@ -986,6 +1031,9 @@ public final class DrugReferenceValidity {
 	 */
 	private void reportRulesWithoutASubstanceIdentity(List<DrugReference> entries) {
 		Map<String, Set<String>> sharedBy = new LinkedHashMap<String, Set<String>>();
+		// The rows behind each shared name: a screen of that name puts only the strongest claimant in play,
+		// so every row sharing it is one the finding concerns.
+		Map<String, Set<DrugReference>> rowsSharing = new LinkedHashMap<String, Set<DrugReference>>();
 		for (DrugReference entry : entries) {
 			if (entry.substanceKey() != null) {
 				// The data says which substance this row is of, so the verdict cannot split it off.
@@ -1002,10 +1050,17 @@ public final class DrugReferenceValidity {
 					sharedBy.put(name, claimants);
 				}
 				claimants.add(String.valueOf(entry.getName()));
+				Set<DrugReference> rows = rowsSharing.get(name);
+				if (rows == null) {
+					rows = new LinkedHashSet<DrugReference>();
+					rowsSharing.put(name, rows);
+				}
+				rows.add(entry);
 			}
 		}
 		int atRisk = 0;
 		Set<String> details = new LinkedHashSet<String>();
+		Set<DrugReference> concerned = new LinkedHashSet<DrugReference>();
 		for (DrugReference entry : entries) {
 			if (entry.substanceKey() != null || !carriesRules(entry)) {
 				continue;
@@ -1017,6 +1072,7 @@ public final class DrugReferenceValidity {
 						&& !name.equals(DrugReference.normalizeName(entry.getName()))) {
 					atRisk++;
 					details.add(entry.getName() + " shares '" + name + "' with " + claimants);
+					concerned.addAll(rowsSharing.get(name));
 					break;
 				}
 			}
@@ -1030,7 +1086,7 @@ public final class DrugReferenceValidity {
 							+ "substance AND name a presentation with a trailing parenthesized qualifier "
 							+ "('Ibuprofen (tablets)', not 'Ibuprofen tablets'), which is what the shipped "
 							+ "datasets do; the claim alone is vetoed by the display stem. "
-							+ sample(details));
+							+ sample(details), concerned);
 		}
 	}
 
@@ -1096,6 +1152,9 @@ public final class DrugReferenceValidity {
 		}
 		int collisions = 0;
 		Set<String> details = new LinkedHashSet<String>();
+		// Both sides: a string carrying the name can resolve either substance, so a screen of either one
+		// may be reading the other's rules.
+		Set<DrugReference> concerned = new LinkedHashSet<DrugReference>();
 		for (DrugReference entry : entries) {
 			String own = DrugReference.normalizeName(entry.getName());
 			for (String alias : entry.getAliases()) {
@@ -1112,6 +1171,8 @@ public final class DrugReferenceValidity {
 					collisions++;
 					details.add(entry.getName() + " publishes '" + name + "', which is "
 							+ other.getName() + "'s own name");
+					concerned.add(entry);
+					concerned.add(other);
 					break;
 				}
 			}
@@ -1120,7 +1181,7 @@ public final class DrugReferenceValidity {
 			report(ALIAS_NAMES_ANOTHER_SUBSTANCE, Remedy.REPORTED, collisions,
 					collisions + " published name(s) denote a DIFFERENT substance in this dataset, so a "
 							+ "question or a chart string carrying one resolves the wrong drug. The data "
-							+ "is left as loaded — the fix is in the dataset. " + sample(details));
+							+ "is left as loaded — the fix is in the dataset. " + sample(details), concerned);
 		}
 	}
 
@@ -1213,6 +1274,7 @@ public final class DrugReferenceValidity {
 		}
 		int merged = 0;
 		Set<String> details = new LinkedHashSet<String>();
+		Set<DrugReference> concerned = new LinkedHashSet<DrugReference>();
 		for (List<DrugReference> rows : bySubstance.values()) {
 			if (!holdsAParent(rows)) {
 				continue;
@@ -1224,6 +1286,7 @@ public final class DrugReferenceValidity {
 				merged++;
 				details.add(row.getName() + " is filed as '" + row.getSubstanceName() + "' beside "
 						+ sample(namesOfOthers(rows, row)));
+				concerned.add(row);
 			}
 		}
 		if (merged > 0) {
@@ -1235,7 +1298,7 @@ public final class DrugReferenceValidity {
 							+ "the parent's substance: in a DDInter-shaped file by giving it its own "
 							+ "drugbank_id, which is what keeps every derivative this module already "
 							+ "separates apart, and in a curated file by giving it its own substanceName. "
-							+ sample(details));
+							+ sample(details), concerned);
 		}
 	}
 
@@ -1344,6 +1407,7 @@ public final class DrugReferenceValidity {
 		}
 		int contradicted = 0;
 		Set<String> details = new LinkedHashSet<String>();
+		Set<DrugReference> concerned = new LinkedHashSet<DrugReference>();
 		for (DrugReference row : entries) {
 			String substance = DrugReference.normalizeName(row.getSubstanceName());
 			String stem = DrugReference.displayStem(row.getName());
@@ -1371,6 +1435,7 @@ public final class DrugReferenceValidity {
 			contradicted++;
 			details.add(row.getName() + " is filed as '" + substance + "', but the bridge files "
 					+ sample(elsewhere) + " on other rows and not on it");
+			concerned.add(row);
 			// Reported, and the data left as loaded for matching; but a clinician is not shown the contradicted name as
 			// the drug's synonym (ADR Decision 216), nor as the name of a partner a rule about this row prints (ADR
 			// Decision 234).
@@ -1383,7 +1448,7 @@ public final class DrugReferenceValidity {
 							+ "while this dataset's bridge names that display name as an ingredient of "
 							+ "concepts it files on other rows and not on them — so the substance name may be "
 							+ "another substance's. The data is left as loaded — the fix is in the dataset. "
-							+ sample(details));
+							+ sample(details), concerned);
 		}
 	}
 

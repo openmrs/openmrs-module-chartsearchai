@@ -1,0 +1,91 @@
+{
+  "schema_version": "dual_provider_conformance.v1",
+  "description": "The cases of the shared dual-provider conformance fixture that this module's tests read, each copied unchanged. Records are synthetic contract data, not patient evidence.",
+  "provider_lifecycle": [
+    {
+      "id": "provider.lifecycle.required-answer-and-terminal",
+      "capabilities": [
+        "answer"
+      ],
+      "events": [
+        "turn_started",
+        "answer_done",
+        "turn_done"
+      ],
+      "expected": "accept"
+    },
+    {
+      "id": "provider.lifecycle.review-is-optional",
+      "capabilities": [
+        "answer",
+        "answer_review",
+        "indepth"
+      ],
+      "events": [
+        "turn_started",
+        "answer_done",
+        "answer_validation",
+        "indepth_pending",
+        "indepth_done",
+        "turn_done"
+      ],
+      "expected": "accept"
+    },
+    {
+      "id": "provider.lifecycle.no-silent-fallback",
+      "capabilities": [
+        "answer"
+      ],
+      "events": [
+        "turn_started",
+        "turn_error"
+      ],
+      "expected": "accept"
+    },
+    {
+      "id": "provider.lifecycle.preview-precedes-committed-reasoning",
+      "capabilities": [
+        "answer",
+        "token_streaming"
+      ],
+      "events": [
+        "turn_started",
+        "preliminary_delta",
+        "preliminary_delta",
+        "reasoning_delta",
+        "answer_delta",
+        "answer_done",
+        "turn_done"
+      ],
+      "expected": "accept"
+    },
+    {
+      "id": "provider.lifecycle.preview-may-not-resume-after-committed-reasoning",
+      "capabilities": [
+        "answer",
+        "token_streaming"
+      ],
+      "events": [
+        "turn_started",
+        "reasoning_delta",
+        "preliminary_delta",
+        "answer_done",
+        "turn_done"
+      ],
+      "expected": "reject"
+    },
+    {
+      "id": "provider.lifecycle.preview-requires-token-streaming",
+      "capabilities": [
+        "answer"
+      ],
+      "events": [
+        "turn_started",
+        "preliminary_delta",
+        "answer_done",
+        "turn_done"
+      ],
+      "expected": "reject"
+    }
+  ]
+}

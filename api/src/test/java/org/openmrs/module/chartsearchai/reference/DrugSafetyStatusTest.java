@@ -242,6 +242,34 @@ public class DrugSafetyStatusTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/** The warning arm reads "1,500 mg" by its last group, as 500 mg, so the dose was not assessed. */
+	@Test
+	public void aDoseWithAThousandsSeparatorIsNotAssessed() {
+		prepareCompletePatient();
+		DrugSafetyValidator.SafetyCheckResult result = validator.validateWithStatus(
+				"Paracetamol 1,500 mg four times daily.", "Can I give her paracetamol?", patient,
+				Collections.emptyList(), new PairChipExtent.Sink());
+		assertEquals("limited", result.getStatus(), result.getIssues().toString());
+		assertTrue(result.getIssues().contains("dose_not_assessable"), result.getIssues().toString());
+	}
+
+	/** A recited ceiling is not a stated dose, also when "of" or a few words follow its cue. */
+	@Test
+	public void aCeilingRecitedAsAMaximumOfAnAmountIsNotAStatedDose() {
+		prepareCompletePatient();
+		DrugSafetyValidator.SafetyCheckResult plain = validator.validateWithStatus(
+				"Paracetamol 1000 mg four times daily.", "Can I give her paracetamol?", patient,
+				Collections.emptyList(), new PairChipExtent.Sink());
+		for (String answer : Arrays.asList(
+				"Paracetamol 1000 mg four times daily, up to a maximum of 4,000 mg per day.",
+				"Paracetamol 1000 mg four times daily, to a maximum daily dose of 4,000 mg.")) {
+			DrugSafetyValidator.SafetyCheckResult recited = validator.validateWithStatus(answer,
+					"Can I give her paracetamol?", patient, Collections.emptyList(), new PairChipExtent.Sink());
+			assertEquals(plain.getStatus(), recited.getStatus(), answer + " " + recited.getIssues());
+			assertEquals(plain.getIssues(), recited.getIssues(), answer);
+		}
+	}
+
 	@Test
 	public void aDoseInAnotherUnitBesideAReadableOneIsNotAssessed() {
 		prepareCompletePatient();

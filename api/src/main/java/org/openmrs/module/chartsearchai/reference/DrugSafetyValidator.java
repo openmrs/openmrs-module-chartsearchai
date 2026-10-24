@@ -321,10 +321,12 @@ public class DrugSafetyValidator {
 	 * is not a sign; the look-behind allows up to ten spaces, Java's look-behind being bounded. A unit
 	 * per volume is a concentration ({@code 10 g/dL}, {@code 250 mg/5 ml}), not a dose; per day, per kg
 	 * or per dose is a dose. A dose in mg per kg ({@code 100 mg/kg}, {@code 100 mg per kg}) is one the
-	 * warning arm misreads, as that many milligrams in total, so it is not assessed as stated either.
+	 * warning arm misreads, as that many milligrams in total, and an amount with a thousands separator
+	 * ({@code 1,500 mg}) one it reads by its last group, so neither is assessed as stated.
 	 */
 	private static final Pattern UNREAD_DOSE = Pattern.compile(
 			"(?<![\\d.]\\s{0,10})[-\u2212]\\s*\\d+(?:\\.\\d+)?\\s*mg\\b"
+					+ "|\\d{1,3}(?:,\\d{3})+(?:\\.\\d+)?\\s*mg\\b"
 					+ "|\\d+(?:\\.\\d+)?\\s*mg\\s*(?:/|per\\b)\\s*(?:kg|kilo)"
 					+ "|\\d+(?:\\.\\d+)?\\s*(?:g|gm|grams?|mcg|ug|\u00b5g|micrograms?|mgs|milligrams?)\\b"
 					+ "(?!\\s*/\\s*(?:\\d+(?:\\.\\d+)?\\s*)?(?:ml|dl|l)\\b)");
@@ -343,9 +345,11 @@ public class DrugSafetyValidator {
 
 	/** A number immediately preceded (within {@link #LIMIT_CUE_LOOKBACK} chars) by one of these cues
 	 *  is a CEILING, not a prescribed dose, so it must not be flagged as an overdose — e.g. the
-	 *  reference "maximum 2400 mg/day" the injector feeds the LLM, recited back in the answer. */
+	 *  reference "maximum 2400 mg/day" the injector feeds the LLM, recited back in the answer. Up to two
+	 *  words and an "of" may sit between the cue and the number ("a maximum daily dose of 4,000 mg"). */
 	private static final Pattern LIMIT_CUE = Pattern.compile(
-			"(?:maximum|max|up to|no more than|not exceed|do not exceed|exceeds?|ceiling|limit|less than|under)\\b\\W*$");
+			"(?:maximum|max|up to|no more than|not exceed|do not exceed|exceeds?|ceiling|limit|less than|under)\\b"
+					+ "(?:(?:\\s+[a-z]+){0,2}\\s+of)?\\W*$");
 
 	private static final int LIMIT_CUE_LOOKBACK = 24;
 

@@ -1057,7 +1057,7 @@ It does not certify that a medication is safe. It covers only drugs recognized b
 the loaded reference data: an unrecognized drug is not checked, and an answer
 naming one beside a recognized drug can still report `checked`.
 
-Limitation codes state the cause. `unavailable` carries one of:
+Limitation codes state the cause. `unavailable` carries one or more of:
 
 - `check_disabled`: answer checking is switched off, or every one of its three sub-checks
   (dose, interactions, contraindications) is;

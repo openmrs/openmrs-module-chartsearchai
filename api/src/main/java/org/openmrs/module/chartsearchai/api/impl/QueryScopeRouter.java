@@ -344,7 +344,14 @@ public final class QueryScopeRouter {
 			}
 			Matcher matcher = WORD.matcher(parts[p]);
 			while (matcher.find()) {
-				words.add(matcher.group().replace('\u2019', '\''));
+				String word = matcher.group().replace('\u2019', '\'');
+				// "What's" is "what is", which the shapes spell (ADR Decision 423).
+				if ("what's".equals(word)) {
+					words.add("what");
+					words.add("is");
+				} else {
+					words.add(word);
+				}
 			}
 		}
 		return words;
@@ -782,7 +789,8 @@ public final class QueryScopeRouter {
 	 * groups interact is a screen of her medications, which states every pair, those between the two among them.
 	 */
 	private static final String MEDICATION_GROUP_NOUN = "(?:treatments?|therapy|therapies|"
-			+ "regimens?|medications?|meds|medicines?|drugs?|pills|tablets|arvs?|art|antiretrovirals?|antibiotics?|antimalarials?|"
+			+ "regimens?|medications?|meds|medicines?|drugs?|pills|tablets|arvs?|art|antiretrovirals?|antacids?|painkillers?|analgesics?|"
+			+ "steroids?|supplements?|vitamins?|contraceptives?|antibiotics?|antimalarials?|"
 			+ "antihypertensives?|antiepileptics?|anticonvulsants?|antidepressants?)";
 
 	private static final String HER_MEDICATION_GROUP = POSSESSIVE + " (?:\\p{L}+ ){0,2}" + MEDICATION_GROUP_NOUN;
@@ -1335,6 +1343,9 @@ public final class QueryScopeRouter {
 			// (ADR Decision 289)
 			"(?:what|which) (?:is|are) the (?:drug )?interactions? between " + HER_D + " and " + HER_D,
 			"(?:what|which) (?:drug )?interactions? (?:is|are) there between " + HER_D + " and " + HER_D,
+			// "rifampicin vs nevirapine interaction", "Interaction between rifampicin and nevirapine?" (ADR Decision 423)
+			HER_D + " (?:vs|versus|and|with|plus) " + HER_D + " (?:drug )?interactions?",
+			"(?:the )?(?:drug )?interactions? between " + HER_D + " and " + HER_D,
 			"how (?:do|does|would|will) " + HER_D + " and " + HER_D + " interact(?: with each other)?",
 			"how (?:do|does|would|will) " + HER_D + " interact with " + HER_D,
 			// "How severe is the interaction between her rifampicin and nevirapine?", "What is the severity of the interaction

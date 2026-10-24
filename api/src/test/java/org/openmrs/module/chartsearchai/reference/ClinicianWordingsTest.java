@@ -564,6 +564,24 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		assertTrue(chart("Warfarin 200mg daily - ok?").statesADose(), "the dose said not checked");
 	}
 
+	/**
+	 * "What's the interaction between X and Y?", "X vs Y interaction" and a drug beside her antacids are the questions their
+	 * spelled-out wordings are (ADR Decision 423). On the 3.7.1 standalone the first two went to the model, which told a
+	 * patient on both drugs "No — Nevirapine should not be given", and "antacids" was read as a drug name not recognised.
+	 */
+	@Test
+	public void aContractedOrTerseWordingOfAPairOrAGroupIsTheQuestionItIs() {
+		String pair = ask("What is the interaction between warfarin and ibuprofen?");
+		assertNotNull(pair, "precondition: the module answers it");
+		for (String question : new String[] { "What's the interaction between warfarin and ibuprofen?",
+				"warfarin vs ibuprofen interaction", "Interaction between warfarin and ibuprofen?" }) {
+			assertEquals(pair, ask(question), question);
+		}
+		String antacids = ask("Is warfarin safe with her antacids?");
+		assertTrue(antacids != null && antacids.startsWith("This check cannot tell which of this patient's active medications are "
+				+ "the \"antacids\" the question names"), "was: " + antacids);
+	}
+
 	private static org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart chart(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

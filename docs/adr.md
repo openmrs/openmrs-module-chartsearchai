@@ -21826,3 +21826,24 @@ before giving amoxicillin?"*. *"ART"* was read as a drug name the data does not 
   would apply to *"Review her medications"* (Decision 409).
 
 Pinned by `ClinicianWordingsTest.aProposalAScreenOrAPairAsAClinicianTypesItIsTheQuestionItIs`.
+
+## Decision 423: "What's the interaction between X and Y?", "X vs Y interaction" and her antacids are the questions they spell
+
+**Status: Accepted** (October 2026) — found asking 40 further wordings of 15 patients on the 3.7.1 standalone on 2026-10-25.
+
+### Context
+
+*"What's the interaction between rifampicin and nevirapine?"* and *"rifampicin vs nevirapine interaction"* went to the model, which
+told patients on both drugs *"No — Nevirapine should not be given"*: Decision 289 reads *"What is the interaction between X and
+Y?"*, but `QueryScopeRouter.words` keeps *"what's"* as one word, and no shape read the terse form. *"Is ciprofloxacin safe with her
+antacids?"* closed *"\"antacids\" is not a drug name the interaction data recognises"*.
+
+### The decision
+
+- `QueryScopeRouter.words` reads *"what's"* as *"what is"*.
+- *"X vs (versus, and, with, plus) Y interaction"* and *"Interaction between X and Y?"* are Decision 289's questions about the pair's
+  interaction, answered with what relates them and no "Yes" or "No".
+- *antacids*, *painkillers*, *analgesics*, *steroids*, *supplements*, *vitamins* and *contraceptives* are nouns of a group of her
+  medications (Decision 221).
+
+Pinned by `ClinicianWordingsTest.aContractedOrTerseWordingOfAPairOrAGroupIsTheQuestionItIs`.

@@ -530,6 +530,40 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 			ask("She has a fungal infection. What about warfarin?"));
 	}
 
+	/**
+	 * Wordings of a proposal, a screen or a pair asked as a clinician types them are answered as the question they are (ADR
+	 * Decision 422). On the 3.7.1 standalone each went to the model, which answered "Fluconazole and Nevirapine can be
+	 * co-administered, with one caution", "Ciprofloxacin can be given, with the following cautions" and "Yes — adding
+	 * Ciprofloxacin would cause interactions" over findings with no rated severity.
+	 */
+	@Test
+	public void aProposalAScreenOrAPairAsAClinicianTypesItIsTheQuestionItIs() {
+		String together = ask("Can warfarin and ibuprofen be given together?");
+		assertNotNull(together, "precondition: the module answers it");
+		assertEquals(together, ask("Can warfarin and ibuprofen be co-administered?"));
+		String withArt = ask("Is warfarin safe with her ART?");
+		assertTrue(withArt != null && withArt.startsWith("This check cannot tell which of this patient's active medications are "
+				+ "the \"ART\" the question names"), "was: " + withArt);
+		assertEquals(withArt, ask("Is it ok to combine warfarin with her ART?"));
+		String affects = ask("Does warfarin affect her ART levels?");
+		assertTrue(affects != null && !affects.contains("\nYes") && !affects.contains("\nNo"), "was: " + affects);
+		String interacts = ask("Does warfarin interact with her medications?");
+		assertNotNull(interacts, "precondition: the module answers it");
+		for (String question : new String[] { "warfarin + her meds", "Would adding warfarin cause any interaction?",
+				"Any drug interactions I should know about before giving warfarin?" }) {
+			assertEquals(interacts, ask(question), question);
+		}
+		assertEquals(ask("Is there any reason not to give her warfarin?"), ask("Can she continue her meds if I add warfarin?"));
+		assertEquals(ask("Do I need to adjust any of her meds if I start warfarin?"),
+			ask("Does warfarin require dose adjustment with her meds?"));
+		String give = ask("Can I give warfarin?");
+		assertEquals(give, ask("Can I give warfarin tomorrow?"));
+		assertEquals(give, ask("Can I add warfarin on top of her current treatment?"));
+		assertEquals(ask("Is it ok to give her warfarin?"), ask("Is it ok to give her warfarin as needed?"));
+		assertEquals(ask("Warfarin ok?"), ask("Warfarin 200mg daily - ok?"));
+		assertTrue(chart("Warfarin 200mg daily - ok?").statesADose(), "the dose said not checked");
+	}
+
 	private static org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart chart(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

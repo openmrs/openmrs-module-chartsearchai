@@ -455,6 +455,10 @@ public final class QueryScopeRouter {
 			"how (?:safe|risky|dangerous) is " + D + "(?: (?:for|in) " + PATIENT + ")?",
 			"how (?:safe|risky|dangerous) (?:is it )?to (?:give|start|prescribe|add) (?:" + PATIENT + " )?(?:on )?" + D,
 			"rate the risk of (?:giving|starting|prescribing|adding) (?:" + PATIENT + " )?(?:on )?" + D,
+			// "Can she continue her meds if I add fluconazole?" (ADR Decision 422)
+			"(?:can|could|may|should) (?:she|he|they|the patient|this patient) (?:continue|keep taking|stay on) (?:all )?"
+					+ POSSESSIVE + " (?:other )?" + MEDICATIONS + " (?:if|when) (?:i|we) (?:add|give|start|prescribe) (?:" + PATIENT
+					+ " )?(?:on )?" + D,
 			// "What about fluconazole?", "How about starting her on fluconazole?" — a proposal that is no yes-or-no question
 			// (ADR Decision 420)
 			"(?:what|how) about (?:(?:giving|starting|prescribing|adding|using) (?:" + PATIENT + " )?(?:on )?)?" + D
@@ -607,6 +611,9 @@ public final class QueryScopeRouter {
 					+ "would|might|could|do) (?:i|we) expect",
 			// "Tell me about fluconazole" — what it does among her medications, with no "Yes" or "No" (ADR Decision 413)
 			"(?:please )?tell me about " + D,
+			// "Does rifampicin require dose adjustment with her meds?" (ADR Decision 422)
+			"(?:does|will|would|could|might) " + D + " (?:require|need|mean) (?:a |any )?(?:dose|dosage) (?:adjustments?|changes?) "
+					+ "(?:with|of|for|to|in) (?:any of )?" + POSSESSIVE + " (?:other )?" + MEDICATIONS,
 			// "Do I need to adjust any doses if I start rifampicin?" (ADR Decision 411)
 			"(?:do|should|must) (?:i|we) (?:need to )?(?:adjust|change|reduce|increase|lower) any (?:doses?|of " + POSSESSIVE
 					+ " " + MEDICATIONS + "(?: doses?)?) if (?:i|we) (?:start|give|add|prescribe) (?:" + PATIENT + " )?(?:on )?" + D,
@@ -675,8 +682,10 @@ public final class QueryScopeRouter {
 	 */
 	private static final List<Pattern> TOGETHER_SHAPES = shapes(
 			// "Can warfarin and ibuprofen be given together?", "Can warfarin be given with ibuprofen to her?"
+			// and "co-administered", "co-prescribed", "combined" (ADR Decision 422)
 			"(?:can|could|may|should) " + HER_D + " (?:and|with) " + HER_D
-					+ " be (?:safely )?(?:given|started|prescribed|administered|taken|used)(?: together)?(?: (?:to|for) "
+					+ " be (?:safely )?(?:given|started|prescribed|administered|taken|used|co administered|coadministered|co prescribed"
+					+ "|coprescribed|combined)(?: together)?(?: (?:to|for) "
 					+ PATIENT + ")?(?: now| today)?",
 			"(?:can|could|may|should) " + HER_D + " be (?:safely )?(?:given|started|prescribed|administered|taken|used) (?:with|alongside) "
 					+ HER_DS + "(?: (?:to|for) " + PATIENT + ")?(?: now| today)?",
@@ -773,7 +782,7 @@ public final class QueryScopeRouter {
 	 * groups interact is a screen of her medications, which states every pair, those between the two among them.
 	 */
 	private static final String MEDICATION_GROUP_NOUN = "(?:treatments?|therapy|therapies|"
-			+ "regimens?|medications?|meds|medicines?|drugs?|pills|tablets|arvs?|antiretrovirals?|antibiotics?|antimalarials?|"
+			+ "regimens?|medications?|meds|medicines?|drugs?|pills|tablets|arvs?|art|antiretrovirals?|antibiotics?|antimalarials?|"
 			+ "antihypertensives?|antiepileptics?|anticonvulsants?|antidepressants?)";
 
 	private static final String HER_MEDICATION_GROUP = POSSESSIVE + " (?:\\p{L}+ ){0,2}" + MEDICATION_GROUP_NOUN;
@@ -993,8 +1002,11 @@ public final class QueryScopeRouter {
 
 	/** "Is dolutegravir safe with her TB preventive therapy?" — one drug beside a group of her medications (ADR Decision
 	 *  313), answered as beside her medications under a lead naming the group. */
-	private static final String SAFE_WITH_A_GROUP_OF_HER_MEDICATIONS = "is " + D + " (?:safe|ok|okay|appropriate)"
-			+ "(?: to (?:give|take|use|start))? (?:with|alongside) (?:any of )?" + HER_MEDICATION_GROUP;
+	private static final String SAFE_WITH_A_GROUP_OF_HER_MEDICATIONS = "(?:is " + D + " (?:safe|ok|okay|appropriate)"
+			+ "(?: to (?:give|take|use|start))?"
+			// "Is it ok to combine ciprofloxacin with her ART?" (ADR Decision 422)
+			+ "|is it (?:safe|ok|okay|appropriate) to combine " + D + ")"
+			+ " (?:with|alongside) (?:any of )?" + HER_MEDICATION_GROUP;
 
 	private static final List<Pattern> SAFE_WITH_HER_MEDICATIONS_SHAPES = shapes(SAFE_WITH_HER_MEDICATIONS,
 			// "What dose of ibuprofen is safe with her medications?" — a dose asked for, which no finding weighs (ADR Decision
@@ -1801,7 +1813,9 @@ public final class QueryScopeRouter {
 		// technical and conditional wordings (ADR Decision 414)
 		"verify", "concomitant", "patient's",
 		// colloquial and non-native wordings (ADR Decision 415)
-		"client", "my", "on", "we"));
+		"client", "my", "on", "we",
+		// when, how often, and what it would cause (ADR Decision 422)
+		"tomorrow", "tonight", "as", "needed", "prn", "top", "cause", "know", "before"));
 
 	/** Words saying the question is about the drug's interactions. */
 	private static final Set<String> RESIDUAL_INTERACTS = new HashSet<String>(Arrays.asList("interact", "interacts",
@@ -1936,6 +1950,12 @@ public final class QueryScopeRouter {
 		if (wordsWithTheDrugMarked == null || Collections.frequency(wordsWithTheDrugMarked, DRUG_NAME) != 1) {
 			return Residual.NONE;
 		}
+		// A dose stated beside the drug is no part of what it asks, as for the shapes (ADR Decisions 269, 422): "Fluconazole
+		// 200mg daily - ok?".
+		String withoutADose = withoutAStatedDose(String.join(" ", wordsWithTheDrugMarked));
+		if (withoutADose != null) {
+			wordsWithTheDrugMarked = Arrays.asList(withoutADose.split(" "));
+		}
 		// A drug named as hers — not "give her X", where she is who it is given to — is her own medication's question,
 		// which its own shapes answer (ADR Decisions 335, 374).
 		int at = wordsWithTheDrugMarked.indexOf(DRUG_NAME);
@@ -1946,6 +1966,12 @@ public final class QueryScopeRouter {
 		// Only where no shape reads it: a question a shape answers is that shape's.
 		if (fitsAOneDrugShape(wordsWithTheDrugMarked)) {
 			return Residual.NONE;
+		}
+		// The drug beside her medications and nothing else, "fluconazole + her meds", asks how they interact (ADR Decision
+		// 422): read here, of a drug the data resolved, and never as a shape, which would read "Review her medications" as one.
+		if (Pattern.compile(D + " (?:and |with |plus |vs |versus )?" + POSSESSIVE + " (?:other )?" + MEDICATIONS)
+				.matcher(String.join(" ", wordsWithTheDrugMarked)).matches()) {
+			return Residual.INTERACTS;
 		}
 		boolean interacts = false;
 		boolean safe = false;

@@ -21798,3 +21798,31 @@ takes, asked whether it is safe with her medications or a group of them and not 
 A product all of whose substances she takes is still her own medication asked about.
 
 Pinned by `ProductCarryingHerOwnDrugTest.aProductCarryingHerDrugAskedSafeWithHerMedicationsStatesWhatTheCheckFound`.
+
+## Decision 422: A proposal, a screen or a pair asked as a clinician types it is the question it is
+
+**Status: Accepted** (October 2026) — found asking 30 further wordings of 15 patients on the 3.7.1 standalone on 2026-10-25.
+
+### Context
+
+Each of these went to the model, which answered *"Fluconazole and Nevirapine can be co-administered, with one caution"*,
+*"Ciprofloxacin can be given, with the following cautions"*, *"Metronidazole can be added, with one caution"* and *"Yes — adding
+Ciprofloxacin would cause interactions"* over findings the data never rated: *"Can fluconazole and nevirapine be co-administered?"*,
+*"Is it ok to combine ciprofloxacin with her ART?"*, *"Does fluconazole affect her ART levels?"*, *"fluconazole + her meds"*,
+*"Can she continue her meds if I add fluconazole?"*, *"Does rifampicin require dose adjustment with her meds?"*, *"Fluconazole 200mg
+daily - ok?"*, *"Can I give fluconazole tomorrow?"*, *"Is it ok to give her ibuprofen as needed?"*, *"Can I add metronidazole on top
+of her current treatment?"*, *"Would adding ciprofloxacin cause any interaction?"* and *"Any drug interactions I should know about
+before giving amoxicillin?"*. *"ART"* was read as a drug name the data does not recognise.
+
+### The decision
+
+- *"be co-administered"*, *"co-prescribed"*, *"combined"* are Decision 169's together shapes.
+- *"ART"* is a noun of a group of her medications (Decision 221), and *"Is it ok to combine X with her <group>?"* is Decision 313's.
+- *"Can she continue her meds if I add X?"* is a proposal answered with no "Yes" or "No" (Decision 181); *"Does X require dose
+  adjustment with her meds?"* is which of her medications interact with X (Decision 411).
+- Decision 396's residual reading reads past a stated dose, as the shapes do (Decision 269), and takes *tomorrow*, *tonight*, *as
+  needed*, *prn*, *on top of*, *cause*, *know* and *before* as filler. The drug beside her medications and nothing else —
+  *"fluconazole + her meds"* — asks how they interact, read there and never as a shape, which the readers of an unknown word
+  would apply to *"Review her medications"* (Decision 409).
+
+Pinned by `ClinicianWordingsTest.aProposalAScreenOrAPairAsAClinicianTypesItIsTheQuestionItIs`.

@@ -219,6 +219,9 @@ public class LocalLlmEngine implements LlmEngine {
 	/** When the engine last started a server or completed a call, on {@link #clock}. */
 	private long lastActivityNanos;
 
+	/** The idle timeout the last arming read; 0 when that arming turned idle unloading off. */
+	private int armedIdleMinutes;
+
 	/** Monotonic nanoseconds; package-private so a test can move time without waiting. */
 	LongSupplier clock = System::nanoTime;
 
@@ -1831,6 +1834,7 @@ public class LocalLlmEngine implements LlmEngine {
 	private synchronized void resetIdleTimer() {
 		lastActivityNanos = clock.getAsLong();
 		int idleMinutes = getIdleTimeoutMinutes();
+		armedIdleMinutes = idleMinutes;
 		scheduleIdleUnload(TimeUnit.MINUTES.toNanos(idleMinutes), idleMinutes);
 	}
 
@@ -1841,7 +1845,7 @@ public class LocalLlmEngine implements LlmEngine {
 		}
 		if (idleMinutes > 0) {
 			try {
-				idleUnloadFuture = idleTimer.schedule(() -> unloadIfIdle(idleMinutes), delayNanos,
+				idleUnloadFuture = idleTimer.schedule(this::unloadIfIdle, delayNanos,
 						TimeUnit.NANOSECONDS);
 			}
 			catch (java.util.concurrent.RejectedExecutionException e) {
@@ -1858,9 +1862,15 @@ public class LocalLlmEngine implements LlmEngine {
 	 * full idle interval has elapsed since the last activity, otherwise the remainder is waited
 	 * out. Without the re-check, a first inference longer than the interval (the startup timer is
 	 * armed before it) would be followed at once by an unload that throws away the prompt cache it
-	 * just built.
+	 * just built. The interval is the one the LAST arming read, not the one this timer was armed
+	 * with: a call that re-armed it while the callback waited may have changed the timeout, or turned
+	 * idle unloading off, in which case there is nothing to do.
 	 */
-	synchronized void unloadIfIdle(int idleMinutes) {
+	synchronized void unloadIfIdle() {
+		int idleMinutes = armedIdleMinutes;
+		if (idleMinutes <= 0) {
+			return;
+		}
 		long idleFor = clock.getAsLong() - lastActivityNanos;
 		long limit = TimeUnit.MINUTES.toNanos(idleMinutes);
 		if (idleFor < limit) {

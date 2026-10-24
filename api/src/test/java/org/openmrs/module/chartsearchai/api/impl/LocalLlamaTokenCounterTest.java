@@ -387,6 +387,43 @@ public class LocalLlamaTokenCounterTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/** A count that turns idle unloading off, while an earlier timer waits, leaves that timer nothing to do. */
+	@Test
+	public void aTimerArmedBeforeIdleUnloadingWasTurnedOffDoesNotUnload() throws Exception {
+		java.io.File model = configureIdleTestModel();
+		com.sun.net.httpserver.HttpServer server = startCountServer();
+		AtomicLong now = new AtomicLong(0);
+		AtomicInteger closes = new AtomicInteger();
+		LocalLlmEngine engine = new LocalLlmEngine() {
+			@Override
+			public synchronized void close() {
+				closes.incrementAndGet();
+			}
+		};
+		CapturingTimer timer = new CapturingTimer();
+		ReflectionTestUtils.setField(engine, "idleTimer", timer);
+		engine.clock = now::get;
+		try {
+			attachRunningServer(engine, server);
+			assertEquals(5, engine.countChatInputTokens("system", "user"));
+			Runnable armedFirst = timer.scheduled.get(0);
+			Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_LLM_IDLE_TIMEOUT_MINUTES, "0");
+			assertEquals(5, engine.countChatInputTokens("system", "user"));
+
+			now.set(TimeUnit.SECONDS.toNanos(120));
+			armedFirst.run();
+
+			assertEquals(0, closes.get(), "idle unloading is off, so the server stays");
+			assertEquals(1, timer.scheduled.size(), "and nothing is rescheduled");
+		}
+		finally {
+			ReflectionTestUtils.setField(engine, "serverProcess", null);
+			timer.shutdownNow();
+			server.stop(0);
+			model.delete();
+		}
+	}
+
 	/** A count, like an inference, restarts the idle interval: the timer it replaces is cancelled. */
 	@Test
 	public void aCountReplacesTheIdleTimerItFindsArmed() throws Exception {

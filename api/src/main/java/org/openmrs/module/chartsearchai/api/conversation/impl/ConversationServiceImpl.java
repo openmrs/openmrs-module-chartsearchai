@@ -306,7 +306,8 @@ public class ConversationServiceImpl implements ConversationService {
 		AnswerEnvelope answer = result.getAnswer() != null ? result.getAnswer()
 				: result.getDeliveredAnswer() != null ? result.getDeliveredAnswer() : retained;
 		audit.setAnswer(answer == null ? "" : answer.getText());
-		audit.setReferenceCount(referenceCount(answer));
+		audit.setReferenceCount(answer != null && answer.getSource() != null
+				? answer.getSource().getReferences().size() : referenceCount(answer));
 		ChartAnswer source = answer == null ? null : answer.getSource();
 		// A retained bundled answer states its measurements under MODULE_MEASUREMENTS (retainedPayload); a
 		// relayed payload's own fields are the provider's and are never read as this module's measurements.

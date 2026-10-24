@@ -26,6 +26,8 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
 import org.openmrs.api.context.Context;
+import org.openmrs.module.chartsearchai.api.provider.CancellationSignal;
+import org.openmrs.module.chartsearchai.api.provider.TurnCancellation;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.AlreadyOrderedDrug;
 import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 import org.openmrs.util.OpenmrsUtil;
@@ -117,7 +119,7 @@ public class LocalLlamaTokenCounterTest extends BaseModuleContextSensitiveTest {
 
 			@Override
 			public synchronized InferenceResult inferStreaming(String system, String user, int timeout,
-					Consumer<String> consumer, String scope, String seed, ReferenceRecords referenceRecords) {
+					Consumer<String> consumer, String scope, String seed, ReferenceRecords referenceRecords, CancellationSignal cancellation) {
 				return infer(system, user, timeout, scope, seed, referenceRecords);
 			}
 		};
@@ -144,6 +146,9 @@ public class LocalLlamaTokenCounterTest extends BaseModuleContextSensitiveTest {
 				assertEquals(inferred.get(), counted.get());
 				provider.searchStreaming(records, focus, question, chunk -> { }, chunk -> { },
 						null, null, enumerate, LlmEngine.ReferenceRecords.ABSENT, orders);
+				assertEquals(inferred.get(), counted.get());
+				provider.searchStreaming(records, focus, question, chunk -> { }, chunk -> { },
+						null, null, enumerate, LlmEngine.ReferenceRecords.ABSENT, orders, new TurnCancellation());
 				assertEquals(inferred.get(), counted.get());
 			}
 		}

@@ -99,6 +99,30 @@ public class ConversationServicePersistenceTest extends BaseModuleContextSensiti
 		assertEquals(ClinicalConversation.STATUS_CLOSED, switchedProvider.getStatus());
 	}
 
+	/** The shared fixture's provider-switch case, driven through openOrCreate, which enforces it. */
+	@Test
+	public void theSharedProviderSwitchCaseStartsANewConversation() throws Exception {
+		com.fasterxml.jackson.databind.JsonNode switchCase = null;
+		try (java.io.InputStream in = getClass().getResourceAsStream("/conformance/dual-provider-conformance.v1.json")) {
+			for (com.fasterxml.jackson.databind.JsonNode fixtureCase : new com.fasterxml.jackson.databind.ObjectMapper()
+					.readTree(in).get("provider_capabilities")) {
+				if (fixtureCase.has("switch_to")) {
+					switchCase = fixtureCase;
+				}
+			}
+		}
+		assertNotNull(switchCase, "the fixture carries a provider-switch case");
+		assertEquals("new_conversation", switchCase.get("expected").asText());
+
+		ClinicalConversation before = conversationService.openOrCreate(patient,
+				switchCase.get("switch_from").asText(), ProviderMode.QUERY_SCOPED);
+		ClinicalConversation after = conversationService.openOrCreate(patient,
+				switchCase.get("switch_to").asText(), ProviderMode.QUERY_SCOPED);
+
+		assertNotEquals(before.getUuid(), after.getUuid());
+		assertEquals(ClinicalConversation.STATUS_CLOSED, before.getStatus());
+	}
+
 	@Test
 	public void startNewAlwaysClosesActiveConversationEvenWhenProviderAndModeMatch() {
 		ClinicalConversation first = conversationService.openOrCreate(patient, "bundled",
@@ -544,6 +568,21 @@ public class ConversationServicePersistenceTest extends BaseModuleContextSensiti
 		finally {
 			org.springframework.test.util.ReflectionTestUtils.setField(target, "conversationDAO", real);
 		}
+	}
+
+	// The bundled envelope's payload carries no citation list; the audit counts the answer's own, as
+	// saveAuditLog does.
+	@Test
+	public void aBundledTurnAuditsTheReferenceCountOfTheAnswerItWasBuiltFrom() {
+		ClinicalConversation conversation = conversationService.openOrCreate(patient, "bundled",
+				ProviderMode.QUERY_SCOPED);
+		ClinicalConversationTurn turn = conversationService.startTurn(conversation, "bundled-refs", "Question");
+		ChartAnswer source = new ChartAnswer("Answer [1]", Collections.singletonList(
+				new org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference(1, "obs", "obs-uuid",
+						new Date())), 12, 3, 0, Collections.emptyList(), "fullChart", new ReferenceSlice(0, 0));
+		conversationService.finishTurn(turn, TurnResult.done("bundled", ProviderMode.QUERY_SCOPED,
+				AnswerEnvelope.fromPayload(Collections.singletonMap("answer", "Answer [1]"), source)), 5L);
+		assertEquals(1, turn.getAuditLog().getReferenceCount());
 	}
 
 	// One turn has one outcome and at most one audit row, so a second settlement (a cancel racing a finish,

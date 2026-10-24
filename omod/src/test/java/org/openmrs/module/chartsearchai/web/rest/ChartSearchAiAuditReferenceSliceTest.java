@@ -167,6 +167,26 @@ public class ChartSearchAiAuditReferenceSliceTest {
 				"the citation count stays beside it; the two answer different questions");
 	}
 
+	@Test
+	public void theAuditListingPublishesAConversationTurnsAttribution() {
+		ChartSearchAuditLog row = new ChartSearchAuditLog();
+		row.setSearchMode("unknown");
+		row.setProviderId("hub");
+		row.setProviderMode("query_scoped");
+		row.setConversationUuid("conversation-1");
+		row.setRequestId("request-1");
+		audit.listed.add(row);
+
+		Object body = controller.getAuditLogs(null, null, null, null, 0, 50).getBody();
+		@SuppressWarnings("unchecked")
+		Map<String, Object> entry = ((List<Map<String, Object>>) ((Map<String, Object>) body).get("results")).get(0);
+
+		assertEquals("hub", entry.get("providerId"), "what tells a relayed turn's unknown mode from an unfinished query");
+		assertEquals("query_scoped", entry.get("providerMode"));
+		assertEquals("conversation-1", entry.get("conversationUuid"));
+		assertEquals("request-1", entry.get("requestId"));
+	}
+
 	private static ChartSearchAiUtils.ReferenceSlice slice(int records, int characters) {
 		return new ChartSearchAiUtils.ReferenceSlice(records, characters);
 	}

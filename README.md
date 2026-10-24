@@ -43,6 +43,7 @@ The standalone download above includes the backend module, frontend ESM, and the
 - [Provider integration contract](#provider-integration-contract)
 - [Local token counting](#local-token-counting)
 - [Safety-check execution status](#safety-check-execution-status)
+- [Conversation persistence](#conversation-persistence)
 - [License](#license)
 
 ## Try it on the demo server
@@ -785,9 +786,11 @@ GET /ws/rest/v1/chartsearchai/auditlog?patient=...&user=...&fromDate=...&toDate=
 
 All query parameters are optional. `fromDate` and `toDate` are epoch milliseconds. Returns paginated results ordered by most recent first, with a `totalCount` for pagination. Each entry includes `rating` and `feedbackComment` fields (null if no feedback was submitted).
 
+Each entry also carries `providerId`, `providerMode`, `conversationUuid` and `requestId`, the attribution a conversation turn copies onto its row; a `/search` or `/search/stream` row leaves all four null.
+
 Each entry also carries `referenceSliceRecords` and `referenceSliceChars` — how much module-supplied reference material the prompt behind that answer contained — every record whose type `ChartSearchAiUtils.referenceGroup` calls reference material, which today is a drug-reference entry, a safety finding or a drug-class note, and which is derived from that one classification rather than from a list kept here. **This is not `referenceCount`**, which is the number of references the answer PUBLISHED: most injected reference material is never cited, so these two report the prompt COST and that one reports the answer's use of it. Since [#305](https://github.com/openmrs/openmrs-module-chartsearchai/issues/305) `referenceCount` is not a count of what the MODEL cited either — a chart record the module attached to a cited finding is in it — so read it as the published total, and the per-reference `attachedByTheModule` for the breakdown it cannot give. **Null is not zero.** Zero means the prompt was measured and carried no reference material; null means the answer stated no measurement at all, so a rollup that treats null as zero under-reports. **And zero says what the prompt carried, not why** — you get it equally when the question matched nothing, when `chartsearchai.drugReference.enabled` is off — which is the shipped default, so a stock install reads 0/0 on every row — when some combination of `chartsearchai.drugReference.injectFromQuery`, `chartsearchai.drugReference.injectFromOrders` and `chartsearchai.drugSafety.validateAnswers` is off (note the last is a `drugSafety` setting, and none of the three silences the columns on its own), when the injection threw and was caught (it degrades to the unmodified chart rather than failing the answer, and logs a WARN), and when the only thing injected was the patient's own active-order records. Each is a true statement about that prompt, but the module's log is the only thing separating a swallowed failure from an honest miss — so a column of zeros is not evidence that your corpus raises no reference material. Note that on an answer served from the response cache the row states the slice of the request the answer was originally built for, so summing the columns across rows over-counts by every cache hit.
 
-**A row may describe a query whose stream did not finish.** Since [#450](https://github.com/openmrs/openmrs-module-chartsearchai/issues/450) the streaming endpoint writes its audit row however the stream ends — not only when the client stayed to the end — so a client that disconnected mid-answer, or a failure after the answer was delivered, still leaves a record of who asked what about whom. **No column tells such a row from one whose stream finished**, and the row is not marked as partial: where the pipeline had handed the controller its own answer before the stream came apart, the row states that answer's `searchMode`, `referenceCount` and slice exactly as a completed query's does, so a rollup by `searchMode` counts those among the completions and nothing else in the table corrects it. Where the pipeline never handed an answer over there is nothing to read a mode off, and the row states `searchMode` `unknown` — which is **not** the same as a truncated answer: a client that goes away in the window the ticket describes, after the last token and before the citations, leaves `unknown` on a row holding the answer in full, and so does a disconnect on a cached answer, which arrives in a single token. On such a row `answer` holds whatever the model had produced when the stream ended, `referenceCount` reads `0`, and the two `referenceSlice` columns are null — for the reason the paragraph above gives about null, which here is true of the row rather than of the prompt: the mode, the slice and the citations travel on the answer, and at that point in the stream the pipeline had not handed one over. `referenceCount`'s `0` is the one of those that asserts a number rather than an absence, so it is not a measurement on such a row either. **On an install whose `ChartSearchService` is this module's own, `unknown` is a subset of "this query did not finish" and not the whole of it**, so a rollup by `searchMode` cannot use it to identify that population. On an install running another `ChartSearchService` it is also what a completed answer stating no mode files, and nothing on the row tells the two apart. A query that failed before the model produced anything writes no row at all, as before.
+**A row may describe a query whose stream did not finish.** Since [#450](https://github.com/openmrs/openmrs-module-chartsearchai/issues/450) the streaming endpoint writes its audit row however the stream ends — not only when the client stayed to the end — so a client that disconnected mid-answer, or a failure after the answer was delivered, still leaves a record of who asked what about whom. **No column tells such a row from one whose stream finished**, and the row is not marked as partial: where the pipeline had handed the controller its own answer before the stream came apart, the row states that answer's `searchMode`, `referenceCount` and slice exactly as a completed query's does, so a rollup by `searchMode` counts those among the completions and nothing else in the table corrects it. Where the pipeline never handed an answer over there is nothing to read a mode off, and the row states `searchMode` `unknown` — which is **not** the same as a truncated answer: a client that goes away in the window the ticket describes, after the last token and before the citations, leaves `unknown` on a row holding the answer in full, and so does a disconnect on a cached answer, which arrives in a single token. On such a row `answer` holds whatever the model had produced when the stream ended, `referenceCount` reads `0`, and the two `referenceSlice` columns are null — for the reason the paragraph above gives about null, which here is true of the row rather than of the prompt: the mode, the slice and the citations travel on the answer, and at that point in the stream the pipeline had not handed one over. `referenceCount`'s `0` is the one of those that asserts a number rather than an absence, so it is not a measurement on such a row either. **On an install whose `ChartSearchService` is this module's own, a `/search` row's `unknown` is a subset of "this query did not finish" and not the whole of it**, so a rollup by `searchMode` cannot use it to identify that population. A completed conversation turn relayed from a provider that states no mode, such as the Hub, also files `unknown`; its `providerId` is set, where a `/search` row's is null, so filter on that column first. On an install running another `ChartSearchService` `unknown` is also what a completed answer stating no mode files, and nothing on the row tells the two apart. A query that failed before the model produced anything writes no row at all, as before.
 
 Two consequences of that worth knowing before you read the numbers. The row a streaming query writes is owed once the pipeline has produced anything at all — so an abandoned `thinking` frame, or a progressive-reasoning preview followed by a chart the model could not fit, each leave a row whose `answer` is empty. And because the per-user rate limit counts these rows, such attempts now count against `chartsearchai.rateLimitPerMinute`: a clinician reloading impatiently on a slow install can throttle themselves out without having received an answer. Both are deliberate — see [ADR Decision 105](docs/adr.md#decision-105-a-streaming-query-that-reached-inference-is-audited-however-the-stream-ends).
 
@@ -1089,6 +1092,38 @@ warning callers and standing chart alerts retain their interfaces and behaviour:
 `validate` still screens a question with no patient and computes no status. Publishing the
 status on provider answers and rendering it in the frontend belong to the subsequent
 integration contributions.
+
+## Conversation persistence
+
+`ConversationService` stores conversation headers and ordered turns for the
+current OpenMRS user and patient. Reusing a conversation requires the same provider
+and mode; switching either, or explicitly starting a new conversation, closes the
+previous header. Each completed turn retains its full provider payload and copies
+provider, mode, conversation and request attribution into the audit record. The audit
+search mode and reference-slice measurements come from the bundled answer itself;
+relayed answers without these measurements record unknown mode and null counts, and
+`/auditlog` returns the row's `providerId`, which tells such a turn from an unfinished
+`/search` query that also records unknown mode.
+If an optional tail fails after a checked answer was shown, the audit retains that
+answer and its accounting. A turn that fails after any other answer reached the client
+records that answer on the audit row only; the turn keeps no answer, so it is never
+replayed.
+A turn and its audit row are written in one transaction: if the audit row cannot be
+written, the turn's terminal state is not stored either and the call fails, whereas
+`/search` logs a failed audit write and still returns its answer. A turn is finished
+once; a second attempt to finish it is refused.
+
+Checked or edited answers can be reused for a follow-up while In-Depth is still
+running. Failed and needs-review answers remain inspectable in storage but are
+excluded from replay. Audit retention clears the turn's audit link without deleting
+the conversation answer. The migration and Hibernate mappings are included here;
+REST history endpoints and provider execution wiring are separate contributions.
+
+`chartsearchai.chat.retentionDays` controls the daily cleanup of conversation
+content, independently of `chartsearchai.auditLogRetentionDays`. Both default to
+90 days; setting either to 0 disables only that cleanup. Turns expire from their
+completion time, or their start time if unfinished. Old empty conversations are
+then removed; independently retained audit rows remain.
 
 ## License
 

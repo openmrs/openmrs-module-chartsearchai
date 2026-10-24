@@ -75,6 +75,14 @@ public class ChartSearchAuditLog implements Serializable {
 
 	private String feedbackComment;
 
+	private String providerId;
+
+	private String providerMode;
+
+	private String conversationUuid;
+
+	private String requestId;
+
 	private Date dateCreated;
 
 	public Integer getAuditLogId() {
@@ -195,5 +203,47 @@ public class ChartSearchAuditLog implements Serializable {
 
 	public void setFeedbackComment(String feedbackComment) {
 		this.feedbackComment = feedbackComment;
+	}
+
+	/**
+	 * Provider that produced this answer; null on {@code /search} and {@code /search/stream} rows,
+	 * which carry no provider attribution, and on rows written before it existed.
+	 */
+	public String getProviderId() {
+		return providerId;
+	}
+
+	public void setProviderId(String providerId) {
+		this.providerId = providerId;
+	}
+
+	/**
+	 * Provider mode used for the turn; null when the provider has no mode, on {@code /search} and
+	 * {@code /search/stream} rows, and on rows written before it existed.
+	 */
+	public String getProviderMode() {
+		return providerMode;
+	}
+
+	public void setProviderMode(String providerMode) {
+		this.providerMode = providerMode;
+	}
+
+	/** Conversation UUID copied onto the audit row so attribution survives conversation retention. */
+	public String getConversationUuid() {
+		return conversationUuid;
+	}
+
+	public void setConversationUuid(String conversationUuid) {
+		this.conversationUuid = conversationUuid;
+	}
+
+	/** Request correlation id copied onto the audit row for trace reconstruction. */
+	public String getRequestId() {
+		return requestId;
+	}
+
+	public void setRequestId(String requestId) {
+		this.requestId = requestId;
 	}
 }

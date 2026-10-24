@@ -11,16 +11,24 @@ package org.openmrs.module.chartsearchai.api.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
+import java.io.OutputStream;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.sun.net.httpserver.HttpServer;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.openmrs.api.APIException;
 
 /**
  * Unit tests for {@link LocalLlmEngine} request building.
@@ -30,6 +38,81 @@ public class LocalLlmEngineTest {
 	private static final ObjectMapper MAPPER = new ObjectMapper();
 
 	private final LocalLlmEngine engine = new LocalLlmEngine();
+
+	private HttpServer tokenizeServer;
+
+	@AfterEach
+	public void stopTokenizeServer() {
+		if (tokenizeServer != null) {
+			tokenizeServer.stop(0);
+		}
+	}
+
+	@Test
+	public void requestChatInputTokenCount_usesTheChatTemplateAwareEndpoint() throws Exception {
+		AtomicReference<String> requestBody = new AtomicReference<>();
+		AtomicReference<String> authorization = new AtomicReference<>();
+		tokenizeServer = HttpServer.create(new InetSocketAddress(LlamaServerEndpoint.LOOPBACK_HOST, 0), 0);
+		tokenizeServer.createContext("/v1/messages/count_tokens", exchange -> {
+			authorization.set(exchange.getRequestHeaders().getFirst("Authorization"));
+			requestBody.set(new String(exchange.getRequestBody().readAllBytes(),
+					StandardCharsets.UTF_8));
+			byte[] response = "{\"input_tokens\":41}".getBytes(StandardCharsets.UTF_8);
+			exchange.getResponseHeaders().set("Content-Type", "application/json");
+			exchange.sendResponseHeaders(200, response.length);
+			try (OutputStream output = exchange.getResponseBody()) {
+				output.write(response);
+			}
+		});
+		tokenizeServer.start();
+		LlamaServerEndpoint endpoint = LlamaServerEndpoint.open(tokenizeServer.getAddress().getPort());
+
+		int count = LocalLlmEngine.requestChatInputTokenCount(engine.getHttpClient(),
+				endpoint, "system instructions", "patient chart and question");
+
+		assertEquals(expectedAuthorization(endpoint), authorization.get());
+		assertEquals(41, count);
+		JsonNode messages = MAPPER.readTree(requestBody.get()).get("messages");
+		assertEquals("system", messages.get(0).get("role").asText());
+		assertEquals("system instructions", messages.get(0).get("content").asText());
+		assertEquals("user", messages.get(1).get("role").asText());
+		assertEquals("patient chart and question", messages.get(1).get("content").asText());
+	}
+
+	@Test
+	public void requestChatInputTokenCount_refusesAFailedOrUnusableReply() throws Exception {
+		AtomicReference<Integer> status = new AtomicReference<>();
+		AtomicReference<String> reply = new AtomicReference<>();
+		tokenizeServer = HttpServer.create(new InetSocketAddress(LlamaServerEndpoint.LOOPBACK_HOST, 0), 0);
+		tokenizeServer.createContext("/v1/messages/count_tokens", exchange -> {
+			byte[] response = reply.get().getBytes(StandardCharsets.UTF_8);
+			exchange.sendResponseHeaders(status.get(), response.length);
+			try (OutputStream output = exchange.getResponseBody()) {
+				output.write(response);
+			}
+		});
+		tokenizeServer.start();
+		LlamaServerEndpoint endpoint = LlamaServerEndpoint.open(tokenizeServer.getAddress().getPort());
+		String[][] cases = {
+				{ "500", "{\"input_tokens\":41}" },
+				{ "200", "{}" },
+				{ "200", "{\"tokens\":[1,2,3]}" },
+				{ "200", "{\"input_tokens\":-1}" },
+				{ "200", "{\"input_tokens\":-0.5}" },
+				{ "200", "{\"input_tokens\":41.9}" } };
+		for (String[] c : cases) {
+			status.set(Integer.valueOf(c[0]));
+			reply.set(c[1]);
+			assertThrows(APIException.class, () -> LocalLlmEngine.requestChatInputTokenCount(
+					engine.getHttpClient(), endpoint, "system", "user"), c[0] + " " + c[1]);
+		}
+	}
+
+	private static String expectedAuthorization(LlamaServerEndpoint endpoint) {
+		ProcessBuilder child = new ProcessBuilder("llama-server");
+		endpoint.handOverTo(child);
+		return "Bearer " + child.environment().get(LlamaServerEndpoint.API_KEY_ENV);
+	}
 
 	@Test
 	public void buildRequestBody_appliesReasoningCapFromConfiguration() throws IOException {

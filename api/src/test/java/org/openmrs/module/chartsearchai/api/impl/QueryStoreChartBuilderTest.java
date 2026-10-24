@@ -61,6 +61,19 @@ public class QueryStoreChartBuilderTest {
 		builder.setChartSerializer(new PatientChartSerializer());
 	}
 
+	/** A type QueryStore withheld from the caller is named to the model, not left to read as none (ADR Decision 91). */
+	@Test
+	public void build_namesTheTypesTheCallerCannotReadToTheModel() {
+		queryStore.withheldTypes = new java.util.HashSet<String>(java.util.Arrays.asList("allergy", "drug_order"));
+
+		PatientChart chart = builder.build(patient(1), "any allergies?");
+
+		assertEquals(new java.util.TreeSet<String>(java.util.Arrays.asList("allergy", "drug_order")),
+				chart.getWithheldTypes());
+		assertTrue(chart.getText().startsWith("Not visible to this user: their account cannot read allergy, drug order"
+				+ " records, so this chart carries none of them."), chart.getText());
+	}
+
 	@Test
 	public void build_shouldStillCallGetPatientChartAndSkipSearch_whenQuestionIsBlank() {
 		// Focus-hint contract: the chart bytes do not vary with the question, so a blank

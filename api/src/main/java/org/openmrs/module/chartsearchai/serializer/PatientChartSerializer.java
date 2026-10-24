@@ -568,6 +568,9 @@ public class PatientChartSerializer {
 		/** @see #getNamedClassAtcGroup() */
 		private String namedClassAtcGroup;
 
+		/** @see #getWithheldTypes() */
+		private Set<String> withheldTypes = Collections.emptySet();
+
 		/** @see #getOrdersInTheNamedClass() */
 		private List<String> ordersInTheNamedClass;
 
@@ -596,8 +599,25 @@ public class PatientChartSerializer {
 			this.focusIndices = focusIndices == null ? Collections.<Integer>emptyList() : focusIndices;
 		}
 
+		/**
+		 * The chart as the model reads it. Where QueryStore withheld record types the asking user
+		 * cannot read, the text opens by naming them, so the model says those records are not visible
+		 * to this user rather than that the patient has none (ADR Decision 91's rule: a chart the module
+		 * could not read is not a chart that records nothing).
+		 */
 		public String getText() {
-			return text;
+			return withheldTypes.isEmpty() ? text : withheldTypesNote(withheldTypes) + text;
+		}
+
+		/** The opening line {@link #getText()} gives a chart with withheld types, the types in sorted order. */
+		static String withheldTypesNote(Set<String> types) {
+			List<String> labels = new ArrayList<String>();
+			for (String type : new java.util.TreeSet<String>(types)) {
+				labels.add(type.replace('_', ' '));
+			}
+			return "Not visible to this user: their account cannot read " + String.join(", ", labels)
+					+ " records, so this chart carries none of them. Do not say the patient has none; say they"
+					+ " are not visible to this user.\n\n";
 		}
 
 		public List<RecordMapping> getMappings() {
@@ -888,6 +908,20 @@ public class PatientChartSerializer {
 		 *  carry the declaration across; empty on a full chart, which needs none. */
 		public Set<String> getCompleteResourceTypes() {
 			return completeResourceTypes;
+		}
+
+		/** Records the resource types QueryStore withheld because the asking user holds no read
+		 *  privilege for them. Called by the chart builder off the chart read or slice, and again by
+		 *  {@code DrugReferenceInjector} on its rebuilt chart, for the reason {@link #markQueryScoped}
+		 *  is. A null or empty set withholds nothing. */
+		public void markWithheldTypes(Set<String> types) {
+			this.withheldTypes = types == null || types.isEmpty() ? Collections.<String>emptySet()
+					: Collections.unmodifiableSet(new java.util.TreeSet<String>(types));
+		}
+
+		/** The resource types withheld from the asking user, sorted; empty when none were. */
+		public Set<String> getWithheldTypes() {
+			return withheldTypes;
 		}
 	}
 

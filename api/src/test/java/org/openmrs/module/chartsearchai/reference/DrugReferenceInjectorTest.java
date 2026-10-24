@@ -142,6 +142,22 @@ public class DrugReferenceInjectorTest {
 	}
 
 	@Test
+	public void injectionKeepsTheTypesWithheldFromTheCallerNamedToTheModel() {
+		// A rebuild that dropped them would show the model a chart missing a refused type's records
+		// and nothing saying why (ADR Decision 91).
+		PatientChart withheld = oneRecordChart();
+		withheld.markWithheldTypes(java.util.Collections.singleton("allergy"));
+
+		PatientChart result = injector().injectRecords(withheld,
+				context(5, null), "what is the safe dose of ibuprofen?");
+
+		assertTrue(result.getMappings().size() > withheld.getMappings().size(),
+				"precondition: a reference record must actually be injected, else the rebuild path is not exercised");
+		assertTrue(result.getText().startsWith("Not visible to this user: their account cannot read allergy records"),
+				result.getText());
+	}
+
+	@Test
 	public void injectionLeavesAPlainFullChartUnPreFiltered() {
 		// The mirror guard: injection must never ADD the stamp, which would file a plain full chart
 		// as a focus-hinted one.

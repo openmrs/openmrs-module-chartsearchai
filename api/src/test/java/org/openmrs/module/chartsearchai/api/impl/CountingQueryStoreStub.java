@@ -171,9 +171,12 @@ final class CountingQueryStoreStub {
 		throw refusal(method);
 	}
 
+	/** The types the chart read says it withheld from the caller; the real slice policy reads them off it. */
+	java.util.Set<String> withheldTypes = java.util.Collections.emptySet();
+
 	public PatientChartRead getPatientChartRead(String patientUuid) {
 		getPatientChartCalls++;
-		return new PatientChartRead(stubChart, chartTruncated, projectionComplete);
+		return new PatientChartRead(stubChart, chartTruncated, projectionComplete, withheldTypes);
 	}
 
 	int getContextSliceCalls = 0;
@@ -198,7 +201,7 @@ final class CountingQueryStoreStub {
 
 					@Override
 					public PatientChartRead getPatientChartRead(String ignoredPatientUuid) {
-						return new PatientChartRead(stubChart, chartTruncated, projectionComplete);
+						return new PatientChartRead(stubChart, chartTruncated, projectionComplete, withheldTypes);
 					}
 				};
 		real.setBackend(bridgeBackend());

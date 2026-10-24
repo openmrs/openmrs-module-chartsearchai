@@ -1736,6 +1736,9 @@ public class DrugReferenceInjector {
 		// ABSENCE from this chart is meaningful, and a fresh PatientChart declares nothing. Dropping
 		// it would silently turn the rebuilt slice into one whose absences look uninformative.
 		injected.markCompleteFor(chart.getCompleteResourceTypes());
+		// And the withheld types: a rebuild that dropped them would show the model a chart with
+		// a refused type's records missing and nothing saying why.
+		injected.markWithheldTypes(chart.getWithheldTypes());
 		return injected;
 	}
 

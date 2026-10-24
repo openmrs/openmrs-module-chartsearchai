@@ -155,6 +155,8 @@ public class DrugReferenceInjectorTest {
 				"precondition: a reference record must actually be injected, else the rebuild path is not exercised");
 		assertTrue(result.getText().startsWith("Not visible to this user: their account cannot read allergy records"),
 				result.getText());
+		assertEquals(1, result.getText().split("Not visible to this user", -1).length - 1,
+				"the opening is stated once, not copied with the records and stamped again");
 	}
 
 	@Test

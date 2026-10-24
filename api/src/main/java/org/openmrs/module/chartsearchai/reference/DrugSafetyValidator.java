@@ -933,9 +933,10 @@ public class DrugSafetyValidator {
 	 *        {@link PairChipExtent} for what an absent statement does and does not mean.
 	 *
 	 * @param scope what this pass is FOR — see {@link SubjectMatterScope}. Every caller but
-	 *        {@link #standingChartAlerts(PatientClinicalContext)} and {@code DrugReferenceInjector}'s
-	 *        pre-answer pass reaches this through the six-argument delegate above, which supplies
-	 *        {@link SubjectMatterScope#OF_THE_RESPONSE}; the injector names that scope itself. So no
+	 *        {@link #standingChartAlerts(PatientClinicalContext)}, {@link #validateWithStatus} and
+	 *        {@code DrugReferenceInjector}'s pre-answer pass reaches this through the six-argument
+	 *        delegate above, which supplies {@link SubjectMatterScope#OF_THE_RESPONSE};
+	 *        {@code validateWithStatus} and the injector name that scope themselves. So no
 	 *        existing path can reach the unbounded gate by omission and a new one has to name it.
 	 * @param listedSink a caller-supplied accumulator this pass states the drugs the question lists that
 	 *        her chart holds no active order for into ({@link #listedWithNoActiveOrder}, issue #515), or

@@ -293,14 +293,21 @@ public class LlmInferenceServiceModuleBudgetContextTest extends BaseModuleContex
 	/** Production hands the provider the router, not the inference service: its overload must forward the signal. */
 	@Test
 	public void cancellingAStalledModelThroughTheRouterReleasesTheRequest() throws Exception {
-		assertModelCancellation(true, true);
+		assertModelCancellation(true, true, "0");
+	}
+
+	/** With caching on, a fresh router misses its cache and reaches the model on the caching path. */
+	@Test
+	public void cancellingAStalledModelThroughTheCachingRouterReleasesTheRequest() throws Exception {
+		assertModelCancellation(true, true, "5");
 	}
 
 	private void assertModelCancellation(boolean sendHeaders) throws Exception {
-		assertModelCancellation(sendHeaders, false);
+		assertModelCancellation(sendHeaders, false, null);
 	}
 
-	private void assertModelCancellation(boolean sendHeaders, boolean throughTheRouter) throws Exception {
+	private void assertModelCancellation(boolean sendHeaders, boolean throughTheRouter, String cacheTtlMinutes)
+			throws Exception {
 		TurnCancellation cancellation = new TurnCancellation();
 		AtomicBoolean reachedModel = new AtomicBoolean();
 		CountDownLatch release = new CountDownLatch(1);
@@ -336,8 +343,8 @@ public class LlmInferenceServiceModuleBudgetContextTest extends BaseModuleContex
 			service.setLlmProvider(llm);
 			ChartSearchService answering = service;
 			if (throughTheRouter) {
-				// Caching off, so the call reaches the model rather than a cached answer.
-				Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_CACHE_TTL_MINUTES, "0");
+				Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_CACHE_TTL_MINUTES,
+						cacheTtlMinutes);
 				ChartSearchServiceRouter router = new ChartSearchServiceRouter();
 				router.setLlmService(service);
 				answering = router;

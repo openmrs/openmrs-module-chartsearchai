@@ -656,6 +656,16 @@ public class DrugReferenceInjector {
 			}
 			return asked;
 		}
+		// A statement about her opening the question is no part of what the check weighs: the question after it is answered,
+		// closing that the check weighs only her chart (ADR Decision 419). Not a statement naming a drug, which lists it (#515).
+		QueryScopeRouter.LeadingStatement opening = QueryScopeRouter.leadingStatement(question);
+		if (opening != null && drugReferenceService.findImpliedByQuestion(opening.statement, orderEntries).isEmpty()) {
+			PatientChart asked = injectRecords(chart, rawContext, opening.question, orderHistory);
+			if (asked.getModuleAnswer() != null) {
+				asked.markModuleAnswer(asked.getModuleAnswer() + "\n" + STATEMENT_NOT_WEIGHED_OPENING + opening.statement + ").");
+			}
+			return asked;
+		}
 		List<DrugReference> questionDrugs = drugReferenceService.findImpliedByQuestion(question, orderEntries);
 		// A question naming a drug only to ask of its record in her chart is handed the model as a question asking nothing of
 		// drug safety is: the pass runs as for one naming no drug and asking nothing — her orders' records reconciled, no
@@ -1631,6 +1641,10 @@ public class DrugReferenceInjector {
 		// And when the drug would be given, or a condition the question names, which no finding weighs (ADR Decision 394).
 		if (moduleAnswer != null && QueryScopeRouter.statesATiming(question)) {
 			moduleAnswer = moduleAnswer + "\n" + TIMING_NOT_WEIGHED;
+		}
+		// And how long it would be given (ADR Decision 419).
+		if (moduleAnswer != null && QueryScopeRouter.statesADuration(question)) {
+			moduleAnswer = moduleAnswer + "\n" + DURATION_NOT_WEIGHED;
 		}
 		String condition = moduleAnswer == null || questionDrugs.isEmpty() ? null
 				: QueryScopeRouter.statedConditionAsWritten(question, wordsBesideItsNames(question, questionDrugs));
@@ -8426,10 +8440,18 @@ public class DrugReferenceInjector {
 			+ " the medications this patient is already taking.";
 
 	/** How an answer to a question naming the drug's form closes, the form and ")." after it (ADR Decision 334). */
-	static final String FORM_NOT_WEIGHED_OPENING = "This check did not weigh the form asked about (";
+	public static final String FORM_NOT_WEIGHED_OPENING = "This check did not weigh the form asked about (";
 
 	/** How an answer to a proposal that said what the drug is for closes, the purpose and ")." after it (ADR Decision 213). */
-	static final String PURPOSE_NOT_WEIGHED_OPENING = "This check did not weigh what the drug is for (";
+	public static final String PURPOSE_NOT_WEIGHED_OPENING = "This check did not weigh what the drug is for (";
+
+	/** What closes an answer to a proposal saying how long the drug would be given (ADR Decision 419). */
+	public static final String DURATION_NOT_WEIGHED = "This check did not weigh how long the drug would be given.";
+
+	/** What opens the line closing an answer to a question opened by a statement about her, the statement and ")." after it
+	 *  (ADR Decision 419): the check weighs her chart, not what the question states. */
+	public static final String STATEMENT_NOT_WEIGHED_OPENING = "This check weighs only this patient's chart, not what the question"
+			+ " states about her (";
 
 	/** What closes an answer to a proposal saying when the drug would be given (ADR Decision 394): no finding weighs it. */
 	static final String TIMING_NOT_WEIGHED = "This check did not weigh when the drug would be given.";

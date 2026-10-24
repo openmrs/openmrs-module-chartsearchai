@@ -476,6 +476,43 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		assertEquals(screen, ask("Do a medication review"));
 	}
 
+	/**
+	 * A proposal opened by a statement about her, or naming a route, a single dose or how long the drug would be given, is
+	 * answered as the proposal, closing with what the check did not weigh (ADR Decision 419). On the 3.7.1 standalone "She has
+	 * HIV and TB. Can I give her fluconazole?" went to the model, and "Is it safe for her to take fluconazole for 2 weeks?"
+	 * closed "This check did not weigh what the drug is for (2 weeks)".
+	 */
+	@Test
+	public void aProposalWithAStatementARouteOrADurationIsTheProposalSayingWhatWasNotWeighed() {
+		String give = ask("Can I give her warfarin?");
+		assertNotNull(give, "precondition: the module answers it");
+		assertEquals(give + "\n" + DrugReferenceInjector.STATEMENT_NOT_WEIGHED_OPENING + "She has HIV and TB).",
+			ask("She has HIV and TB. Can I give her warfarin?"));
+		assertEquals(give + "\n" + DrugReferenceInjector.STATEMENT_NOT_WEIGHED_OPENING + "She is pregnant).",
+			ask("She is pregnant, can I give her warfarin?"));
+		String safe = ask("Is warfarin safe?");
+		assertNotNull(safe, "precondition: the module answers it");
+		assertEquals(safe + "\n" + DrugReferenceInjector.STATEMENT_NOT_WEIGHED_OPENING + "Patient is on ART).",
+			ask("Patient is on ART. Is warfarin safe?"));
+		String which = ask("Which of her medications interact with warfarin?");
+		assertNotNull(which, "precondition: the module answers it");
+		assertEquals(which, ask("Before I give warfarin, does she have any interactions?"));
+		assertEquals(which, ask("Prior to starting warfarin, should I check anything?"));
+		String iv = ask("Can I give her warfarin IV?");
+		assertTrue(iv != null && iv.endsWith("\n" + DrugReferenceInjector.FORM_NOT_WEIGHED_OPENING + "iv)."), "was: " + iv);
+		String oral = ask("Is oral warfarin safe for her?");
+		assertTrue(oral != null && oral.endsWith("\n" + DrugReferenceInjector.FORM_NOT_WEIGHED_OPENING + "oral)."),
+			"was: " + oral);
+		assertEquals(ask("Is warfarin safe for her?"), ask("Is a single dose of warfarin safe for her?"));
+		assertTrue(chart("Is a single dose of warfarin safe for her?").statesADose(), "the dose said not checked");
+		for (String question : new String[] { "Is it safe for her to take warfarin for 2 weeks?",
+				"Can I give her a short course of warfarin?" }) {
+			String answer = ask(question);
+			assertTrue(answer != null && answer.endsWith("\n" + DrugReferenceInjector.DURATION_NOT_WEIGHED)
+					&& !answer.contains(DrugReferenceInjector.PURPOSE_NOT_WEIGHED_OPENING), question + " — was: " + answer);
+		}
+	}
+
 	private static org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart chart(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

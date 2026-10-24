@@ -21732,3 +21732,30 @@ went to the model with nothing to answer from.
 - *"What is a safer painkiller for her?"* is Decision 293's choice of drug, *"a"* beside *"the"*; *"Do a medication review"* a screen.
 
 Pinned by `ClinicianWordingsTest.explainingManagingOrReplacingIsAnsweredWithWhatTheCheckFound`.
+
+## Decision 419: A proposal opened by a statement about her, or naming a route, a single dose or how long it would be given, is the proposal saying what was not weighed
+
+**Status: Accepted** (October 2026) — found asking 30 further wordings of 15 patients on the 3.7.1 standalone on 2026-10-24.
+
+### Context
+
+*"She has HIV and TB. Can I give her fluconazole?"*, *"Patient is on ART. Is fluconazole safe?"*, *"She is pregnant, can I give her
+fluconazole?"* and *"I need to treat her UTI. Can I use ciprofloxacin?"* went to the model: Decision 325 reads a statement of what
+she has only where it CLOSES the question. So did *"Can I give her ciprofloxacin IV?"*, *"Is oral fluconazole safe for her?"*, *"Is a
+single dose of fluconazole safe for her?"*, *"Can I give her a short course of ciprofloxacin?"*, *"Before I give fluconazole, does she
+have any interactions?"* and *"Prior to starting rifampicin, should I check anything?"*. And *"Is it safe for her to take fluconazole
+for 2 weeks?"* closed *"This check did not weigh what the drug is for (2 weeks)"* — how long it would be given read as what it is for.
+
+### The decision
+
+- A statement about her opening the question (`QueryScopeRouter.leadingStatement`) is set aside and the question after it answered,
+  closing *"This check weighs only this patient's chart, not what the question states about her (…)."*
+  (`DrugReferenceInjector.STATEMENT_NOT_WEIGHED_OPENING`). Not a statement naming a drug, which lists it (#515).
+- A route before or after the drug — *oral*, *topical*, *IV*, *IM* — and *prophylaxis* or *preventive therapy* after it are Decision 334's
+  form, closing that the form was not weighed; *"a single dose of X"* is a dose (Decision 326).
+- How long the drug would be given — *"for 2 weeks"*, *"a short course of"* — is no purpose: the answer closes *"This check did not weigh
+  how long the drug would be given."* (`DURATION_NOT_WEIGHED`).
+- *"Before I give X, does she have any interactions?"* and *"Prior to starting X, should I check anything?"* are which of her
+  medications interact with X.
+
+Pinned by `ClinicianWordingsTest.aProposalWithAStatementARouteOrADurationIsTheProposalSayingWhatWasNotWeighed`.

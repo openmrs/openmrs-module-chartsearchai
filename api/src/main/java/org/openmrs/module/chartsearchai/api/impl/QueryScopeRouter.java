@@ -592,6 +592,12 @@ public final class QueryScopeRouter {
 			// "Is there a safer alternative to fluconazole?", "What can I use instead of fluconazole?" — what was found about it,
 			// under a lead choosing no alternative (ADR Decision 418)
 			AN_ALTERNATIVE_TO,
+			// "Before I give fluconazole, does she have any interactions?", "Prior to starting rifampicin, should I check
+			// anything?" (ADR Decision 419)
+			"before (?:i|we) (?:give|start|add|prescribe) (?:" + PATIENT + " )?(?:on )?" + D + " (?:does|do) (?:she|he|they|the patient)"
+					+ " have any (?:drug )?interactions",
+			"(?:prior to|before) (?:starting|giving|adding|prescribing) (?:" + PATIENT + " )?(?:on )?" + D + " (?:should|do|must) (?:i|we)"
+					+ " (?:check|know|consider) anything",
 			// "If I start fluconazole, what interactions should I expect?" (ADR Decision 414)
 			"if (?:i|we) (?:start|give|add|prescribe) (?:" + PATIENT + " )?(?:on )?" + D + " what (?:drug )?interactions (?:should|"
 					+ "would|might|could|do) (?:i|we) expect",
@@ -1497,16 +1503,27 @@ public final class QueryScopeRouter {
 
 	/** An amount stated in words before the drug — "more lidocaine", "a second dose of neomycin" (ADR Decision 326). */
 	private static final Pattern AMOUNT_IN_WORDS_BEFORE_THE_DRUG = Pattern.compile("(?<=^| )(?:more|extra|additional|"
-			+ "(?:another|a second|a further|an extra|an additional|a repeat) dose of) (" + D + ")");
+			+ "(?:another|a second|a further|an extra|an additional|a repeat|a single|one|a one off) dose of) (" + D + ")");
 
 	/** A form named right after the drug — "ketoconazole cream", "chloramphenicol eye drops" (ADR Decision 334). */
 	private static final Pattern FORM_AFTER_THE_DRUG = Pattern.compile("(" + D + ") (cream|ointment|gel|lotion|eye drops|ear "
 			+ "drops|drops|spray|nasal spray|inhaler|patch|patches|suppository|suppositories|pessary|pessaries|injection|"
-			+ "syrup|suspension|tablets?|capsules?)(?= |$)");
+			+ "syrup|suspension|tablets?|capsules?"
+			// a route or a use after it — "ciprofloxacin IV", "isoniazid preventive therapy" (ADR Decision 419)
+			+ "|iv|im|intravenously|intramuscularly|orally|topically|prophylaxis|preventive therapy|preventative therapy)(?= |$)");
+
+	/** A route named right before the drug — "oral fluconazole", "topical clotrimazole" (ADR Decision 419). */
+	private static final Pattern FORM_BEFORE_THE_DRUG = Pattern.compile("(?<=^| )(oral|topical|intravenous|iv|im|intramuscular|"
+			+ "inhaled|vaginal|rectal) (" + D + ")");
+
+	/** A course of the drug named before it — "a short course of ciprofloxacin" (ADR Decision 419): how long it is given. */
+	private static final Pattern COURSE_BEFORE_THE_DRUG = Pattern.compile("(?<=^| )(?:a )?(?:short |long |full |\\p{N}+ day )?"
+			+ "course of (" + D + ")");
 
 	/** {@code joined} without the form named beside its drug, or {@code null} where it names none (ADR Decision 334). */
 	private static String withoutAStatedForm(String joined) {
-		String without = FORM_AFTER_THE_DRUG.matcher(joined).replaceAll("$1");
+		String without = COURSE_BEFORE_THE_DRUG.matcher(FORM_BEFORE_THE_DRUG.matcher(FORM_AFTER_THE_DRUG.matcher(joined)
+				.replaceAll("$1")).replaceAll("$2")).replaceAll("$1");
 		return without.equals(joined) ? null : without;
 	}
 
@@ -1519,7 +1536,11 @@ public final class QueryScopeRouter {
 			return null;
 		}
 		Matcher form = FORM_AFTER_THE_DRUG.matcher(String.join(" ", wordsWithTheDrugMarked));
-		return form.find() ? form.group(2) : null;
+		if (form.find()) {
+			return form.group(2);
+		}
+		Matcher before = FORM_BEFORE_THE_DRUG.matcher(String.join(" ", wordsWithTheDrugMarked));
+		return before.find() ? before.group(1) : null;
 	}
 
 	/** {@code joined} without the dose stated beside its drug, or {@code null} where it states none (ADR Decisions 269, 326). */
@@ -1547,6 +1568,17 @@ public final class QueryScopeRouter {
 	public static boolean statesATiming(String question) {
 		return question != null && Pattern.compile("(?:^| )(?:" + TIMING + "|" + SEQUENCE + ")(?: |$)")
 				.matcher(String.join(" ", words(question))).find();
+	}
+
+	/** How long a drug would be given — "2 weeks", "a few days" (ADR Decision 419). */
+	private static final String A_DURATION = "(?:\\p{N}+|one|two|three|four|five|six|seven|ten|fourteen|a|a few|several) "
+			+ "(?:days?|weeks?|months?)";
+
+	/** Whether {@code question} says how long the drug would be given — "for 2 weeks", "a short course of" — which no finding
+	 *  weighs (ADR Decision 419). */
+	public static boolean statesADuration(String question) {
+		return question != null && Pattern.compile("(?:^| )(?:for " + A_DURATION + "|(?:a )?(?:short |long |full |\\p{N}+ day )?"
+				+ "course of)(?: |$)").matcher(String.join(" ", words(question))).find();
 	}
 
 	/** One drug given after another — "after she finishes rifampicin", "and then rifampicin later" — a timing no finding
@@ -1966,6 +1998,43 @@ public final class QueryScopeRouter {
 		}
 	}
 
+	/** A statement about her that opens the question, and the question after it (ADR Decision 419). */
+	public static final class LeadingStatement {
+
+		/** The question after the statement. */
+		public final String question;
+
+		/** The statement as the question wrote it. */
+		public final String statement;
+
+		LeadingStatement(String question, String statement) {
+			this.question = question;
+			this.statement = statement;
+		}
+	}
+
+	/** A statement about her opening the question, then the question: "She has HIV and TB. Can I give her fluconazole?", "She
+	 *  is pregnant, can I give her fluconazole?", "Patient is on ART. Is fluconazole safe?", "I need to treat her UTI. Can I use
+	 *  ciprofloxacin?" (ADR Decision 419). */
+	private static final Pattern LEADING_STATEMENT = Pattern.compile("(?i)^\\s*((?:(?:she|he|they|the patient|this patient|patient)"
+			+ "\\s+(?:is|are|was|has|have|had|takes|gets)|(?:her|his|their)\\s+[\\p{L} ]{1,30}?\\s+(?:is|are)|i\\s+(?:need|want|have)"
+			+ "\\s+to\\s+treat\\s+(?:her|his|their))\\b[^.?!,;]{1,60}?)\\s*[.,;]\\s+((?:can|could|may|should|is|are|would|will|"
+			+ "what|which|does|do|any|before)\\b.+)$");
+
+	/** The statement opening {@code question} and the question after it, or {@code null} (ADR Decision 419). The caller decides
+	 *  whether it names a drug, in which case it is a list of drugs and no statement. */
+	public static LeadingStatement leadingStatement(String question) {
+		if (question == null) {
+			return null;
+		}
+		Matcher m = LEADING_STATEMENT.matcher(question.trim());
+		if (!m.matches()) {
+			return null;
+		}
+		String rest = m.group(2).trim();
+		return new LeadingStatement(Character.toUpperCase(rest.charAt(0)) + rest.substring(1), m.group(1).trim());
+	}
+
 	/** The clauses supposing an allergy, each closing the question: the proposal before it, the allergen in it. */
 	private static final List<Pattern> SUPPOSED_ALLERGY_CLAUSES = Arrays.asList(
 		Pattern.compile("(?i)^(.+?),?\\s+(?:if|when|given that)\\s+(?:she|he|they|the patient)\\s+(?:is|are|was|were)\\s+"
@@ -2009,7 +2078,9 @@ public final class QueryScopeRouter {
 		}
 		// After "for", or the whole closing statement of what she has (ADR Decision 325).
 		int from = "for".equals(wordsWithTheDrugMarked.get(proposal.size())) ? proposal.size() + 1 : proposal.size();
-		return String.join(" ", wordsWithTheDrugMarked.subList(from, wordsWithTheDrugMarked.size()));
+		String purpose = String.join(" ", wordsWithTheDrugMarked.subList(from, wordsWithTheDrugMarked.size()));
+		// Not how long it would be given — "for 2 weeks" — which is no purpose, and says so itself (ADR Decision 419).
+		return purpose.matches(A_DURATION) ? null : purpose;
 	}
 
 	/**

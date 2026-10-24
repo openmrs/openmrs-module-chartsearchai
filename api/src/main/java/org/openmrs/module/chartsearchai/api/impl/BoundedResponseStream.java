@@ -32,6 +32,9 @@ import java.io.InputStream;
  * {@code endlessLinesCarryingNoContentAtAllAreStillCountedAgainstTheCeiling}, which are the
  * two shapes a ceiling counted on the parser's accumulated text lets through.</p>
  *
+ * <p>The Hub adapter and profile discovery also reuse this stream with the remote response
+ * ceiling; their real-HTTP tests cover oversized staged and metadata responses.</p>
+ *
  * <p>Closing this closes the underlying body, which is what cancels the exchange and stops the peer
  * — so the caller that reads through it must close it on the failure path too. Every caller does,
  * by reading inside a try-with-resources.</p>
@@ -47,7 +50,7 @@ import java.io.InputStream;
  * clause no test discriminates is one the next change can delete for free without knowing it. The
  * list is what was measured, not a proof that nothing else here is undiscriminated.</p>
  */
-final class BoundedResponseStream extends FilterInputStream {
+public final class BoundedResponseStream extends FilterInputStream {
 
 	/**
 	 * Raised when the peer sent more than it was allowed to. An {@link IOException} so that it
@@ -75,7 +78,7 @@ final class BoundedResponseStream extends FilterInputStream {
 
 	private long delivered;
 
-	BoundedResponseStream(InputStream in, long limit) {
+	public BoundedResponseStream(InputStream in, long limit) {
 		super(in);
 		this.limit = limit;
 	}

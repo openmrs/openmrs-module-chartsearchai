@@ -715,6 +715,42 @@ public class BundledClinicalAnswerProviderTest {
 	}
 
 	@Test
+	public void aRemoteEngineThatHoldsItsBodyOpenDoesNotStallTheReadinessProbe() throws Exception {
+		// Headers sent, body held open: a probe reading the body would wait for it past its timeout.
+		java.util.concurrent.CountDownLatch release = new java.util.concurrent.CountDownLatch(1);
+		com.sun.net.httpserver.HttpServer server = com.sun.net.httpserver.HttpServer
+				.create(new java.net.InetSocketAddress("127.0.0.1", 0), 0);
+		server.setExecutor(java.util.concurrent.Executors.newCachedThreadPool());
+		server.createContext("/", exchange -> {
+			exchange.sendResponseHeaders(503, 0);
+			exchange.getResponseBody().write("{".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+			exchange.getResponseBody().flush();
+			try {
+				release.await(10, java.util.concurrent.TimeUnit.SECONDS);
+			}
+			catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+			}
+			exchange.close();
+		});
+		server.start();
+		try {
+			String endpoint = new java.net.URI("http", null, server.getAddress().getHostString(),
+					server.getAddress().getPort(), "/v1/chat/completions", null, null).toString();
+			long start = System.nanoTime();
+			boolean reachable = new org.openmrs.module.chartsearchai.api.impl.RemoteLlmEngine().endpointReachable(endpoint);
+			long elapsedMs = java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start);
+
+			assertFalse(reachable, "a 503 is not ready");
+			assertTrue(elapsedMs < 2000, "the probe returned on the headers, not the body; took " + elapsedMs + " ms");
+		}
+		finally {
+			release.countDown();
+			server.stop(0);
+		}
+	}
+
+	@Test
 	public void remoteEngineBehindAProxyWhoseUpstreamIsDownIsNotReady() throws Exception {
 		// A relay in front of the engine (tap/gateway) answers 502 when the engine is down —
 		// an HTTP response that must still count as NOT ready, or a dead engine hides behind

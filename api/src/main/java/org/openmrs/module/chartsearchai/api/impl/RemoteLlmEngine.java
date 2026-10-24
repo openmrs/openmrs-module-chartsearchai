@@ -221,12 +221,42 @@ public class RemoteLlmEngine implements LlmEngine {
 		}
 	}
 
+	/**
+	 * Cancels the body unread and completes on the headers: the status is all readiness needs, and
+	 * the request timeout bounds only the headers, so a peer that answers and holds its body open
+	 * cannot stall provider discovery.
+	 */
+	private static final HttpResponse.BodyHandler<Void> STATUS_ONLY = info -> new HttpResponse.BodySubscriber<Void>() {
+
+		@Override
+		public java.util.concurrent.CompletionStage<Void> getBody() {
+			return java.util.concurrent.CompletableFuture.completedFuture(null);
+		}
+
+		@Override
+		public void onSubscribe(java.util.concurrent.Flow.Subscription subscription) {
+			subscription.cancel();
+		}
+
+		@Override
+		public void onNext(java.util.List<java.nio.ByteBuffer> item) {
+		}
+
+		@Override
+		public void onError(Throwable throwable) {
+		}
+
+		@Override
+		public void onComplete() {
+		}
+	};
+
 	/** Reachability probe for the operator-configured remote engine, sharing its proxy-aware client. */
 	public boolean endpointReachable(String endpointUrl) {
 		try {
 			HttpRequest request = HttpRequest.newBuilder().uri(URI.create(endpointUrl))
 					.timeout(Duration.ofSeconds(2)).GET().build();
-			HttpResponse<Void> response = getHttpClient().send(request, HttpResponse.BodyHandlers.discarding());
+			HttpResponse<Void> response = getHttpClient().send(request, STATUS_ONLY);
 			return response.statusCode() < 500;
 		}
 		catch (IOException | IllegalArgumentException e) {

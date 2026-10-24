@@ -31,9 +31,11 @@ public final class HubCallRequest {
 
 	private final List<PriorClinicalTurn> priorTurns;
 
+	private final AccountContext accountContext;
+
 	public HubCallRequest(String endpointUrl, String profileId, String patientUuid,
 			String conversationId, String requestId, String question,
-			List<PriorClinicalTurn> priorTurns) {
+			List<PriorClinicalTurn> priorTurns, AccountContext accountContext) {
 		this.endpointUrl = endpointUrl;
 		this.profileId = profileId;
 		this.patientUuid = patientUuid;
@@ -42,6 +44,7 @@ public final class HubCallRequest {
 		this.question = question;
 		this.priorTurns = priorTurns == null ? Collections.emptyList()
 				: Collections.unmodifiableList(priorTurns);
+		this.accountContext = accountContext == null ? AccountContext.unavailable() : accountContext;
 	}
 
 	public String getEndpointUrl() {
@@ -70,5 +73,9 @@ public final class HubCallRequest {
 
 	public List<PriorClinicalTurn> getPriorTurns() {
 		return priorTurns;
+	}
+
+	public AccountContext getAccountContext() {
+		return accountContext;
 	}
 }

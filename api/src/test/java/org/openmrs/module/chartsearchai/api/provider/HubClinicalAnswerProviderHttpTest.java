@@ -73,7 +73,7 @@ public class HubClinicalAnswerProviderHttpTest extends BaseModuleContextSensitiv
 				"http://127.0.0.1:" + server.getAddress().getPort() + "/v1/chat/completions");
 		Patient patient = Context.getPatientService().getPatient(7);
 		TurnRequest request = new TurnRequest(patient, "What is recorded?", "conversation-1", "request-1",
-				ProviderMode.QUERY_SCOPED, "product-profile-a", Collections.emptyList());
+				ProviderMode.QUERY_SCOPED, "product-profile-a", Collections.emptyList(), AccountContext.unavailable());
 		TurnResult result = provider.execute(request, events::add, CancellationSignal.NONE)
 				.toCompletableFuture().get();
 		assertEquals(patient.getUuid(), receivedRequest.get().path("patient").asText());

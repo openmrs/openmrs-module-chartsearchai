@@ -11,6 +11,7 @@ package org.openmrs.module.chartsearchai.api.provider;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import java.util.Collections;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -29,7 +30,7 @@ public class TurnRequestTest {
 		callersList.add(new PriorClinicalTurn("What is her latest weight?", "62 kg on 2026-01-04."));
 
 		TurnRequest request = new TurnRequest(null, "And her height?", "conversation", "request",
-				ProviderMode.QUERY_SCOPED, null, callersList);
+				ProviderMode.QUERY_SCOPED, null, callersList, AccountContext.unavailable());
 		callersList.add(new PriorClinicalTurn("Added after the turn started", "must not be replayed"));
 		callersList.remove(0);
 

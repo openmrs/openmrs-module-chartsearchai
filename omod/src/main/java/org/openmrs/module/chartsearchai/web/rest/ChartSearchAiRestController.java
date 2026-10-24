@@ -66,6 +66,7 @@ import org.openmrs.module.chartsearchai.api.conversation.PriorClinicalTurn;
 import org.openmrs.module.chartsearchai.api.impl.PrewarmBootstrapService;
 import org.openmrs.module.chartsearchai.api.impl.PrewarmStatus;
 import org.openmrs.module.chartsearchai.api.impl.WarmupExecutor;
+import org.openmrs.module.chartsearchai.api.provider.AccountContext;
 import org.openmrs.module.chartsearchai.api.provider.AnswerEnvelope;
 import org.openmrs.module.chartsearchai.api.provider.ClinicalAnswerProvider;
 import org.openmrs.module.chartsearchai.api.provider.ClinicalAnswerProviderRegistry;
@@ -1492,6 +1493,7 @@ public class ChartSearchAiRestController {
 		ProviderMode mode = resolveMode(body);
 		String profileId = body.get("profile");
 		String sessionUuid = body.get("session");
+		AccountContext accountContext = AccountContext.fromSession(Context.getUserContext());
 
 		HttpServletResponse unwrapped = response;
 		while (unwrapped instanceof HttpServletResponseWrapper) {
@@ -1512,7 +1514,7 @@ public class ChartSearchAiRestController {
 		unwrapped.flushBuffer();
 
 		streamProviderTurn(out, resolved.patient, sanitizedQuestion, providerId, mode, profileId,
-				sessionUuid);
+				sessionUuid, accountContext);
 	}
 
 	/**
@@ -1521,14 +1523,15 @@ public class ChartSearchAiRestController {
 	 * Package-private for unit tests.
 	 */
 	void streamProviderTurn(OutputStream out, Patient patient, String question, String providerId,
-			ProviderMode mode, String profileId, String conversationUuid) {
+			ProviderMode mode, String profileId, String conversationUuid, AccountContext accountContext) {
 		streamProviderTurn(out, patient, question, providerId, mode, profileId, conversationUuid,
-				KEEP_ALIVE_INTERVAL_MS);
+				accountContext, KEEP_ALIVE_INTERVAL_MS);
 	}
 
 	/** Per-call interval seam, matching the legacy stream's keep-alive tests. */
 	void streamProviderTurn(OutputStream out, Patient patient, String question, String providerId,
-			ProviderMode mode, String profileId, String conversationUuid, long keepAliveIntervalMillis) {
+			ProviderMode mode, String profileId, String conversationUuid, AccountContext accountContext,
+			long keepAliveIntervalMillis) {
 		final SseKeepAlive keepAlive = SseKeepAlive.start(out, keepAliveIntervalMillis);
 		final java.io.Closeable stopKeepAlive = keepAlive::stop;
 		final Map<TurnEventType, WholeCodePoints> textChannels = new java.util.EnumMap<>(TurnEventType.class);
@@ -1569,7 +1572,7 @@ public class ChartSearchAiRestController {
 			final ClinicalConversationTurn turn = startedTurn;
 			List<PriorClinicalTurn> prior = conversationService.priorClinicalTurns(activeConversation);
 			TurnRequest request = new TurnRequest(patient, question, activeConversation.getUuid(),
-					requestId, resolvedMode, profileId, prior);
+					requestId, resolvedMode, profileId, prior, accountContext);
 
 			// A new turn starting for this conversation IS the preempt signal — it cancels
 			// whichever turn currently holds that conversation's slot (see TurnPreemptionRegistry),
@@ -1598,7 +1601,7 @@ public class ChartSearchAiRestController {
 									terminalEvent.compareAndSet(null, event);
 									return;
 								}
-								TurnEvent outgoing = withModuleStatements(event);
+								TurnEvent outgoing = withTurnMetadata(event, accountContext);
 								delivered.record(outgoing);
 								try {
 									writeTurnEventOrThrow(out, outgoing, activeConversation, turn, textChannels);
@@ -1617,10 +1620,10 @@ public class ChartSearchAiRestController {
 					.toCompletableFuture().get();
 			long responseTimeMs = (System.nanoTime() - startNs) / 1_000_000L;
 			ClinicalConversationTurn completedTurn = conversationService.finishTurn(turn,
-					withModuleStatements(delivered.attachTo(result)), responseTimeMs);
+					withTurnMetadata(delivered.attachTo(result), accountContext), responseTimeMs);
 			persisted = true;
 			if (!activeCancellation.isCancelled() && terminalEvent.get() != null) {
-				writeTurnEventOrThrow(out, withModuleStatements(terminalEvent.get()), activeConversation, completedTurn, textChannels);
+				writeTurnEventOrThrow(out, withTurnMetadata(terminalEvent.get(), accountContext), activeConversation, completedTurn, textChannels);
 			}
 		}
 		catch (Exception e) {
@@ -1747,32 +1750,35 @@ public class ChartSearchAiRestController {
 	 * shape of the safety chips live in {@link #putModuleStatements}; references use
 	 * {@link #serializeReferences}. Publish both here as {@code /search} and {@code /search/stream} do,
 	 * from the {@link ChartAnswer} the envelope carries, so the provider stream and the persisted turn
-	 * state the same facts as the legacy stream. A relayed provider's envelope carries no source and
-	 * passes through unchanged.
+	 * state the same facts as the legacy stream. Account metadata comes from the request snapshot,
+	 * never the provider's response, and is preserved with both providers' answers for evaluation.
 	 */
-	private AnswerEnvelope withModuleStatements(AnswerEnvelope envelope) {
-		if (envelope == null || envelope.getSource() == null) {
+	private AnswerEnvelope withTurnMetadata(AnswerEnvelope envelope, AccountContext accountContext) {
+		if (envelope == null) {
 			return envelope;
 		}
 		Map<String, Object> payload = new LinkedHashMap<String, Object>(envelope.getPayload());
-		payload.put("references", serializeReferences(envelope.getSource().getReferences()));
-		putModuleStatements(payload, envelope.getSource());
+		if (envelope.getSource() != null) {
+			payload.put("references", serializeReferences(envelope.getSource().getReferences()));
+			putModuleStatements(payload, envelope.getSource());
+		}
+		payload.put("accountContext", accountContext.toPayload());
 		return AnswerEnvelope.fromPayload(payload, envelope.getSource());
 	}
 
-	private TurnEvent withModuleStatements(TurnEvent event) {
-		if (event.getAnswer() == null || event.getAnswer().getSource() == null) {
+	private TurnEvent withTurnMetadata(TurnEvent event, AccountContext accountContext) {
+		if (event.getAnswer() == null) {
 			return event;
 		}
 		return TurnEvent.withAnswer(event.getType(), event.getSequence(), event.getProviderId(),
-				withModuleStatements(event.getAnswer()));
+				withTurnMetadata(event.getAnswer(), accountContext));
 	}
 
-	private TurnResult withModuleStatements(TurnResult result) {
-		if (result.getAnswer() == null || result.getAnswer().getSource() == null) {
+	private TurnResult withTurnMetadata(TurnResult result, AccountContext accountContext) {
+		if (result.getAnswer() == null) {
 			return result;
 		}
-		return TurnResult.done(result.getProviderId(), result.getMode(), withModuleStatements(result.getAnswer()));
+		return TurnResult.done(result.getProviderId(), result.getMode(), withTurnMetadata(result.getAnswer(), accountContext));
 	}
 
 	/**

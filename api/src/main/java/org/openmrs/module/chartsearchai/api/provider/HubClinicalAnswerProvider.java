@@ -120,7 +120,7 @@ public class HubClinicalAnswerProvider implements ClinicalAnswerProvider {
 
 		HubCallRequest call = new HubCallRequest(endpoint, profileId.trim(),
 				request.getPatient().getUuid(), request.getConversationId(), request.getRequestId(),
-				request.getQuestion(), request.getPriorClinicalTurns());
+				request.getQuestion(), request.getPriorClinicalTurns(), request.getAccountContext());
 
 		AtomicReference<AnswerEnvelope> latestAnswer = new AtomicReference<>();
 		AtomicReference<String> streamError = new AtomicReference<>();

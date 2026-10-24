@@ -65,7 +65,7 @@ public class TemporalGateRelayConformanceTest {
 	private static TurnRequest request() {
 		return new TurnRequest(patient(), "When was the last visit?", "conversation-1", "request-1",
 				ProviderMode.QUERY_SCOPED, "product-profile-a",
-				Collections.singletonList(new PriorClinicalTurn("prior q", "prior a")));
+				Collections.singletonList(new PriorClinicalTurn("prior q", "prior a")), AccountContext.unavailable());
 	}
 
 	/** Scripted hub transport that emits exactly one prepared SSE sequence. */

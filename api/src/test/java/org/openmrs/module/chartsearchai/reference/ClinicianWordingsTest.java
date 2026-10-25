@@ -993,6 +993,32 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/**
+	 * Interactions "for" a drug, safe "with what she's on" or "on top of" a group of hers, one drug potentiating another, a
+	 * pair mixed or named as a combination, a drug started "while she's on" another, "how safe" beside her medicines and
+	 * "what if" are the questions they spell (ADR Decision 440). On the 3.7.1 standalone each went to the model, which
+	 * answered "Can I give clarithromycin while she's on efavirenz?" "Clarithromycin can be given, with one caution" and
+	 * "Does rifampicin potentiate nevirapine?" "No — Rifampicin should not be given".
+	 */
+	@Test
+	public void aDrugStartedWhileOnAnotherPotentiatingOrMixedIsTheQuestionItSpells() {
+		String[][] pairs = { { "Interactions for warfarin?", "Any interactions with warfarin?" },
+			{ "Will warfarin be okay with what she's on?", "Is warfarin safe with her medications?" },
+			{ "Does warfarin potentiate nevirapine?", "Does warfarin increase nevirapine levels?" },
+			{ "Any issue mixing warfarin and efavirenz?", "Is warfarin dangerous with her efavirenz?" },
+			{ "Warfarin + efavirenz combination?", "Is warfarin dangerous with her efavirenz?" },
+			{ "Is it OK to start warfarin while she's on efavirenz?", "Can I give her warfarin with efavirenz?" },
+			{ "Can I give warfarin while she's on efavirenz?", "Can I give her warfarin with efavirenz?" },
+			{ "Warfarin on top of her ARVs - safe?", "Is warfarin safe with her ARVs?" },
+			{ "How safe is warfarin with her medicines?", "How safe is warfarin for her?" },
+			{ "What if I give her warfarin?", "What happens if I give her warfarin?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+	}
+
 	private static String ask(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

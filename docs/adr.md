@@ -22274,3 +22274,25 @@ word begins (*"insulin"*) is offered as before, and a longer misspelling (*"rifa
 suggestion.
 
 Pinned by `SomethingToEatOrDrinkTest.aShortWordIsOfferedNoMisspellingsNearName`.
+
+## Decision 440: A drug started while she is on another, one potentiating another, and a pair mixed, are the questions they spell
+
+**Status: Accepted** (October 2026) — found asking 40 further wordings of 15 patients on the 3.7.1 standalone on 2026-10-25.
+
+### Context
+
+Ten wordings went to the model. It answered *"Can I give clarithromycin while she's on efavirenz?"* *"Clarithromycin can be
+given, with one caution"*, *"Is it OK to start rifampicin while she's on efavirenz?"* *"Efavirenz can be started with
+Rifampicin, with one caution"*, and *"Does rifampicin potentiate nevirapine?"* *"No — Rifampicin should not be given"*.
+
+### The decision
+
+- *"Is it OK to start X while she's on Y?"* and *"Can I give X while she's on Y?"* are Decision 203's proposal of the two
+  together.
+- *"Does X potentiate (antagonize, inhibit, induce) Y?"* is Decision 249's effect of one on the other, and *"Any issue mixing
+  X and Y?"* and *"X + Y combination?"* Decision 255's whether they are dangerous together: each with no lead.
+- *"Interactions for X?"* is whether X interacts with her medications; *"Will X be okay with what she's on?"* and *"X on top
+  of her ARVs - safe?"* whether it is safe beside them; *"How safe is X with her medicines?"* and *"What if I give her X?"*
+  Decision 413's and 251's questions of the risk, with no lead.
+
+Pinned by `ClinicianWordingsTest.aDrugStartedWhileOnAnotherPotentiatingOrMixedIsTheQuestionItSpells`.

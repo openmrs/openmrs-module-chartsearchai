@@ -101,8 +101,19 @@ final class UnrecognisedDrugName {
 		}
 		// Something she would eat or drink is offered no drug's name: "Can she drink milk?" is no misspelled milk thistle
 		// (ADR Decision 390).
-		UnrecognisedDrugName name = new UnrecognisedDrugName(asWritten(word, question), toEatOrDrink(question, word)
-				? new ArrayList<String>() : suggestionsFor(word, entries));
+		List<String> suggestions = toEatOrDrink(question, word) ? new ArrayList<String>() : suggestionsFor(word, entries);
+		// A word no medicine is near, before a form the shapes read past, is named with it: "green tea" and not "green" (ADR
+		// Decision 438). A misspelt medicine before one — "fluconazle cream" — keeps its own word and its suggestion.
+		if (suggestions.isEmpty()) {
+			String form = QueryScopeRouter.statedForm(QueryScopeRouter.words(
+					(" " + question.toLowerCase(java.util.Locale.ROOT) + " ").replaceFirst("(?<=[^\\p{L}])" + java.util.regex.Pattern
+							.quote(word) + "(?=[^\\p{L}])", " " + QueryScopeRouter.DRUG_NAME + " ")));
+			if (form != null && (" " + String.join(" ", QueryScopeRouter.words(question)) + " ").contains(" " + word + " " + form
+					+ " ")) {
+				word = word + " " + form;
+			}
+		}
+		UnrecognisedDrugName name = new UnrecognisedDrugName(asWritten(word, question), suggestions);
 		name.inAStop = QueryScopeRouter.asksWhetherToStopHerDrug(QueryScopeRouter.words(
 				(" " + question.toLowerCase(java.util.Locale.ROOT) + " ").replaceFirst("(?<=[^\\p{L}])" + java.util.regex.Pattern
 						.quote(word) + "(?=[^\\p{L}])", " " + QueryScopeRouter.DRUG_NAME + " ")));

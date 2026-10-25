@@ -22225,3 +22225,29 @@ immunotherapy with peanut allergen extract"*. The word "peanut" resolved it.
   statement that no check ran after it.
 
 Pinned by `SomethingToEatOrDrinkTest.aFoodTheDataCarriesOnlyAsAnAllergenExtractRaisesNothingOfTheExtract`.
+
+## Decision 438: A herb or a fruit named with what it is taken as is the proposal of it
+
+**Status: Accepted** (October 2026) — found asking 20 questions about food of 15 patients on the 3.7.1 standalone on
+2026-10-25. It widens Decision 334's forms.
+
+### Context
+
+*"Can she have chamomile tea?"* and *"Can she have ginger tea?"* went to the model for every patient, and it answered a
+patient on aspirin *"Chamomile can be given, with one caution: it interacts with active order Aspirin 81mg, a Minor
+problem"* — a clearance, which the module never gives. *"Can she have chamomile?"* is a proposal the module answers; the
+word after the drug left the question in no shape, and the findings went to the model.
+
+### The decision
+
+What a herb or a fruit is taken as — *tea*, *juice*, *supplements*, *extract*, *powder* — joins the forms Decision 334 reads
+past after a drug's name (`QueryScopeRouter.FORM_AFTER_THE_DRUG`), so the question is the proposal of the drug, answered as
+it is, with *"This check did not weigh the form asked about (tea)."* after it. *"Can she drink cranberry juice?"* is
+answered so too, by what the knowledge base rates of cranberry.
+
+A word the data does not recognise before such a form is named with it where no medicine is near the word alone
+(`UnrecognisedDrugName.in`): *"green tea"* is said not to be a drug name the data recognises, not *"green"*. A misspelt
+medicine before a form — *"fluconazle cream"* — keeps its own word and its suggestion.
+
+Pinned by `ClinicianWordingsTest.aDrugNamedWithWhatItIsTakenAsIsTheProposalOfTheDrug` and, for the word named with its form,
+`SomethingToEatOrDrinkTest.somethingToHaveWhoseNearNamesAreNoMedicineTakesTheChartAnswer`.

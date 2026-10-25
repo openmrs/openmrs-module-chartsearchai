@@ -1829,6 +1829,9 @@ public final class QueryScopeRouter {
 	private static final Pattern FORM_AFTER_THE_DRUG = Pattern.compile("(" + D + ") (cream|ointment|gel|lotion|eye drops|ear "
 			+ "drops|drops|spray|nasal spray|inhaler|patch|patches|suppository|suppositories|pessary|pessaries|injection|"
 			+ "syrup|suspension|tablets?|capsules?"
+			// and what a herb or a fruit is taken as — "chamomile tea", "cranberry juice", "garlic supplements": "Can she have
+			// chamomile tea?" went to the model, which answered "Chamomile can be given, with one caution" (ADR Decision 438)
+			+ "|tea|teas|juice|supplements?|extract|powder"
 			// a route or a use after it — "ciprofloxacin IV", "isoniazid preventive therapy" (ADR Decision 419)
 			+ "|iv|im|intravenously|intramuscularly|orally|topically|prophylaxis|preventive therapy|preventative therapy)(?= |$)");
 

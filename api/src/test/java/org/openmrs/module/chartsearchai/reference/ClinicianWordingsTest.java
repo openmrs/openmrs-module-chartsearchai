@@ -974,6 +974,25 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/**
+	 * A herb or a fruit named with what it is taken as — "chamomile tea", "cranberry juice" — is the proposal of it, the form
+	 * stated as not weighed, as Decision 334 states a cream's (ADR Decision 438). On the 3.7.1 standalone "Can she have chamomile tea?" went to the model, which answered a patient on aspirin
+	 * "Chamomile can be given, with one caution".
+	 */
+	@Test
+	public void aDrugNamedWithWhatItIsTakenAsIsTheProposalOfTheDrug() {
+		String[][] pairs = { { "Can she have ginger tea?", "Can she have ginger?", "tea" },
+			{ "Can she have chamomile tea?", "Can she have chamomile?", "tea" },
+			{ "Can she take garlic supplements?", "Can she take garlic?", "supplements" },
+			{ "Can she drink cranberry juice?", "Can she drink cranberry?", "juice" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical + "\nThis check did not weigh the form asked about (" + pair[2] + ").", ask(pair[0]),
+				pair[0]);
+		}
+	}
+
 	private static String ask(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

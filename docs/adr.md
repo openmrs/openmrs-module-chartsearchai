@@ -21982,3 +21982,38 @@ ended order is stated from that order's drug.
 
 Pinned by `ClinicianWordingsTest.anAbbreviatedTechnicalOrDosedWordingIsTheQuestionItSpells` and
 `EndedOrderFindingReferentTest.aProposalAfterAListedDrugTheChartHoldsOnlyAsAnEndedOrderIsTheModulesAnswer`.
+
+## Decision 429: A pair, a group, a list or a check as a clinician types it is the question it spells
+
+**Status: Accepted** (October 2026) — found asking 40 further wordings of 15 patients on the 3.7.1 standalone on 2026-10-25.
+
+### Context
+
+Each went to the model. It answered *"Fluconazole can be given, with one caution"* of *"Fluconazole for thrush - any drug interactions
+with her current list?"*, *"Would fluconazole interfere with her ARVs?"*, *"Is there a problem combining fluconazole with what she's
+already taking?"* and *"Can I give her a stat dose of fluconazole?"*; *"Efavirenz can be given"* of *"Does efavirenz interact with
+rifampicin? She is on both."*; *"Clarithromycin can be given"* of *"What is the risk of giving clarithromycin to someone on
+efavirenz?"*; *"Nevirapine can be given"* of *"Which of her drugs should I avoid giving with fluconazole?"*; and *"The records do not
+address any red flags in the medication list"* of *"Any red flags in her medication list?"*. It answered *"Check interactions:
+ibuprofen"* with a note that *"Check interactions"* is not a drug name the interaction data recognises. *"Is it safe to combine X and
+Y?"* was the module's only where both drugs were hers.
+
+### The decision
+
+- *"her medication list"* and *"her current list"* are her medications; *"her TB and HIV meds"* is a group of hers, named in Decision
+  221's lead.
+- *"Check interactions: X"*, *"DDI check for X please"* and *"X for thrush - any drug interactions with her current list?"* are
+  Decision 181's whether X interacts with her medications; *"Would X interfere with her ARVs?"* and *"Any issues adding X to her TB
+  and HIV meds?"* are Decision 271's; *"Is there a problem combining X with what she's already taking?"* is the same beside all of
+  them; *"Can X be taken by her with her other drugs?"* is Decision 426's.
+- *"Does X mix well with Y?"* is Decision 203's; *"Can X and Y go together?"*, *"Safe combo? X + Y"* and *"Is it safe to combine X and
+  Y?"* are Decision 169's together; *"Is the X Y combination dangerous?"* is Decision 255's; *"What is the risk of giving X to someone on
+  Y?"* is Decision 251's; a closing *"She is on both."* is set aside, as her chart says whether she is.
+- *"Which of her drugs should I avoid giving with X?"* is Decision 319's; *"a stat dose of X"* is Decision 326's dose.
+- A statement opening the question may end in a dash or a colon, and may say what she needs: *"She needs pain relief - is X ok with
+  her meds?"* is Decision 419's. A statement made only of words the residual reading takes as filler (Decision 396) is none:
+  *"She needs an antibiotic, is ciprofloxacin okay?"* stays that reading.
+
+A hyphenated pair, *"fluconazole-nevirapine"*, is read as one combination's name, which this decision does not change.
+
+Pinned by `ClinicianWordingsTest.aPairAGroupAListOrACheckAsAClinicianTypesItIsTheQuestionItSpells`.

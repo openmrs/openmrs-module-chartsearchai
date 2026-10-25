@@ -743,6 +743,52 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/**
+	 * Wordings of a pair, a group, a list or a check, typed as a clinician types them, are the question they spell (ADR
+	 * Decision 429). On the 3.7.1 standalone each went to the model, which answered "Fluconazole can be given, with one
+	 * caution", "Efavirenz can be given" of "Does efavirenz interact with rifampicin? She is on both.", and "Check
+	 * interactions: ibuprofen" with a note that "Check interactions" is not a drug name.
+	 */
+	@Test
+	public void aPairAGroupAListOrACheckAsAClinicianTypesItIsTheQuestionItSpells() {
+		String[][] pairs = {
+			{ "Warfarin for thrush - any drug interactions with her current list?",
+					"Does warfarin interact with her medications?" },
+			{ "Check interactions: warfarin", "Does warfarin interact with her medications?" },
+			{ "DDI check for warfarin please", "Does warfarin interact with her medications?" },
+			{ "Any red flags in her medication list?", "Any red flags in her medications?" },
+			{ "Would warfarin interfere with her ARVs?", "Does warfarin interact with her ARVs?" },
+			{ "Is there a problem combining warfarin with what she's already taking?",
+					"Is there any problem combining warfarin with her medications?" },
+			{ "Does warfarin mix well with nevirapine?", "Does warfarin interact with nevirapine?" },
+			{ "Can nevirapine and warfarin go together?", "Can nevirapine and warfarin be used together?" },
+			{ "Safe combo? warfarin + rifampicin", "Can warfarin and rifampicin be used together?" },
+			{ "Is it safe to combine warfarin and rifampicin?", "Can warfarin and rifampicin be used together?" },
+			{ "Is it safe to combine warfarin and nevirapine?", "Can warfarin and nevirapine be used together?" },
+			{ "Is the warfarin nevirapine combination dangerous?",
+					"Is the combination of warfarin and nevirapine dangerous?" },
+			{ "Does efavirenz interact with nevirapine? She is on both.", "Does efavirenz interact with nevirapine?" },
+			{ "What is the risk of giving warfarin to someone on efavirenz?",
+					"What is the risk of combining warfarin and efavirenz?" },
+			{ "Can warfarin be taken by her with her other drugs?", "Can warfarin be given with her other drugs?" },
+			{ "Which of her drugs should I avoid giving with warfarin?", "Which of her medications interact with warfarin?" },
+			{ "Can I give her a stat dose of warfarin?", "Can I give her warfarin?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+		assertTrue(chart("Can I give her a stat dose of warfarin?").statesADose(), "the dose said not checked");
+		// "TB and HIV meds" is a group of hers the check cannot resolve, named in the lead (ADR Decision 221)
+		String group = ask("Any issues adding warfarin to her TB and HIV meds?");
+		assertTrue(group != null && group.startsWith("This check cannot tell which of this patient's active medications are the "
+				+ "\"TB and HIV meds\" the question names"), "was: " + group);
+		String safe = ask("Is warfarin ok with her meds?");
+		assertNotNull(safe, "precondition: the module answers it");
+		assertEquals(safe + "\n" + DrugReferenceInjector.STATEMENT_NOT_WEIGHED_OPENING + "She needs pain relief).",
+			ask("She needs pain relief - is warfarin ok with her meds?"));
+	}
+
 	private static org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart chart(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

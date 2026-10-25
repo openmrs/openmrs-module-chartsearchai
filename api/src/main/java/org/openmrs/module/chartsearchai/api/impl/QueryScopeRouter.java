@@ -449,8 +449,10 @@ public final class QueryScopeRouter {
 			// "Is it fine (alright) to give him paracetamol?" too (ADR Decision 357), and "advisable" (wise) (ADR Decision 361)
 			"is it (?:safe|ok|okay|appropriate|fine|alright|advisable|wise) (?:for " + PATIENT + " )?to (?:(?:give|start|prescribe|"
 					+ "administer|add) (?:" + PATIENT + " )?(?:on )?|take )" + D + "(?: for " + PATIENT + ")?(?: now| today)?",
-			// "Is ibuprofen safe for her?", "Is ibuprofen appropriate for this patient?", "suitable" (ADR Decision 362)
-			"is " + D + " (?:safe|ok|okay|appropriate|suitable)(?: (?:for|in) " + PATIENT + ")?(?: now| today)?",
+			// "Is ibuprofen safe for her?", "Is ibuprofen appropriate for this patient?", "suitable" (ADR Decision 362), and "Is
+			// the fluconazole-nevirapine combination safe?" (ADR Decision 430)
+			"is (?:the )?" + D + " (?:(?:combination|combo) )?(?:safe|ok|okay|appropriate|suitable)(?: (?:for|in) " + PATIENT
+					+ ")?(?: now| today)?",
 			// "Would ibuprofen be appropriate for her?"
 			"(?:would|will) " + D + " be (?:safe|ok|okay|appropriate|suitable)(?: for " + PATIENT + ")?",
 			// "Is ibuprofen safe to add?", "Is ibuprofen safe to give her?" — the drug before "safe to", the
@@ -556,7 +558,9 @@ public final class QueryScopeRouter {
 					+ " )?(?:on )?" + D + "(?: (?:to|for) " + PATIENT + ")?(?: now| today)?",
 			// "Is ibuprofen dangerous for her?", "Could ibuprofen cause problems?", "Will giving her ibuprofen cause problems?",
 			// "Is there any harm in giving her ibuprofen?", "Any reason to avoid ibuprofen?" (ADR Decision 255)
-			"is " + D + " (?:dangerous|risky|unsafe|harmful|a problem|problematic)(?: (?:for|in) " + PATIENT + ")?(?: now| today)?",
+			// and "Is the fluconazole-nevirapine combination dangerous?", a combination named as one (ADR Decision 430)
+			"is (?:the )?" + D + " (?:(?:combination|combo) )?(?:dangerous|risky|unsafe|harmful|a problem|problematic)(?: (?:for|in) "
+					+ PATIENT + ")?(?: now| today)?",
 			"(?:could|would|will|might|can) " + D + " cause (?:any )?(?:problems?|issues?|harm)(?: (?:for|in) " + PATIENT + ")?",
 			"(?:could|would|will|might) giving (?:" + PATIENT + " )?" + D + " cause (?:any )?(?:problems?|issues?|harm)",
 			// and with no preposition, or "of" — "Is there a risk giving her erythromycin?" (ADR Decision 348)
@@ -1257,6 +1261,9 @@ public final class QueryScopeRouter {
 			// "Any interactions with her metronidazole?", "Are there any problems with his lisinopril?" — her drug named as
 			// hers, the interactions or problems of it asked after (ADR Decision 237)
 			ANY_INTERACTIONS_WITH_HER_D,
+			// "Can ibuprofen be taken by her with her other drugs?" of her own drug (ADR Decision 430)
+			"(?:can|could|may|should) " + D + " be (?:safely )?(?:given|taken|used|continued|combined)(?: (?:by|to|for) " + PATIENT
+					+ ")? (?:with|alongside) (?:any of )?" + POSSESSIVE + " (?:other )?" + MEDICATIONS,
 			// "Should I hold her metformin?", "Do I need to stop her ibuprofen?" (ADR Decision 259)
 			"(?:should|must|do|can) (?:i|we) (?:need to )?(?:hold|stop|pause|suspend|discontinue|withhold) " + POSSESSIVE + " " + D
 					+ "(?: now| today| for now)?");

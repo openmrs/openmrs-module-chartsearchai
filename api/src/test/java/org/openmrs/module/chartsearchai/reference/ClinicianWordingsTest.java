@@ -789,6 +789,30 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 			ask("She needs pain relief - is warfarin ok with her meds?"));
 	}
 
+	/**
+	 * A combination named with a hyphen is asked about as the combination it names, and her own drug asked whether it may be
+	 * taken with her other drugs is asked about as her own (ADR Decision 430). On the 3.7.1 standalone "Is the
+	 * fluconazole-nevirapine combination dangerous?" went to the model for every patient, which answered "Nevirapine can be
+	 * given, with one caution".
+	 */
+	@Test
+	public void aCombinationNamedAsOneOrHerOwnDrugBesideHerOthersIsTheQuestionItSpells() {
+		String[][] pairs = {
+			{ "Is the warfarin-nevirapine combination dangerous?", "Is warfarin-nevirapine dangerous?" },
+			{ "Is the warfarin-rifampicin combination dangerous?", "Is warfarin-rifampicin dangerous?" },
+			{ "Is the warfarin/nevirapine combination safe?", "Is warfarin/nevirapine safe?" },
+			{ "Can ibuprofen be taken by her with her other drugs?", "Is ibuprofen safe with her other drugs?" },
+			{ "Can ibuprofen be given with her other drugs?", "Is ibuprofen safe with her other drugs?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+		// The combination's own pair is stated, though neither of its drugs is hers.
+		assertTrue(ask("Is the warfarin-rifampicin combination dangerous?").contains(
+			"Rifampicin (rifampin) interacts with Warfarin, also named in the question — Major."), "the pair within it");
+	}
+
 	private static org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart chart(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

@@ -22017,3 +22017,23 @@ Y?"* was the module's only where both drugs were hers.
 A hyphenated pair, *"fluconazole-nevirapine"*, is read as one combination's name, which this decision does not change.
 
 Pinned by `ClinicianWordingsTest.aPairAGroupAListOrACheckAsAClinicianTypesItIsTheQuestionItSpells`.
+
+## Decision 430: A combination named as one, and her own drug beside her other drugs, are the questions they spell
+
+**Status: Accepted** (October 2026) — found re-asking Decision 429's wordings of 15 patients on the 3.7.1 standalone on 2026-10-25.
+
+### Context
+
+*"Is the fluconazole-nevirapine combination dangerous?"* went to the model for every patient, which answered *"Nevirapine can be
+given, with one caution"*. The hyphen makes the two names one combination's (Decision 429 left that reading as it is), and no shape
+read *"the X combination"*. *"Can ibuprofen be taken by her with her other drugs?"* was the module's for every patient but the one on
+ibuprofen: Decision 429 read it beside her medications for a drug she is not on, and her own drug is read by
+`BESIDE_HER_MEDICATIONS_SHAPES`, which held no such wording.
+
+### The decision
+
+- *"Is the X-Y combination dangerous?"* and *"Is the X/Y combination safe?"* are what *"Is X-Y dangerous?"* and *"Is X-Y safe?"*
+  ask: the combination proposed, every substance it carries checked against her orders, and the pair within it stated.
+- *"Can X be given (taken by her) with her other drugs?"* of her own drug is Decision 202's question about her medication.
+
+Pinned by `ClinicianWordingsTest.aCombinationNamedAsOneOrHerOwnDrugBesideHerOthersIsTheQuestionItSpells`.

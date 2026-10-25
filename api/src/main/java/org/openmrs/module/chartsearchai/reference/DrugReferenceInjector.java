@@ -6922,6 +6922,19 @@ public class DrugReferenceInjector {
 		}
 		// Each drug as the question names it — a combination's name one drug (ADR Decision 272).
 		List<AskedDrug> rowOf = askedDrugs(question, questionDrugs, context, true);
+		// Which of two to choose beside a third named last, hers: the two each answered as its proposal, whose findings against
+		// her orders are those against the third (ADR Decision 442). The model answered "Is diclofenac safer than ibuprofen
+		// with her aspirin?" "Diclofenac is safer than Ibuprofen". A third she does not take leaves this to the model; what
+		// the check found of hers alone, against her other orders, is no part of the choice asked.
+		AskedDrug besideHers = null;
+		if (either && rowOf.size() == 3
+				&& QueryScopeRouter.asksWhichOfTwoDrugsBesideOneOfHers(wordsBesideItsNames(question, questionDrugs))) {
+			if (!rowOf.get(2).isHers(herSubstances)) {
+				return null;
+			}
+			besideHers = rowOf.get(2);
+			rowOf = rowOf.subList(0, 2);
+		}
 		if (rowOf.size() != 2) {
 			return null;
 		}
@@ -6957,6 +6970,9 @@ public class DrugReferenceInjector {
 				continue;
 			}
 			Set<Object> about = subjectSubstances(finding);
+			if (besideHers != null && besideHers.substances.containsAll(about)) {
+				continue;
+			}
 			boolean ofTheFirst = !Collections.disjoint(about, rowOf.get(0).substances);
 			boolean ofTheSecond = !Collections.disjoint(about, rowOf.get(1).substances);
 			if (finding.alreadyOrdered() != null && about.size() == 1 && (ofTheFirst || ofTheSecond)
@@ -7066,7 +7082,10 @@ public class DrugReferenceInjector {
 		}
 		List<AskedDrug> asked = askedDrugs(question, questionDrugs, context, true);
 		List<String> words = wordsBesideItsNames(question, questionDrugs);
-		if (asked.size() < 3 || !QueryScopeRouter.asksWhetherToGiveDrugsTogether(words)
+		// Or which of two is safer beside a third that is not hers: the choice no finding makes, then what relates the three
+		// (ADR Decision 442). The model answered "Diclofenac is safer than Ibuprofen with her aspirin".
+		boolean choosing = asked.size() == 3 && QueryScopeRouter.asksWhichOfTwoDrugsBesideOneOfHers(words);
+		if (asked.size() < 3 || !choosing && !QueryScopeRouter.asksWhetherToGiveDrugsTogether(words)
 				&& !QueryScopeRouter.asksWhetherTwoDrugsInteract(words)) {
 			return null;
 		}
@@ -7080,8 +7099,10 @@ public class DrugReferenceInjector {
 		}
 		List<String> pairLines = new ArrayList<String>();
 		List<Integer> aboutHerOwn = new ArrayList<Integer>();
+		// A choice states each of the three under its own heading, one of hers too (ADR Decision 442).
+		List<AskedDrug> sectioned = choosing ? asked : others;
 		Map<AskedDrug, List<Integer>> ofEach = new LinkedHashMap<AskedDrug, List<Integer>>();
-		for (AskedDrug drug : others) {
+		for (AskedDrug drug : sectioned) {
 			ofEach.put(drug, new ArrayList<Integer>());
 		}
 		for (int i = 0; i < findings.size(); i++) {
@@ -7099,7 +7120,7 @@ public class DrugReferenceInjector {
 				}
 			}
 			AskedDrug subject = null;
-			for (AskedDrug drug : others) {
+			for (AskedDrug drug : sectioned) {
 				if (drug.substances.containsAll(about)) {
 					subject = drug;
 				}
@@ -7127,7 +7148,13 @@ public class DrugReferenceInjector {
 			}
 		}
 		List<String> lines = new ArrayList<String>();
-		if (hers.isEmpty()) {
+		if (choosing) {
+			lines.add(COMPARES_NO_DRUGS_LEAD);
+		}
+		if (choosing && hers.isEmpty()) {
+			lines.add(asked.get(0).label + " or " + asked.get(1).label + ", each checked beside " + asked.get(2).label
+					+ "; none of the three is one of this patient's active medications.");
+		} else if (hers.isEmpty()) {
 			lines.add(joinedAsAList(labelsOf(others)) + ", asked about together; none is one of this patient's active "
 					+ "medications.");
 		} else {
@@ -7139,7 +7166,7 @@ public class DrugReferenceInjector {
 			lines.add("Between them:");
 			lines.addAll(pairLines);
 		}
-		for (AskedDrug drug : others) {
+		for (AskedDrug drug : sectioned) {
 			List<SafetyWarning> its = new ArrayList<SafetyWarning>();
 			List<Integer> itsNumbers = new ArrayList<Integer>();
 			for (Integer i : ofEach.get(drug)) {
@@ -7149,14 +7176,18 @@ public class DrugReferenceInjector {
 			lines.add("For " + drug.label + ":");
 			if (its.isEmpty()) {
 				lines.add("The interaction check raised no finding about " + drug.label
-						+ " against this patient's active medications.");
+						+ (hers.contains(drug) ? " against this patient's other active medications."
+								: " against this patient's active medications."));
 				continue;
 			}
 			boolean withholds = false;
 			for (SafetyWarning finding : its) {
 				withholds |= licensesTheModulesNo(finding);
 			}
-			if (!withholds && !cautionsOnlyAbout(drug.substances, its)) {
+			// The third of a choice, asked about as hers, is proposed by no one, nor is one of the two she already takes: what
+			// was found, with no verdict.
+			if (choosing && (drug == asked.get(2) || hers.contains(drug))
+					|| !withholds && !cautionsOnlyAbout(drug.substances, its)) {
 				lines.add(FOUND_LEAD_OPENING + drug.label + ":");
 				for (int f = 0; f < its.size(); f++) {
 					lines.add(findingLine(its.get(f), itsNumbers.get(f), orderRecordNumbers, herOrderRecords, true));

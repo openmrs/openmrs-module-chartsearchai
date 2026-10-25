@@ -10,6 +10,7 @@
 package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -1046,6 +1047,67 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
 			assertEquals(canonical, ask(pair[0]), pair[0]);
 		}
+	}
+
+	/**
+	 * Which of two drugs is safer "with her" third, one of her orders, is the choice of the two as it is asked without the
+	 * third: her orders are what each is checked against (ADR Decision 442). On the 3.7.1 standalone it went to the model,
+	 * which answered "Is diclofenac safer than ibuprofen with her aspirin?" "Diclofenac is safer than Ibuprofen with her
+	 * aspirin", a choice no finding makes.
+	 */
+	@Test
+	public void whichOfTwoIsSaferBesideOneOfHerOrdersIsTheChoiceOfTheTwo() {
+		String[][] pairs = { { "Is fluconazole safer than clarithromycin with her efavirenz?",
+			"Is fluconazole safer than clarithromycin for her?" },
+			{ "Is fluconazole or clarithromycin better with her efavirenz?", "Is fluconazole or clarithromycin better for her?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+	}
+
+	/**
+	 * Which of two drugs is safer "with her" third that she does not take is answered with the choice no finding makes, what
+	 * relates the three, each of the two as its proposal, and what was found about the third with no verdict, since no one
+	 * proposed it (ADR Decision 442). On the 3.7.1 standalone, where most patients do not take aspirin, the model answered "Is
+	 * diclofenac safer than ibuprofen with her aspirin?" "Diclofenac is safer than Ibuprofen with her aspirin".
+	 */
+	@Test
+	public void whichOfTwoIsSaferBesideAThirdSheDoesNotTakeChoosesNeither() {
+		String answer = ask("Is fluconazole safer than clarithromycin with her warfarin?");
+		assertNotNull(answer);
+		assertTrue(answer.startsWith(DrugReferenceInjector.COMPARES_NO_DRUGS_LEAD + "\nFluconazole or Clarithromycin, each "
+				+ "checked beside Warfarin; none of the three is one of this patient's active medications.\nBetween them:\n"),
+			answer);
+		assertTrue(answer.contains("\n" + DrugReferenceInjector.FOUND_LEAD_OPENING + "Warfarin:\n"), answer);
+		assertTrue(answer.contains("\nFor Fluconazole:\nNo — this module's drug-safety check found a reason to withhold "
+				+ "Fluconazole.\n"), answer);
+		assertFalse(answer.contains("withhold Warfarin"), answer);
+	}
+
+	/**
+	 * Which of two drugs is safer beside a third she does not take, one or both of the two being hers, states each of hers
+	 * under its own heading with what was found and no verdict (ADR Decision 442). On the 3.7.1 standalone the model answered
+	 * a patient on clarithromycin "Is fluconazole or clarithromycin better with her efavirenz?" "Clarithromycin is the better
+	 * option".
+	 */
+	@Test
+	public void whichOfTwoIsSaferWhenSheTakesOneOfThemStatesHersWithNoVerdict() {
+		String one = ask("Is diclofenac safer than fluconazole with her warfarin?");
+		assertNotNull(one);
+		assertTrue(one.startsWith(DrugReferenceInjector.COMPARES_NO_DRUGS_LEAD + "\nDiclofenac is one of this patient's active "
+				+ "medications; Fluconazole and Warfarin are not.\n"), one);
+		assertTrue(one.contains("\nFor Diclofenac:\n" + DrugReferenceInjector.FOUND_LEAD_OPENING + "Diclofenac:\n"), one);
+		assertTrue(one.contains("\nFor Fluconazole:\nNo — this module's drug-safety check found a reason to withhold "
+				+ "Fluconazole.\n"), one);
+		String both = ask("Is diclofenac safer than ibuprofen with her warfarin?");
+		assertNotNull(both);
+		assertTrue(both.startsWith(DrugReferenceInjector.COMPARES_NO_DRUGS_LEAD + "\nDiclofenac and Ibuprofen are among this "
+				+ "patient's active medications; Warfarin is not.\nFor Diclofenac:\n" + DrugReferenceInjector.FOUND_LEAD_OPENING
+				+ "Diclofenac:\n"), both);
+		assertTrue(both.contains("\nFor Ibuprofen:\n" + DrugReferenceInjector.FOUND_LEAD_OPENING + "Ibuprofen:\n"), both);
+		assertFalse(both.contains("withhold"), both);
 	}
 
 	private static String ask(String question) {

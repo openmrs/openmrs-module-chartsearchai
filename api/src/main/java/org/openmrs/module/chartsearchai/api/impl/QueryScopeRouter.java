@@ -934,6 +934,13 @@ public final class QueryScopeRouter {
 					+ "(?: now| today)?",
 			"(?:is|would) " + D + " or " + D + " (?:be )?(?:safe|ok|okay|appropriate|suitable)(?: (?:for|in) " + PATIENT + ")?");
 
+	/** "Is diclofenac safer than ibuprofen with her aspirin?", "Is diclofenac or ibuprofen better with her aspirin?" — the
+	 *  choice of two drugs made beside a third, hers, named last (ADR Decision 442). */
+	private static final String BESIDE_ONE_OF_HERS_WHICH_OF_TWO = "(?:(?:is|would) " + D + " (?:be )?(?:a (?:safer|better) "
+			+ "(?:choice|option|alternative|drug)|safer|better|preferable) (?:than|over) " + D + "|(?:is|would) " + D + " or " + D
+			+ " (?:be )?(?:safer|better|preferable|preferred))(?: (?:for|in) " + PATIENT + ")? (?:with|alongside|given|on top of) "
+			+ POSSESSIVE + " " + D;
+
 	/** "Which is safer for her, ibuprofen or paracetamol?", "Is ibuprofen or paracetamol better for her?" — a choice between
 	 *  two drugs, which no finding makes (ADR Decision 393). */
 	private static final List<Pattern> WHICH_OF_TWO_SHAPES = shapes(
@@ -946,12 +953,19 @@ public final class QueryScopeRouter {
 					+ "|over) " + D + "(?: (?:for|in) " + PATIENT + ")?",
 			"(?:should|can|could) (?:i|we) (?:give|use|prescribe|choose) " + D + " or " + D + "(?: (?:for|in) " + PATIENT + ")?",
 			"(?:which|what) (?:should|can|could) (?:i|we) (?:give|use|prescribe|choose)(?: (?:for|to) " + PATIENT + ")? " + D + " or "
-					+ D);
+					+ D,
+			BESIDE_ONE_OF_HERS_WHICH_OF_TWO);
 
 	/** Whether a question asks about either of two drugs, each proposed alone — or which of the two to choose, {@link
 	 *  #asksWhichOfTwoDrugs} (ADR Decision 393). Fail-CLOSED. */
 	public static boolean asksAboutEitherOfTwoDrugs(List<String> wordsWithTheDrugsMarked) {
 		return fitsAShape(wordsWithTheDrugsMarked, EITHER_SHAPES) || asksWhichOfTwoDrugs(wordsWithTheDrugsMarked);
+	}
+
+	/** Whether a question asks which of two drugs to choose beside a third, hers, named last — {@link
+	 *  #BESIDE_ONE_OF_HERS_WHICH_OF_TWO} (ADR Decision 442). Fail-CLOSED. */
+	public static boolean asksWhichOfTwoDrugsBesideOneOfHers(List<String> wordsWithTheDrugsMarked) {
+		return fitsAShape(wordsWithTheDrugsMarked, shapes(BESIDE_ONE_OF_HERS_WHICH_OF_TWO));
 	}
 
 	/** Whether a question asks which of two drugs to choose, or which is safer (ADR Decision 393). Fail-CLOSED. */

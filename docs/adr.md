@@ -22321,3 +22321,34 @@ given"*, where the "No" says the reverse of the warning after it.
   together.
 
 Pinned by `ClinicianWordingsTest.aPairAskedAfterItIsNamedOrOneStoppedOrDoubledForTheOtherIsTheQuestionItSpells`.
+
+## Decision 442: Which of two drugs is safer beside one of hers is the choice of the two
+
+**Status: Accepted** (October 2026) — found asking 40 further wordings of 15 patients on the 3.7.1 standalone on 2026-10-25.
+
+### Context
+
+*"Is diclofenac safer than ibuprofen with her aspirin?"* names three drugs, so Decision 393's choice of two did not read it,
+and it went to the model. On 12 of 15 patients the model answered *"Diclofenac is safer than Ibuprofen with her aspirin"*. No
+finding makes that choice, and Decision 393 answers the same question without the third drug with *"This check does not
+compare drugs or choose between them"*.
+
+### The decision
+
+A choice of two drugs made *"with her"* third, named last (*"Is X safer than Y with her Z?"*, *"Is X or Y better with her
+Z?"*), is Decision 393's choice of the two, answered as it is without the third. Her orders are what each of the two is
+checked against, so the third's interactions with X and Y are already in each drug's findings. What the check found of the
+third alone, against her other orders, is no part of the choice and is left out of the answer
+(`DrugReferenceInjector.composeTwoProposalsTogether`).
+
+Most of the 15 patients do not take aspirin, and on them the first version of this decision left the question to the model,
+which still answered *"Diclofenac is safer"*. A third she does not take is therefore answered as Decision 309's three drugs
+(`DrugReferenceInjector.composeSeveralDrugsTogether`). The answer opens with the same lead and *"X or Y, each checked beside
+Z"*, then lists what relates the three and gives each of the two the answer its own proposal gets. The third is proposed by
+no one, so it gets what the check found about it, with no verdict. So does one of the two that she already takes; on a
+patient taking clarithromycin, the model had answered *"Is fluconazole or clarithromycin better with her efavirenz?"*
+*"Clarithromycin is the better option"*.
+
+Pinned by `ClinicianWordingsTest.whichOfTwoIsSaferBesideOneOfHerOrdersIsTheChoiceOfTheTwo`,
+`ClinicianWordingsTest.whichOfTwoIsSaferBesideAThirdSheDoesNotTakeChoosesNeither` and
+`ClinicianWordingsTest.whichOfTwoIsSaferWhenSheTakesOneOfThemStatesHersWithNoVerdict`.

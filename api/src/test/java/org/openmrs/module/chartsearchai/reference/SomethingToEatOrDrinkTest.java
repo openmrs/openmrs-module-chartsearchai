@@ -35,6 +35,10 @@ public class SomethingToEatOrDrinkTest extends BaseModuleContextSensitiveTest {
 	private static final List<PatientClinicalContext.ActiveDrugOrder> ORDERS = Arrays.asList(
 		DrugReferenceTestSupport.activeOrder("order-cq", "Chloroquine Co 250mg", "Chloroquine"));
 
+	private static final List<PatientClinicalContext.ActiveDrugOrder> NSAIDS = Arrays.asList(
+		DrugReferenceTestSupport.activeOrder("order-ibu", "Ibuprofen 400mg", "Ibuprofen"),
+		DrugReferenceTestSupport.activeOrder("order-dic", "Diclofenac 50mg", "Diclofenac"));
+
 	@BeforeEach
 	public void answerFromFindings() {
 		Context.getAdministrationService().setGlobalProperty(
@@ -69,10 +73,43 @@ public class SomethingToEatOrDrinkTest extends BaseModuleContextSensitiveTest {
 		assertTrue(ask("Can I give her rifampcin?").getModuleAnswer().contains("Did you mean Rifampicin"));
 	}
 
+	/**
+	 * A food the data carries only as its allergen extract, named by the food's word, raises nothing of the extract — as a
+	 * finding before the answer or a chip after it (ADR Decision 437). On the 3.7.1 standalone "Can she have peanut
+	 * butter?" was answered for a patient on diclofenac and ibuprofen "No — peanut butter should not be consumed: it
+	 * interacts with active order Diclofenac and Ibuprofen, a Major problem", the rating of peanut allergen immunotherapy.
+	 */
+	@Test
+	public void aFoodTheDataCarriesOnlyAsAnAllergenExtractRaisesNothingOfTheExtract() {
+		for (String question : Arrays.asList("Can she have peanut butter?", "Can she have peanut?", "Is peanut ok for her?")) {
+			PatientChart chart = ask(question, NSAIDS);
+			assertTrue(DrugReferenceTestSupport.injectedFindings(chart).isEmpty(),
+				question + " — " + DrugReferenceTestSupport.injectedFindings(chart));
+			assertNull(chart.getModuleAnswer(), question + " — the chart answer: " + chart.getModuleAnswer());
+		}
+		LinkedHashSet<String> names = new LinkedHashSet<String>();
+		for (PatientClinicalContext.ActiveDrugOrder order : NSAIDS) {
+			names.addAll(order.getNames());
+		}
+		List<SafetyWarning> chips = DrugReferenceTestSupport.chipsOverAnswerFromDataset(
+			DrugReferenceTestSupport.shippedServiceWithGroups(), "No — peanut butter should not be consumed.",
+			"Can she have peanut butter?", names, null, NSAIDS);
+		assertTrue(chips.isEmpty(), "no chip of the extract after the answer: " + chips);
+		// Named as the product, it is the extract, and is checked.
+		assertTrue(ask("Is Palforzia safe with her medications?", NSAIDS).getModuleAnswer().contains("Peanut"));
+	}
+
 	private static PatientChart ask(String question) {
-		LinkedHashSet<String> names = new LinkedHashSet<String>(ORDERS.get(0).getNames());
+		return ask(question, ORDERS);
+	}
+
+	private static PatientChart ask(String question, List<PatientClinicalContext.ActiveDrugOrder> orders) {
+		LinkedHashSet<String> names = new LinkedHashSet<String>();
+		for (PatientClinicalContext.ActiveDrugOrder order : orders) {
+			names.addAll(order.getNames());
+		}
 		return DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.shippedServiceWithGroups())
 				.injectRecords(DrugReferenceTestSupport.oneRecordChart(),
-					DrugReferenceTestSupport.ctx(45, null, names, null, null, null, ORDERS), question);
+					DrugReferenceTestSupport.ctx(45, null, names, null, null, null, orders), question);
 	}
 }

@@ -304,7 +304,7 @@ public class DrugReferenceService {
 	 * @return the matching entries, in dataset order, deduplicated — a subset of {@link #findByQuery}
 	 */
 	public List<DrugReference> findImpliedByQuery(String question) {
-		List<DrugReference> matched = findByQuery(question);
+		List<DrugReference> matched = withoutAnAllergenNamedAsItsSource(findByQuery(question), question);
 		if (matched.size() < 2) {
 			// A no-op on one match, and provably so given rowsOf's empty-set fallback: either the single
 			// row's own alias denotes its substance and it is kept, or nothing is in play and rowsOf returns
@@ -321,6 +321,35 @@ public class DrugReferenceService {
 			}
 		}
 		return rowsOf(matched, inPlay);
+	}
+
+	/**
+	 * {@code matched} without an allergen extract ({@link DrugReference#isAnAllergenExtract}) that {@code text} names only
+	 * by its bare name — the food, pollen or mite the extract is made from, never the product given as immunotherapy (ADR
+	 * Decision 437). "Can she have peanut butter?" resolved the knowledge base's Peanut, and the model answered a patient on
+	 * diclofenac and ibuprofen "No — peanut butter should not be consumed: it interacts with active order Diclofenac and
+	 * Ibuprofen, a Major problem", a rating of peanut allergen immunotherapy. Named as the product — "Palforzia", "peanut
+	 * allergenic extract" — it stays.
+	 */
+	private static List<DrugReference> withoutAnAllergenNamedAsItsSource(List<DrugReference> matched, String text) {
+		if (matched.isEmpty()) {
+			return matched;
+		}
+		List<DrugReference> kept = new ArrayList<DrugReference>(matched.size());
+		String lower = text.toLowerCase(Locale.ROOT);
+		for (DrugReference ref : matched) {
+			if (ref.isAnAllergenExtract()) {
+				boolean namedAsTheProduct = false;
+				for (String alias : ref.aliasesIn(lower)) {
+					namedAsTheProduct |= !alias.equalsIgnoreCase(ref.getName());
+				}
+				if (!namedAsTheProduct) {
+					continue;
+				}
+			}
+			kept.add(ref);
+		}
+		return kept;
 	}
 
 	/**

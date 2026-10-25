@@ -22198,3 +22198,30 @@ drug the answer names is an allergy of hers it reports, never one proposed. What
 
 Pinned by `AllergyQuestionConflictingOrderContextTest.search_anAnswerNamingAnotherAllergyThanTheOneAskedAboutCarriesNoChipAboutIt`,
 which each of the two halves alone leaves red.
+
+## Decision 437: A food the data carries only as its allergen extract is not read as the extract
+
+**Status: Accepted** (October 2026) — found asking 40 negative and danger wordings of 15 patients on the 3.7.1 standalone
+on 2026-10-25.
+
+### Context
+
+*"Can she have peanut butter?"* was answered by the model for a patient on diclofenac and ibuprofen *"No — peanut butter
+should not be consumed: it interacts with active order Diclofenac and Ibuprofen, a Major problem"*, beside a chip. The
+knowledge base's *Peanut* is the peanut allergen extract given as immunotherapy (Palforzia): each of its 83 interactions is
+about that immunotherapy — *"NSAIDs may pose a greater risk of more serious systemic reactions, including anaphylaxis, to
+immunotherapy with peanut allergen extract"*. The word "peanut" resolved it.
+
+### The decision
+
+- An entry is an allergen extract by the knowledge base's own words (`DrugReference.isAnAllergenExtract`): one of its names
+  is "&lt;its name&gt; allergenic extract", and every interaction it is rated in speaks of the allergen. Measured over the shipped
+  data on 2026-10-25 through a throwaway test: Peanut, two pollens, a house dust mite and two Trichophyton species. Licorice,
+  Papaya, Yeast, Saccharomyces cerevisiae and Barley malt also carry such a name, but are rated for what taking them does,
+  and stay.
+- Prose that names such an entry only by its bare name — the food, pollen or mite it is made from — does not resolve it
+  (`DrugReferenceService.findImpliedByQuery`), in the question or in the answer; named as the product (*"Palforzia"*,
+  *"peanut allergenic extract"*) it does. With Decision 435, *"Can she have peanut?"* then takes the chart answer, the
+  statement that no check ran after it.
+
+Pinned by `SomethingToEatOrDrinkTest.aFoodTheDataCarriesOnlyAsAnAllergenExtractRaisesNothingOfTheExtract`.

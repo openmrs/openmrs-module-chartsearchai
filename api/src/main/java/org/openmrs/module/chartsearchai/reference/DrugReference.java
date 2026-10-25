@@ -2136,6 +2136,29 @@ public class DrugReference {
 	}
 
 	/**
+	 * Whether this entry is an allergen extract given as immunotherapy, by the knowledge base's own words: a name of it
+	 * is "&lt;name&gt; allergenic extract", and every interaction it is rated in speaks of the allergen (ADR Decision 437).
+	 * The knowledge base files <em>Peanut</em> so — its 83 interactions are each about immunotherapy with peanut allergen
+	 * extract — while <em>Licorice</em> and <em>Papaya</em>, which also carry such a name, are rated for what eating them
+	 * does. Package-private, so it is never serialized as a field of the entry.
+	 */
+	boolean isAnAllergenExtract() {
+		if (interactions.isEmpty() || name == null) {
+			return false;
+		}
+		String extract = foldedLower(name).trim() + " allergenic extract";
+		if (!foldedAliases.contains(extract)) {
+			return false;
+		}
+		for (Interaction interaction : interactions) {
+			if (interaction.getNote() == null || !interaction.getNote().toLowerCase(Locale.ROOT).contains("allergen")) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/**
 	 * @return the knowledge base's DERIVED chains in which THIS entry is the rated drug (issues #391
 	 *         Part B, #473): another drug's DDInter drug-disease note names a condition, in a sentence the
 	 *         knowledge base reads as causal, that this entry is rated for. Filed on the rated side only,

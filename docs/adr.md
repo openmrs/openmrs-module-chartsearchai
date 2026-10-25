@@ -22095,3 +22095,27 @@ fluconazole"* to *"Is she on fluconazole already?"*.
 
 Pinned by `ClinicianWordingsTest.aFragmentAPlanAPairAtOnceOrAGroupOfHersIsTheQuestionItSpells` and
 `AllergyQuestionConflictingOrderContextTest.search_whenSheStartedADrugIsAQuestionAboutHerRecord`.
+
+## Decision 433: Whether a pair is to be avoided, dangerous or a problem is answered with no lead
+
+**Status: Accepted** (October 2026) — found asking 40 further wordings of 15 patients on the 3.7.1 standalone on 2026-10-25.
+
+### Context
+
+Three wordings went to the model, which answered each with a "No" that read backwards: *"No — rifampicin should be avoided"*
+to *"Should rifampicin be avoided with her nevirapine?"*, *"No — rifampicin should not be given"* to *"Is there a dangerous
+interaction between rifampicin and nevirapine?"*, and *"No — Ibuprofen and Acetylsalicylic acid (aspirin) should not be given
+together"* to *"Is ibuprofen and aspirin together a problem?"*. Seven more went to the model for every patient.
+
+### The decision
+
+- *"Should X be avoided with her Y?"* is Decision 251's whether to avoid one with the other; *"Is X and Y together a
+  problem?"* is Decision 255's whether they are dangerous together; *"Is there a dangerous (serious, major) interaction between
+  X and Y?"* is Decision 289's what their interaction is. Each is answered with what relates them and neither "Yes" nor "No".
+- *"Will X cause problems with her HIV drugs?"* is Decision 281's question of a group of hers, with no lead.
+- *"What dose of X with Y?"* is Decision 432's dose adjustment for the pair.
+- *"I'd like to give X - safe?"* is Decision 427's plan; *"X vs her ARVs - interaction?"* whether X interacts with the group;
+  *"X together with Y okay?"* and *"Is the combination of X and Y safe?"* whether the two may be given together;
+  *"Can X worsen her kidney function with her other drugs?"* Decision 426's effect beside her medications.
+
+Pinned by `ClinicianWordingsTest.aPairAvoidedDangerousOrAProblemIsAnsweredWithNoLead`.

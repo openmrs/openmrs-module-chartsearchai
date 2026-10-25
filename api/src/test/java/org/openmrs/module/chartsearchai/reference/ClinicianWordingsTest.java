@@ -894,6 +894,49 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 				&& !group.contains("Yes —") && !group.contains("No —"), "which, never yes or no: " + group);
 	}
 
+	/**
+	 * Whether a pair is to be avoided, dangerous or a problem is answered with what relates them and no lead, and a wish, a
+	 * group of hers named after "vs", "together with" and "the combination of" are the questions they spell (ADR Decision
+	 * 433). On the 3.7.1 standalone each went to the model, which answered "Should rifampicin be avoided with her
+	 * nevirapine?" with "No — rifampicin should be avoided", "Is there a dangerous interaction between rifampicin and
+	 * nevirapine?" with "No — rifampicin should not be given", and "Is ibuprofen and aspirin together a problem?" with "No —
+	 * Ibuprofen and Acetylsalicylic acid (aspirin) should not be given together": each "No" backwards.
+	 */
+	@Test
+	public void aPairAvoidedDangerousOrAProblemIsAnsweredWithNoLead() {
+		String[][] pairs = {
+			{ "Should warfarin be avoided with her nevirapine?", "Should I avoid warfarin with her nevirapine?" },
+			{ "Is there a dangerous interaction between warfarin and nevirapine?",
+					"What is the interaction between warfarin and nevirapine?" },
+			{ "Is warfarin and nevirapine together a problem?", "Is warfarin dangerous with her nevirapine?" },
+			{ "Is ibuprofen and aspirin together a problem?", "Is ibuprofen dangerous with her aspirin?" },
+			{ "What dose of efavirenz with warfarin?", "Nevirapine and efavirenz: dose adjustment needed?" },
+			{ "Will warfarin cause problems with her HIV drugs?", "Will warfarin affect her HIV drugs?" },
+			{ "I'd like to give warfarin - safe?", "Planning to give warfarin - safe?" },
+			{ "Warfarin vs her ARVs - interaction?", "Does warfarin interact with her ARVs?" },
+			{ "Warfarin together with nevirapine okay?", "warfarin with nevirapine ok?" },
+			{ "Is the combination of warfarin and nevirapine safe?", "Is concomitant use of warfarin and nevirapine safe?" },
+			{ "Can ibuprofen worsen her kidney function with her other drugs?",
+					"Will ibuprofen affect her kidneys with her current meds?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			if (pair[0].startsWith("What dose")) {
+				assertNotNull(ask(pair[0]), pair[0]);
+				assertTrue(!ask(pair[0]).contains("Yes —") && !ask(pair[0]).contains("No —"), pair[0]);
+				continue;
+			}
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+		for (String question : Arrays.asList("Should warfarin be avoided with her nevirapine?",
+				"Is there a dangerous interaction between warfarin and nevirapine?",
+				"Is warfarin and nevirapine together a problem?", "Is ibuprofen and aspirin together a problem?",
+				"Will warfarin cause problems with her HIV drugs?")) {
+			String answer = ask(question);
+			assertTrue(!answer.contains("Yes —") && !answer.contains("No —"), "a \"No\" would read backwards: " + answer);
+		}
+	}
+
 	private static String ask(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

@@ -838,7 +838,12 @@ public class DrugSafetyValidator {
 		// the attributable half, the arm below reads the cited half, and neither list is the other. See
 		// AttributionTexts for why aliasing them would widen issue #143's gate.
 		AttributionTexts attribution = null;
-		for (DrugReference ref : drugReferenceService.findImpliedByQuery(answer)) {
+		// Whether she is allergic to one thing is about that thing alone: a drug the answer names is an allergy of hers it
+		// reports, never one proposed (ADR Decision 436). "Is she allergic to peanuts?", answered "No peanut allergy is
+		// recorded. The following allergy is recorded: Dexamethasone", drew a chip about her dexamethasone allergy.
+		boolean allergyToOneThing = question != null && QueryScopeRouter.asksWhetherAllergicToOneNamedThing(question);
+		for (DrugReference ref : allergyToOneThing ? Collections.<DrugReference> emptyList()
+				: drugReferenceService.findImpliedByQuery(answer)) {
 			if (questionDrugs.contains(ref)) {
 				continue; // already in play; question-named drugs are always validated
 			}
@@ -2578,6 +2583,14 @@ public class DrugSafetyValidator {
 
 		private SubjectMatter(SubjectMatterScope scope, String question, String answer,
 				List<String> citedChartTextsLower, List<String> referenceMaterialLower) {
+			// Nor, for whether she is allergic to one thing, what the answer names or cites of her other allergies (ADR
+			// Decision 436).
+			boolean unboundedPass = scope == SubjectMatterScope.UNBOUNDED;
+			boolean oneNamedThing = !unboundedPass && question != null
+					&& QueryScopeRouter.asksWhetherAllergicToOneNamedThing(question);
+			if (oneNamedThing) {
+				citedChartTextsLower = Collections.<String> emptyList();
+			}
 			List<String> collected = new ArrayList<String>();
 			if (question != null && !question.trim().isEmpty()) {
 				collected.add(question.toLowerCase(Locale.ROOT));
@@ -2586,12 +2599,12 @@ public class DrugSafetyValidator {
 			this.askedAbout = collected;
 			this.citedChartRecords = citedChartTextsLower;
 			List<String> fromAnswer = new ArrayList<String>();
-			if (answer != null && !answer.trim().isEmpty()) {
+			if (answer != null && !answer.trim().isEmpty() && !oneNamedThing) {
 				fromAnswer.add(answer.toLowerCase(Locale.ROOT));
 			}
 			this.answerTexts = fromAnswer;
 			this.referenceMaterial = referenceMaterialLower;
-			this.unbounded = scope == SubjectMatterScope.UNBOUNDED;
+			this.unbounded = unboundedPass;
 			// A choice of drug asked of the module is about her medications whatever word names the drugs — "painkiller"
 			// is no medication cue (ADR Decision 293).
 			this.coversActiveOrders = QueryScopeRouter.asksAboutMedications(question)

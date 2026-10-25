@@ -179,6 +179,24 @@ public class AllergyQuestionConflictingOrderContextTest extends BaseModuleContex
 	}
 
 	/**
+	 * Whether she is allergic to one thing stays about that thing where the model's answer names an allergy she does have
+	 * (ADR Decision 436): no chip about that allergy, nor about her order it conflicts with. On the 3.7.1 standalone "Is
+	 * she allergic to peanuts?" was answered for a patient allergic to dexamethasone "No peanut allergy is recorded. The
+	 * following allergy is recorded: Dexamethasone (drug allergen)", with a chip about her dexamethasone allergy and one
+	 * about her hydrocortisone order's cross-reactivity with it — none of it what was asked.
+	 */
+	@Test
+	public void search_anAnswerNamingAnotherAllergyThanTheOneAskedAboutCarriesNoChipAboutIt() throws IOException {
+		String modelAnswer = "No peanut allergy is recorded. The following allergy is recorded: Aspirin [1].";
+		ChartAnswer peanuts = serviceAnswering(modelAnswer).search(patient, "Is she allergic to peanuts?");
+		assertEquals(modelAnswer, peanuts.getAnswer(), "the answer about peanuts, and nothing else");
+		for (SafetyWarning chip : peanuts.getSafetyWarnings()) {
+			assertFalse(SafetyWarning.TYPE_CONTRAINDICATION.equals(chip.getType()),
+				"no chip about an allergy the question does not name: " + chip.getDetail());
+		}
+	}
+
+	/**
 	 * A question about one drug carries nothing about her other medications alone — neither in the answer nor as a chip
 	 * (ADR Decision 387). On the 3.7.1 standalone "Is her metronidazole safe?" was answered for Agnes Adams, on aspirin
 	 * and recorded allergic to NSAIDs, with "Found as well, about this patient's other medications:" and her aspirin

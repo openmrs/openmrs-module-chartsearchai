@@ -22174,3 +22174,27 @@ near names are no medicine has none, and takes Decision 384's chart answer with 
 does carry (*"tumeric"*) loses its suggestion, and is told no check ran, beside the chart answer.
 
 Pinned by `SomethingToEatOrDrinkTest.somethingToHaveWhoseNearNamesAreNoMedicineTakesTheChartAnswer`.
+
+## Decision 436: Whether she is allergic to one thing raises nothing about an allergy the answer reports
+
+**Status: Accepted** (October 2026) — found asking 20 questions about food of 15 patients on the 3.7.1 standalone on
+2026-10-25. It completes [Decision 386](#decision-386-whether-she-is-allergic-to-one-thing-the-question-names-is-answered-about-that-thing-alone).
+
+### Context
+
+*"Is she allergic to peanuts?"* was answered, for a patient allergic to dexamethasone and on dexamethasone and
+hydrocortisone, *"No peanut allergy is recorded. The following allergy is recorded: Dexamethasone (drug allergen)"* — and
+two chips followed it: her recorded allergy to dexamethasone, and her hydrocortisone order's cross-reactivity with it.
+Decision 386 kept the QUESTION's reading to the one thing named; the post-answer pass still read the ANSWER, which named
+the allergy she does have, in two places: as a drug put in play (an answer-named drug is validated as if proposed), and as
+subject matter the order-driven contraindication arm is scoped to.
+
+### The decision
+
+Where the question asks whether she is allergic to one thing it names (`QueryScopeRouter.asksWhetherAllergicToOneNamedThing`),
+`DrugSafetyValidator` reads neither what the answer names nor the chart records it cites as what the response is about: a
+drug the answer names is an allergy of hers it reports, never one proposed. What the question names is read as before, so
+*"Is she allergic to aspirin?"* keeps its aspirin chip.
+
+Pinned by `AllergyQuestionConflictingOrderContextTest.search_anAnswerNamingAnotherAllergyThanTheOneAskedAboutCarriesNoChipAboutIt`,
+which each of the two halves alone leaves red.

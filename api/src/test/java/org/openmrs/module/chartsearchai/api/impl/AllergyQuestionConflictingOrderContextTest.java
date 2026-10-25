@@ -310,6 +310,35 @@ public class AllergyQuestionConflictingOrderContextTest extends BaseModuleContex
 		assertTrue(!unrelated.records.equals(recorder.records), "why it was stopped keeps them");
 	}
 
+	/**
+	 * When she started a drug is a question about her record (ADR Decision 432): on the 3.7.1 standalone "When did she start
+	 * nevirapine?" carried "Nevirapine interacts with active order Rifampin — Major" for nine of 15 patients, most of them
+	 * not on it, read as a proposal to start it. Whether to start it is still one.
+	 */
+	@Test
+	public void search_whenSheStartedADrugIsAQuestionAboutHerRecord() throws IOException {
+		int number = theAspirinOrderRecordNumber(SLICE);
+		String modelAnswer = "She started aspirin [" + number + "] last year.";
+		Recorder unrelated = new Recorder(modelAnswer);
+		TestableService plain = serviceAnswering(modelAnswer);
+		plain.setLlmProvider(unrelated);
+		plain.search(patient, "Summarize her chart.");
+		for (String question : Arrays.asList("When did she start aspirin?", "When did she start warfarin?",
+				"Did she start warfarin?", "How long ago did she start aspirin?")) {
+			Recorder recorder = new Recorder(modelAnswer);
+			TestableService service = serviceAnswering(modelAnswer);
+			service.setLlmProvider(recorder);
+			ChartAnswer answer = service.search(patient, question);
+			assertTrue(answer.getSafetyWarnings().isEmpty(), question + " — no chip: " + answer.getSafetyWarnings());
+			assertEquals(unrelated.records, recorder.records, question + " — no drug-safety material");
+		}
+		Recorder recorder = new Recorder(modelAnswer);
+		TestableService service = serviceAnswering(modelAnswer);
+		service.setLlmProvider(recorder);
+		ChartAnswer answer = service.search(patient, "Can she start aspirin?");
+		assertTrue(!answer.getSafetyWarnings().isEmpty(), "whether she may start it keeps the findings");
+	}
+
 	/** A proposal beside an allergy the question supposes is no question about her allergies, so no statement of the orders
 	 *  her records conflict with follows it (ADR Decision 410): on the 3.7.1 standalone "Can I give cephalexin to a
 	 *  penicillin-allergic patient?" closed with Kevin's clarithromycin order and his allergy to it. */

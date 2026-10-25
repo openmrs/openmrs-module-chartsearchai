@@ -22064,3 +22064,34 @@ cautions"* to *"Will rifampicin make her ARVs less effective?"*: a clearance the
 - *"Is X safer than Y for her?"* is Decision 393's choice between two drugs.
 
 Pinned by `ClinicianWordingsTest.anAbbreviatedComparativeOrMonitoringWordingIsTheQuestionItSpells`.
+
+## Decision 432: When she started a drug is her record; a fragment, a plan, a pair at once and a group of hers are the questions they spell
+
+**Status: Accepted** (October 2026) — found asking 40 further wordings of 15 patients on the 3.7.1 standalone on 2026-10-25.
+
+### Context
+
+*"When did she start nevirapine?"* carried *"Nevirapine interacts with active order Rifampin — Major"* for nine patients, most of
+them not on it: *"start"* is one of the words Decision 399 reads as giving the drug, so the question was a proposal to start
+it. Twelve more wordings went to the model for every patient. Its answers included *"Paracetamol and ibuprofen can be given"*
+to *"Is it ok to give her paracetamol and ibuprofen at the same time?"* and *"Efavirenz can be given, with one caution"* to
+*"Which of her ARVs interact with rifampicin?"* — clearances the module never gives — and *"The records do not address
+fluconazole"* to *"Is she on fluconazole already?"*.
+
+### The decision
+
+- *"start"* after *she*, *he*, *they* or *patient*, in a question opening *when*, *did* or *how*, is her having started the drug,
+  a fact of her record (`QueryScopeRouter.PAST_RECORD_OPENERS`). *"Can she start X?"* stays a proposal.
+- *"Is she on X already?"* is Decision 202's whether she is on it.
+- *"X - safe w/ her current meds?"* and *"X ok? She's on ARVs"* are whether X is safe with her medications;
+  *"Thinking of X for her - concerns?"* is Decision 181's reason not to give it, with no lead.
+- *"Is X going to be a problem with her Y?"* and *"X with Y - is that a problem?"* are Decision 255's whether the two are
+  dangerous together; *"Is X going to be a problem with her meds?"* is Decision 391's.
+- *"Can I co-prescribe X and Y?"* and *"… at the same time"* are giving the two together.
+- *"X and Y: dose adjustment needed?"*, *"Is it safe to continue Y while she is on X?"* and *"Can she stay on Y with X?"* are
+  answered with what relates them and no lead, as Decision 252 answers whether to keep her drug beside another.
+- *"Is X a safer choice than Y for her?"* is Decision 393's choice between two drugs.
+- *"Which of her ARVs interact with X?"* is Decision 319's which of hers interact, of a group of hers.
+
+Pinned by `ClinicianWordingsTest.aFragmentAPlanAPairAtOnceOrAGroupOfHersIsTheQuestionItSpells` and
+`AllergyQuestionConflictingOrderContextTest.search_whenSheStartedADrugIsAQuestionAboutHerRecord`.

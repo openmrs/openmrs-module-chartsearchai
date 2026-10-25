@@ -858,6 +858,42 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 			"one or the other, which neither \"Yes\" nor \"No\" answers: " + switchOrNot);
 	}
 
+	/**
+	 * A drug and a verdict typed as a fragment, a plan and a concern, two drugs at the same time, keeping hers beside another,
+	 * a dose adjustment for a pair, a safer choice and a group of hers are the questions they spell (ADR Decision 432). On the
+	 * 3.7.1 standalone each went to the model, which answered "Is it ok to give her paracetamol and ibuprofen at the same
+	 * time?" with "Paracetamol and ibuprofen can be given" and "Which of her ARVs interact with rifampicin?" with "Efavirenz
+	 * can be given, with one caution".
+	 */
+	@Test
+	public void aFragmentAPlanAPairAtOnceOrAGroupOfHersIsTheQuestionItSpells() {
+		String[][] pairs = {
+			{ "warfarin - safe w/ her current meds?", "Is warfarin safe with her current meds?" },
+			{ "Warfarin ok? She's on ARVs", "Can I give her warfarin?" },
+			{ "Thinking of warfarin for her - concerns?", "Is there any reason not to give her warfarin?" },
+			{ "Is warfarin going to be a problem with her nevirapine?", "Is warfarin dangerous with her nevirapine?" },
+			{ "Warfarin with nevirapine - is that a problem?", "Is warfarin dangerous with her nevirapine?" },
+			{ "Is warfarin going to be a problem with her meds?", "Would warfarin be a problem with her meds?" },
+			{ "Can I co-prescribe warfarin and nevirapine?", "Can I give warfarin and nevirapine together?" },
+			{ "Nevirapine and efavirenz: dose adjustment needed?", "Does she need monitoring on nevirapine and efavirenz?" },
+			{ "Is it safe to continue efavirenz while she is on warfarin?", "Can she continue her efavirenz if I start warfarin?" },
+			{ "Can she stay on nevirapine with warfarin?", "Can she continue her nevirapine if I start warfarin?" },
+			{ "Is warfarin a safer choice than paracetamol for her?", "Which is safer for her, warfarin or paracetamol?" },
+			{ "Is she on warfarin already?", "Is she on warfarin?" },
+			{ "Is it ok to give her paracetamol and warfarin at the same time?",
+					"Is it ok to give her paracetamol and warfarin together?" },
+			{ "Can I give her paracetamol and warfarin at the same time?", "Can I give her paracetamol and warfarin together?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+		String group = ask("Which of her ARVs interact with warfarin?");
+		assertNotNull(group, "the module answers which of a group of hers interact");
+		assertTrue(group.startsWith("This check cannot tell which of this patient's active medications are the \"ARVs\"")
+				&& !group.contains("Yes —") && !group.contains("No —"), "which, never yes or no: " + group);
+	}
+
 	private static String ask(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

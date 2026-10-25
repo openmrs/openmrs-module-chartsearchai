@@ -42,8 +42,8 @@ import org.openmrs.module.chartsearchai.api.impl.QueryScopeRouter;
  *
  * <p><b>Which suggestions.</b> Of the names the data carries — every entry's name and aliases, folded — those the word
  * is the first word of (<em>insulin</em> → its forms; <em>tenofovir</em> is a question's name for its two since ADR
- * Decision 284, and never reaches here), else single-word names within one edit of it (two
- * for a word of eight letters or more; <em>rifampcin</em> → Rifampicin), one per substance, by the row that names it —
+ * Decision 284, and never reaches here), else, for a word of six letters or more (ADR Decision 439), single-word
+ * names within one edit of it (two for a word of eight letters or more; <em>rifampcin</em> → Rifampicin), one per substance, by the row that names it —
  * and only of a substance the data classifies as a medicine (ADR Decision 435).
  */
 final class UnrecognisedDrugName {
@@ -410,7 +410,9 @@ final class UnrecognisedDrugName {
 		}
 		Map<Object, DrugReference> prefixed = new LinkedHashMap<Object, DrugReference>();
 		Map<Object, DrugReference> near = new LinkedHashMap<Object, DrugReference>();
-		int best = w.length() >= 8 ? 2 : w.length() >= 5 ? 1 : 0;
+		// A word of five letters is one edit from too many names of what the data carries — "sugar" from "sular", a brand of
+		// nisoldipine — so a misspelling is read in a word of six letters or more (ADR Decision 439).
+		int best = w.length() >= 8 ? 2 : w.length() >= 6 ? 1 : 0;
 		for (DrugReference entry : entries) {
 			if (!medicines.contains(entry.substanceGroupKey())) {
 				continue;

@@ -22251,3 +22251,26 @@ medicine before a form — *"fluconazle cream"* — keeps its own word and its s
 
 Pinned by `ClinicianWordingsTest.aDrugNamedWithWhatItIsTakenAsIsTheProposalOfTheDrug` and, for the word named with its form,
 `SomethingToEatOrDrinkTest.somethingToHaveWhoseNearNamesAreNoMedicineTakesTheChartAnswer`.
+
+## Decision 439: A word of five letters is offered no misspelling's near name
+
+**Status: Accepted** (October 2026) — found asking 40 further wordings of 15 patients on the 3.7.1 standalone on 2026-10-25.
+It narrows [Decision 183](#decision-183-a-drug-name-the-data-does-not-recognise-is-said-to-be-unrecognised-with-the-names-it-carries-and-never-guessed).
+
+### Context
+
+*"Can she have sugar?"* was answered by the module alone, for every patient: *"No interaction check was run: "sugar" is not
+a drug name the interaction data recognises. Did you mean Nisoldipine? Ask again with the name it carries."* Nisoldipine's
+names include *sular*, a brand, one edit from *sugar*; Decision 435 does not stop it, nisoldipine being a medicine, and
+Decision 384 keeps the module's answer for a word with a near name. The knowledge base files brands, international names
+and abbreviations alike among a row's names, so which of them is a brand cannot be read.
+
+### The decision
+
+A misspelling's near name — a single-word name within one edit of the word — is read only in a word of six letters or more
+(`UnrecognisedDrugName.suggestionsFor`); two edits still need eight. A five-letter word, which is one edit from too many of
+the names the data carries, is offered none, and takes Decision 384's chart answer with the statement after it. A name the
+word begins (*"insulin"*) is offered as before, and a longer misspelling (*"rifampcin"*, *"paracetmol"*) keeps its
+suggestion.
+
+Pinned by `SomethingToEatOrDrinkTest.aShortWordIsOfferedNoMisspellingsNearName`.

@@ -74,6 +74,20 @@ public class SomethingToEatOrDrinkTest extends BaseModuleContextSensitiveTest {
 	}
 
 	/**
+	 * A word of five letters is offered no misspelling's near name (ADR Decision 439): on the 3.7.1 standalone "Can she have
+	 * sugar?" was answered by the module alone "No interaction check was run: "sugar" is not a drug name the interaction
+	 * data recognises. Did you mean Nisoldipine?" — "sular", a brand of nisoldipine, one edit away.
+	 */
+	@Test
+	public void aShortWordIsOfferedNoMisspellingsNearName() {
+		PatientChart chart = ask("Can she have sugar?");
+		assertNull(chart.getModuleAnswer(), "the chart answer: " + chart.getModuleAnswer());
+		assertEquals("No interaction check was run: \"sugar\" is not a drug name the interaction data recognises.",
+			chart.getUncheckedWordStatement());
+		assertTrue(ask("Can I give her paracetmol?").getModuleAnswer().contains("Did you mean Acetaminophen"));
+	}
+
+	/**
 	 * A food the data carries only as its allergen extract, named by the food's word, raises nothing of the extract — as a
 	 * finding before the answer or a chip after it (ADR Decision 437). On the 3.7.1 standalone "Can she have peanut
 	 * butter?" was answered for a patient on diclofenac and ibuprofen "No — peanut butter should not be consumed: it

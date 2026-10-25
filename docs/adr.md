@@ -22149,3 +22149,28 @@ careful with fluconazole?"* ran no check at all.
   single-drug shapes can name it.
 
 Pinned by `ClinicianWordingsTest.anAvoidedMistakenOrRuledOutDrugIsAnsweredWithNoLead`.
+
+## Decision 435: A word is offered only a medicine's name as its near name
+
+**Status: Accepted** (October 2026) — found asking 20 questions about food of 15 patients on the 3.7.1 standalone on
+2026-10-25. It narrows [Decision 384](#decision-384-a-word-in-a-drug-questions-place-that-the-drug-data-has-no-near-name-for-takes-the-chart-answer-with-the-unchecked-statement-after-it).
+
+### Context
+
+*"Can I give her milk?"*, *"Can she have peanuts?"* and *"Can she have green tea?"* were answered by the module alone, for
+every patient: *"No interaction check was run: "milk" is not a drug name the interaction data recognises. Did you mean Milk
+thistle? Ask again with the name it carries."* Decision 390 offers no near name for something she would eat or drink, but
+only after "eat" or "drink"; "have" and "give" also propose a drug. The knowledge base carries foods, herbs and allergen
+extracts among its drugs — Milk thistle, Green tea leaf, the Peanut allergen extract — so each word found one as its near
+name, and Decision 384 kept the module's answer for any word with a near name. Asked again by the name suggested,
+*"peanuts"* would have been checked as peanut allergen immunotherapy.
+
+### The decision
+
+A near name is suggested only where the knowledge base classifies its substance as a medicine, an ATC code on one of its
+rows (`UnrecognisedDrugName.suggestionsFor`). The data's own classification, so no food is named here. A word whose only
+near names are no medicine has none, and takes Decision 384's chart answer with the statement after it; a misspelt medicine
+(*"rifampcin"*), and a family of them (*"insulin"*), keep the module's answer and its "Did you mean". A misspelt herb the data
+does carry (*"tumeric"*) loses its suggestion, and is told no check ran, beside the chart answer.
+
+Pinned by `SomethingToEatOrDrinkTest.somethingToHaveWhoseNearNamesAreNoMedicineTakesTheChartAnswer`.

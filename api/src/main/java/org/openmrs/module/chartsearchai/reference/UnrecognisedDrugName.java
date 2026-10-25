@@ -43,7 +43,8 @@ import org.openmrs.module.chartsearchai.api.impl.QueryScopeRouter;
  * <p><b>Which suggestions.</b> Of the names the data carries — every entry's name and aliases, folded — those the word
  * is the first word of (<em>insulin</em> → its forms; <em>tenofovir</em> is a question's name for its two since ADR
  * Decision 284, and never reaches here), else single-word names within one edit of it (two
- * for a word of eight letters or more; <em>rifampcin</em> → Rifampicin), one per substance, by the row that names it.
+ * for a word of eight letters or more; <em>rifampcin</em> → Rifampicin), one per substance, by the row that names it —
+ * and only of a substance the data classifies as a medicine (ADR Decision 435).
  */
 final class UnrecognisedDrugName {
 
@@ -381,13 +382,28 @@ final class UnrecognisedDrugName {
 		return String.join("", span).length() >= 3;
 	}
 
-	/** The names of {@code entries} the word begins, else those within an edit of it — one per substance. */
+	/**
+	 * The names of {@code entries} the word begins, else those within an edit of it — one per substance, and only of a
+	 * substance the data classifies as a medicine, an ATC code on one of its rows (ADR Decision 435). The data also carries
+	 * foods, herbs and allergen extracts under no ATC code, and a word naming something to eat found one of those as its
+	 * near name — "milk" Milk thistle, "peanuts" Peanut, the allergen extract — so the module answered "Can I give her
+	 * milk?" with "Did you mean Milk thistle?" and no answer about her.
+	 */
 	private static List<String> suggestionsFor(String word, List<DrugReference> entries) {
 		String w = DrugReference.foldedLower(word).trim();
+		Set<Object> medicines = new HashSet<Object>();
+		for (DrugReference entry : entries) {
+			if (entry.getAtcCodes() != null && !entry.getAtcCodes().isEmpty()) {
+				medicines.add(entry.substanceGroupKey());
+			}
+		}
 		Map<Object, DrugReference> prefixed = new LinkedHashMap<Object, DrugReference>();
 		Map<Object, DrugReference> near = new LinkedHashMap<Object, DrugReference>();
 		int best = w.length() >= 8 ? 2 : w.length() >= 5 ? 1 : 0;
 		for (DrugReference entry : entries) {
+			if (!medicines.contains(entry.substanceGroupKey())) {
+				continue;
+			}
 			List<String> names = new ArrayList<String>();
 			if (entry.getName() != null) {
 				names.add(entry.getName());

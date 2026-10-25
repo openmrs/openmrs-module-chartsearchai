@@ -1019,6 +1019,35 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/**
+	 * A drug asked "for her thrush - any issues?", its interactions "with her meds", a pair's risk asked after naming it, why
+	 * one "can't be given with" another, one stopped "for" or "continued with" another, what happens to one's levels with
+	 * another, a dose doubled with another, a pair "together - yes or no?", a drug "risky to give to someone on" another and
+	 * two taken "at the same time" are the questions they spell (ADR Decision 441). On the 3.7.1 standalone each went to the
+	 * model, which answered "Is it risky to give clarithromycin to someone on efavirenz?" "Clarithromycin can be given, with
+	 * one caution" for every patient, and "Do I need to stop nevirapine for rifampicin?" "No — Nevirapine should not be
+	 * given".
+	 */
+	@Test
+	public void aPairAskedAfterItIsNamedOrOneStoppedOrDoubledForTheOtherIsTheQuestionItSpells() {
+		String[][] pairs = { { "Warfarin for her thrush - any issues?", "Any problems giving her warfarin?" },
+			{ "Warfarin interactions with her meds", "Does warfarin interact with her medications?" },
+			{ "Warfarin with nevirapine - what's the risk?", "What is the risk of combining warfarin and nevirapine?" },
+			{ "Why can't warfarin be given with nevirapine?", "What is the interaction between warfarin and nevirapine?" },
+			{ "Do I need to stop nevirapine for warfarin?", "Do I need to stop nevirapine before starting warfarin?" },
+			{ "Can nevirapine be continued with warfarin?", "Can she stay on nevirapine with warfarin?" },
+			{ "What happens to efavirenz levels with warfarin?", "Will warfarin lower her efavirenz levels?" },
+			{ "Should I double the efavirenz dose with warfarin?", "What dose of efavirenz with warfarin?" },
+			{ "Warfarin and nevirapine together - yes or no?", "Can I give her warfarin with nevirapine?" },
+			{ "Is it risky to give warfarin to someone on efavirenz?", "Is warfarin dangerous with her efavirenz?" },
+			{ "Can she take ibuprofen and aspirin at the same time?", "Can she take ibuprofen and aspirin together?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+	}
+
 	private static String ask(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

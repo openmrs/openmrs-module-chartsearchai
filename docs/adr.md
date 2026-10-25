@@ -22296,3 +22296,28 @@ Rifampicin, with one caution"*, and *"Does rifampicin potentiate nevirapine?"* *
   Decision 413's and 251's questions of the risk, with no lead.
 
 Pinned by `ClinicianWordingsTest.aDrugStartedWhileOnAnotherPotentiatingOrMixedIsTheQuestionItSpells`.
+
+## Decision 441: A pair asked about after naming it, and one drug stopped, kept or doubled for the other, are the questions they spell
+
+**Status: Accepted** (October 2026) — found asking 40 further wordings of 15 patients on the 3.7.1 standalone on 2026-10-25.
+
+### Context
+
+Eleven wordings went to the model. It answered *"Is it risky to give clarithromycin to someone on efavirenz?"*
+*"Clarithromycin can be given, with one caution"* for every patient. It answered *"Should I double the efavirenz dose with
+rifampicin?"* *"Efavirenz can be given, with one caution"*, and *"Fluconazole for her thrush - any issues?"* *"Fluconazole can
+be given, with one caution"*. It answered *"Do I need to stop nevirapine for rifampicin?"* *"No — Nevirapine should not be
+given"*, where the "No" says the reverse of the warning after it.
+
+### The decision
+
+- *"X for her thrush - any issues?"* is Decision 255's question of the risk, with no lead, and *"X interactions with her
+  meds"* whether X interacts with her medications.
+- *"X with Y - what's the risk?"*, *"What happens to Y levels with X?"*, *"Do I need to stop Y for X?"*, *"Can Y be continued
+  with X?"*, *"Should I double the Y dose with X?"* and *"Is it risky to give X to someone on Y?"* are Decisions 249-255's
+  questions of what one does beside the other, each with no lead.
+- *"Why can't X be given with Y?"* is Decision 264's question of what the interaction is.
+- *"X and Y together - yes or no?"* and *"Can she take X and Y at the same time?"* are Decision 203's proposal of the two
+  together.
+
+Pinned by `ClinicianWordingsTest.aPairAskedAfterItIsNamedOrOneStoppedOrDoubledForTheOtherIsTheQuestionItSpells`.

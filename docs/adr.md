@@ -21872,3 +21872,24 @@ model as well, and *"Why is rifampicin flagged?"* was read as a question about t
 - *"Why is X flagged?"* is which of her medications interact with X, and *"flag"* a word of safety to Decision 399.
 
 Pinned by `ClinicianWordingsTest.whyARiskOrATerseOrRatedPairIsAnsweredWithWhatTheCheckFound`.
+
+## Decision 425: The pair's interaction states a drug not hers against her active medications
+
+**Status: Accepted** (October 2026) — found by the full regression matrix of 2026-10-25 on the 3.7.1 standalone.
+
+### Context
+
+Once Decision 423 read *"Interactions between simvastatin and clarithromycin"* as Decision 289's question about the pair, it was
+answered with the finding relating the two alone. Of 44 patients the answer had stated, under *"Against this patient's active
+medications:"*, each drug's findings against her orders — Mark Smith's simvastatin and clarithromycin with the patient's nevirapine, simvastatin
+with the patient's stavudine — and now left them to the chips. Decisions 423 and 424 had widened the question to wordings that weigh a drug for
+her (*"Is there an interaction if I add X to Y?"*, *"Any concerns with X + Y?"*), where what that drug does with her other medications
+is part of the answer.
+
+### The decision
+
+- `DrugReferenceInjector.composeAboutThePair` states, after what relates the pair, each finding of a drug of the two that is not hers
+  against her active medications, under *"Against this patient's active medications:"*, as Decision 220's answer does. A pair of her
+  own two medications is still answered with what relates them alone.
+
+Pinned by `TogetherWithHerOwnMedicationContextTest.thePairsInteractionStatesADrugNotHersAgainstHerActiveMedications`.

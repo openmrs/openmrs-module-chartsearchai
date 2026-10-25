@@ -390,6 +390,35 @@ public class TogetherWithHerOwnMedicationContextTest extends BaseModuleContextSe
 	}
 
 	/**
+	 * What the interaction between two drugs is, where one of them is not hers, also states that drug's findings against her
+	 * active medications (ADR Decision 425): it is a drug being weighed for her, and the answer's own lines are what the
+	 * check found. On the 3.7.1 standalone Mark Smith, on nevirapine and stavudine, "Interactions between simvastatin and
+	 * clarithromycin" stated the pair alone once ADR Decision 423 read it as this question, leaving simvastatin and
+	 * clarithromycin with her nevirapine, and simvastatin with her stavudine, to the chips.
+	 */
+	@Test
+	public void thePairsInteractionStatesADrugNotHersAgainstHerActiveMedications() {
+		String neither = askOverTheShippedData("Interactions between simvastatin and clarithromycin", "Nevirapine 200mg",
+			"Nevirapine").getModuleAnswer();
+		assertTrue(neither != null && neither.startsWith("What the interaction check relates between Simvastatin and "
+				+ "Clarithromycin:\nSimvastatin interacts with Clarithromycin, also named in the question — Major."), "was: " + neither);
+		assertTrue(neither.contains("\nAgainst this patient's active medications:\n"), "the heading: " + neither);
+		assertTrue(neither.contains("\nSimvastatin interacts with active order Nevirapine — Moderate.")
+				&& neither.contains("\nClarithromycin interacts with active order Nevirapine — Moderate."),
+			"each drug against her nevirapine: " + neither);
+		assertTrue(!neither.contains("No —") && !neither.contains("Yes —"), "neither Yes nor No: " + neither);
+
+		String oneHers = askOverTheseOrders("What is the interaction between fluconazole and nevirapine?").getModuleAnswer();
+		assertTrue(oneHers != null && oneHers.startsWith("Nevirapine is one of this patient's active medications.\nWhat the "
+				+ "interaction check relates between Fluconazole and Nevirapine:\n"), "was: " + oneHers);
+		assertTrue(oneHers.contains("\nAgainst this patient's active medications:\n")
+				&& oneHers.contains("\nFluconazole interacts with active order Zidovudine — Moderate."),
+			"fluconazole against her zidovudine: " + oneHers);
+		assertEquals(1, oneHers.split("Fluconazole interacts with active order Nevirapine", -1).length - 1,
+			"the pair's finding stated once: " + oneHers);
+	}
+
+	/**
 	 * Whether to separate two drugs' doses is answered as the mechanism is, with the finding relating them whole (ADR
 	 * Decision 270): it is the mechanism that says whether spacing them helps. On the 3.7.1 standalone Rhoda, on didanosine,
 	 * asked "Should I separate the doses of ciprofloxacin and her didanosine?" and the model opened "Didanosine can be given".

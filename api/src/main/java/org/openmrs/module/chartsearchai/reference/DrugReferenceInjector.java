@@ -7851,6 +7851,29 @@ public class DrugReferenceInjector {
 		}
 		List<String> lines = withEachFormStatedOnce(findings, numbers, relating,
 				findingLines(findings, numbers, relating, orderRecordNumbers, herOrderRecords, false), formsOf(pair));
+		// A drug of the two that is not hers is one being weighed for her: its findings against her active medications are
+		// what the check found of it, stated as ADR Decision 220's answer states them (ADR Decision 425).
+		List<Integer> notHers = new ArrayList<Integer>();
+		for (int i = 0; i < findings.size(); i++) {
+			SafetyWarning finding = findings.get(i);
+			if (relating.contains(i) || !SafetyWarning.TYPE_INTERACTION.equals(finding.getType())
+					|| finding.statesOrdersSharingASubstance()) {
+				continue;
+			}
+			Set<Object> about = subjectSubstances(finding);
+			for (AskedDrug drug : pair) {
+				if (!drug.isHers(herSubstances) && !about.isEmpty() && drug.substances.containsAll(about)
+						&& Collections.disjoint(about, herSubstances)) {
+					notHers.add(i);
+					break;
+				}
+			}
+		}
+		if (!notHers.isEmpty()) {
+			lines.add("Against this patient's active medications:");
+			lines.addAll(withEachFormStatedOnce(findings, numbers, notHers,
+				findingLines(findings, numbers, notHers, orderRecordNumbers, herOrderRecords, true), formsOf(pair)));
+		}
 		String first = pair.get(0).label;
 		String second = pair.get(1).label;
 		List<String> hers = new ArrayList<String>();

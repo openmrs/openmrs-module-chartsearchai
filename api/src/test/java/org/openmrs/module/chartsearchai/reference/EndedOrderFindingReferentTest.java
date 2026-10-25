@@ -393,6 +393,26 @@ public class EndedOrderFindingReferentTest extends BaseModuleContextSensitiveTes
 	}
 
 	/**
+	 * A proposal after a statement listing a drug her chart holds only as an ended order is answered by the module as a
+	 * proposal after a list (ADR Decision 428), the finding against the listed drug read as the strength it rates. On the
+	 * 3.7.1 standalone <em>"Patient on nevirapine. Can I add fluconazole?"</em> went to the model for the one patient
+	 * whose nevirapine had ended, which answered "Fluconazole can be given, with one caution".
+	 */
+	@Test
+	public void aProposalAfterAListedDrugTheChartHoldsOnlyAsAnEndedOrderIsTheModulesAnswer() throws IOException {
+		Context.getAdministrationService().setGlobalProperty(
+			ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS, "true");
+		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(ddi()).injectRecords(
+			DrugReferenceTestSupport.chartOf(orderRecord(1, "Clarithromycin 500mg", Boolean.FALSE)),
+			onlyOn("Spironolactone"), "Patient on clarithromycin. Can I give her simvastatin?");
+
+		String answer = chart.getModuleAnswer();
+		assertNotNull(answer, "the module answers the proposal after its list: " + chart.getText());
+		assertTrue(answer.startsWith("No if the patient is on Clarithromycin — this module's drug-safety check found a reason "
+				+ "to withhold Simvastatin against it.\n"), "her chart does not say she is on it: " + answer);
+	}
+
+	/**
 	 * A CLASS-only finding — a shared ATC subgroup and no rule — about a drug the chart holds only as
 	 * an ended order states the ended-order caution: the class arm's chip is built apart from the rule
 	 * chips, so it is its own site. Over the shipped-KB slice {@code ClassOnlyFindingStrengthTest}

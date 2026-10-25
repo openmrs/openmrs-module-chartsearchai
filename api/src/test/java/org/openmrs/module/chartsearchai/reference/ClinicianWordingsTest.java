@@ -706,6 +706,43 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/**
+	 * Wordings with an abbreviation, a technical term, a frequency or a dose before the drug, or two names with nothing
+	 * between, are the question they spell (ADR Decision 428). On the 3.7.1 standalone each went to the model, which answered
+	 * "Fluconazole can be given, with one caution" and "Nevirapine can be co-administered with Fluconazole, with one caution".
+	 */
+	@Test
+	public void anAbbreviatedTechnicalOrDosedWordingIsTheQuestionItSpells() {
+		String patient = ask("Can the patient have warfarin?");
+		assertNotNull(patient, "precondition: the module answers it");
+		assertEquals(patient, ask("Can the pt have warfarin?"));
+		String changes = ask("Will warfarin affect her ARVs?");
+		assertNotNull(changes, "precondition: the module answers it");
+		assertEquals(changes, ask("Will starting warfarin affect her ARVs?"));
+		String with = ask("Can warfarin be given with nevirapine?");
+		assertNotNull(with, "precondition: the module answers it");
+		assertEquals(with, ask("Can warfarin be co-administered with nevirapine?"));
+		String combine = ask("Can warfarin and nevirapine be used together?");
+		assertNotNull(combine, "precondition: the module answers it");
+		assertEquals(combine, ask("Is concomitant use of warfarin and nevirapine safe?"));
+		String group = ask("Is warfarin safe with her ARV regimen?");
+		assertNotNull(group, "precondition: the module answers it");
+		assertEquals(group, ask("Is warfarin safe in combination with her ARV regimen?"));
+		String pair = ask("warfarin and nevirapine");
+		assertNotNull(pair, "precondition: the module answers it");
+		assertEquals(pair, ask("warfarin nevirapine"));
+		String hold = ask("Should I hold her nevirapine before giving warfarin?");
+		assertNotNull(hold, "precondition: the module answers it");
+		assertEquals(hold, ask("Should I hold her nevirapine while she is on warfarin?"));
+		String dosed = ask("Can I give her warfarin 5mg?");
+		assertNotNull(dosed, "precondition: the module answers it");
+		for (String question : new String[] { "Can I give her warfarin once a week?", "Can I give her 150mg warfarin?",
+				"Can I give her 5 mg warfarin?" }) {
+			assertEquals(dosed, ask(question), question);
+			assertTrue(chart(question).statesADose(), "the dose said not checked: " + question);
+		}
+	}
+
 	private static org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart chart(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

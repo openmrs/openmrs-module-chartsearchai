@@ -350,6 +350,10 @@ public final class QueryScopeRouter {
 				if ("what's".equals(word)) {
 					words.add("what");
 					words.add("is");
+				} else if ("pt".equals(word) && !words.isEmpty()
+						&& ("the".equals(words.get(words.size() - 1)) || "this".equals(words.get(words.size() - 1)))) {
+					// "the pt", "this pt" — the patient, never "her PT", the test (ADR Decision 428)
+					words.add("patient");
 				} else {
 					words.add(word);
 				}
@@ -735,14 +739,18 @@ public final class QueryScopeRouter {
 	 * admitted.
 	 */
 	private static final List<Pattern> TOGETHER_SHAPES = shapes(
+			// "Is concomitant use of fluconazole and nevirapine safe?" (ADR Decision 428)
+			"is (?:the )?(?:(?:concomitant|concurrent|combined|simultaneous) use|co administration|coadministration) of " + HER_D
+					+ " (?:and|with) " + HER_D + " (?:safe|ok|okay|appropriate)(?: (?:for|in) " + PATIENT + ")?",
 			// "Can warfarin and ibuprofen be given together?", "Can warfarin be given with ibuprofen to her?"
 			// and "co-administered", "co-prescribed", "combined" (ADR Decision 422)
 			"(?:can|could|may|should) " + HER_D + " (?:and|with) " + HER_D
 					+ " be (?:safely )?(?:given|started|prescribed|administered|taken|used|co administered|coadministered|co prescribed"
 					+ "|coprescribed|combined)(?: together| at the same time| concurrently| simultaneously)?(?: safely)?(?: (?:to|for) "
 					+ PATIENT + ")?(?: now| today)?",
-			"(?:can|could|may|should) " + HER_D + " be (?:safely )?(?:given|started|prescribed|administered|taken|used) (?:with|alongside) "
-					+ HER_DS + "(?: (?:to|for) " + PATIENT + ")?(?: now| today)?",
+			// and "co-administered" (ADR Decision 428)
+			"(?:can|could|may|should) " + HER_D + " be (?:safely )?(?:given|started|prescribed|administered|taken|used|co administered"
+					+ "|coadministered|co prescribed|coprescribed|combined) (?:with|alongside) " + HER_DS + "(?: (?:to|for) " + PATIENT + ")?(?: now| today)?",
 			// "Can I give her warfarin with ibuprofen?", "Can I give her warfarin and ibuprofen together?", and the first joining
 			// word optional where the list ends in "and", a list's commas being no words — "ibuprofen, naproxen and aspirin"
 			// (ADR Decision 356); never two names with nothing between, which an unrecognised word beside a drug would make
@@ -1071,7 +1079,8 @@ public final class QueryScopeRouter {
 			+ "(?: to (?:give|take|use|start))?"
 			// "Is it ok to combine ciprofloxacin with her ART?" (ADR Decision 422)
 			+ "|is it (?:safe|ok|okay|appropriate) to combine " + D + ")"
-			+ " (?:with|alongside) (?:any of )?" + HER_MEDICATION_GROUP;
+			// "in combination with her ARV regimen" (ADR Decision 428)
+			+ " (?:with|alongside|in combination with|together with) (?:any of )?" + HER_MEDICATION_GROUP;
 
 	private static final List<Pattern> SAFE_WITH_HER_MEDICATIONS_SHAPES = shapes(SAFE_WITH_HER_MEDICATIONS,
 			// "What dose of ibuprofen is safe with her medications?" — a dose asked for, which no finding weighs (ADR Decision
@@ -1307,7 +1316,8 @@ public final class QueryScopeRouter {
 	 *  clarithromycin?" — whether to stop or keep her drug for another (ADR Decision 252). */
 	private static final String STOP_OR_KEEP_ONE_FOR_THE_OTHER = "(?:(?:(?:do|will) (?:i|we) (?:need|have) to|should (?:i|we))"
 			+ " (?:stop|hold|pause|suspend|discontinue) " + HER_D + " (?:before|when|while|if) (?:starting|giving|adding|prescribing"
-			+ "|(?:i|we) (?:start|give|add|prescribe)) " + D + "|(?:can|could|should) (?:she|he|they|the patient|this patient)"
+			// "… while she is on fluconazole" (ADR Decision 428)
+			+ "|(?:i|we) (?:start|give|add|prescribe)|(?:she|he|they) (?:is|are) (?:on|taking)) " + D + "|(?:can|could|should) (?:she|he|they|the patient|this patient)"
 			+ " (?:continue|keep taking|stay on|remain on) " + HER_D + " (?:if|when|while) (?:i|we) (?:start|give|add|prescribe) "
 			+ D + ")";
 
@@ -1398,6 +1408,8 @@ public final class QueryScopeRouter {
 			CHANGE_HERS_IF_STARTING,
 			// "Fluconazole and nevirapine", "Fluconazole plus nevirapine" — two names and a joining word alone (ADR Decision 413)
 			HER_D + " (?:and|plus|with) " + HER_D,
+			// and "fluconazole nevirapine", the two names alone (ADR Decision 428)
+			D + " " + D,
 			// "Can I give fluconazole after she finishes rifampicin?", "Is it safe to give fluconazole and then rifampicin later?"
 			// — what relates the two; when each is given is a timing no finding weighs (ADR Decision 414)
 			"(?:can|could|may) (?:i|we) (?:give|start) (?:" + PATIENT + " )?(?:on )?" + HER_D + " after (?:she|he|they) (?:finishes|"
@@ -1484,8 +1496,10 @@ public final class QueryScopeRouter {
 	 * the drug to her orders and never states the effect asked about.
 	 */
 	private static final List<Pattern> CHANGES_A_GROUP_OF_HER_MEDICATIONS_SHAPES = shapes(
-			"(?:does|do|will|would|can|could|might) " + D + " (?:increase|raise|elevate|boost|decrease|lower|reduce|change|alter"
-					+ "|potentiate|affect) (?:the " + MEASURE + " of )?(?:any of )?" + HER_MEDICATION_GROUP + "(?: " + MEASURE + ")?");
+			// and "Will starting rifampicin affect her ARVs?" (ADR Decision 428)
+			"(?:does|do|will|would|can|could|might) (?:starting |giving |adding )?" + D + " (?:increase|raise|elevate|boost|decrease"
+					+ "|lower|reduce|change|alter|potentiate|affect) (?:the " + MEASURE + " of )?(?:any of )?" + HER_MEDICATION_GROUP
+					+ "(?: " + MEASURE + ")?");
 
 	/**
 	 * Whether a question asks whether ONE drug changes an effect of a group of her medications, and nothing else — one of
@@ -1588,14 +1602,18 @@ public final class QueryScopeRouter {
 			+ "|iu|units?|tablets?|tabs?|capsules?|caps?|drops?|puffs?)|\\d+(?:mg|g|gm|mcg|ug|ml|mls|iu))(?: (?:per )?kg)?";
 
 	/** How often: "three times a day", "twice daily", "tds", "every 6 hours", "at night". */
-	private static final String FREQUENCY = "(?:(?:once|twice|thrice|(?:one|two|three|four|\\d+) times?) (?:a|per|each|every) day"
+	private static final String FREQUENCY = "(?:(?:once|twice|thrice|(?:one|two|three|four|\\d+) times?) (?:a|per|each|every) "
+			// "once a week", "weekly" (ADR Decision 428)
+			+ "(?:day|week|month)|(?:once |twice )?weekly"
 			+ "|(?:once |twice )?daily|bd|bid|tds|tid|qds|qid|od|nocte|stat|prn|(?:every|each) (?:\\d+ )?(?:hours?|hrs?)"
 			+ "|\\d+ hourly|q\\d+h|at night|in the morning)";
 
 	/** A dose stated before the drug, "1 g of paracetamol", and after it, "amoxicillin 500 mg three times a day". */
-	private static final Pattern DOSE_BEFORE_THE_DRUG = Pattern.compile("(?<=^| )" + AMOUNT + " of (" + D + ")");
+	private static final Pattern DOSE_BEFORE_THE_DRUG = Pattern.compile("(?<=^| )" + AMOUNT + "(?: of)? (" + D + ")");
 
-	private static final Pattern DOSE_AFTER_THE_DRUG = Pattern.compile("(" + D + ") " + AMOUNT + "(?: " + FREQUENCY + ")?(?= |$)");
+	private static final Pattern DOSE_AFTER_THE_DRUG = Pattern.compile("(" + D + ") (?:" + AMOUNT + "(?: " + FREQUENCY + ")?|"
+			// how often alone, "fluconazole once a week" (ADR Decision 428)
+			+ FREQUENCY + ")(?= |$)");
 
 	/**
 	 * "Is it safe to increase her simvastatin dose?", "Is it safe to increase her simvastatin to 40 mg?", "Should I reduce

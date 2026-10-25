@@ -4250,9 +4250,11 @@ public class DrugReferenceInjector {
 		// A contraindication about the drug proposed — her allergy covering it — is stated, and makes no verdict: the lead
 		// says what the check found, as for the drug asked alone (ADR Decision 389).
 		boolean noVerdict = false;
+		// Each clause as the module's own answer reads it: a finding about a listed drug her chart holds only as an ended
+		// order carries the strength it rates (ADR Decisions 321, 428).
 		for (Integer i : aboutTheProposal) {
 			SafetyWarning finding = findings.get(i);
-			String clause = strengthClause(finding);
+			String clause = moduleClause(finding);
 			if (SafetyWarning.TYPE_CONTRAINDICATION.equals(finding.getType()) && !finding.subjectRows().isEmpty()
 					&& strengthRank(clause) >= 0) {
 				noVerdict = true;
@@ -4274,14 +4276,14 @@ public class DrugReferenceInjector {
 			againstListed.put(i, partners);
 		}
 		List<Integer> order = new ArrayList<Integer>(aboutTheProposal);
-		Collections.sort(order, Comparator.<Integer> comparingInt(i -> strengthRank(strengthClause(findings.get(i))))
+		Collections.sort(order, Comparator.<Integer> comparingInt(i -> strengthRank(moduleClause(findings.get(i))))
 				.thenComparingInt(i -> againstListed.get(i).isEmpty() ? 0 : 1));
 		boolean withholdsAgainstHerOrders = false;
 		List<Object> withholdingListed = new ArrayList<Object>();
 		List<String> lines = new ArrayList<String>(order.size() + 1);
 		for (Integer i : order) {
 			SafetyWarning finding = findings.get(i);
-			if (STRENGTH_WITHHOLD.equals(strengthClause(finding)) && SafetyWarning.TYPE_INTERACTION.equals(finding.getType())) {
+			if (STRENGTH_WITHHOLD.equals(moduleClause(finding)) && SafetyWarning.TYPE_INTERACTION.equals(finding.getType())) {
 				if (againstListed.get(i).isEmpty()) {
 					withholdsAgainstHerOrders = true;
 				}
@@ -4295,7 +4297,9 @@ public class DrugReferenceInjector {
 					+ findingNumbers.get(i) + "]";
 			lines.add(line + orderRecordMarkers(finding, herOrderRecords, ChartSearchAiUtils.citedIndexes(line)));
 		}
-		String drug = findings.get(order.get(0)).getDrug();
+		// The drug proposed, never the first finding's own subject: a finding about a listed drug her chart holds only as an
+		// ended order is stated from that drug (ADR Decision 428).
+		String drug = DrugSafetyValidator.interactionSubject(proposed, context).displayLabel();
 		// And each listed drug the check raised nothing against, named, so a drug the question lists is never passed over
 		// in silence (ADR Decision 389).
 		Set<Object> related = new HashSet<Object>();

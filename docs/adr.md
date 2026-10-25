@@ -21949,3 +21949,36 @@ with *"No QT prolonging drug diagnosis is recorded"*.
   there a risk of QT prolongation with her meds?"* already was.
 
 Pinned by `ClinicianWordingsTest.aWordingAClinicianTypesInPassingIsTheQuestionItSpells`.
+
+## Decision 428: An abbreviated, technical or dosed wording is the question it spells, and a proposal after a drug her chart holds only as ended is the module's
+
+**Status: Accepted** (October 2026) — found asking 40 further wordings of 15 patients on the 3.7.1 standalone on 2026-10-25.
+
+### Context
+
+Each went to the model, which answered *"Fluconazole can be given, with one caution"* of *"Can the pt have fluconazole?"*, *"Will
+starting fluconazole affect her ARVs?"*, *"Is fluconazole safe in combination with her ARV regimen?"*, *"Can I give her fluconazole
+once a week?"* and *"Can I give her 150mg fluconazole?"*; *"Nevirapine can be co-administered with Fluconazole, with one caution"* of
+*"Can fluconazole be co-administered with nevirapine?"*; *"The drug can be given"* of *"Is concomitant use of fluconazole and nevirapine
+safe?"*; *"Nevirapine can be given"* of *"fluconazole nevirapine"*; and *"No — rifampicin should not be given with fluconazole"* of
+*"Should I hold her rifampicin while she is on fluconazole?"*.
+
+*"Patient on nevirapine. Can I add fluconazole?"* was the module's for every patient but the one whose nevirapine had ended, for
+whom the model answered *"Fluconazole can be given, with one caution"*. `composeListFindings` read each finding's `strengthClause`,
+which gives a finding about a drug her chart holds only as an ended order its "should it be proposed again" clause, so the answer
+fell to the model. Read as `moduleClause` (Decision 321), the composed lead then named the listed drug — *"No if the patient is on
+Clarithromycin — … withhold Clarithromycin against it"* — since it took the first finding's own subject, and a finding about an
+ended order is stated from that order's drug.
+
+### The decision
+
+- *"the pt"* and *"this pt"* are the patient; *"her PT"* is not.
+- *"Will starting X affect her ARVs?"* is Decision 281's; *"Can X be co-administered with Y?"* and *"Is concomitant use of X and Y
+  safe?"* are Decision 169's together; *"Is X safe in combination with her ARV regimen?"* is Decision 313's; the two names alone are
+  Decision 413's; *"Should I hold her X while she is on Y?"* is Decision 252's.
+- A frequency alone after the drug (*"once a week"*, *"weekly"*), and an amount before it without *"of"* (*"150mg fluconazole"*), are a
+  dose, as Decision 269 has it.
+- `composeListFindings` reads `moduleClause`, and its lead names the drug proposed.
+
+Pinned by `ClinicianWordingsTest.anAbbreviatedTechnicalOrDosedWordingIsTheQuestionItSpells` and
+`EndedOrderFindingReferentTest.aProposalAfterAListedDrugTheChartHoldsOnlyAsAnEndedOrderIsTheModulesAnswer`.

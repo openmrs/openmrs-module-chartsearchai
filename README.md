@@ -40,6 +40,7 @@ The standalone download above includes the backend module, frontend ESM, and the
 - [Evals](#evals)
 - [Evaluated models](#evaluated-models)
 - [Architecture](#architecture)
+- [Provider integration contract](#provider-integration-contract)
 - [License](#license)
 
 ## Try it on the demo server
@@ -995,6 +996,25 @@ See [docs/adr.md](docs/adr.md) (Decision 10) for detailed per-model analysis, tr
 ## Architecture
 
 See [docs/adr.md](docs/adr.md) for architectural decisions and design rationale.
+
+## Provider integration contract
+
+The `api.provider` package defines a shared contract for the bundled answering
+pipeline and an optional Med Agent Hub relay: provider identity and capabilities,
+turn requests and results, ordered events, and cancellation. This package is the
+foundation for provider integration; it does not yet change the running search
+endpoints or enable a Hub connection.
+
+`AnswerEnvelope` preserves the complete provider payload while exposing the answer
+text needed for display, conversation replay and audit. `TurnLifecycleValidator`
+checks event order and advertised capabilities. `TurnCancellation` closes bound
+resources, and `TurnPreemptionRegistry` lets the newer turn of a conversation, by
+turn ordinal, cancel the older one, never the reverse. Tests read cases of the shared
+dual-provider conformance fixture;
+`api/src/test/resources/conformance/dual-provider-conformance.v1.json` carries only
+the cases this module's tests read, each copied unchanged from
+[`datasets/validation/conformance/dual-provider-conformance.v1.json`](https://github.com/pmanko/clinical-ai-validation-harness/blob/main/datasets/validation/conformance/dual-provider-conformance.v1.json)
+in the validation harness.
 
 ## License
 

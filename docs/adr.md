@@ -21847,3 +21847,28 @@ antacids?"* closed *"\"antacids\" is not a drug name the interaction data recogn
   medications (Decision 221).
 
 Pinned by `ClinicianWordingsTest.aContractedOrTerseWordingOfAPairOrAGroupIsTheQuestionItIs`.
+
+## Decision 424: Why a drug is a problem, what its risk is, and a pair asked tersely or by its rating are answered with what the check found
+
+**Status: Accepted** (October 2026) — found asking 40 further wordings of 15 patients on the 3.7.1 standalone on 2026-10-25.
+
+### Context
+
+Each went to the model. It answered *"What's the risk of giving her fluconazole?"*, *"Why can't I give her fluconazole?"* and *"What's
+wrong with giving her clarithromycin?"* with *"Fluconazole can be given, with one caution"*; *"Is fluconazole ok to use with
+nevirapine?"* and *"fluconazole with nevirapine ok?"* with *"Fluconazole can be used with Nevirapine"*; *"Any concerns with rifampicin +
+efavirenz?"* with *"Rifampicin and Efavirenz can be coadministered"*; and *"Is the interaction between rifampicin and nevirapine
+major?"* with *"No — Rifampicin should not be given"* of patients on both. *"Which drugs are contraindicated for her?"* went to the
+model as well, and *"Why is rifampicin flagged?"* was read as a question about the drug's record and handed it no finding.
+
+### The decision
+
+- *"What's the risk of giving her X?"*, *"What's her risk with X?"*, *"Explain why X is a problem for her"*, *"Why can't I give her X?"*
+  and *"What's wrong with giving her X?"* are proposals answered with no "Yes" or "No" (Decision 181).
+- *"Is X ok to use with Y?"* and *"X with Y ok?"* are Decision 169's together shapes; *"Any concerns with X + Y?"*, *"Is there an
+  interaction if I add X to Y?"*, *"How serious is the X Y interaction?"* and *"Is the interaction between X and Y major?"* are
+  Decision 289's questions about the pair's interaction. `QueryScopeRouter.words` reads *"+"* as *"plus"*.
+- *"Which drugs are contraindicated for her?"* is Decision 397's screen of what to avoid.
+- *"Why is X flagged?"* is which of her medications interact with X, and *"flag"* a word of safety to Decision 399.
+
+Pinned by `ClinicianWordingsTest.whyARiskOrATerseOrRatedPairIsAnsweredWithWhatTheCheckFound`.

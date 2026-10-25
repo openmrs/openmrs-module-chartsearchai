@@ -582,6 +582,41 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 				+ "the \"antacids\" the question names"), "was: " + antacids);
 	}
 
+	/**
+	 * Asking why a drug is a problem, what its risk is, or about a pair in a terse or rated wording is answered with what the
+	 * check found (ADR Decision 424). On the 3.7.1 standalone each went to the model, which answered "Fluconazole can be
+	 * given, with one caution" to "What's the risk of giving her fluconazole?" and "Why can't I give her fluconazole?", "Fluconazole
+	 * can be used with Nevirapine" to "Is fluconazole ok to use with nevirapine?", and "No — Rifampicin should not be given" to
+	 * "Is the interaction between rifampicin and nevirapine major?" of patients on both.
+	 */
+	@Test
+	public void whyARiskOrATerseOrRatedPairIsAnsweredWithWhatTheCheckFound() {
+		String notToGive = ask("Is there any reason not to give her warfarin?");
+		assertNotNull(notToGive, "precondition: the module answers it");
+		for (String question : new String[] { "What's the risk of giving her warfarin?", "What's her risk with warfarin?",
+				"Explain why warfarin is a problem for her", "Why can't I give her warfarin?",
+				"What's wrong with giving her warfarin?" }) {
+			assertEquals(notToGive, ask(question), question);
+		}
+		String screen = ask("What drugs should she avoid?");
+		assertNotNull(screen, "precondition: the module answers it");
+		assertEquals(screen, ask("Which drugs are contraindicated for her?"));
+		String together = ask("Is warfarin safe with ibuprofen?");
+		assertNotNull(together, "precondition: the module answers it");
+		for (String question : new String[] { "Is warfarin ok to use with ibuprofen?", "warfarin with ibuprofen ok?" }) {
+			assertEquals(together, ask(question), question);
+		}
+		String pair = ask("What is the interaction between warfarin and ibuprofen?");
+		assertNotNull(pair, "precondition: the module answers it");
+		for (String question : new String[] { "Any concerns with warfarin + ibuprofen?",
+				"Is there an interaction if I add warfarin to ibuprofen?", "How serious is the warfarin ibuprofen interaction?",
+				"Is the interaction between warfarin and ibuprofen major?" }) {
+			assertEquals(pair, ask(question), question);
+		}
+		String flagged = ask("Why is ibuprofen flagged?");
+		assertTrue(flagged != null && flagged.contains("Ibuprofen"), "was: " + flagged);
+	}
+
 	private static org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart chart(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

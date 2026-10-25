@@ -403,6 +403,13 @@ public final class QueryScopeRouter {
 			// chart records it (ADR Decision 394)
 			"is " + D + " (?:safe|ok|okay|appropriate|suitable)(?: (?:for|in) " + PATIENT + ")? " + GIVEN_A_CONDITION
 					+ "(?!.*allerg)\\p{L}+(?: \\p{L}+){0,3}",
+			// "Planning to start fluconazole - safe?", "Is fluconazole a good idea for her?", "Can I treat her with fluconazole
+			// for thrush?" (ADR Decision 427)
+			"(?:(?:i am|i'm|we are|we're) )?(?:planning|going|about|wanting) to (?:start|give|prescribe|add) (?:" + PATIENT
+					+ " )?(?:on )?" + D + " (?:is (?:it|that|this) )?(?:safe|ok|okay)",
+			"(?:is|would) " + D + " (?:be )?a (?:good|reasonable|sensible|safe) (?:idea|choice|option)(?: (?:for|in) " + PATIENT
+					+ ")?",
+			"(?:can|could|may|should) (?:i|we) (?:safely )?treat " + PATIENT + " with " + D + "(?: now| today)?",
 			// "Can I restart her simvastatin?", "Is it safe to resume her simvastatin?" — giving it again (ADR Decision 342)
 			"(?:can|could|may|should) (?:i|we) (?:safely )?(?:restart|resume) (?:" + PATIENT + " (?:on )?|" + POSSESSIVE + " )?"
 					+ D + "(?: now| today)?",
@@ -596,6 +603,11 @@ public final class QueryScopeRouter {
 					+ "(?:interact|interfere) with " + D,
 			"(?:does|will|would|could|can) " + D + " interact with anything (?:she|he|they|the patient|this patient) "
 					+ "(?:takes|is taking|is on)",
+			// "Is fluconazole going to interact with anything she's on?", "Tell me about fluconazole and her medications" (ADR
+			// Decision 427)
+			"is " + D + " going to interact with anything (?:(?:she|he|they|the patient|this patient) (?:is|are) |she's |he's "
+					+ "|they're )(?:on|taking)",
+			"(?:please )?tell me about " + D + " (?:and|with) " + POSSESSIVE + " (?:other )?" + MEDICATIONS,
 			"(?:does|do) (?:she|he|they|the patient|this patient) have any (?:drug )?interactions? with " + D,
 			// "Any interactions with his lisinopril?", "Are there any drug interactions with rifampicin?" — the model told a
 			// patient on no medication "interactions with Lisinopril are recorded: ketoconazole (Major) …" (ADR Decision 338);
@@ -615,6 +627,9 @@ public final class QueryScopeRouter {
 	/** An alternative to one drug, asked for (ADR Decision 418): no finding chooses one, and the answer says so. */
 	private static final String AN_ALTERNATIVE_TO = "(?:(?:is|are) there (?:a |an |any )?(?:safer |better )?alternatives? (?:to|for) (?:"
 			+ POSSESSIVE + " )?" + D + "(?: (?:for|in) " + PATIENT + ")?"
+			// "Is there an alternative to rifampicin that doesn't interact with her ARVs?" (ADR Decision 427)
+			+ "(?: (?:that|which) (?:does not|doesn't|doesnt|won't|will not|wouldn't|would not) interact with (?:any of )?" + POSSESSIVE
+			+ " (?:\\p{L}+ ){0,2}(?:medications|meds|medicines|drugs|regimen|arvs|art|antiretrovirals|treatment|therapy))?"
 			+ "|what (?:else )?(?:can|could|should|may) (?:i|we) (?:use|give|prescribe) instead of (?:" + POSSESSIVE + " )?" + D
 			+ "|(?:can|could|should|may) (?:i|we) replace (?:" + POSSESSIVE + " )?" + D + " with something (?:safer|else|better))";
 
@@ -673,6 +688,8 @@ public final class QueryScopeRouter {
 			"(?:which|what) (?:of )?" + POSSESSIVE + " (?:other |current |active )?(?:medications|meds|medicines|drugs|"
 					+ "prescriptions) (?:interact|interacts|interfere|interferes) with " + D,
 			"which of " + POSSESSIVE + " (?:medications|meds|medicines|drugs) (?:is|are) the problems? with " + D,
+			// "What are the interactions of fluconazole?" (ADR Decision 427)
+			"(?:what|which) are (?:the )?(?:drug )?interactions (?:of|for|with) " + D,
 			// "What interacts with her lamivudine?" — which of hers interact with it, of a drug named as hers (ADR Decision
 			// 369)
 			"what (?:drugs |medications |medicines |meds )?(?:interacts?|interferes?) with " + POSSESSIVE + " " + D);
@@ -722,7 +739,7 @@ public final class QueryScopeRouter {
 			// and "co-administered", "co-prescribed", "combined" (ADR Decision 422)
 			"(?:can|could|may|should) " + HER_D + " (?:and|with) " + HER_D
 					+ " be (?:safely )?(?:given|started|prescribed|administered|taken|used|co administered|coadministered|co prescribed"
-					+ "|coprescribed|combined)(?: together| at the same time| concurrently| simultaneously)?(?: (?:to|for) "
+					+ "|coprescribed|combined)(?: together| at the same time| concurrently| simultaneously)?(?: safely)?(?: (?:to|for) "
 					+ PATIENT + ")?(?: now| today)?",
 			"(?:can|could|may|should) " + HER_D + " be (?:safely )?(?:given|started|prescribed|administered|taken|used) (?:with|alongside) "
 					+ HER_DS + "(?: (?:to|for) " + PATIENT + ")?(?: now| today)?",
@@ -944,6 +961,12 @@ public final class QueryScopeRouter {
 			// "Are any of her drugs contraindicated together?", "Can her medications be taken together?", "Do her meds clash?"
 			"are any of " + POSSESSIVE + " " + MEDICATIONS + " contraindicated (?:together|with each other)",
 			"can " + POSSESSIVE + " " + MEDICATIONS + " be (?:taken|given|used) together",
+			// "Can she safely take all her medicines together?", "Are there any QT prolonging drugs in her list?" — the screen,
+			// as "Is there a risk of QT prolongation with her meds?" is (ADR Decision 427)
+			"(?:can|could|should) (?:she|he|they|the patient|this patient) (?:safely )?(?:take|continue|have) (?:all )?(?:of )?"
+					+ POSSESSIVE + " " + MEDICATIONS + " together",
+			"(?:(?:are|is) there )?any (?:qt prolonging|interacting|nephrotoxic|hepatotoxic|serotonergic) (?:drugs|medications|meds"
+					+ "|medicines) (?:in|on) " + POSSESSIVE + " (?:med |medication |drug )?list",
 			"do " + POSSESSIVE + " " + MEDICATIONS + " clash(?: with (?:each other|one another))?",
 			// "Check for drug interactions", "Screen for DDIs", "Interaction check" (ADR Decision 180)
 			"(?:please )?(?:check|screen) for (?:any )?" + QUALIFIER + "(?:drug )?(?:interactions|ddis)(?: please)?",
@@ -1308,7 +1331,9 @@ public final class QueryScopeRouter {
 
 	/** How to manage the interaction of two drugs (ADR Decision 418): no finding advises it, and the answer says so. */
 	private static final String MANAGE_THE_INTERACTION = "(?:how (?:do|should|can|would) (?:i|we) manage|what (?:should|do|can|would)"
-			+ " (?:i|we) do about) (?:the|this|that) interactions? between " + HER_D + " and " + HER_D;
+			+ " (?:i|we) do about) (?:the|this|that) (?:interactions? between " + HER_D + " and " + HER_D
+			// "What should I do about the rifampicin nevirapine interaction?" (ADR Decision 427)
+			+ "|" + HER_D + " (?:and |plus |with )?" + HER_D + " (?:drug )?interactions?)";
 
 	/** Whether {@code words} ask how to manage the interaction of two drugs (ADR Decision 418). */
 	public static boolean asksHowToManageAnInteraction(List<String> wordsWithTheDrugsMarked) {
@@ -1331,6 +1356,13 @@ public final class QueryScopeRouter {
 	private static final String CHANGE_HERS_IF_STARTING = "(?:should|must|do) (?:i|we) (?:need to )?(?:change|stop|switch|adjust|"
 			+ "modify|reduce|lower|decrease|increase|hold|pause) " + HER_D + "(?: dose)? if (?:i|we) (?:start|give|add|prescribe) (?:"
 			+ PATIENT + " )?(?:on )?" + HER_D
+			// "Should I change her nevirapine because of rifampicin?", "Does she need a dose change of efavirenz with
+			// rifampicin?" (ADR Decision 427)
+			+ "|(?:should|must|do) (?:i|we) (?:need to )?(?:change|stop|switch|adjust|modify|reduce|lower|decrease|increase|hold"
+			+ "|pause) " + HER_D + "(?: dose)? (?:because of|due to) " + HER_D
+			+ "|(?:does|do|will|would) (?:she|he|they|the patient|this patient) need (?:a |any )?(?:dose|dosage) (?:change|adjustment"
+			+ "|increase|reduction|modification) (?:of|for|to) " + HER_D + " (?:with|because of|due to|on|if (?:i|we) (?:start|give|"
+			+ "add|prescribe)) " + HER_D
 			// "Which drug should I stop, aspirin or ibuprofen?", "Is aspirin or ibuprofen causing the interaction?" — what relates
 			// them, under a lead choosing neither (ADR Decision 411)
 			+ "|" + WHICH_OF_TWO_TO_STOP

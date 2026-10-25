@@ -656,6 +656,56 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/**
+	 * Thirteen wordings the model answered on the 3.7.1 standalone (ADR Decision 427) — "Fluconazole can be given, with one
+	 * caution", "Clarithromycin and Efavirenz can be used together", "No — Nevirapine should not be given" of "Should I change
+	 * her nevirapine because of rifampicin?" — each the question it spells, answered as its plainer wording is.
+	 */
+	@Test
+	public void aWordingAClinicianTypesInPassingIsTheQuestionItSpells() {
+		String interacts = ask("Does warfarin interact with her medications?");
+		assertNotNull(interacts, "precondition: the module answers it");
+		for (String question : new String[] { "Is warfarin going to interact with anything she's on?",
+				"Tell me about warfarin and her medications" }) {
+			assertEquals(interacts, ask(question), question);
+		}
+		String which = ask("Which of her medications interact with warfarin?");
+		assertNotNull(which, "precondition: the module answers it");
+		assertEquals(which, ask("What are the interactions of warfarin?"));
+		String give = ask("Can I give her warfarin?");
+		assertNotNull(give, "precondition: the module answers it");
+		for (String question : new String[] { "Planning to start warfarin - safe?", "Is warfarin a good idea for her?" }) {
+			assertEquals(give, ask(question), question);
+		}
+		String forThrush = ask("Can I give her warfarin for thrush?");
+		assertNotNull(forThrush, "precondition: the module answers it");
+		assertEquals(forThrush, ask("Can I treat her with warfarin for thrush?"));
+		String together = ask("Can warfarin and ibuprofen be used together?");
+		assertNotNull(together, "precondition: the module answers it");
+		assertEquals(together, ask("Can warfarin and ibuprofen be used together safely?"));
+		String manage = ask("How do I manage the interaction between aspirin and ibuprofen?");
+		assertNotNull(manage, "precondition: the module answers it");
+		assertEquals(manage, ask("What should I do about the aspirin ibuprofen interaction?"));
+		String change = ask("Should I change her ibuprofen if I start warfarin?");
+		assertNotNull(change, "precondition: the module answers it");
+		assertEquals(change, ask("Should I change her ibuprofen because of warfarin?"));
+		String dose = ask("Should I change her efavirenz if I start rifampicin?");
+		assertNotNull(dose, "precondition: the module answers it");
+		assertEquals(dose, ask("Does she need a dose change of efavirenz with rifampicin?"));
+		String alternative = ask("Is there a safer alternative to warfarin?");
+		assertNotNull(alternative, "precondition: the module answers it");
+		// and under the lead naming the group, which no order is (ADR Decision 221)
+		assertEquals(alternative.replaceFirst("\n", "\nThis check cannot tell which of this patient's active medications are the "
+				+ "\"ARVs\" the question names, so it checked Warfarin against all of them.\n"),
+			ask("Is there an alternative to warfarin that doesn't interact with her ARVs?"));
+		String screen = ask("Is her regimen safe?");
+		assertNotNull(screen, "precondition: the module answers it");
+		for (String question : new String[] { "Are there any QT prolonging drugs in her list?",
+				"Can she safely take all her medicines together?" }) {
+			assertEquals(screen, ask(question), question);
+		}
+	}
+
 	private static org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart chart(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

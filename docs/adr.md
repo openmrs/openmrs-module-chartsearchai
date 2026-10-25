@@ -21920,3 +21920,32 @@ and nevirapine be taken at the same time?"*; *"Ibuprofen can be given"* of *"Wil
   with her ARVs?"* is Decision 341's whether to continue her drug.
 
 Pinned by `ClinicianWordingsTest.aWordingThatWeighsADrugForHerIsTheQuestionItSpells`.
+
+## Decision 427: A wording a clinician types in passing is the question it spells
+
+**Status: Accepted** (October 2026) — found asking 40 further wordings of 15 patients on the 3.7.1 standalone on 2026-10-25.
+
+### Context
+
+Each went to the model. It answered *"Fluconazole can be given, with one caution"* of *"Is fluconazole going to interact with anything
+she's on?"*, *"Planning to start fluconazole - safe?"*, *"Is fluconazole a good idea for her?"*, *"Can I treat her with fluconazole for
+thrush?"* and *"Tell me about fluconazole and her medications"*; *"Clarithromycin and Efavirenz can be used together"* of *"Can
+clarithromycin and efavirenz be used together safely?"* (14 of 15 patients); *"Efavirenz can be given"* of *"Does she need a dose change
+of efavirenz with rifampicin?"*; *"No — Rifampicin should not be given"* of *"What should I do about the rifampicin nevirapine
+interaction?"* and *"No — Nevirapine should not be given"* of *"Should I change her nevirapine because of rifampicin?"*. It listed
+*"What are the interactions of fluconazole?"* from the reference data, and answered *"Are there any QT prolonging drugs in her list?"*
+with *"No QT prolonging drug diagnosis is recorded"*.
+
+### The decision
+
+- *"Is X going to interact with anything she's on?"* and *"Tell me about X and her medications"* are Decision 181's whether X interacts
+  with her medications; *"What are the interactions of X?"* is Decision 319's which of hers interact with it.
+- *"Planning to start X - safe?"*, *"Is X a good idea for her?"* and *"Can I treat her with X for thrush?"* are proposals, the last with
+  Decision 213's stated purpose.
+- *"Can X and Y be used together safely?"* is Decision 169's together; *"What should I do about the X Y interaction?"* is Decision 418's
+  how to manage it; *"Should I change her X because of Y?"* and *"Does she need a dose change of X with Y?"* are Decision 402's.
+- *"Is there an alternative to X that doesn't interact with her ARVs?"* is Decision 418's alternative, under Decision 221's group lead.
+- *"Can she safely take all her medicines together?"* and *"Are there any QT prolonging drugs in her list?"* are the screen, as *"Is
+  there a risk of QT prolongation with her meds?"* already was.
+
+Pinned by `ClinicianWordingsTest.aWordingAClinicianTypesInPassingIsTheQuestionItSpells`.

@@ -617,6 +617,45 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		assertTrue(flagged != null && flagged.contains("Ibuprofen"), "was: " + flagged);
 	}
 
+	/**
+	 * Ten wordings the model answered "X can be given, with one caution" on the 3.7.1 standalone (ADR Decision 426): each is
+	 * the question it spells, answered as that question's plainer wording is.
+	 */
+	@Test
+	public void aWordingThatWeighsADrugForHerIsTheQuestionItSpells() {
+		String notToGive = ask("Is there any reason not to give her warfarin?");
+		assertNotNull(notToGive, "precondition: the module answers it");
+		for (String question : new String[] { "I want to prescribe warfarin. Thoughts?", "Do her current meds make warfarin unsafe?" }) {
+			assertEquals(notToGive, ask(question), question);
+		}
+		String effect = ask("Is warfarin hepatotoxic with her other meds?");
+		assertNotNull(effect, "precondition: the module answers it");
+		for (String question : new String[] { "Could warfarin cause QT problems with her meds?",
+				"Will warfarin affect her kidneys with her current meds?" }) {
+			assertEquals(effect, ask(question), question);
+		}
+		String watch = ask("What should I watch for if I add warfarin?");
+		assertNotNull(watch, "precondition: the module answers it");
+		assertEquals(watch, ask("How should I monitor her if I add warfarin?"));
+		String interacts = ask("Any drug interactions I should know about before giving warfarin?");
+		assertNotNull(interacts, "precondition: the module answers it");
+		assertEquals(interacts, ask("Any drug interactions I should be aware of before giving her warfarin?"));
+		String withGroup = ask("Is warfarin safe with her HIV medicines?");
+		assertNotNull(withGroup, "precondition: the module answers it");
+		assertEquals(withGroup, ask("Can warfarin be given with her HIV medicines?"));
+		String together = ask("Can warfarin and ibuprofen be taken together?");
+		assertNotNull(together, "precondition: the module answers it");
+		assertEquals(together, ask("Can warfarin and ibuprofen be taken at the same time?"));
+		String pair = ask("What is the interaction between warfarin and ibuprofen?");
+		assertNotNull(pair, "precondition: the module answers it");
+		assertEquals(pair, ask("warfarin and ibuprofen - any issue?"));
+		for (String drug : new String[] { "ibuprofen", "warfarin" }) {
+			String toContinue = ask("Is it okay to continue her " + drug + "?");
+			assertNotNull(toContinue, "precondition: the module answers it");
+			assertEquals(toContinue, ask("Is it ok to continue her " + drug + " with her ARVs?"), drug);
+		}
+	}
+
 	private static org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart chart(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

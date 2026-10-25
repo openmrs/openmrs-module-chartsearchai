@@ -21893,3 +21893,30 @@ is part of the answer.
   own two medications is still answered with what relates them alone.
 
 Pinned by `TogetherWithHerOwnMedicationContextTest.thePairsInteractionStatesADrugNotHersAgainstHerActiveMedications`.
+
+## Decision 426: A wording that weighs a drug for her is the question it spells
+
+**Status: Accepted** (October 2026) — found asking 40 further wordings of 15 patients on the 3.7.1 standalone on 2026-10-25.
+
+### Context
+
+Each went to the model, which answered *"Clarithromycin can be given, with one caution"* of *"I want to prescribe clarithromycin.
+Thoughts?"*, *"Could clarithromycin cause QT problems with her meds?"* and *"Any drug interactions I should be aware of before giving her
+clarithromycin?"*; *"Fluconazole can be given"* of *"Do her current meds make fluconazole unsafe?"*, *"How should I monitor her if I add
+fluconazole?"* and *"Can fluconazole be given with her HIV medicines?"*; *"Fluconazole can be taken with Nevirapine"* of *"Can fluconazole
+and nevirapine be taken at the same time?"*; *"Ibuprofen can be given"* of *"Will ibuprofen affect her kidneys with her current meds?"*;
+*"Rifampicin can be given"* of *"Is it ok to continue her rifampicin with her ARVs?"*; and *"No — Rifampicin should not be given"* of
+*"Rifampicin and nevirapine - any issue?"* of patients on both.
+
+### The decision
+
+- *"I want to prescribe X. Thoughts?"* and *"Do her current meds make X unsafe?"* are proposals answered with no "Yes" or "No"
+  (Decision 181); *"Could X cause QT problems with her meds?"* and *"Will X affect her kidneys with her current meds?"* are Decision 414's
+  effects the findings do not weigh one by one.
+- *"How should I monitor her if I add X?"* is Decision 391's what to watch for; *"aware"* is a filler word to Decision 396's residual
+  reading, so *"…I should be aware of before giving her X?"* is Decision 422's *"…I should know about…"*.
+- *"Can X be given with her HIV medicines?"* is Decision 313's drug beside a group of her medications; *"Can X and Y be taken at the same
+  time?"* is Decision 169's together; *"X and Y - any issue?"* is Decision 289's question about the pair; and *"Is it ok to continue her X
+  with her ARVs?"* is Decision 341's whether to continue her drug.
+
+Pinned by `ClinicianWordingsTest.aWordingThatWeighsADrugForHerIsTheQuestionItSpells`.

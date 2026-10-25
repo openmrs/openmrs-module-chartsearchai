@@ -479,6 +479,18 @@ public final class QueryScopeRouter {
 					+ "|add) (?:" + PATIENT + " )?(?:on )?" + D + "(?: (?:to|for) " + PATIENT + ")?",
 			"what is wrong with (?:giving|starting|prescribing|using|adding) (?:" + PATIENT + " )?(?:on )?" + D
 					+ "(?: (?:to|for) " + PATIENT + ")?",
+			// "I want to prescribe clarithromycin. Thoughts?", "Do her current meds make fluconazole unsafe?", "Could
+			// clarithromycin cause QT problems with her meds?", "Will ibuprofen affect her kidneys with her current meds?" (ADR
+			// Decision 426)
+			"(?:i|we) (?:want|would like|plan|am planning|intend|am thinking|am considering) (?:to )?(?:of )?(?:give|start|"
+					+ "prescribe|add|giving|starting|prescribing|adding) (?:" + PATIENT + " )?(?:on )?" + D + "(?: (?:to|for) "
+					+ PATIENT + ")? (?:any )?(?:thoughts|what do you think)",
+			"(?:do|does|would|will|could) (?:any of )?" + POSSESSIVE + " (?:other )?" + MEDICATIONS + " make " + D
+					+ " (?:unsafe|dangerous|risky|contraindicated|a problem)",
+			"(?:could|would|will|might|can|does) " + D + " cause (?:any )?(?:\\p{L}+ ){0,2}(?:problems?|issues?|prolongation|toxicity"
+					+ "|damage) (?:with|alongside) (?:any of )?" + POSSESSIVE + " (?:other )?" + MEDICATIONS,
+			"(?:could|would|will|might|does) " + D + " (?:affect|harm|damage) " + POSSESSIVE + " (?:\\p{L}+ ){1,2}(?:with|alongside|"
+					+ "given) (?:any of )?" + POSSESSIVE + " (?:other )?" + MEDICATIONS,
 			// "What about fluconazole?", "How about starting her on fluconazole?" — a proposal that is no yes-or-no question
 			// (ADR Decision 420)
 			"(?:what|how) about (?:(?:giving|starting|prescribing|adding|using) (?:" + PATIENT + " )?(?:on )?)?" + D
@@ -652,6 +664,9 @@ public final class QueryScopeRouter {
 			"(?:should|must|do|does) (?:i|we|she|he|they|the patient|this patient) (?:need to )?stop any (?:of " + POSSESSIVE
 					+ " )?(?:current |active |other )?(?:medication|medications|meds|medicines|drugs)(?: first)? before "
 					+ "(?:starting|giving|adding|prescribing|taking) (?:" + PATIENT + " )?(?:on )?" + D,
+			// "How should I monitor her if I add fluconazole?" (ADR Decision 426)
+			"how (?:should|do|would|must) (?:i|we) (?:need to )?monitor " + PATIENT + " (?:if|when) (?:i|we) (?:add|give|start|"
+					+ "prescribe) (?:" + PATIENT + " )?(?:on )?" + D,
 			// "What should I watch for if I add clarithromycin?" (ADR Decision 391)
 			"what (?:should|do|would|must) (?:i|we) (?:need to )?(?:watch|look out|monitor|be careful)(?: for)? if (?:i|we) (?:add|give|"
 					+ "start|prescribe) (?:" + PATIENT + " )?(?:on )?" + D,
@@ -707,7 +722,7 @@ public final class QueryScopeRouter {
 			// and "co-administered", "co-prescribed", "combined" (ADR Decision 422)
 			"(?:can|could|may|should) " + HER_D + " (?:and|with) " + HER_D
 					+ " be (?:safely )?(?:given|started|prescribed|administered|taken|used|co administered|coadministered|co prescribed"
-					+ "|coprescribed|combined)(?: together)?(?: (?:to|for) "
+					+ "|coprescribed|combined)(?: together| at the same time| concurrently| simultaneously)?(?: (?:to|for) "
 					+ PATIENT + ")?(?: now| today)?",
 			"(?:can|could|may|should) " + HER_D + " be (?:safely )?(?:given|started|prescribed|administered|taken|used) (?:with|alongside) "
 					+ HER_DS + "(?: (?:to|for) " + PATIENT + ")?(?: now| today)?",
@@ -1049,7 +1064,10 @@ public final class QueryScopeRouter {
 			// "Can he take dolutegravir and his TB preventive therapy together?", "Can I give her dolutegravir with her TB
 			// preventive therapy?" (ADR Decision 313)
 			"(?:can|could|may) (?:i give " + PATIENT + "|(?:he|she|they|the patient|this patient) (?:take|have|use)) " + D
-					+ " (?:and|with|alongside) " + HER_MEDICATION_GROUP + "(?: together)?");
+					+ " (?:and|with|alongside) " + HER_MEDICATION_GROUP + "(?: together)?",
+			// "Can fluconazole be given with her HIV medicines?" (ADR Decision 426)
+			"(?:can|could|may|should) " + D + " be (?:safely )?(?:given|taken|used|started|combined) (?:with|alongside) (?:any of )?"
+					+ HER_MEDICATION_GROUP);
 
 	/**
 	 * Whether a question asks whether its one drug is safe with her medications — <em>"Is ibuprofen safe with her current
@@ -1111,7 +1129,9 @@ public final class QueryScopeRouter {
 
 	/** "Is it okay to continue her aspirin?" (ADR Decision 341). */
 	private static final String CONTINUE_HER_D = "is it (?:safe|ok|okay|alright|appropriate|fine) to (?:continue|keep (?:giving"
-			+ "|taking)) " + POSSESSIVE + " " + D + "(?: now)?";
+			+ "|taking)) " + POSSESSIVE + " " + D
+			// "Is it ok to continue her rifampicin with her ARVs?" (ADR Decision 426)
+			+ "(?: (?:with|alongside) (?:all )?" + HER_MEDICATION_GROUP + ")?(?: now)?";
 
 	/** "Can I continue her Advil?", "Can I keep giving her aspirin?" (ADR Decision 341). */
 	private static final String CONTINUE_HER_D_AS_I = "(?:can|could|may|should) (?:i|we) (?:safely )?(?:continue|keep giving)"
@@ -1367,6 +1387,8 @@ public final class QueryScopeRouter {
 			// (ADR Decision 424)
 			"(?:(?:are|is) there )?any (?:concerns?|problems?|issues?|risks?) (?:with|combining|giving) " + HER_D
 					+ " (?:and|plus|with) " + HER_D + "(?: together)?",
+			// "Rifampicin and nevirapine - any issue?" (ADR Decision 426)
+			HER_D + " (?:and|with|plus) " + HER_D + " (?:(?:is|are) there )?any (?:concerns?|problems?|issues?|risks?)",
 			"(?:is|are) there (?:an |any )?(?:drug )?interactions? if (?:i|we) (?:add|give|start) " + HER_D + " (?:to|with) " + HER_D,
 			"how (?:severe|serious|bad|significant|dangerous|major|important) is the " + HER_D + " (?:and |plus |with )?" + HER_D
 					+ " (?:drug )?interaction",
@@ -1852,6 +1874,8 @@ public final class QueryScopeRouter {
 		"you", "choice", "option",
 		// technical and conditional wordings (ADR Decision 414)
 		"verify", "concomitant", "patient's",
+		// "Any drug interactions I should be aware of before giving her clarithromycin?" (ADR Decision 426)
+		"aware",
 		// colloquial and non-native wordings (ADR Decision 415)
 		"client", "my", "on", "we",
 		// when, how often, and what it would cause (ADR Decision 422)

@@ -376,6 +376,20 @@ public final class QueryScopeRouter {
 			// "her medication list", "her current list" (ADR Decision 429)
 			+ "|(?:med |medication |medicine |drug )?list)";
 
+	/**
+	 * A group of her OWN medications as a clinician words it, closing on a noun of medication — "her TB treatment", "her
+	 * ARVs", "her blood pressure pills" (ADR Decision 221). Never resolved to drugs: a question asking whether two such
+	 * groups interact is a screen of her medications, which states every pair, those between the two among them.
+	 */
+	private static final String MEDICATION_GROUP_NOUN = "(?:treatments?|therapy|therapies|"
+			+ "regimens?|medications?|meds|medicines?|drugs?|pills|tablets|arvs?|art|antiretrovirals?|antacids?|painkillers?|analgesics?|"
+			+ "steroids?|supplements?|vitamins?|contraceptives?|antibiotics?|antimalarials?|"
+			+ "antihypertensives?|antiepileptics?|anticonvulsants?|antidepressants?)";
+
+	// and two groups joined, "her TB and HIV meds" (ADR Decision 429)
+	private static final String HER_MEDICATION_GROUP = POSSESSIVE + " (?:\\p{L}+ ){0,2}(?:and (?:\\p{L}+ ){1,2})?"
+			+ MEDICATION_GROUP_NOUN;
+
 	private static final String D = Pattern.quote(DRUG_NAME);
 
 	/** The tail a screen question may close with: what the clinician should know, or worry, about. */
@@ -595,7 +609,43 @@ public final class QueryScopeRouter {
 					+ " )?(?:on )?" + D + "(?: (?:to|for) " + PATIENT + ")?",
 			// "Is there any contraindication to warfarin for her?" (ADR Decision 391)
 			"(?:(?:is|are) there )?(?:any |a )?contraindications? (?:to|for|against|with) " + D + "(?: (?:for|in) " + PATIENT
-					+ ")?");
+					+ ")?",
+			// "Should fluconazole be avoided with her ARVs?", "Does fluconazole have to be avoided?", "Is fluconazole unsafe with
+			// her meds?", "Is it a bad idea to give her fluconazole?", "Should I not give fluconazole?", "Is there no problem
+			// giving her fluconazole?", "Does giving fluconazole put her at risk?", "Would you avoid clarithromycin in this
+			// patient?", "Should we hold off on fluconazole?", "Do her medications rule out fluconazole?", "Is there a reason to
+			// be careful with fluconazole?", "Any red flags with fluconazole for her?" — each answered by the model "Fluconazole
+			// can be given" (ADR Decision 434)
+			"(?:should|must) " + D + " be avoided (?:with|alongside|in combination with|together with) (?:any of )?"
+					+ HER_MEDICATION_GROUP,
+			"(?:does|do) " + D + " (?:have|need) to be avoided(?: (?:for|in) " + PATIENT + "| (?:with|alongside) (?:any of )?"
+					+ HER_MEDICATION_GROUP + ")?",
+			"is " + D + " (?:unsafe|not safe|dangerous|risky|harmful|a problem|problematic) (?:with|alongside|in combination with) "
+					+ "(?:any of )?" + HER_MEDICATION_GROUP,
+			"(?:is|would) it (?:be )?(?:a bad idea|a mistake|unwise|inadvisable|not advisable|risky|dangerous|unsafe|harmful|wrong) to "
+					+ "(?:give|start|prescribe|administer|add|use) (?:" + PATIENT + " )?(?:on )?" + D + "(?: (?:to|for) " + PATIENT
+					+ ")?",
+			"(?:should|must) (?:i|we) not (?:give|start|prescribe|administer|add|use) (?:" + PATIENT + " )?(?:on )?" + D
+					+ "(?: (?:to|for|in) " + PATIENT + ")?",
+			"is there no (?:problems?|issues?|risks?|harm|danger|concerns?|contraindications?) (?:(?:in|with) )?(?:giving|starting|"
+					+ "prescribing|adding) (?:" + PATIENT + " )?(?:on )?" + D + "(?: (?:to|for) " + PATIENT + ")?",
+			"(?:does|do|would|will|could|might) (?:giving|starting|prescribing|adding) (?:" + PATIENT + " )?(?:on )?" + D + " put "
+					+ PATIENT + " at (?:any )?risk",
+			"(?:is|are|will|would) (?:she|he|they|the patient|this patient) (?:be )?at (?:any )?risk(?: of \\p{L}+)? (?:if|when) "
+					+ "(?:she|he|they) (?:takes|take|gets|get|starts|start|is given|are given) " + D + "(?: (?:with|alongside) "
+					+ "(?:any of )?" + HER_MEDICATION_GROUP + ")?",
+			"(?:would|should|do) you avoid (?:giving )?" + D + "(?: (?:in|for) " + PATIENT + ")?",
+			"is it (?:better|best|wiser|safer) to avoid (?:giving )?(?:" + PATIENT + " )?" + D + "(?: (?:in|for) " + PATIENT + ")?",
+			"(?:should|must) (?:i|we) hold (?:off|back) (?:on )?(?:giving |starting )?(?:" + PATIENT + " )?(?:on )?" + D,
+			"(?:do|does|would|will) (?:any of )?" + HER_MEDICATION_GROUP + " rule out " + D,
+			"(?:does|do) (?:she|he|they|the patient|this patient) have anything that (?:rules out|contraindicates) " + D,
+			"is there (?:a |any )?reason to be (?:careful|cautious) (?:with|about) (?:giving )?" + D + "(?: (?:for|in) " + PATIENT
+					+ ")?",
+			"(?:are there )?any (?:red flags|warnings|cautions|precautions) (?:with|for|about) (?:giving )?" + D + "(?: (?:for|in) "
+					+ PATIENT + ")?",
+			// "Is there a serious interaction between fluconazole and her ARVs?" — a grade a "Yes" would claim of every finding
+			"(?:is|are) there (?:a |an |any )?(?:clinically )?(?:dangerous|serious|major|significant|severe|important|relevant) "
+					+ "(?:drug )?interactions? between " + D + " and (?:any of )?" + HER_MEDICATION_GROUP);
 
 	/**
 	 * Whether a question asks whether NOT to give one drug, and nothing else — one of {@link #NEGATED_PROPOSAL_SHAPES}
@@ -896,19 +946,6 @@ public final class QueryScopeRouter {
 	 * replaced admitted "Does this drug interact with her medications?", every word of which was on
 	 * it, and answered it with her own pairs.
 	 */
-	/**
-	 * A group of her OWN medications as a clinician words it, closing on a noun of medication — "her TB treatment", "her
-	 * ARVs", "her blood pressure pills" (ADR Decision 221). Never resolved to drugs: a question asking whether two such
-	 * groups interact is a screen of her medications, which states every pair, those between the two among them.
-	 */
-	private static final String MEDICATION_GROUP_NOUN = "(?:treatments?|therapy|therapies|"
-			+ "regimens?|medications?|meds|medicines?|drugs?|pills|tablets|arvs?|art|antiretrovirals?|antacids?|painkillers?|analgesics?|"
-			+ "steroids?|supplements?|vitamins?|contraceptives?|antibiotics?|antimalarials?|"
-			+ "antihypertensives?|antiepileptics?|anticonvulsants?|antidepressants?)";
-
-	// and two groups joined, "her TB and HIV meds" (ADR Decision 429)
-	private static final String HER_MEDICATION_GROUP = POSSESSIVE + " (?:\\p{L}+ ){0,2}(?:and (?:\\p{L}+ ){1,2})?"
-			+ MEDICATION_GROUP_NOUN;
 
 	/** "Which of her ARVs interact with rifampicin?" — which of a group of hers interact with one drug (ADR Decision 432). */
 	private static final List<Pattern> WHICH_OF_A_GROUP_INTERACT_SHAPES = shapes("(?:which|what) of " + HER_MEDICATION_GROUP
@@ -1379,7 +1416,9 @@ public final class QueryScopeRouter {
 			+ HER_D + "(?: together)?"
 			// "Should rifampicin be avoided with her nevirapine?", whose "No" was "No — rifampicin should be avoided" (ADR
 			// Decision 433)
-			+ "|(?:should|must) " + HER_D + " be avoided (?:with|alongside|in combination with|together with) " + HER_D;
+			+ "|(?:should|must) " + HER_D + " be avoided (?:with|alongside|in combination with|together with) " + HER_D
+			// "Does fluconazole have to be avoided with nevirapine?" (ADR Decision 434)
+			+ "|(?:does|do) " + HER_D + " (?:have|need) to be avoided (?:with|alongside|in combination with|together with) " + HER_D;
 
 	private static final String WHAT_COMBINING_THEM_DOES = "(?:what (?:happens|would happen|will happen) if (?:i|we) (?:give|add"
 			+ "|start|combine|prescribe) (?:" + PATIENT + " )?(?:on )?" + HER_D + " (?:to|with|and|alongside) " + HER_D
@@ -1412,7 +1451,12 @@ public final class QueryScopeRouter {
 			// Decision 432)
 			+ "|is " + HER_D + " going to be (?:a problem|an issue|dangerous|risky|harmful|unsafe) (?:with|alongside|for) " + HER_D
 			+ "|" + HER_D + " (?:and|with|plus) " + HER_D + " (?:is|would be|will be) (?:that|this|it) (?:a problem|an issue|"
-			+ "dangerous|risky|harmful|unsafe))";
+			+ "dangerous|risky|harmful|unsafe)"
+			// "Is it contraindicated to give rifampicin with nevirapine?", "Are rifampicin and nevirapine contraindicated
+			// together?", each answered "No — … should not be given" (ADR Decision 434)
+			+ "|is it contraindicated to (?:give|combine|use|take|prescribe) " + HER_D + " (?:and|with|alongside) " + HER_D
+			+ "(?: together)?"
+			+ "|(?:is|are) " + HER_D + " (?:and|with|plus) " + HER_D + " contraindicated(?: together| with each other| in combination)?)";
 
 	/** "Do I need to stop her simvastatin before starting clarithromycin?", "Can she continue her simvastatin if I start
 	 *  clarithromycin?" — whether to stop or keep her drug for another (ADR Decision 252). */

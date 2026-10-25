@@ -937,6 +937,43 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/**
+	 * Whether to avoid a drug, whether it is a mistake, unsafe beside a group of hers or ruled out, and whether a pair is
+	 * contraindicated, are the questions they spell, answered with what the check found and no lead (ADR Decision 434). On
+	 * the 3.7.1 standalone each went to the model, which answered "Is it a bad idea to give her fluconazole?" and "Should I
+	 * not give fluconazole?" with "Fluconazole can be given, with one caution", and "Is it contraindicated to give rifampicin
+	 * with nevirapine?" with "No — rifampicin should not be given".
+	 */
+	@Test
+	public void anAvoidedMistakenOrRuledOutDrugIsAnsweredWithNoLead() {
+		String avoid = ask("Should I avoid warfarin?");
+		assertNotNull(avoid, "precondition: the module answers Should I avoid warfarin?");
+		for (String question : Arrays.asList("Should warfarin be avoided with her ARVs?", "Does warfarin have to be avoided?",
+				"Is warfarin unsafe with her meds?", "Would it be a mistake to give her warfarin?",
+				"Is it a bad idea to give her warfarin?", "Should I not give warfarin?", "Is there no problem giving her warfarin?",
+				"Does giving warfarin put her at risk?", "Is she at risk if she takes warfarin with her ARVs?",
+				"Would you avoid warfarin in this patient?", "Is it better to avoid warfarin?", "Should we hold off on warfarin?",
+				"Do her medications rule out warfarin?", "Does she have anything that rules out warfarin?",
+				"Is there a reason to be careful with warfarin?", "Are there any red flags with warfarin for her?",
+				"Any warnings for warfarin?", "Is there a serious interaction between warfarin and her ARVs?")) {
+			assertEquals(avoid, ask(question), question);
+		}
+		String[][] pairs = {
+			{ "Is it contraindicated to give warfarin with nevirapine?", "Is warfarin contraindicated with her nevirapine?" },
+			{ "Are warfarin and nevirapine contraindicated together?", "Is warfarin contraindicated with her nevirapine?" },
+			{ "Does warfarin have to be avoided with nevirapine?", "Should I avoid warfarin with her nevirapine?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+		for (String question : Arrays.asList("Should I avoid warfarin?", "Is warfarin contraindicated with her nevirapine?",
+				"Should I avoid warfarin with her nevirapine?")) {
+			String answer = ask(question);
+			assertTrue(!answer.contains("Yes —") && !answer.contains("No —"), "a \"No\" would read backwards: " + answer);
+		}
+	}
+
 	private static String ask(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

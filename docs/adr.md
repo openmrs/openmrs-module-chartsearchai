@@ -22119,3 +22119,33 @@ together"* to *"Is ibuprofen and aspirin together a problem?"*. Seven more went 
   *"Can X worsen her kidney function with her other drugs?"* Decision 426's effect beside her medications.
 
 Pinned by `ClinicianWordingsTest.aPairAvoidedDangerousOrAProblemIsAnsweredWithNoLead`.
+
+## Decision 434: Whether to avoid a drug, whether it is a mistake or ruled out, and whether a pair is contraindicated, are answered with no lead
+
+**Status: Accepted** (October 2026) — found asking 40 negative and danger wordings of 15 patients on the 3.7.1 standalone on
+2026-10-25.
+
+### Context
+
+Eighteen wordings went to the model. It answered most of those whose drug was single with a clearance and one caution:
+*"Fluconazole can be given, with one caution: it interacts with active order Nevirapine, a Moderate problem"* to *"Is it a bad
+idea to give her fluconazole?"*, *"Should I not give fluconazole?"*, *"Is fluconazole unsafe with her meds?"*, *"Should we hold
+off on fluconazole?"* and *"Do her medications rule out fluconazole?"*. And it answered *"Is it contraindicated to give
+rifampicin with nevirapine?"* and *"Are rifampicin and nevirapine contraindicated together?"* with a "No" that read backwards:
+*"No — rifampicin should not be given"*. *"Does she have anything that rules out fluconazole?"* and *"Is there a reason to be
+careful with fluconazole?"* ran no check at all.
+
+### The decision
+
+- Each single-drug wording joins Decision 181's whether not to give the drug, answered with what the check found and neither
+  "Yes" nor "No": avoided beside a group of hers (*"Should X be avoided with her ARVs?"*), *"Does X have to be avoided?"*,
+  unsafe beside her medications, a bad idea or a mistake, *"Should I not give X?"*, *"Is there no problem giving her X?"*,
+  putting her at risk, *"Would you avoid X in this patient?"*, better avoided, held off, ruled out by her medications or by
+  anything she has, a reason to be careful, red flags or warnings, and a serious interaction with a group of hers, which a
+  "Yes" would claim of every finding whatever its rating.
+- *"Is it contraindicated to give X with Y?"* and *"Are X and Y contraindicated together?"* are Decision 255's whether the
+  two are dangerous together, and *"Does X have to be avoided with Y?"* Decision 251's whether to avoid one with the other.
+- The group of her medications (`HER_MEDICATION_GROUP`) is declared beside her other words for medications, so the
+  single-drug shapes can name it.
+
+Pinned by `ClinicianWordingsTest.anAvoidedMistakenOrRuledOutDrugIsAnsweredWithNoLead`.

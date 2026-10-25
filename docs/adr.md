@@ -22037,3 +22037,30 @@ ibuprofen: Decision 429 read it beside her medications for a drug she is not on,
 - *"Can X be given (taken by her) with her other drugs?"* of her own drug is Decision 202's question about her medication.
 
 Pinned by `ClinicianWordingsTest.aCombinationNamedAsOneOrHerOwnDrugBesideHerOthersIsTheQuestionItSpells`.
+
+## Decision 431: An abbreviation, a monitoring, severity or effect question, and a comparison are the questions they spell
+
+**Status: Accepted** (October 2026) — found asking 40 further wordings of 15 patients on the 3.7.1 standalone on 2026-10-25.
+
+### Context
+
+Fourteen wordings went to the model for every patient. Its answers included *"No Ibuprofen diagnosis is recorded"* and
+*"Ibuprofen can be given, with one caution"* to *"Ibuprofen - yes or no?"*, and *"Rifampicin can be given, with several
+cautions"* to *"Will rifampicin make her ARVs less effective?"*: a clearance the module never gives.
+
+### The decision
+
+- *"Pls"* is *"please"*, *"w/"* is *"with"* and *"w/o"* *"without"* (`QueryScopeRouter.words`).
+- *"Can she get X?"* and *"X - yes or no?"* propose X; *"Any reason she can't have X?"* is Decision 181's reason not to give it.
+- *"Does X react with any of her drugs?"* is whether it interacts with them.
+- *"Will X make her ARVs (her Y) less effective?"* asks an effect, answered as Decisions 249 and 281 answer one, with no "Yes"
+  or "No".
+- *"If she starts X, what happens to her Y?"* is Decision 251's what combining them does.
+- *"Is X + Y a major interaction?"* is Decision 424's how serious their interaction is.
+- *"X and Y - should I monitor anything?"*, *"What should I monitor if she takes X with Y?"* and *"Do I need to monitor her LFTs
+  if I give X?"* are Decision 252's and Decision 251's monitoring questions.
+- *"Is Y OK with X or do I need to switch?"* asks one or the other, which neither "Yes" nor "No" answers, and no finding
+  chooses a drug to change: it is answered with what relates them and no lead (`SAFE_TOGETHER_OR_SWITCH`).
+- *"Is X safer than Y for her?"* is Decision 393's choice between two drugs.
+
+Pinned by `ClinicianWordingsTest.anAbbreviatedComparativeOrMonitoringWordingIsTheQuestionItSpells`.

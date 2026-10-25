@@ -823,6 +823,41 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 					DrugReferenceTestSupport.ctx(45, null, names, null, null, null, ORDERS), question);
 	}
 
+	/**
+	 * An abbreviation, a verb a clinician uses for "give" or "interact", a monitoring, severity or effect question and a
+	 * comparison are the questions they spell (ADR Decision 431). On the 3.7.1 standalone each went to the model, which
+	 * answered "Ibuprofen - yes or no?" with "No Ibuprofen diagnosis is recorded" and "Will rifampicin make her ARVs less
+	 * effective?" with "Rifampicin can be given, with several cautions".
+	 */
+	@Test
+	public void anAbbreviatedComparativeOrMonitoringWordingIsTheQuestionItSpells() {
+		String[][] pairs = {
+			{ "Pls check if warfarin is ok with her ARVs", "Please check if warfarin is ok with her ARVs" },
+			{ "warfarin w/ nevirapine ok?", "warfarin with nevirapine ok?" },
+			{ "Can she get warfarin?", "Can she take warfarin?" },
+			{ "Warfarin - yes or no?", "Can I give her warfarin?" },
+			{ "Any reason she can't have warfarin?", "Is there any reason not to give her warfarin?" },
+			{ "Does warfarin react with any of her drugs?", "Does warfarin interact with any of her drugs?" },
+			{ "Will warfarin make her ARVs less effective?", "Will warfarin affect her ARVs?" },
+			{ "Will warfarin make her nevirapine less effective?", "Will warfarin reduce the effectiveness of her nevirapine?" },
+			{ "If she starts warfarin, what happens to her nevirapine?", "What happens if I give warfarin with her nevirapine?" },
+			{ "Is warfarin + nevirapine a major interaction?", "How serious is the warfarin nevirapine interaction?" },
+			{ "Warfarin and nevirapine - should I monitor anything?", "Does she need monitoring on warfarin and nevirapine?" },
+			{ "What should I monitor if she takes warfarin with nevirapine?",
+					"Does she need monitoring on warfarin and nevirapine?" },
+			{ "Is nevirapine OK with warfarin or do I need to switch?", "Does she need monitoring on warfarin and nevirapine?" },
+			{ "Do I need to monitor her INR if I give warfarin?", "Does she need INR monitoring if I give her warfarin?" },
+			{ "Is paracetamol safer than warfarin for her?", "Which is safer for her, paracetamol or warfarin?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+		String switchOrNot = ask("Is nevirapine OK with warfarin or do I need to switch?");
+		assertTrue(!switchOrNot.contains("Yes —") && !switchOrNot.contains("No —"),
+			"one or the other, which neither \"Yes\" nor \"No\" answers: " + switchOrNot);
+	}
+
 	private static String ask(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

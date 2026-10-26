@@ -1053,16 +1053,12 @@ the input budget returns HTTP 422 and recommends increasing the context size;
 streaming search emits the corresponding error message. These APIs
 require the QueryStore stack openmrs/openmrs-module-querystore
 [#95](https://github.com/openmrs/openmrs-module-querystore/pull/95) to
-[#98](https://github.com/openmrs/openmrs-module-querystore/pull/98), which the paired
-check pins; build and test against their declared source dependency before an upstream
-artifact is available.
-
-A temporary paired-source check validates against the QueryStore contributions while
-their API is unpublished. The ordinary published-dependency and QueryStore-main checks
-also run on pull requests. These may fail until QueryStore #95 to #98 are merged and their API
-is published; the paired check does not establish upstream merge readiness. Remove
-the temporary paired job once ordinary checks pass with the published API, before
-merging this contribution.
+[#98](https://github.com/openmrs/openmrs-module-querystore/pull/98). Until they are merged
+and published, build against that QueryStore source installed locally (`mvn install` in
+its checkout). The required build compiles against the published `querystore-api` and
+fails until then; the pull request names QueryStore #98 on a `Depends-On:` line, so the
+QueryStore compatibility check builds against it instead (see
+`.github/workflows/build.yml`).
 
 To verify counting against a real local engine, prepare a separate application-data
 directory containing `model.gguf` and a compatible `chartsearchai/bin/llama-server`

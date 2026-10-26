@@ -1324,6 +1324,23 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/**
+	 * A drug given "if she drinks" alcohol or "if she takes" another is the proposal of the two together (ADR Decision 451). On
+	 * the 3.7.1 standalone "Can I give her fluconazole if she drinks alcohol?" went to the model, which answered "Fluconazole
+	 * can be given, with one caution … Ethanol can be given, with one caution".
+	 */
+	@Test
+	public void aDrugGivenIfSheDrinksOrTakesAnotherIsTheProposalOfTheTwo() {
+		String[][] pairs = { { "Can I give her warfarin if she drinks alcohol?", "Can I give her warfarin with alcohol?" },
+			{ "Can she take warfarin if she drinks alcohol?", "Can she take warfarin with alcohol?" },
+			{ "Can I give her warfarin if she is taking nevirapine?", "Can I give her warfarin with nevirapine?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+	}
+
 	private static String ask(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

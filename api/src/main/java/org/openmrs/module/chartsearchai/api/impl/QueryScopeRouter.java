@@ -925,6 +925,14 @@ public final class QueryScopeRouter {
 			// "Are warfarin and ibuprofen safe together?", "Is warfarin safe with ibuprofen?"
 			"(?:are|is) " + HER_D + " and " + HER_D + " (?:safe|ok|okay|appropriate|fine)(?: to (?:give|take|use))?(?: together)?(?: for "
 					+ PATIENT + ")?",
+			// "Can I give her fluconazole if she drinks alcohol?", answered by the model "Fluconazole can be given … Ethanol can
+			// be given" (ADR Decision 451)
+			"(?:can|could|may|should) (?:i|we) (?:safely )?(?:give|start|prescribe|add|use) (?:" + PATIENT + " )?(?:on )?" + HER_D
+					+ " (?:if|when|while|since) (?:she|he|they|the patient) (?:drinks|drink|takes|take|uses|use|is on|are on|is taking"
+					+ "|are taking|has|have) " + HER_D,
+			"(?:can|could|may|should) (?:she|he|they|the patient|this patient) (?:safely )?(?:take|have|be given|use|get) " + HER_D
+					+ " (?:if|when|while|since) (?:she|he|they) (?:drinks|drink|takes|take|uses|use|is on|are on|is taking|are taking) "
+					+ HER_D,
 			// "Rifampicin while on nevirapine?", "Rifampicin and nevirapine at the same time?", "Ibuprofen and aspirin together?"
 			// (ADR Decision 444)
 			HER_D + " (?:while|when) (?:on|taking) " + HER_D,

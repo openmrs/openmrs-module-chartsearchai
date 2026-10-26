@@ -22584,3 +22584,21 @@ A second drug or a substance the data carries is not a meal: *"Can she take efav
 calcium with ciprofloxacin?"* are the questions they were.
 
 Pinned by `ClinicianWordingsTest.howOrWhenSheTakesADrugCarriesNoDrugSafetyMaterial`.
+
+## Decision 451: A drug given if she drinks alcohol, or if she takes another, is the proposal of the two together
+
+**Status: Accepted** (October 2026) — found asking 40 food, drink and supplement questions of 15 patients on the 3.7.1
+standalone on 2026-10-26.
+
+### Context
+
+*"Can I give her fluconazole if she drinks alcohol?"* went to the model, which answered *"Fluconazole can be given, with one
+caution … Ethanol can be given, with one caution"*. *"Fluconazole and alcohol?"* was already the module's (Decision 268 carries
+alcohol as ethanol), but the condition *"if she drinks"* matched no shape.
+
+### The decision
+
+*"Can I give her X if (when, while) she drinks (takes, is on) Y?"* and *"Can she take X if she drinks Y?"* are Decision
+203's proposal of the two together, as *"Can I give her X with Y?"* is.
+
+Pinned by `ClinicianWordingsTest.aDrugGivenIfSheDrinksOrTakesAnotherIsTheProposalOfTheTwo`.

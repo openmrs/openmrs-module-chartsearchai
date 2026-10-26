@@ -580,10 +580,12 @@ public class LlmInferenceService implements ChartSearchService {
 	 * A preview failure is
 	 * swallowed — the full-chart answer is authoritative and must never be blocked by this optional
 	 * speed-up. Returns the elapsed wall time (the {@code previewMs} timing field), or 0 when the
-	 * gate is off or the focused chart has no records.
+	 * gate is off or the focused chart has no records. The focused chart reads {@code searchByPatient},
+	 * which QueryStore filters by caller as it does the full chart, so it carries the full chart's
+	 * {@code withheldTypes}: without the notice the preview reasons that the patient has none of them.
 	 */
 	private long maybeEmitPreliminaryReasoning(Patient patient, String question,
-			Consumer<String> previewReasoningConsumer) {
+			Consumer<String> previewReasoningConsumer, Set<String> withheldTypes) {
 		long start = System.currentTimeMillis();
 		try {
 			if (!resolveProgressiveReasoningEnabled()) {
@@ -596,6 +598,7 @@ public class LlmInferenceService implements ChartSearchService {
 			}
 			PatientChart focused = chartBuildingStrategy.buildFocusedChart(patient, question);
 			if (focused != null && !focused.getMappings().isEmpty()) {
+				focused.markWithheldTypes(withheldTypes);
 				// `false` explicitly, and it is a decision rather than a default. THE LOAD-BEARING
 				// REASON IS THAT THIS PROMPT HAS NOTHING TO ENUMERATE: buildFocusedChart goes to
 				// QueryStoreChartBuilder.buildFocused and never through drugReferenceInjector
@@ -748,7 +751,8 @@ public class LlmInferenceService implements ChartSearchService {
 			// the preliminary channel before the full-chart answer prefills. No-op (returns 0) when the
 			// gate is off. Runs after the full chart is built so the patient's querystore index is
 			// already warm when the preview's searchByPatient runs (a cold patient pays it once).
-			previewMs = maybeEmitPreliminaryReasoning(patient, question, preliminaryReasoningConsumer);
+			previewMs = maybeEmitPreliminaryReasoning(patient, question, preliminaryReasoningConsumer,
+					chart.getWithheldTypes());
 
 			long llmStart = System.currentTimeMillis();
 			// KV scope: decided against the CHART that was built, not a re-read of the chartMode

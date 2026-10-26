@@ -1005,7 +1005,8 @@ public final class QueryScopeRouter {
 	 * model wrote it.
 	 */
 	public static boolean asksWhetherToGiveDrugsTogether(List<String> wordsWithTheDrugsMarked) {
-		return fitsAShape(wordsWithTheDrugsMarked, TOGETHER_SHAPES);
+		return fitsAShape(wordsWithTheDrugsMarked, TOGETHER_SHAPES)
+				|| residualPairReading(wordsWithTheDrugsMarked) == Residual.PROPOSES;
 	}
 
 	/** "Can I give her ibuprofen or paracetamol?", "Is ibuprofen or paracetamol safe for her?" — one drug or the other, each
@@ -1782,7 +1783,8 @@ public final class QueryScopeRouter {
 	 * #TOGETHER_SHAPES} (ADR Decision 203). Fail-CLOSED as {@link #asksWhetherToGiveADrug} is.
 	 */
 	public static boolean asksAboutTwoDrugsTogether(List<String> wordsWithTheDrugsMarked) {
-		return fitsAShape(wordsWithTheDrugsMarked, TWO_DRUGS_SHAPES) || asksWhetherToGiveDrugsTogether(wordsWithTheDrugsMarked);
+		return fitsAShape(wordsWithTheDrugsMarked, TWO_DRUGS_SHAPES) || asksWhetherToGiveDrugsTogether(wordsWithTheDrugsMarked)
+				|| residualPairReading(wordsWithTheDrugsMarked) != Residual.NONE;
 	}
 
 	private static final List<Pattern> TWO_DRUGS_INTERACT_SHAPES = shapes(DOES_ONE_INTERACT_WITH_THE_OTHER, ANY_INTERACTION_BETWEEN,
@@ -1898,7 +1900,8 @@ public final class QueryScopeRouter {
 	 * {@link #asksWhetherToGiveADrug} is.
 	 */
 	public static boolean asksWhetherOneDrugChangesTheOther(List<String> wordsWithTheDrugsMarked) {
-		return fitsAShape(wordsWithTheDrugsMarked, ONE_DRUG_CHANGES_THE_OTHER_SHAPES);
+		return fitsAShape(wordsWithTheDrugsMarked, ONE_DRUG_CHANGES_THE_OTHER_SHAPES)
+				|| residualPairReading(wordsWithTheDrugsMarked) == Residual.HARMS;
 	}
 
 	/**
@@ -1977,7 +1980,92 @@ public final class QueryScopeRouter {
 	 * the pair, which a proposal's "No" lead answers backwards. Fail-CLOSED as {@link #asksWhetherToGiveADrug} is.
 	 */
 	public static boolean asksWhetherTwoDrugsInteract(List<String> wordsWithTheDrugsMarked) {
-		return fitsAShape(wordsWithTheDrugsMarked, TWO_DRUGS_INTERACT_SHAPES);
+		return fitsAShape(wordsWithTheDrugsMarked, TWO_DRUGS_INTERACT_SHAPES)
+				|| residualPairReading(wordsWithTheDrugsMarked) == Residual.INTERACTS;
+	}
+
+	/** The words that make a question naming two drugs one about her medications as a whole (ADR Decision 456). */
+	private static final Set<String> RESIDUAL_NOT_A_PAIR = new HashSet<String>(Arrays.asList("medication", "medications",
+		"meds", "medicine", "medicines", "drug", "drugs", "treatment", "treatments", "regimen", "therapy", "prescriptions",
+		"tablets", "pills", "arvs", "arv", "antiretrovirals", "current", "currently", "existing", "other", "all", "each"));
+
+	/** The words the second of TWO drugs may follow in a question read without a shape (ADR Decision 456). */
+	private static final Set<String> RESIDUAL_PAIR_JOINS = new HashSet<String>(Arrays.asList("and", "with", "plus",
+		"alongside", "on", "taking"));
+
+	/** The words a question about TWO drugs may join them with and still be read without a shape (ADR Decision 456). */
+	private static final Set<String> RESIDUAL_PAIR_WORDS = new HashSet<String>(Arrays.asList("plus", "combination", "combo",
+		"combining", "combined", "mixing", "between", "concurrently", "simultaneously", "same", "time", "use", "using",
+		"coadministration", "administration", "given", "together"));
+
+	/**
+	 * How a question about TWO drugs that no pair shape fits is read (ADR Decision 456), as {@link #residualReading} reads one
+	 * drug: {@link Residual#INTERACTS} where it says "interact", {@link Residual#HARMS} where it asks whether the two would
+	 * harm her — answered as {@link #DANGEROUS_TOGETHER} is, with no lead — and {@link Residual#PROPOSES} where it asks
+	 * whether they are safe or proposes giving them. Exactly two drugs, and every other word one the one-drug reading admits
+	 * or {@link #RESIDUAL_PAIR_WORDS}; any other word, and the model answers. "Will rifampicin harm her with nevirapine?"
+	 * and "Ibuprofen and aspirin together - harmful?" went to the model, which opened each "No —".
+	 */
+	static Residual residualPairReading(List<String> wordsWithTheDrugsMarked) {
+		if (wordsWithTheDrugsMarked == null || Collections.frequency(wordsWithTheDrugsMarked, DRUG_NAME) != 2
+				|| fitsAShape(wordsWithTheDrugsMarked, TWO_DRUGS_SHAPES) || fitsAShape(wordsWithTheDrugsMarked, TOGETHER_SHAPES)
+				|| fitsAShape(wordsWithTheDrugsMarked, TWO_DRUGS_INTERACT_SHAPES)
+				|| fitsAShape(wordsWithTheDrugsMarked, ONE_DRUG_CHANGES_THE_OTHER_SHAPES)) {
+			return Residual.NONE;
+		}
+		// The second joined to the first, as the pair shapes join them: never a word after "her" — "Is fluconazole risky for her
+		// pregnancy?" is no pair, and a word standing there would be read as an unrecognised drug.
+		int first = wordsWithTheDrugsMarked.indexOf(DRUG_NAME);
+		int second = wordsWithTheDrugsMarked.lastIndexOf(DRUG_NAME);
+		if (!RESIDUAL_PAIR_JOINS.contains(wordsWithTheDrugsMarked.get(second - 1))) {
+			return Residual.NONE;
+		}
+		// Between the two, only what joins them or says what is asked of them: "Will rifampicin harm her with nevirapine?" —
+		// never "Are any of his current medications interacting with each other?", whose "any" and "each" stand in the
+		// places a word read as an unrecognised drug would.
+		for (String word : wordsWithTheDrugsMarked.subList(first + 1, second)) {
+			if (!RESIDUAL_PAIR_JOINS.contains(word) && !RESIDUAL_PAIR_WORDS.contains(word) && !RESIDUAL_HARMS.contains(word)
+					&& !RESIDUAL_SAFE.contains(word) && !"her".equals(word) && !"him".equals(word) && !"them".equals(word)) {
+				return Residual.NONE;
+			}
+		}
+		// A group of her medications is a screen of them, which its own shapes read: "Her current medications are aspirin and
+		// ibuprofen. Any interactions?"
+		for (String word : wordsWithTheDrugsMarked) {
+			if (RESIDUAL_NOT_A_PAIR.contains(word)) {
+				return Residual.NONE;
+			}
+		}
+		boolean interacts = false;
+		boolean safe = false;
+		boolean harms = false;
+		boolean gives = false;
+		boolean asked = false;
+		boolean aQuestion = false;
+		for (String word : wordsWithTheDrugsMarked) {
+			asked |= RESIDUAL_ASKING.contains(word);
+			aQuestion |= RESIDUAL_QUESTION.contains(word);
+			if (DRUG_NAME.equals(word) || RESIDUAL_FILLER.contains(word) || RESIDUAL_PAIR_WORDS.contains(word)) {
+				continue;
+			}
+			if (RESIDUAL_INTERACTS.contains(word)) {
+				interacts = true;
+			} else if (RESIDUAL_SAFE.contains(word)) {
+				safe = true;
+			} else if (RESIDUAL_HARMS.contains(word)) {
+				harms = true;
+			} else if (RESIDUAL_GIVE.contains(word)) {
+				gives = true;
+			} else {
+				return Residual.NONE;
+			}
+		}
+		// A question it must be, or the two drugs and a word saying what is asked of them: "Rifampicin and nevirapine: risk?"
+		if (!aQuestion && !((interacts || safe || harms) && wordsWithTheDrugsMarked.size() <= 6)) {
+			return Residual.NONE;
+		}
+		return interacts ? Residual.INTERACTS : harms ? Residual.HARMS : safe || gives && asked ? Residual.PROPOSES
+				: Residual.NONE;
 	}
 
 	/**
@@ -2358,6 +2446,8 @@ public final class QueryScopeRouter {
 		"verify", "concomitant", "patient's",
 		// "Does fluconazole pose a risk?" (ADR Decision 454)
 		"pose", "poses",
+		// "Is fluconazole a bad idea?", "Is fluconazole risky in her case?" (ADR Decision 456)
+		"idea", "case",
 		// "Any drug interactions I should be aware of before giving her clarithromycin?" (ADR Decision 426)
 		"aware",
 		// colloquial and non-native wordings (ADR Decision 415)
@@ -2374,14 +2464,19 @@ public final class QueryScopeRouter {
 		"fine", "alright", "compatible", "appropriate", "safety", "good", "suitable", "reasonable", "able", "recommended",
 		"allowed", "proper", "well",
 		// "Fluconazole permitted?" (ADR Decision 454)
-		"permitted", "permissible"));
+		"permitted", "permissible",
+		// "Fluconazole acceptable?" (ADR Decision 456)
+		"acceptable"));
 
 	/** Words saying the question is about whether the drug would harm her, which "No" answers backwards (ADR Decision 454):
 	 *  "Will fluconazole harm her?", "Is fluconazole a risk?", "Is fluconazole contraindicated here?". */
 	private static final Set<String> RESIDUAL_HARMS = new HashSet<String>(Arrays.asList("issue", "issues", "problem",
 		"problems", "problematic", "concern", "concerns", "risk", "risks", "risky", "contraindicated", "contraindication",
 		"contraindications", "worried", "worry", "worrying", "harm", "harmful", "hurt", "toxic", "dangerous", "danger",
-		"unsafe"));
+		"unsafe",
+		// "Would fluconazole be a mistake?", "Is fluconazole a bad idea?", "Is fluconazole hazardous for her?", "Is there a
+		// downside to fluconazole?" (ADR Decision 456)
+		"mistake", "bad", "hazardous", "downside", "downsides", "unwise", "inadvisable"));
 
 	/** Words proposing to give the drug, where an asking word opens the question. */
 	private static final Set<String> RESIDUAL_GIVE = new HashSet<String>(Arrays.asList("give", "giving", "given", "start",

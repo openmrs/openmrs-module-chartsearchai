@@ -22713,3 +22713,51 @@ The model withheld rifampicin in each answer, but from its own reading of the re
 - *"Is X suitable with Y?"* and *"X appropriate with Y?"* are *"Is X appropriate with Y?"*.
 
 Pinned by `ClinicianWordingsTest.aPairAskedWithNoVerbOrOfAPatientOnTheOtherIsTheQuestionItSpells`.
+
+## Decision 456: A pair, or a drug, asked in words no shape lists is read by its words
+
+**Status: Accepted** (October 2026) — found asking 40 further wordings of 15 patients on the 3.7.1 standalone on 2026-10-26.
+
+### Context
+
+Every pair wording no shape listed went to the model, and the model opens with its own *"No — X should not be given"* even
+where the question asks whether the two would HARM her. The lead check on the answers counted *"No —"* on 13 to 15 of 15
+patients for each of:
+- *"Will rifampicin harm her with nevirapine?"*, *"Could rifampicin and nevirapine hurt her?"*
+- *"Do I need to worry about rifampicin with nevirapine?"*, *"Any danger with rifampicin and nevirapine?"*
+- *"Is rifampicin plus nevirapine a risk?"*, *"Rifampicin and nevirapine: risk?"*, *"Rifampicin with nevirapine -
+  concerns?"*
+- *"Is there a contraindication between rifampicin and nevirapine?"*, *"Ibuprofen and aspirin together - harmful?"*
+
+One drug had the same gap in words the residual reading of Decisions 396 and 454 did not carry. The model answered
+*"Fluconazole can be given"* on 5 to 7 of 15 patients for *"Would fluconazole be a mistake?"*, *"Is fluconazole a bad
+idea?"*, *"Is fluconazole risky in her case?"* and *"Fluconazole acceptable?"*. *"Is fluconazole hazardous for her?"* and
+*"Is there a downside to fluconazole?"* raised no chip.
+
+Adding a shape per wording, as Decisions 441 to 455 did, closes the wordings measured and leaves the next one to the model.
+
+### The decision
+
+- A question naming TWO drugs that no pair shape fits is read by its words, `residualPairReading`, as the one-drug
+  `residualReading` reads one drug:
+  - *"interact"* is `asksWhetherTwoDrugsInteract`.
+  - A word of harm (`RESIDUAL_HARMS`) is `asksWhetherOneDrugChangesTheOther`. That is Decision 255's family of
+    `DANGEROUS_TOGETHER`, answered with no lead.
+  - A word of safety, or a proposal after an asking word, is `asksWhetherToGiveDrugsTogether`, Decision 203's proposal of
+    the two.
+- It reads a question only when every other word is one the one-drug reading admits, or a word joining two drugs
+  (`RESIDUAL_PAIR_WORDS`).
+- The second drug must follow a joining word (`RESIDUAL_PAIR_JOINS`: *and*, *with*, *plus*, *alongside*, *on*,
+  *taking*). `UnrecognisedDrugName` puts a word in each drug's place in turn, and *"Is fluconazole risky for her
+  pregnancy?"* would otherwise read *"pregnancy"* as an unrecognised second drug.
+- Between the two drugs stand only joining words, words of harm or safety, and *"her"*, *"him"* or *"them"*. A first
+  build without this read *"Are any of his current medications interacting with each other?"* as a question of two
+  unrecognised drugs, *"any"* and *"each"*. The screen tests caught it.
+- A word naming her medications as a whole (`RESIDUAL_NOT_A_PAIR`) leaves the question to the screen shapes. *"Her current
+  medications are aspirin and ibuprofen. Any interactions?"* is a screen of her medications, which
+  `LlmInferenceServiceEndedOrderStatementContextTest` keeps the model's.
+- *"mistake"*, *"bad"*, *"hazardous"*, *"downside"*, *"unwise"* and *"inadvisable"* are words of harm. *"acceptable"* is a
+  word of safety. *"idea"* and *"case"* are filler.
+
+Pinned by `ClinicianWordingsTest.aPairOrADrugAskedInWordsNoShapeListsIsReadByItsWords`, with *"Is warfarin risky for her
+pregnancy?"* and *"Is she on warfarin and nevirapine?"* still the model's.

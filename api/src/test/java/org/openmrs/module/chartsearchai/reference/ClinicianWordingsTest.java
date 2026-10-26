@@ -1429,6 +1429,38 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/** ADR Decision 456: a question of two drugs no pair shape fits is read by its words — whether they would harm her with no
+	 *  lead, whether they interact, whether they are safe together — and of one drug "a mistake", "a bad idea", "acceptable"
+	 *  are the questions they spell. */
+	@Test
+	public void aPairOrADrugAskedInWordsNoShapeListsIsReadByItsWords() {
+		String[][] pairs = { { "Will warfarin harm her with nevirapine?", "Is warfarin dangerous with her nevirapine?" },
+			{ "Could warfarin and nevirapine hurt her?", "Is warfarin dangerous with her nevirapine?" },
+			{ "Do I need to worry about warfarin with nevirapine?", "Is warfarin dangerous with her nevirapine?" },
+			{ "Any danger with warfarin and nevirapine?", "Is warfarin dangerous with her nevirapine?" },
+			{ "Is warfarin plus nevirapine a risk?", "Is warfarin dangerous with her nevirapine?" },
+			{ "Warfarin and nevirapine: risk?", "Is warfarin dangerous with her nevirapine?" },
+			{ "Is there a contraindication between warfarin and nevirapine?", "Is warfarin dangerous with her nevirapine?" },
+			{ "Warfarin with nevirapine - concerns?", "Is warfarin dangerous with her nevirapine?" },
+			{ "Ibuprofen and aspirin together - harmful?", "Is ibuprofen dangerous with aspirin?" },
+			{ "Any interaction warfarin with nevirapine please?", "Does warfarin interact with nevirapine?" },
+			{ "Warfarin and nevirapine compatible?", "Can I give her warfarin with nevirapine?" },
+			{ "Would warfarin be a mistake?", "Is warfarin dangerous for her?" },
+			{ "Is warfarin a bad idea?", "Is warfarin dangerous for her?" },
+			{ "Is warfarin hazardous for her?", "Is warfarin dangerous for her?" },
+			{ "Is warfarin risky in her case?", "Is warfarin dangerous for her?" },
+			{ "Is there a downside to warfarin?", "Is warfarin dangerous for her?" },
+			{ "Warfarin acceptable?", "Is warfarin allowed?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+		// Never a word after "her" in the second drug's place, nor two drugs she is asked to be on.
+		assertNull(ask("Is warfarin risky for her pregnancy?"));
+		assertNull(ask("Is she on warfarin and nevirapine?"));
+	}
+
 	private static String ask(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

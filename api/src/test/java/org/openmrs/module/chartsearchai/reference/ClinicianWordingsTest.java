@@ -1110,6 +1110,25 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		assertFalse(both.contains("withhold"), both);
 	}
 
+	/**
+	 * Which of two drugs she both takes is safer states each as hers, with what was found and no verdict (ADR Decision 443).
+	 * On the 3.7.1 standalone the module left it to the model for a patient taking both.
+	 */
+	@Test
+	public void whichOfTwoSheBothTakesIsSaferStatesEachAsHers() {
+		for (String question : new String[] { "Is diclofenac safer than ibuprofen for her?",
+			"Which is safer for her, diclofenac or ibuprofen?" }) {
+			String answer = ask(question);
+			assertNotNull(answer, question);
+			assertTrue(answer.startsWith(DrugReferenceInjector.COMPARES_NO_DRUGS_LEAD + "\nDiclofenac or Ibuprofen, each checked "
+					+ "on its own.\nDiclofenac is one of this patient's active medications (Diclofenac 50mg [n]).\nIbuprofen is one "
+					+ "of this patient's active medications (Ibuprofen 400mg [n]).\nFor Diclofenac:\n"
+					+ DrugReferenceInjector.FOUND_LEAD_OPENING + "Diclofenac:\n"), answer);
+			assertTrue(answer.contains("\nFor Ibuprofen:\n" + DrugReferenceInjector.FOUND_LEAD_OPENING + "Ibuprofen:\n"), answer);
+			assertFalse(answer.contains("withhold"), answer);
+		}
+	}
+
 	private static String ask(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

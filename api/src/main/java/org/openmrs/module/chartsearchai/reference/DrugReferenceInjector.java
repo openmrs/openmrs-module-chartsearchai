@@ -6950,7 +6950,9 @@ public class DrugReferenceInjector {
 			}
 			hersOfThem.add(drug);
 		}
-		if (hersOfThem.size() == 2) {
+		// Both hers, asked which is safer: each stated as hers, with what was found and no verdict (ADR Decision 443). Either of
+		// two she both takes, asked otherwise, is still the model's.
+		if (hersOfThem.size() == 2 && !QueryScopeRouter.asksWhichOfTwoDrugs(wordsBesideItsNames(question, questionDrugs))) {
 			return null;
 		}
 		List<String> pairLines = new ArrayList<String>();

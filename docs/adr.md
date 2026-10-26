@@ -22352,3 +22352,21 @@ patient taking clarithromycin, the model had answered *"Is fluconazole or clarit
 Pinned by `ClinicianWordingsTest.whichOfTwoIsSaferBesideOneOfHerOrdersIsTheChoiceOfTheTwo`,
 `ClinicianWordingsTest.whichOfTwoIsSaferBesideAThirdSheDoesNotTakeChoosesNeither` and
 `ClinicianWordingsTest.whichOfTwoIsSaferWhenSheTakesOneOfThemStatesHersWithNoVerdict`.
+
+## Decision 443: Which of two drugs she takes both of is safer states each as hers
+
+**Status: Accepted** (October 2026) — found asking Decision 442's wordings of 15 patients on the 3.7.1 standalone on
+2026-10-26.
+
+### Context
+
+*"Is diclofenac safer than ibuprofen for her?"* went to the model for the one patient taking both drugs. Decision 393's
+answer to a choice of two declined it, because neither drug can be proposed when both are hers.
+
+### The decision
+
+A choice of two drugs she both takes is answered with Decision 393's lead. Each drug is stated as one of her active
+medications, then each gets what the check found about it, with no verdict. Either of two she takes both of, asked any other
+way, is still left to the model (`DrugReferenceInjector.composeTwoProposalsTogether`).
+
+Pinned by `ClinicianWordingsTest.whichOfTwoSheBothTakesIsSaferStatesEachAsHers`.

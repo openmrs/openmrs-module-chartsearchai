@@ -1483,6 +1483,24 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 	}
 
 	@Test
+	public void aReasonNotToGiveTwoDrugsTogetherADoseChangedForTheOtherAndASingleDoseAreTheQuestionsTheySpell() {
+		String[][] pairs = { { "Is there any reason not to give warfarin with nevirapine?", "Should warfarin be avoided with her nevirapine?" },
+			{ "Any reason not to combine warfarin and nevirapine?", "Should warfarin be avoided with her nevirapine?" },
+			{ "Is there a reason to avoid warfarin with her nevirapine?", "Should warfarin be avoided with her nevirapine?" },
+			{ "Why shouldn't I give warfarin with nevirapine?", "Should warfarin be avoided with her nevirapine?" },
+			{ "Should I reduce the nevirapine dose if I add warfarin?", "Should I reduce her nevirapine dose if I add warfarin?" },
+			{ "Do I need to change the nevirapine dose if I start warfarin?", "Should I reduce her nevirapine dose if I add warfarin?" },
+			{ "Warfarin 5mg once - ok?", "Warfarin 5mg - ok?" },
+			{ "Warfarin 5mg as a single dose - ok?", "Warfarin 5mg - ok?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+		assertFalse(ask("Warfarin 5mg once - ok?").contains("is not a drug name"), "\"once\" is no drug name");
+	}
+
+	@Test
 	public void aDrugAskedOfEitherWayOrOfSideEffectsWithHerMedicationsIsTheQuestionItSpells() {
 		String[][] pairs = { { "Is it safe or not to give warfarin?", "Is warfarin allowed?" },
 			{ "Can warfarin be given or not?", "Is warfarin allowed?" },

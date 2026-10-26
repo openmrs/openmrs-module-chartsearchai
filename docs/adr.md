@@ -22827,3 +22827,31 @@ under no lead.
 
 Pinned by `ClinicianWordingsTest.whetherSheIsOnTwoDrugsIsAnsweredWithWhichSheIsOnAndWhatRelatesThem`: one drug hers, both
 hers, and neither, with *"Was warfarin given with nevirapine?"* still the model's.
+
+## Decision 459: A reason not to give two drugs together, a dose changed when the other starts, and a single dose are the questions they spell
+
+**Status: Accepted** (October 2026) — found asking 40 further wordings of 15 patients on the 3.7.1 standalone on 2026-10-26.
+
+### Context
+
+Three wordings went to the model:
+
+- *"Is there any reason not to give fluconazole with nevirapine?"* was answered *"Fluconazole can be given, with one
+  caution"* on all 15 patients. The one-drug *"Is there any reason not to give her X?"* has been the module's since
+  Decision 181, but no pair shape read the negated question.
+- *"Should I reduce the nevirapine dose if I add fluconazole?"* was answered *"Nevirapine can be given"* on all 15
+  patients. Decision 402's `CHANGE_HERS_IF_STARTING` reads *"her nevirapine dose"* and not *"the nevirapine dose"*.
+- *"Fluconazole 150mg once - ok?"* was answered *"Fluconazole can be given"* on 8 patients. Its answer also said *"once -
+  ok"* is not a drug name the interaction data recognises. `FREQUENCY` had no *"once"*, so the stated dose was not read
+  past and the word after it was taken for a second drug.
+
+### The decision
+
+- `AVOID_ONE_WITH_THE_OTHER` reads *"(Is there) any reason not to / to avoid giving X with Y"* and *"Why shouldn't I give
+  X with Y?"*. It is answered as *"Should X be avoided with her Y?"*: what relates the two, under no lead.
+- `CHANGE_HERS_IF_STARTING` admits *"the"* before her drug. The question is answered as Decision 402 answers *"Should I
+  reduce her X dose if I add Y?"*.
+- `FREQUENCY` reads *"once"*, *"(as) a single / one / one-off dose"* and *"one-off"*. The dose is read past as Decision 269
+  reads any stated dose, and the answer says the dose was not checked.
+
+Pinned by `ClinicianWordingsTest.aReasonNotToGiveTwoDrugsTogetherADoseChangedForTheOtherAndASingleDoseAreTheQuestionsTheySpell`.

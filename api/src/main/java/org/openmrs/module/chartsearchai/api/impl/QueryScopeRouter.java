@@ -1566,7 +1566,14 @@ public final class QueryScopeRouter {
 			// "Rifampicin and nevirapine - avoid?", "Should rifampicin be avoided in someone on nevirapine?" (ADR Decision 455)
 			+ "|" + HER_D + " (?:and|with|plus) " + HER_D + "(?: together)? avoid(?:ed)?"
 			+ "|(?:should|must) " + HER_D + " be avoided (?:in|for) (?:(?:a|the|this) patient|someone|somebody|a person|patients"
-			+ "|people) (?:on|taking|who takes|who is (?:on|taking)|who are (?:on|taking)) " + HER_D;
+			+ "|people) (?:on|taking|who takes|who is (?:on|taking)|who are (?:on|taking)) " + HER_D
+			// "Is there any reason not to give fluconazole with nevirapine?", answered "Fluconazole can be given" on every
+			// patient, and "Why shouldn't I give X with Y?" (ADR Decision 459)
+			+ "|(?:is there )?(?:any |a )?reasons? (?:why )?(?:not to|to avoid) (?:give |giving |start |starting |prescribe "
+			+ "|prescribing |add |adding |use |using |combine |combining )?(?:" + PATIENT + " )?(?:on )?" + HER_D
+			+ " (?:with|and|alongside|together with|plus) " + HER_D + "(?: together)?"
+			+ "|why (?:shouldn't|shouldnt|should not) (?:i|we) (?:give|start|prescribe|add|use|combine) (?:" + PATIENT + " )?(?:on )?"
+			+ HER_D + " (?:with|and|alongside|plus) " + HER_D + "(?: together)?";
 
 	private static final String WHAT_COMBINING_THEM_DOES = "(?:what (?:happens|would happen|will happen) if (?:i|we) (?:give|add"
 			+ "|start|combine|prescribe) (?:" + PATIENT + " )?(?:on )?" + HER_D + " (?:to|with|and|alongside) " + HER_D
@@ -1752,7 +1759,9 @@ public final class QueryScopeRouter {
 	/** "Should I change her efavirenz if I start rifampicin?" — asked as whether the two interact, the module choosing no drug
 	 *  to change (ADR Decision 402); of two of hers too (ADR Decision 404). */
 	private static final String CHANGE_HERS_IF_STARTING = "(?:should|must|do) (?:i|we) (?:need to )?(?:change|stop|switch|adjust|"
-			+ "modify|reduce|lower|decrease|increase|hold|pause) " + HER_D + "(?: dose)? if (?:i|we) (?:start|give|add|prescribe) (?:"
+			// and "the": "Should I reduce the nevirapine dose if I add fluconazole?", answered "Nevirapine can be given" (ADR
+			// Decision 459)
+			+ "modify|reduce|lower|decrease|increase|hold|pause) (?:the )?" + HER_D + "(?: dose)? if (?:i|we) (?:start|give|add|prescribe) (?:"
 			+ PATIENT + " )?(?:on )?" + HER_D
 			// "Should I change her nevirapine because of rifampicin?", "Does she need a dose change of efavirenz with
 			// rifampicin?" (ADR Decision 427)
@@ -2119,7 +2128,10 @@ public final class QueryScopeRouter {
 			// "once a week", "weekly" (ADR Decision 428)
 			+ "(?:day|week|month)|(?:once |twice )?weekly"
 			+ "|(?:once |twice )?daily|bd|bid|tds|tid|qds|qid|od|nocte|stat|prn|(?:every|each) (?:\\d+ )?(?:hours?|hrs?)"
-			+ "|\\d+ hourly|q\\d+h|at night|in the morning)";
+			+ "|\\d+ hourly|q\\d+h|at night|in the morning"
+			// once, a single time: "Fluconazole 150mg once - ok?", whose "once - ok" was reported a drug name the data does not
+			// recognise (ADR Decision 459)
+			+ "|once|(?:as )?(?:a )?(?:single|one|one-off|one off) dose|one-off|one off)";
 
 	/** A dose stated before the drug, "1 g of paracetamol", and after it, "amoxicillin 500 mg three times a day". */
 	private static final Pattern DOSE_BEFORE_THE_DRUG = Pattern.compile("(?<=^| )" + AMOUNT + "(?: of)? (" + D + ")");

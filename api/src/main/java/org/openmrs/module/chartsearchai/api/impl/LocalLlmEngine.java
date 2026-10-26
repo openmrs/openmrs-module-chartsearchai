@@ -328,6 +328,49 @@ public class LocalLlmEngine implements LlmEngine {
 		}
 	}
 
+	/** Exact prompt count after llama-server applies this model's chat template. */
+	synchronized int countChatInputTokens(String systemPrompt, String userMessage) {
+		ensureServerRunning();
+		try {
+			return requestChatInputTokenCount(getHttpClient(), endpoint, systemPrompt, userMessage);
+		}
+		catch (IOException e) {
+			throw new APIException("Failed to count local chat input tokens: " + e.getMessage(), e);
+		}
+		catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			throw new APIException("Local chat input token count was interrupted", e);
+		}
+		finally {
+			resetIdleTimer();
+		}
+	}
+
+	/** Package-visible transport seam for llama.cpp's chat-template-aware count endpoint. */
+	static int requestChatInputTokenCount(HttpClient client, LlamaServerEndpoint endpoint, String systemPrompt,
+			String userMessage) throws IOException, InterruptedException {
+		ObjectNode body = MAPPER.createObjectNode();
+		body.set("messages", ChatMessages.systemAndUser(MAPPER, systemPrompt, userMessage));
+		HttpRequest request = endpoint.request(endpoint.inputTokensUrl(), Duration.ofSeconds(30))
+				.header("Content-Type", "application/json")
+				.POST(HttpRequest.BodyPublishers.ofString(MAPPER.writeValueAsString(body),
+						StandardCharsets.UTF_8))
+				.build();
+		HttpResponse<String> response = client.send(request,
+				HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+		if (response.statusCode() < 200 || response.statusCode() >= 300) {
+			throw new APIException("Local chat input token count returned HTTP "
+					+ response.statusCode());
+		}
+		JsonNode root = MAPPER.readTree(response.body());
+		JsonNode count = root.get("input_tokens");
+		// An integral, non-negative count only: canConvertToInt alone reads -0.5 as 0 and 41.9 as 41.
+		if (count == null || !count.isIntegralNumber() || !count.canConvertToInt() || count.asInt() < 0) {
+			throw new APIException("Local chat input token count returned malformed JSON");
+		}
+		return count.asInt();
+	}
+
 	@Override
 	public synchronized InferenceResult inferStreaming(String systemPrompt, String userMessage,
 			int timeoutSeconds, Consumer<String> tokenConsumer) {

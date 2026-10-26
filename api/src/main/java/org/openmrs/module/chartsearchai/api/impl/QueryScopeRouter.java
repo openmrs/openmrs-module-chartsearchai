@@ -455,8 +455,9 @@ public final class QueryScopeRouter {
 					+ " (?:with|alongside|while (?:on|taking)) " + POSSESSIVE + " " + MEDICATIONS,
 			// "Can this patient take warfarin?", "Can she take ibuprofen?", "Can she drink alcohol?" (ADR Decision 268)
 			"(?:can|could|may|should) (?:she|he|they|the patient|this patient) (?:also )?(?:safely )?(?:take|start|be given|be started on"
-					// and "Can she get fluconazole?" (ADR Decision 431)
-					+ "|have|use|drink|get|receive) " + D + "(?: now| today)?",
+					// and "Can she get fluconazole?" (ADR Decision 431), and "Can she eat ginger?", answered by the model "Ginger
+					// can be eaten, with one caution" (ADR Decision 445)
+					+ "|have|use|drink|get|receive|eat|consume) " + D + "(?: now| today)?",
 			// "Ibuprofen - yes or no?" (ADR Decision 431)
 			D + "(?: for " + PATIENT + ")? (?:yes or no|ok or not|okay or not|safe or not)",
 			// "Would it be safe to start ibuprofen?", "OK to give ibuprofen?", "Is it safe to add ibuprofen to her regimen?"
@@ -472,8 +473,8 @@ public final class QueryScopeRouter {
 			// allowance the first and fourth shapes make, as a reordering of "Is it safe for her to add
 			// prednisone?", which this shape already admits.
 			// "Is it fine (alright) to give him paracetamol?" too (ADR Decision 357), and "advisable" (wise) (ADR Decision 361)
-			"is it (?:safe|ok|okay|appropriate|fine|alright|advisable|wise) (?:for " + PATIENT + " )?to (?:(?:give|start|prescribe|"
-					+ "administer|add) (?:" + PATIENT + " )?(?:on )?|take )" + D + "(?: for " + PATIENT + ")?(?: now| today)?",
+			"is it (?:safe|ok|okay|appropriate|fine|alright|advisable|wise|acceptable) (?:for " + PATIENT + " )?to (?:(?:give|start|"
+					+ "prescribe|administer|add) (?:" + PATIENT + " )?(?:on )?|take )" + D + "(?: for " + PATIENT + ")?(?: now| today)?",
 			// "Is ibuprofen safe for her?", "Is ibuprofen appropriate for this patient?", "suitable" (ADR Decision 362), and "Is
 			// the fluconazole-nevirapine combination safe?" (ADR Decision 430)
 			"is (?:the )?" + D + " (?:(?:combination|combo) )?(?:safe|ok|okay|appropriate|suitable)(?: (?:for|in) " + PATIENT
@@ -550,6 +551,8 @@ public final class QueryScopeRouter {
 			// "Fluconazole for her thrush - any issues?", answered by the model "Fluconazole can be given, with one caution" (ADR
 			// Decision 441)
 			D + "(?: for \\p{L}+(?: \\p{L}+){0,2})? (?:(?:are there )?any )?(?:issues|concerns|problems|risks)",
+			// and "Fluconazole in this patient - concerns?" (ADR Decision 445)
+			D + " (?:in|for) " + PATIENT + " (?:(?:are there )?any )?(?:issues|concerns|problems|risks|thoughts)",
 			// "Is fluconazole not safe for her?", "Can't I give her fluconazole?" — asked in the negative, answered with no "Yes"
 			// or "No" (ADR Decision 406)
 			"is " + D + " (?:not (?:safe|ok|okay|appropriate|suitable)|unsafe)(?: (?:for|in) " + PATIENT + ")?",
@@ -695,6 +698,9 @@ public final class QueryScopeRouter {
 					+ "(?:interact|interfere) with " + D,
 			"(?:does|will|would|could|can) " + D + " interact with anything (?:she|he|they|the patient|this patient) "
 					+ "(?:takes|is taking|is on)",
+			// "Will fluconazole interact with what she is taking?" (ADR Decision 445)
+			"(?:does|will|would|could|can) " + D + " interact with what (?:(?:she|he|they|the patient|this patient) (?:takes|is taking"
+					+ "|is on|are taking|are on)|she's (?:on|taking)|he's (?:on|taking)|they're (?:on|taking))(?: already| currently)?",
 			// "Is fluconazole going to interact with anything she's on?", "Tell me about fluconazole and her medications" (ADR
 			// Decision 427)
 			"is " + D + " going to interact with anything (?:(?:she|he|they|the patient|this patient) (?:is|are) |she's |he's "
@@ -887,8 +893,9 @@ public final class QueryScopeRouter {
 			HER_D + " (?:and|with|plus) " + HER_D + "(?: together)? (?:yes or no|ok or not|okay or not|safe or not)",
 			// "Is it safe to give her warfarin and ibuprofen together?", "Is it safe to take warfarin with ibuprofen?", "Is it OK
 			// to co-prescribe warfarin with her ibuprofen?" (ADR Decision 250)
-			"is it (?:safe|ok|okay|appropriate|fine|alright|advisable|wise) (?:for " + PATIENT + " )?to (?:(?:give|start|prescribe|"
-					+ "co prescribe|administer) (?:"
+			// and "acceptable" (ADR Decision 445)
+			"is it (?:safe|ok|okay|appropriate|fine|alright|advisable|wise|acceptable) (?:for " + PATIENT + " )?to (?:(?:give|start|"
+					+ "prescribe|co prescribe|administer) (?:"
 					// and "Is it safe to combine X and Y?" of a drug she is not on (ADR Decision 429)
 					+ PATIENT + " )?(?:on )?|take |combine |use |mix )" + HER_D + " (?:(?:and|with|alongside) " + HER_DS + "|(?:" + HER_D
 					+ " )+and " + HER_D + ")" + AT_ONCE + "(?: (?:for|to) " + PATIENT + ")?(?: now| today)?",
@@ -908,6 +915,8 @@ public final class QueryScopeRouter {
 					+ "(?: for " + PATIENT + ")?",
 			// and "Rifampicin together with nevirapine okay?" (ADR Decision 433)
 			HER_D + " (?:with|and|plus|together with) " + HER_D + "(?: together)? (?:safe|ok|okay|fine)",
+			// "Ibuprofen on top of aspirin - ok?" (ADR Decision 445)
+			HER_D + " on top of " + HER_D + " (?:safe|ok|okay|fine)",
 			// "Safe combo? fluconazole + rifampicin" (ADR Decision 429)
 			"(?:is (?:it|this|that) a )?(?:safe|ok|okay) (?:combo|combination)(?: of)? " + HER_D + " (?:and|with|plus) " + HER_D,
 			// "Is warfarin compatible with his amiodarone?", "Are warfarin and amiodarone compatible?", "Can metronidazole be
@@ -1515,6 +1524,9 @@ public final class QueryScopeRouter {
 			+ "|is it contraindicated to (?:give|combine|use|take|prescribe) " + HER_D + " (?:and|with|alongside) " + HER_D
 			+ "(?: together)?"
 			+ "|(?:is|are) " + HER_D + " (?:and|with|plus) " + HER_D + " contraindicated(?: together| with each other| in combination)?"
+			// "Is there a problem combining rifampicin with nevirapine?" (ADR Decision 445)
+			+ "|is there (?:a |any )?(?:problems?|issues?|risks?|dangers?|harm|concerns?) (?:(?:in|with) )?(?:combining|giving|mixing|"
+			+ "using|taking) " + HER_D + " (?:and|with|alongside) " + HER_D + "(?: together)?"
 			// "How bad is rifampicin with nevirapine?", "Clarithromycin while on nevirapine - risky?" (ADR Decision 444)
 			+ "|how (?:bad|dangerous|risky|harmful|serious|safe) is " + HER_D + " (?:with|alongside|and|plus|while on|while taking) "
 			+ HER_D
@@ -1542,8 +1554,9 @@ public final class QueryScopeRouter {
 			+ "|(?:(?:(?:do|will) (?:i|we) (?:need|have) to|should (?:i|we)) (?:stop|hold|pause|suspend|discontinue) " + HER_D
 			+ " (?:for|because of|due to|with) " + HER_D + ")"
 			+ "|(?:can|could|should) (?:she|he|they|the patient|this patient)"
-			+ " (?:continue|keep taking|stay on|remain on) " + HER_D + " (?:if|when|while) (?:i|we) (?:start|give|add|prescribe) "
-			+ D + ")";
+			+ " (?:continue|keep taking|stay on|remain on) " + HER_D + " (?:if|when|while) (?:(?:i|we) (?:start|give|add|prescribe)"
+			// and "Can she continue efavirenz if she starts rifampicin?" (ADR Decision 445)
+			+ "|(?:she|he|they) (?:starts|start|takes|take|begins|begin|is given|are given|gets|get)) " + D + ")";
 
 	/** "Does she need potassium monitoring on lisinopril and spironolactone?", "Does she need monitoring if I add
 	 *  spironolactone to her lisinopril?" — whether the two need monitoring (ADR Decision 252). */
@@ -1749,6 +1762,9 @@ public final class QueryScopeRouter {
 			DOES_ONE_INTERFERE_WITH_THE_OTHER,
 			// "Will rifampicin make her nevirapine less effective?" (ADR Decision 431)
 			"(?:does|do|will|would|can|could|might) " + HER_D + " make " + HER_D + " " + LESS_EFFECTIVE,
+			// "Will nevirapine levels drop with rifampicin?" (ADR Decision 445)
+			"(?:does|do|will|would|can|could|might) (?:the |" + POSSESSIVE + " )?" + D + " " + MEASURE + " (?:drop|fall|decrease|go down|"
+					+ "rise|increase|go up|change) (?:with|on|alongside|if (?:i|we) (?:add|give|start|prescribe)) " + HER_D,
 			// "Will rifampicin cause her nevirapine to fail?", "Is efavirenz still effective with rifampicin?" (ADR Decision 444)
 			"(?:does|do|will|would|can|could|might) " + HER_D + " cause " + HER_D + " to (?:fail|stop working|not work|be less "
 					+ "effective|work less)",

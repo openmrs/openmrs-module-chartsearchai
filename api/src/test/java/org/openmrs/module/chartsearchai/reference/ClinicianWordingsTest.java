@@ -1180,6 +1180,30 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/**
+	 * A substance the data carries asked whether she can "eat" it, a drug "interacting with what she is taking", one "in this
+	 * patient - concerns?", a pair "acceptable to give", "a problem combining", one's levels "dropping" with another, one
+	 * continued "if she starts" another, and one "on top of" another are the questions they spell (ADR Decision 445). On the
+	 * 3.7.1 standalone each went to the model, which answered "Can she eat ginger?" "Ginger can be eaten, with one caution"
+	 * and "Can she continue efavirenz if she starts rifampicin?" "Efavirenz can be continued".
+	 */
+	@Test
+	public void aSubstanceEatenOrADrugAcceptableBesideAnotherIsTheQuestionItSpells() {
+		String[][] pairs = { { "Can she eat ginger?", "Can she have ginger?" },
+			{ "Will warfarin interact with what she is taking?", "Does warfarin interact with her medications?" },
+			{ "Warfarin in this patient - concerns?", "Any problems giving her warfarin?" },
+			{ "Is it acceptable to give warfarin with nevirapine?", "Can I give her warfarin with nevirapine?" },
+			{ "Is there a problem combining warfarin with nevirapine?", "Is warfarin dangerous with her nevirapine?" },
+			{ "Will nevirapine levels drop with warfarin?", "Will warfarin lower her nevirapine levels?" },
+			{ "Can she continue nevirapine if she starts warfarin?", "Can she continue nevirapine if I start warfarin?" },
+			{ "Warfarin on top of nevirapine - ok?", "Is warfarin safe with her nevirapine?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+	}
+
 	private static String ask(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

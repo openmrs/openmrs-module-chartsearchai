@@ -22401,3 +22401,32 @@ she both takes (Decision 203) admitted only the effect shapes `asksAboutTwoDrugs
 
 Pinned by `ClinicianWordingsTest.aPairGivenWhileOnTheOtherOrFailingWithItIsTheQuestionItSpells` and
 `ClinicianWordingsTest.oneOfHersFailingWithAnotherOfHersIsAnsweredAsTwoOfHers`.
+
+## Decision 445: A substance she would eat, and a drug acceptable beside another, are the questions they spell
+
+**Status: Accepted** (October 2026) — found asking 40 further wordings of 15 patients on the 3.7.1 standalone on 2026-10-26.
+
+### Context
+
+Seven wordings went to the model:
+- *"Can she eat ginger?"* was answered *"Ginger can be eaten, with one caution"* for the two patients whose orders ginger
+  interacts with (aspirin, heparin). The data carries ginger as a substance that potentiates antiplatelet drugs and
+  anticoagulants. *"Can she have ginger?"* was the module's, but the proposal shape listed *"drink"* and not *"eat"*.
+- *"Can she continue efavirenz if she starts rifampicin?"* was answered *"Efavirenz can be continued"*.
+- *"Will fluconazole interact with what she is taking?"* was answered *"Fluconazole can be given"*.
+
+### The decision
+
+- *"Can she eat (consume) X?"* is the proposal of X, as *"Can she drink X?"* is (Decision 268). A word the data does not
+  carry, after *"eat"*, is still something to eat and takes the chart answer (Decisions 390, 435). The proposal shape reads
+  only a name the data carries, so oranges, beans, fish and ugali are untouched.
+- *"Will X interact with what she is taking?"* is whether X interacts with her medications.
+- *"X in this patient - concerns?"* is Decision 255's question of the risk, with no lead.
+- *"Is it acceptable to give X with Y?"* is Decision 203's proposal of the two together.
+- These are Decisions 249-255's questions of what one does beside the other, with no lead:
+  - *"Is there a problem combining X with Y?"*;
+  - *"Will Y levels drop with X?"*;
+  - *"Can she continue Y if she starts X?"*.
+- *"X on top of Y - ok?"* is whether the two are safe together.
+
+Pinned by `ClinicianWordingsTest.aSubstanceEatenOrADrugAcceptableBesideAnotherIsTheQuestionItSpells`.

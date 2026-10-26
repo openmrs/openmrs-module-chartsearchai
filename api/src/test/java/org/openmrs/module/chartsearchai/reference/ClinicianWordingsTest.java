@@ -1456,9 +1456,30 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
 			assertEquals(canonical, ask(pair[0]), pair[0]);
 		}
-		// Never a word after "her" in the second drug's place, nor two drugs she is asked to be on.
+		// Never a word after "her" in the second drug's place. (Two drugs she is asked to be on are the module's since ADR
+		// Decision 458, whetherSheIsOnTwoDrugsIsAnsweredWithWhichSheIsOnAndWhatRelatesThem.)
 		assertNull(ask("Is warfarin risky for her pregnancy?"));
-		assertNull(ask("Is she on warfarin and nevirapine?"));
+	}
+
+	@Test
+	public void whetherSheIsOnTwoDrugsIsAnsweredWithWhichSheIsOnAndWhatRelatesThem() {
+		String[][] pairs = { { "Is she taking warfarin and nevirapine together?", "Is warfarin dangerous with her nevirapine?" },
+			{ "Is she on warfarin and nevirapine?", "Is warfarin dangerous with her nevirapine?" },
+			{ "Is she currently on both warfarin and nevirapine?", "Is warfarin dangerous with her nevirapine?" },
+			{ "Does she take warfarin and nevirapine?", "Is warfarin dangerous with her nevirapine?" },
+			{ "Is the patient taking warfarin with nevirapine?", "Is warfarin dangerous with her nevirapine?" },
+			{ "Is she taking ibuprofen and aspirin together?", "Is ibuprofen dangerous with aspirin?" },
+			{ "Is she on warfarin and fluconazole?", "Is warfarin dangerous with fluconazole?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertTrue(canonical.contains("this patient's active medications"),
+				"precondition: the answer says which of the two she is on: " + canonical);
+			assertFalse(canonical.startsWith("No") || canonical.startsWith("Yes"), canonical);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+		// Whether she WAS given them is her history, which the model answers from her records.
+		assertNull(ask("Was warfarin given with nevirapine?"));
 	}
 
 	@Test

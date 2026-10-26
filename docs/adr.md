@@ -22798,3 +22798,32 @@ the module's, because a shape spells *"safe or not"* after the drug.
 Pinned by `ClinicianWordingsTest.aDrugAskedOfEitherWayOrOfSideEffectsWithHerMedicationsIsTheQuestionItSpells`, with
 *"Does warfarin have side effects?"*, *"Any side effects of warfarin?"* and *"Is warfarin safe or not effective?"* still
 the model's.
+
+## Decision 458: Whether she is on two drugs is answered with which she is on and what relates them
+
+**Status: Accepted** (October 2026) — found asking 40 further wordings of 15 patients on the 3.7.1 standalone on 2026-10-26.
+
+### Context
+
+*"Is she taking fluconazole and nevirapine together?"* asks what her orders hold. It went to the model, which answered
+*"Fluconazole and Nevirapine can be given, with one caution"* on 2 of 15 patients. That is a clearance, answering a
+question nobody asked. On most of the rest it answered *"The records do not address whether the patient is taking
+Fluconazole and Nevirapine together"*, though her orders say which of the two she is on.
+
+The module's answers to two drugs asked of together already open with that statement: *"Nevirapine is one of this
+patient's active medications"*, *"… are both among this patient's active medications"*, or *"Neither … is one of this
+patient's active medications"*. The pair answers of Decision 255's `DANGEROUS_TOGETHER` then state what relates the two
+under no lead.
+
+### The decision
+
+- `ON_BOTH_NOW` reads *"Is she (currently) on / taking X and Y (together)?"* and *"Does she take X and Y?"*. It sits in
+  both lists that hold `DANGEROUS_TOGETHER`, so the question is answered as that family is: which of the two she is on,
+  then what relates them, and neither *"Yes"* nor *"No"*.
+- Present tense only. *"Was rifampicin given with nevirapine?"* is her history, and the model answers it from her records.
+- `ClinicianWordingsTest.aPairOrADrugAskedInWordsNoShapeListsIsReadByItsWords` kept *"Is she on warfarin and
+  nevirapine?"* the model's (Decision 456). The control kept the residual pair reading from taking a presence question for
+  a proposal, which it still does not do. This decision gives that wording its own shape and supersedes that one line.
+
+Pinned by `ClinicianWordingsTest.whetherSheIsOnTwoDrugsIsAnsweredWithWhichSheIsOnAndWhatRelatesThem`: one drug hers, both
+hers, and neither, with *"Was warfarin given with nevirapine?"* still the model's.

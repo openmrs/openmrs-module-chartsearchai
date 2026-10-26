@@ -1590,6 +1590,13 @@ public final class QueryScopeRouter {
 	 *  dangerous together, whose "No" would say they are not (ADR Decision 255). */
 	// and with no verb, or "toxic": "Rifampicin dangerous with nevirapine?", "Is rifampicin toxic with nevirapine?" (ADR
 	// Decision 455)
+	/** "Is she taking fluconazole and nevirapine together?", "Does she take X and Y?" — whether she is on the two now, which
+	 *  her orders answer, and what relates them, under no lead: the model answered it "Fluconazole and Nevirapine can be
+	 *  given" (ADR Decision 458). Present tense only: whether she WAS given them is her history, the model's. */
+	private static final String ON_BOTH_NOW = "(?:(?:is|are) " + SUBJECT + " (?:currently |still |now |already )?(?:on|taking|"
+			+ "using|receiving|prescribed)|(?:does|do) " + SUBJECT + " (?:currently |still )?(?:take|use|receive)) (?:both )?" + HER_D
+			+ " (?:and|with|plus|alongside) " + HER_D + "(?: together)?(?: now| currently| at the moment| at present| already)?";
+
 	private static final String DANGEROUS_TOGETHER = "(?:(?:is )?" + HER_D + " (?:dangerous|risky|unsafe|harmful|toxic"
 			+ "|contraindicated|a problem|problematic) (?:with|alongside|in combination with) " + HER_D + "|is it (?:dangerous|risky|unsafe|harmful"
 			+ "|a problem) to (?:combine|give|take|use) " + HER_D + " (?:and|with) " + HER_D + "(?: together)?|(?:could|would|will"
@@ -1767,7 +1774,7 @@ public final class QueryScopeRouter {
 					+ "(?: together)?",
 			DOES_ONE_INTERACT_WITH_THE_OTHER, CHANGE_HERS_IF_STARTING,
 			DOES_ONE_CHANGE_THE_OTHER, AVOID_ONE_WITH_THE_OTHER, WHAT_COMBINING_THEM_DOES, DOSE_BECAUSE_OF_THE_OTHER,
-			STOP_OR_KEEP_ONE_FOR_THE_OTHER, MONITORING_ON_BOTH, DANGEROUS_TOGETHER, DOSE_SAFE_WITH_THE_OTHER, SAFE_TOGETHER_OR_SWITCH,
+			STOP_OR_KEEP_ONE_FOR_THE_OTHER, MONITORING_ON_BOTH, DANGEROUS_TOGETHER, ON_BOTH_NOW, DOSE_SAFE_WITH_THE_OTHER, SAFE_TOGETHER_OR_SWITCH,
 			DOSE_ADJUSTMENT_FOR_THE_PAIR, KEEP_HERS_BESIDE_THE_OTHER,
 			// "Is ibuprofen safe with celecoxib?", "Is simvastatin ok with clopidogrel?", "Is her ibuprofen safe with her
 			// celecoxib?"
@@ -1888,7 +1895,7 @@ public final class QueryScopeRouter {
 			"(?:is|are|will|would) " + HER_D + " (?:still )?(?:be )?(?:as )?(?:effective|work|working) (?:with|alongside|on|if (?:i|we) "
 					+ "(?:add|give|start|prescribe)) " + HER_D,
 			AVOID_ONE_WITH_THE_OTHER, WHAT_COMBINING_THEM_DOES, DOSE_BECAUSE_OF_THE_OTHER, STOP_OR_KEEP_ONE_FOR_THE_OTHER,
-			MONITORING_ON_BOTH, DANGEROUS_TOGETHER, DOSE_SAFE_WITH_THE_OTHER, SAFE_TOGETHER_OR_SWITCH, DOSE_ADJUSTMENT_FOR_THE_PAIR,
+			MONITORING_ON_BOTH, DANGEROUS_TOGETHER, ON_BOTH_NOW, DOSE_SAFE_WITH_THE_OTHER, SAFE_TOGETHER_OR_SWITCH, DOSE_ADJUSTMENT_FOR_THE_PAIR,
 			KEEP_HERS_BESIDE_THE_OTHER);
 
 	/**

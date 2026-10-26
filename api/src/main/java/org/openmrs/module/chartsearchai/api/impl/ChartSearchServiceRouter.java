@@ -197,6 +197,12 @@ public class ChartSearchServiceRouter implements ChartSearchService {
 		return Context.getAdministrationService().getGlobalProperty(property, defaultValue);
 	}
 
+	/** Test seam, as {@link #gp} is: who is asking, since QueryStore withholds what they cannot read. */
+	protected String askingUser() {
+		org.openmrs.User user = Context.getAuthenticatedUser();
+		return user == null ? "" : user.getUuid();
+	}
+
 	protected String buildCacheKey(Patient patient, String question) {
 		// Retrieval GPs that change what the LLM sees, post-querystore-migration (#51): preFilter
 		// toggles the fullChart focus-hint pass, and querystore.topK sizes the queryScoped slice
@@ -216,7 +222,8 @@ public class ChartSearchServiceRouter implements ChartSearchService {
 		String grounding = gp(ChartSearchAiConstants.GP_GROUNDING_ENABLED, "");
 		String groundingMinCosine = gp(ChartSearchAiConstants.GP_GROUNDING_MIN_COSINE, "");
 		String groundingEntailment = gp(ChartSearchAiConstants.GP_GROUNDING_ENTAILMENT_ENABLED, "");
-		return patient.getUuid() + "::" + preFilter.trim().toLowerCase()
+		// The asker follows the patient uuid, so invalidatePatient's prefix still covers every entry.
+		return patient.getUuid() + "::" + askingUser() + "::" + preFilter.trim().toLowerCase()
 				+ "::" + chartMode.trim().toLowerCase()
 				+ "::" + queryStoreTopK.trim()
 				+ "::" + grounding.trim().toLowerCase()

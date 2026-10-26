@@ -1560,6 +1560,22 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		assertNull(ask("Was warfarin given with nevirapine?"));
 	}
 
+	/** ADR Decision 462: starting one drug and stopping another, in either order, is the switch it spells. */
+	@Test
+	public void startingOneDrugAndStoppingAnotherIsTheSwitchItSpells() {
+		String[][] pairs = { { "Can I start warfarin and stop nevirapine?", "Can I give her warfarin instead of nevirapine?" },
+			{ "Should I start warfarin and stop her nevirapine?", "Can I give her warfarin instead of nevirapine?" },
+			{ "Can I give warfarin and stop nevirapine?", "Can I give her warfarin instead of nevirapine?" },
+			{ "Can I stop nevirapine and start warfarin?", "Can I switch her nevirapine to warfarin?" },
+			{ "Should I stop her nevirapine and give warfarin?", "Can I switch her nevirapine to warfarin?" },
+			{ "Can I stop nevirapine and start her on warfarin?", "Can I switch her nevirapine to warfarin?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+	}
+
 	private static String ask(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

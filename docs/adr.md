@@ -22912,3 +22912,23 @@ fluconazole. Any issue?"*. Decision 456's residual pair reading missed each of t
   warfarin to nevirapine?"* are left there.
 
 Pinned by `ClinicianWordingsTest.aPairJoinedByAVerbAPlanOrTheWordsOnTopOfIsThePairQuestionItSpells`.
+
+## Decision 462: Starting one drug and stopping another, in either order, is the switch it spells
+
+**Status: Accepted** (October 2026) — found asking 40 further wordings of 15 patients on the 3.7.1 standalone on 2026-10-26.
+
+### Context
+
+*"Can I start fluconazole and stop nevirapine?"* went to the model, which answered *"Fluconazole can be given"* on 4 of
+15 patients and opened *"No —"* on 5. The question is a switch. Decision 219 answers *"Can I switch her nevirapine to
+fluconazole?"* and Decision 230 answers *"Can I give her fluconazole instead of nevirapine?"*: each says which drug the
+switch replaces, and what relates the drug started to the medications she keeps. Neither switch grammar read the two
+verbs joined by *"and"*.
+
+### The decision
+
+- `SWITCH_TO_FIRST_SHAPES` reads *"Can I start / give X and stop Y?"*, the drug started named first.
+- `SWITCH_SHAPES` reads *"Can I stop Y and start / give X?"*, the drug stopped named first.
+- Both admit *"her"* before the drug stopped and *"her on"* before the drug started, as the switch shapes already do.
+
+Pinned by `ClinicianWordingsTest.startingOneDrugAndStoppingAnotherIsTheSwitchItSpells`.

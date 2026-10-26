@@ -1959,7 +1959,10 @@ public final class QueryScopeRouter {
 			"(?:can|could|may|should) (?:i|we) replace (?:" + POSSESSIVE + " )?" + D + " (?:with|by) " + D + "(?: now| today)?",
 			"is it (?:safe|ok|okay|appropriate) to (?:switch|change|swap) (?:" + PATIENT + " (?:from )?|" + POSSESSIVE + " |from )?" + D
 					+ " (?:to|for) " + D,
-			"is it (?:safe|ok|okay|appropriate) to replace (?:" + POSSESSIVE + " )?" + D + " (?:with|by) " + D);
+			"is it (?:safe|ok|okay|appropriate) to replace (?:" + POSSESSIVE + " )?" + D + " (?:with|by) " + D,
+			// "Can I stop nevirapine and start warfarin?", "Should I stop her nevirapine and give warfarin?" (ADR Decision 462)
+			"(?:can|could|may|should) (?:i|we) (?:stop|discontinue) (?:" + POSSESSIVE + " )?" + D + " and (?:start|give|use|prescribe"
+					+ "|begin) (?:" + PATIENT + " )?(?:on )?" + D + "(?: instead)?(?: now| today)?");
 
 	/**
 	 * Whether a question asks whether to switch one drug to another, and nothing else — one of {@link #SWITCH_SHAPES}, the
@@ -1981,7 +1984,10 @@ public final class QueryScopeRouter {
 			"(?:can|could|may|should) (?:i|we) (?:give|use|start|prescribe|try) (?:" + PATIENT + " )?(?:on )?" + D + INSTEAD_OF,
 			"(?:can|could|may|should) " + SUBJECT + " (?:take|have|use|receive|start|be on|be given|be started on) " + D
 					+ INSTEAD_OF,
-			"is it (?:safe|ok|okay|appropriate) to (?:give|use|start|prescribe) (?:" + PATIENT + " )?(?:on )?" + D + INSTEAD_OF);
+			"is it (?:safe|ok|okay|appropriate) to (?:give|use|start|prescribe) (?:" + PATIENT + " )?(?:on )?" + D + INSTEAD_OF,
+			// "Can I start warfarin and stop nevirapine?" (ADR Decision 462)
+			"(?:can|could|may|should) (?:i|we) (?:give|use|start|prescribe|begin) (?:" + PATIENT + " )?(?:on )?" + D + " and (?:stop"
+					+ "|discontinue) (?:" + POSSESSIVE + " )?" + D + "(?: now| today)?");
 
 	/**
 	 * Whether a question asks whether to give one drug instead of another, and nothing else — one of {@link

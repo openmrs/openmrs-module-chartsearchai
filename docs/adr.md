@@ -22488,3 +22488,38 @@ article before the drug was not removed with it.
   lidocaine, with Decision 334's statement that the form was not weighed.
 
 Pinned by `ClinicianWordingsTest.aPairsRiskOrADrugGivenToSomeoneOnAnotherIsTheQuestionItSpells`.
+
+## Decision 448: A drug causing damage, a pair safe or not, and a misspelt drug safe for her with no verb, are the questions they spell
+
+**Status: Accepted** (October 2026) — found asking 40 further wordings of 15 patients on the 3.7.1 standalone on 2026-10-26.
+
+### Context
+
+Seven wordings went to the model:
+- *"Clarithromycin safe with efavirenz or not?"* was answered *"Clarithromycin can be given, with one caution"* on 14 of 15
+  patients.
+- *"Can fluconazole cause liver damage?"* was answered *"Fluconazole can be given, with one caution"* on 2 patients,
+  including one whose methotrexate the data relates to fluconazole by the risk of liver injury.
+- *"fluconazol safe for her?"*, without a verb, got no *"Did you mean Fluconazole?"*. The name the data carries is read
+  without a verb by Decision 396's residual reading, which does not read a word the data does not carry.
+
+The batch also asked questions that name a drug and ask nothing about interactions:
+- *"What is fluconazole used for?"*, its side effects, its class and how it works raised nothing.
+- Its normal dose, how long she should take it, and whether efavirenz is safe in pregnancy or breastfeeding raised the
+  drug's findings as chips (Decision 399 keeps the findings where a question has a word of dose, safety or advice). The model
+  answered each that the records do not address it, with no clearance.
+- *"Is she taking her medicines regularly?"* brought one patient's allergy to her own active dexamethasone order into the
+  answer. That is the contraindication arm's scope for any question about her medications (Decisions 293, 374, 417), a
+  prescribing error the chart records, and no interaction.
+
+### The decision
+
+- *"Can X cause liver damage (toxicity, injury, failure)?"* is Decision 255's *"Could X cause problems?"*, answered with what
+  the check found and no lead, as Decision 414 answers an effect the findings do not weigh one by one.
+- *"X safe for her?"* without a verb is the proposal of X, so a misspelling is offered its near name.
+- *"X safe with Y or not?"* and *"Can she take both X and Y?"* are Decision 203's proposal of the two together.
+- *"X, Y - interaction?"* is Decision 423's question of what the interaction is; the comma is no word.
+- *"X vs her ARVs?"* is whether X is safe beside them.
+- *"Will giving X harm her Y treatment?"* is Decision 360's question of one interfering with the other.
+
+Pinned by `ClinicianWordingsTest.aDrugCausingDamageOrAPairSafeOrNotIsTheQuestionItSpells`.

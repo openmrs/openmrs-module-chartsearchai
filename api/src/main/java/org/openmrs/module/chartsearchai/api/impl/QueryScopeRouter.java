@@ -480,6 +480,9 @@ public final class QueryScopeRouter {
 			// the fluconazole-nevirapine combination safe?" (ADR Decision 430)
 			"is (?:the )?" + D + " (?:(?:combination|combo) )?(?:safe|ok|okay|appropriate|suitable)(?: (?:for|in) " + PATIENT
 					+ ")?(?: now| today)?",
+			// "Fluconazol safe for her?" — no verb, which the residual reading answers of a name the data carries but not of a
+			// misspelling (ADR Decision 448)
+			D + " (?:safe|ok|okay|fine|appropriate|suitable) (?:for|in) " + PATIENT + "(?: now| today)?",
 			// "Would ibuprofen be appropriate for her?"
 			"(?:would|will) " + D + " be (?:safe|ok|okay|appropriate|suitable)(?: for " + PATIENT + ")?",
 			// "Is ibuprofen safe to add?", "Is ibuprofen safe to give her?" — the drug before "safe to", the
@@ -547,6 +550,10 @@ public final class QueryScopeRouter {
 			"is there (?:a |any )?(?:increased )?risk of (?:\\p{L}+ ){1,3}(?:if|when) (?:i|we) (?:give|add|start|prescribe) (?:"
 					+ PATIENT + " )?(?:on )?" + D,
 			"(?:will|would|could|does|can) " + D + " (?:increase|raise|worsen) (?:" + POSSESSIVE + " |the )?(?:\\p{L}+ ){1,2}risk",
+			// "Can fluconazole cause liver damage?", answered by the model "Fluconazole can be given, with one caution" (ADR
+			// Decision 448)
+			"(?:could|would|will|might|can|does) " + D + " cause (?:\\p{L}+ ){1,2}(?:damage|toxicity|injury|failure|problems?)"
+					+ "(?: (?:for|in) " + PATIENT + ")?",
 			"is " + D + " (?:hepatotoxic|nephrotoxic|cardiotoxic|ototoxic|myelotoxic) (?:with|alongside) " + POSSESSIVE
 					+ " (?:other )?" + MEDICATIONS,
 			// "Fluconazole for her thrush - any issues?", answered by the model "Fluconazole can be given, with one caution" (ADR
@@ -893,8 +900,9 @@ public final class QueryScopeRouter {
 			// alcohol with her metronidazole?" (ADR Decision 268), "Can he have ibuprofen as well as his warfarin?" (ADR
 			// Decision 355)
 			// and "Can she get heparin while on aspirin?" (ADR Decision 447)
+			// and "Can she take both rifampicin and nevirapine?" (ADR Decision 448)
 			"(?:can|could|may|should) (?:she|he|they|the patient|this patient) (?:safely )?(?:take|be given|drink|have|get|receive|use) "
-					+ HER_D
+					+ "(?:both )?" + HER_D
 					// and "at the same time" (ADR Decision 441)
 					+ " (?:and|with|alongside|as well as|while on|while taking) " + HER_DS + AT_ONCE + "(?: now| today)?",
 			// "Rifampicin and nevirapine together - yes or no?" (ADR Decision 441)
@@ -926,6 +934,8 @@ public final class QueryScopeRouter {
 			// "Is co-prescribing rifampicin and nevirapine safe?" (ADR Decision 446)
 			"is (?:co prescribing|coprescribing|co administering|coadministering|combining|giving|using|mixing) " + HER_D
 					+ " (?:and|with) " + HER_D + "(?: together)? (?:safe|ok|okay|appropriate|fine)(?: (?:for|in) " + PATIENT + ")?",
+			// "Clarithromycin safe with efavirenz or not?" (ADR Decision 448)
+			"(?:is )?" + HER_D + " (?:safe|ok|okay|fine) (?:with|alongside) " + HER_D + " or not",
 			// "Ibuprofen on top of aspirin - ok?" (ADR Decision 445)
 			HER_D + " on top of " + HER_D + " (?:safe|ok|okay|fine)",
 			// "Safe combo? fluconazole + rifampicin" (ADR Decision 429)
@@ -1260,6 +1270,8 @@ public final class QueryScopeRouter {
 			"(?:will|would|is) " + D + " (?:be )?(?:ok|okay|safe|fine) with what (?:she's|he's|they're|(?:she|he|the patient) is"
 					+ "|they are) (?:already |currently )?(?:on|taking)",
 			D + " on top of " + HER_MEDICATION_GROUP + " (?:safe|ok|okay|fine)",
+			// "Fluconazole vs her ARVs?" (ADR Decision 448)
+			D + " (?:vs|versus) " + HER_MEDICATION_GROUP,
 			// "Fluconazole and her ARVs - ok?" (ADR Decision 444)
 			D + " (?:and|with|plus) " + HER_MEDICATION_GROUP + " (?:safe|ok|okay|fine)",
 			// "What dose of ibuprofen is safe with her medications?" — a dose asked for, which no finding weighs (ADR Decision
@@ -1753,7 +1765,8 @@ public final class QueryScopeRouter {
 			"is (?:the )?" + HER_D + " (?:and |plus |with )?" + HER_D + " (?:a |an )?(?:major|serious|severe|significant|dangerous|"
 					+ "moderate|minor|important) (?:drug )?interaction",
 			// "rifampicin vs nevirapine interaction", "Interaction between rifampicin and nevirapine?" (ADR Decision 423)
-			HER_D + " (?:vs|versus|and|with|plus) " + HER_D + " (?:drug )?interactions?",
+			// and "Rifampicin, nevirapine - interaction?", the comma no word (ADR Decision 448)
+			HER_D + " (?:(?:vs|versus|and|with|plus) )?" + HER_D + " (?:drug )?interactions?",
 			"(?:the )?(?:drug )?interactions? between " + HER_D + " and " + HER_D,
 			"how (?:do|does|would|will) " + HER_D + " and " + HER_D + " interact(?: with each other)?",
 			"how (?:do|does|would|will) " + HER_D + " interact with " + HER_D,
@@ -1790,6 +1803,9 @@ public final class QueryScopeRouter {
 			DOES_ONE_INTERFERE_WITH_THE_OTHER,
 			// "Will rifampicin make her nevirapine less effective?" (ADR Decision 431)
 			"(?:does|do|will|would|can|could|might) " + HER_D + " make " + HER_D + " " + LESS_EFFECTIVE,
+			// "Will giving rifampicin harm her nevirapine treatment?" (ADR Decision 448)
+			"(?:does|do|will|would|could|might|can) (?:giving|starting|adding|prescribing) " + HER_D + " (?:harm|affect|damage|"
+					+ "interfere with|compromise|undermine|weaken) " + HER_D + "(?: (?:treatment|therapy|regimen))?",
 			// "Is efavirenz affected by rifampicin?" (ADR Decision 446)
 			"(?:is|are|will|would) " + HER_D + " (?:be )?(?:affected|changed|reduced|weakened|altered|influenced) by " + HER_D,
 			// "Will nevirapine levels drop with rifampicin?" (ADR Decision 445)

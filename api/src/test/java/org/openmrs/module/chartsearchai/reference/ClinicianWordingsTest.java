@@ -1253,6 +1253,29 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 			ask("Any problem with giving her a warfarin injection?"));
 	}
 
+	/**
+	 * Whether a drug "can cause liver damage", a misspelt drug "safe for her" with no verb, a pair "safe or not", two names
+	 * and "interaction" with a comma between, a drug "vs her ARVs", "both" of two taken, and giving one "harming" another's
+	 * treatment are the questions they spell (ADR Decision 448). On the 3.7.1 standalone each went to the model, which
+	 * answered "Clarithromycin safe with efavirenz or not?" "Clarithromycin can be given, with one caution" on 14 of 15
+	 * patients and "Can fluconazole cause liver damage?" "Fluconazole can be given" where methotrexate was hers.
+	 */
+	@Test
+	public void aDrugCausingDamageOrAPairSafeOrNotIsTheQuestionItSpells() {
+		String[][] pairs = { { "Can warfarin cause liver damage?", "Can warfarin cause problems?" },
+			{ "warfarn safe for her?", "Is warfarn safe for her?" },
+			{ "Warfarin safe with nevirapine or not?", "Is warfarin safe with nevirapine?" },
+			{ "Warfarin, nevirapine - interaction?", "Warfarin and nevirapine interaction?" },
+			{ "Warfarin vs her ARVs?", "Is warfarin safe with her ARVs?" },
+			{ "Can she take both warfarin and nevirapine?", "Can she take warfarin and nevirapine?" },
+			{ "Will giving warfarin harm her nevirapine treatment?", "Will warfarin interfere with her nevirapine?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+	}
+
 	private static String ask(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

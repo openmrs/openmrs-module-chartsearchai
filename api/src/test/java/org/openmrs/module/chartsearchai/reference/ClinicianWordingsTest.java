@@ -1461,6 +1461,27 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		assertNull(ask("Is she on warfarin and nevirapine?"));
 	}
 
+	@Test
+	public void aDrugAskedOfEitherWayOrOfSideEffectsWithHerMedicationsIsTheQuestionItSpells() {
+		String[][] pairs = { { "Is it safe or not to give warfarin?", "Is warfarin allowed?" },
+			{ "Can warfarin be given or not?", "Is warfarin allowed?" },
+			{ "Can I give her warfarin or not?", "Is warfarin allowed?" },
+			{ "Is warfarin ok or not for her?", "Is warfarin allowed?" },
+			{ "Is warfarin safe or unsafe for her?", "Is warfarin dangerous for her?" },
+			{ "Is warfarin safe or harmful?", "Is warfarin dangerous for her?" },
+			{ "Any side effects with her meds if I give warfarin?", "Is warfarin dangerous for her?" },
+			{ "Will warfarin cause side effects with her medications?", "Is warfarin dangerous for her?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+		// Side effects of the drug alone are the drug's own question, and "or not" before a word no reading admits leaves it.
+		assertNull(ask("Does warfarin have side effects?"));
+		assertNull(ask("Any side effects of warfarin?"));
+		assertNull(ask("Is warfarin safe or not effective?"));
+	}
+
 	private static String ask(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

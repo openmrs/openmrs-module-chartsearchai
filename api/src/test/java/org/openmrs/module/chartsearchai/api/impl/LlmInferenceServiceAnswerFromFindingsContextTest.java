@@ -2516,7 +2516,8 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 			"Give her ibuprofen?",
 			// a proposal cue beside a concern or a negation: "No" would answer it backwards
 			"Can I give her ibuprofen, or is it risky?",
-			"Can I give her ibuprofen or not?",
+			// ("Can I give her ibuprofen or not?" asks the proposal either way, which "No" answers the right way round: the
+			// module's since ADR Decision 457, aDrugAskedOfEitherWayOrOfSideEffectsWithHerMedicationsIsTheQuestionItSpells)
 			// a second question joined to the proposal, in words a proposal is made of
 			"Can I give her ibuprofen, and is she allergic?",
 			"Is she allergic, and can I give her ibuprofen?",

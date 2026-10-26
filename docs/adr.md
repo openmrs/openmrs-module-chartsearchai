@@ -22761,3 +22761,40 @@ Adding a shape per wording, as Decisions 441 to 455 did, closes the wordings mea
 
 Pinned by `ClinicianWordingsTest.aPairOrADrugAskedInWordsNoShapeListsIsReadByItsWords`, with *"Is warfarin risky for her
 pregnancy?"* and *"Is she on warfarin and nevirapine?"* still the model's.
+
+## Decision 457: A drug asked of either way, or of side effects with her medications, is the question it spells
+
+**Status: Accepted** (October 2026) — found asking 40 further wordings of 15 patients on the 3.7.1 standalone on 2026-10-26.
+
+### Context
+
+Four one-drug wordings still went to the model after Decision 456, and the model answered *"Fluconazole can be given"* on
+5 or 6 of 15 patients, the ones whose chart rates it against an active order:
+
+- *"Is it safe or not to give fluconazole?"* and *"Can fluconazole be given or not?"*
+- *"Is fluconazole safe or unsafe for her?"*
+- *"Any side effects with her meds if I give fluconazole?"*
+
+`residualReading` admitted none of *"or"*, *"not"*, *"side"* or *"effects"*. *"Fluconazole - safe or not?"* was already
+the module's, because a shape spells *"safe or not"* after the drug.
+
+### The decision
+
+- `residualReading` reads the words as the one way they ask (`withEitherWayAsked`):
+  - *"or not"* asks no more than the question before it, so it is dropped.
+  - An *"or"* between two words of safety or harm is dropped. *"safe or unsafe"* then carries a word of harm, which
+    Decision 454 reads as `Residual.HARMS`, answered with no lead.
+  - *"side effect(s)"* is one word, a word of harm only where a word naming her medications as a whole stands in the
+    question too. The side effects of the drug alone are the drug's own question, which the model answers.
+- The reading applies only after no shape has read the question as written. The shapes that spell *"or not"* (Decisions
+  431, 446, 448) keep reading it. A question the dropped words would turn into a shape's is still read here, by its words,
+  and never handed to a shape it does not spell.
+- The tokenizer `words` is unchanged, so no shape sees a question other than the one asked.
+- *"Can I give her ibuprofen or not?"* leaves `LlmInferenceServiceAnswerFromFindingsContextTest.aQuestionTheModuleDidNotResolveAsASuitabilityQuestionStillAsksTheModel`.
+  That row read *"or not"* as a negation that "No" would answer backwards. "No" answers it the right way round, as it
+  answers *"Ibuprofen - yes or no?"* (Decision 431), and the model answered the wording *"Can be given"* on the patients
+  whose chart rates the drug. This supersedes that one row.
+
+Pinned by `ClinicianWordingsTest.aDrugAskedOfEitherWayOrOfSideEffectsWithHerMedicationsIsTheQuestionItSpells`, with
+*"Does warfarin have side effects?"*, *"Any side effects of warfarin?"* and *"Is warfarin safe or not effective?"* still
+the model's.

@@ -2654,6 +2654,9 @@ public final class QueryScopeRouter {
 		if (fitsAOneDrugShape(wordsWithTheDrugMarked)) {
 			return Residual.NONE;
 		}
+		// Read as the one way it asks only once no shape has read it as written: a shape that spells "or not" is that
+		// shape's, and a shape that "or not" removed would read is no reading of the words the question has (ADR Decision 457).
+		wordsWithTheDrugMarked = withEitherWayAsked(wordsWithTheDrugMarked);
 		// The drug beside her medications and nothing else, "fluconazole + her meds", asks how they interact (ADR Decision
 		// 422): read here, of a drug the data resolved, and never as a shape, which would read "Review her medications" as one.
 		if (Pattern.compile(D + " (?:and |with |plus |vs |versus )?" + POSSESSIVE + " (?:other )?" + MEDICATIONS)
@@ -2664,11 +2667,22 @@ public final class QueryScopeRouter {
 		boolean safe = false;
 		boolean harms = false;
 		boolean gives = false;
+		boolean herMedications = false;
+		for (String word : wordsWithTheDrugMarked) {
+			herMedications |= RESIDUAL_HER_MEDICATIONS.contains(word);
+		}
 		for (String word : wordsWithTheDrugMarked) {
 			if (DRUG_NAME.equals(word) || RESIDUAL_FILLER.contains(word)) {
 				continue;
 			}
-			if (RESIDUAL_INTERACTS.contains(word)) {
+			// Side effects WITH her medications ask what the drug would do beside them, which is a harm her medications'
+			// interactions answer; side effects of the drug alone are the drug's own question, the model's (ADR Decision 457).
+			if (SIDE_EFFECTS.equals(word)) {
+				if (!herMedications) {
+					return Residual.NONE;
+				}
+				harms = true;
+			} else if (RESIDUAL_INTERACTS.contains(word)) {
 				interacts = true;
 			} else if (RESIDUAL_SAFE.contains(word)) {
 				safe = true;
@@ -2701,6 +2715,44 @@ public final class QueryScopeRouter {
 		// is safe: "Is fluconazole safe or risky?" (ADR Decision 454).
 		return interacts ? Residual.INTERACTS : harms ? Residual.HARMS : safe || gives && asked ? Residual.PROPOSES
 				: Residual.NONE;
+	}
+
+	/** The one word {@link #withEitherWayAsked} makes of "side effect(s)". */
+	private static final String SIDE_EFFECTS = "side-effects";
+
+	/** The words naming her medications as a whole, beside which a drug's side effects are its interactions' question. */
+	private static final Set<String> RESIDUAL_HER_MEDICATIONS = new HashSet<String>(Arrays.asList("meds", "medication",
+		"medications", "medicine", "medicines", "drugs", "regimen", "treatment", "treatments", "prescriptions", "arvs",
+		"antiretrovirals"));
+
+	/**
+	 * The words a question asked either way spells, read as the one way (ADR Decision 457): "or not" asks no more than the
+	 * question before it — "Can fluconazole be given or not?" is "Can fluconazole be given?" — and "or" between two words
+	 * saying it is safe or harmful asks both, "Is fluconazole safe or unsafe for her?", which the harm word reads. "Side
+	 * effect(s)" is made one word. Any other "or", and a "not" not after "or", are left, and no reading admits them.
+	 */
+	private static List<String> withEitherWayAsked(List<String> words) {
+		List<String> read = new ArrayList<String>(words.size());
+		for (int i = 0; i < words.size(); i++) {
+			String word = words.get(i);
+			String next = i + 1 < words.size() ? words.get(i + 1) : null;
+			if ("or".equals(word) && "not".equals(next)) {
+				i++;
+			} else if ("or".equals(word) && !read.isEmpty() && next != null && safeOrHarmful(read.get(read.size() - 1))
+					&& safeOrHarmful(next)) {
+				continue;
+			} else if ("side".equals(word) && ("effect".equals(next) || "effects".equals(next))) {
+				read.add(SIDE_EFFECTS);
+				i++;
+			} else {
+				read.add(word);
+			}
+		}
+		return read;
+	}
+
+	private static boolean safeOrHarmful(String word) {
+		return RESIDUAL_SAFE.contains(word) || RESIDUAL_HARMS.contains(word);
 	}
 
 	/**

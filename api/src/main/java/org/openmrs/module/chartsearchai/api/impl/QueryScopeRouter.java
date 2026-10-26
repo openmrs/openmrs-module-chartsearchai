@@ -604,7 +604,8 @@ public final class QueryScopeRouter {
 			"(?:is|are|will|would) (?:she|he|they|the patient|this patient) (?:be )?at (?:any )?risk(?: of [a-z]+)? (?:if|when) (?:i|we)"
 					+ " (?:add|give|start|prescribe) (?:" + PATIENT + " )?(?:on )?" + D,
 			"what (?:happens|would happen|will happen) if (?:i|we) (?:give|add|start|prescribe) (?:" + PATIENT + " )?(?:on )?" + D
-					+ "(?: (?:to|for) " + PATIENT + ")?",
+					// and "… to her regimen" (ADR Decision 449)
+					+ "(?: (?:to|for) " + PATIENT + "| to (?:" + POSSESSIVE + " )?(?:other )?" + MEDICATIONS + ")?",
 			// "Any problems if I start her on ibuprofen?", "Are there any issues if I give her ibuprofen?" (ADR Decision 299)
 			"(?:(?:is|are) there )?any (?:problems?|issues?|concerns?|risks?) if (?:i|we) (?:give|start|prescribe|add) (?:"
 					+ PATIENT + " )?(?:on )?" + D + "(?: (?:to|for) " + PATIENT + ")?",
@@ -642,8 +643,9 @@ public final class QueryScopeRouter {
 					+ HER_MEDICATION_GROUP,
 			"(?:does|do) " + D + " (?:have|need) to be avoided(?: (?:for|in) " + PATIENT + "| (?:with|alongside) (?:any of )?"
 					+ HER_MEDICATION_GROUP + ")?",
-			"is " + D + " (?:unsafe|not safe|dangerous|risky|harmful|a problem|problematic) (?:with|alongside|in combination with) "
-					+ "(?:any of )?" + HER_MEDICATION_GROUP,
+			// and of a drug named as hers, "Is her aspirin a problem with her other meds?" (ADR Decision 449)
+			"is (?:" + POSSESSIVE + " )?" + D + " (?:unsafe|not safe|dangerous|risky|harmful|a problem|problematic) (?:with|alongside|"
+					+ "in combination with) (?:any of )?" + HER_MEDICATION_GROUP,
 			"(?:is|would) it (?:be )?(?:a bad idea|a mistake|unwise|inadvisable|not advisable|risky|dangerous|unsafe|harmful|wrong) to "
 					+ "(?:give|start|prescribe|administer|add|use) (?:" + PATIENT + " )?(?:on )?" + D + "(?: (?:to|for) " + PATIENT
 					+ ")?",
@@ -708,6 +710,8 @@ public final class QueryScopeRouter {
 					+ "(?:interact|interfere) with " + D,
 			"(?:does|will|would|could|can) " + D + " interact with anything (?:she|he|they|the patient|this patient) "
 					+ "(?:takes|is taking|is on)",
+			// "Does her simvastatin interact with anything?" (ADR Decision 449)
+			"(?:does|will|would|could|can) (?:" + POSSESSIVE + " )?" + D + " interact with anything(?: else)?",
 			// "Will fluconazole interact with what she is taking?" (ADR Decision 445)
 			"(?:does|will|would|could|can) " + D + " interact with what (?:(?:she|he|they|the patient|this patient) (?:takes|is taking"
 					+ "|is on|are taking|are on)|she's (?:on|taking)|he's (?:on|taking)|they're (?:on|taking))(?: already| currently)?",
@@ -794,6 +798,9 @@ public final class QueryScopeRouter {
 			// "What drugs should she avoid with fluconazole?" (ADR Decision 444)
 			"(?:what|which) (?:drugs|medications|medicines|meds) should (?:she|he|they|the patient|this patient|i|we) avoid "
 					+ "(?:taking |giving |combining |using )?(?:with|alongside|while on|while taking) " + D,
+			// "If I add fluconazole, which of her drugs are affected?" (ADR Decision 449)
+			"if (?:i|we) (?:add|give|start|prescribe) (?:" + PATIENT + " )?(?:on )?" + D + " (?:which|what) (?:of " + POSSESSIVE
+					+ " )?(?:medications|meds|medicines|drugs) (?:are|is|would be|will be) (?:affected|impacted|at risk)",
 			// "Which of her drugs should I avoid giving with fluconazole?" (ADR Decision 429)
 			"which of " + POSSESSIVE + " (?:medications|meds|medicines|drugs) should (?:i|we) avoid (?:giving |combining |using )?"
 					+ "(?:with|alongside) " + D,
@@ -1065,8 +1072,14 @@ public final class QueryScopeRouter {
 	}
 
 	/** "Does her TB treatment interact with her ARVs?", "Do her TB drugs interact with her antiretrovirals?" (ADR Decision 221). */
-	private static final String TWO_OF_HER_MEDICATION_GROUPS_INTERACT = "(?:does|do|will|would) " + HER_MEDICATION_GROUP
-			+ " interact with " + HER_MEDICATION_GROUP;
+	private static final String TWO_OF_HER_MEDICATION_GROUPS_INTERACT = "(?:(?:does|do|will|would) " + HER_MEDICATION_GROUP
+			// and "clash with" (ADR Decision 449)
+			+ " (?:interact|clash) with " + HER_MEDICATION_GROUP
+			// "Do her ARVs and her TB treatment clash?", "Can she take her TB drugs with her ARVs?" (ADR Decision 449)
+			+ "|(?:do|does|will|would) " + HER_MEDICATION_GROUP + " and " + HER_MEDICATION_GROUP + " (?:interact|clash)(?: with "
+			+ "(?:each other|one another))?"
+			+ "|(?:can|could|may|should) (?:she|he|they|the patient|this patient) (?:safely )?(?:take|have|continue|stay on) "
+			+ HER_MEDICATION_GROUP + " (?:with|and|alongside) " + HER_MEDICATION_GROUP + "(?: together)?)";
 
 	/** "Is it safe to continue all her ARVs together?", "Are her ARVs safe together?" — whether a group of her own
 	 *  medications is safe together, a screen of them (ADR Decision 254). */

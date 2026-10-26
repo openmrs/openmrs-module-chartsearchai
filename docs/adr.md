@@ -22523,3 +22523,33 @@ The batch also asked questions that name a drug and ask nothing about interactio
 - *"Will giving X harm her Y treatment?"* is Decision 360's question of one interfering with the other.
 
 Pinned by `ClinicianWordingsTest.aDrugCausingDamageOrAPairSafeOrNotIsTheQuestionItSpells`.
+
+## Decision 449: Two of her groups that clash, a drug of hers interacting with anything, and a drug added to her regimen, are the questions they spell
+
+**Status: Accepted** (October 2026) — found asking 40 further wordings of 15 patients on the 3.7.1 standalone on 2026-10-26.
+
+### Context
+
+Six wordings went to the model. It answered *"What happens if I add rifampicin to her regimen?"* *"Rifampicin can be added,
+with one caution"* on 7 of 15 patients. It answered *"Does her simvastatin interact with anything?"* with the data's whole
+interaction list for simvastatin (*"ketoconazole, leflunomide, lenalidomide …"*), and with *"Simvastatin can be given"* on 3
+patients. *"Do her ARVs and her TB treatment clash?"* and *"Can she take her TB drugs with her ARVs?"* got *"The records do
+not address it"*, where *"Does her ART interact with her TB drugs?"* is a screen of her medications (Decision 221).
+
+The three-drug questions of the batch went to the model on the one or two patients whose rifampicin is part of a
+combination order. The module leaves those to the model by Decision 309's fail-closed rule, and the model answered each of
+them *"No —"* or *"Yes, interactions are recorded"*, with no clearance.
+
+### The decision
+
+- *"Do her ARVs and her TB treatment clash?"*, *"Does her ART clash with her TB drugs?"* and *"Can she take her TB drugs with
+  her ARVs?"* are Decision 221's screen of two groups of her medications. Like Decision 254's *"Are her ARVs safe
+  together?"*, the screen states that contraindications were weighed, because a question asking only of interactions is the
+  one that leaves them out.
+- *"Does her X interact with anything?"* is whether X interacts with her medications. It is answered as hers where she
+  takes it (Decision 202), and as not hers where she does not (Decision 287).
+- *"Is her X a problem with her other meds?"* is Decision 434's question with no lead.
+- *"If I add X, which of her drugs are affected?"* is which of her medications interact with X.
+- *"What happens if I add X to her regimen?"* is Decision 251's *"What happens if I give her X?"*.
+
+Pinned by `ClinicianWordingsTest.twoOfHerGroupsClashingOrADrugAddedToHerRegimenIsTheQuestionItSpells`.

@@ -1276,6 +1276,28 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/**
+	 * Two groups of her medications that "clash" or that she "takes with" each other, a drug named as hers that "interacts with
+	 * anything", one of hers "a problem with her other meds", which of hers are "affected" if a drug is added, and what happens
+	 * if a drug is added "to her regimen" are the questions they spell (ADR Decision 449). On the 3.7.1 standalone each went to
+	 * the model, which answered "What happens if I add rifampicin to her regimen?" "Rifampicin can be added, with one caution"
+	 * on 7 of 15 patients.
+	 */
+	@Test
+	public void twoOfHerGroupsClashingOrADrugAddedToHerRegimenIsTheQuestionItSpells() {
+		String[][] pairs = { { "Do her ARVs and her TB treatment clash?", "Are her TB and HIV meds safe together?" },
+			{ "Can she take her TB drugs with her ARVs?", "Are her TB and HIV meds safe together?" },
+			{ "Does her nevirapine interact with anything?", "Does her nevirapine interact with her other medications?" },
+			{ "Is her aspirin a problem with her other meds?", "Is her aspirin safe with her other medications?" },
+			{ "If I add warfarin, which of her drugs are affected?", "Which of her medications interact with warfarin?" },
+			{ "What happens if I add warfarin to her regimen?", "What happens if I give her warfarin?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+	}
+
 	private static String ask(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

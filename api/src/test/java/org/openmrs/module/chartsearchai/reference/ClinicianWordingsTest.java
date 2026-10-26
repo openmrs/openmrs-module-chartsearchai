@@ -12,6 +12,7 @@ package org.openmrs.module.chartsearchai.reference;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Arrays;
@@ -1295,6 +1296,31 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 			String canonical = ask(pair[1]);
 			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
 			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+	}
+
+	/**
+	 * When or how she takes a drug — with food, on an empty stomach, at night, crushed — asks nothing of its safety, and is
+	 * handed the model with no drug-safety material, as a question of the drug's record is (ADR Decision 450). On the 3.7.1
+	 * standalone "When should she take her efavirenz?" was handed efavirenz's findings for its "should", and the model
+	 * answered "Efavirenz can be given, with two cautions".
+	 */
+	@Test
+	public void howOrWhenSheTakesADrugCarriesNoDrugSafetyMaterial() {
+		for (String question : new String[] { "When should she take her efavirenz?", "How should she take nevirapine?",
+			"Can she take efavirenz with food?", "Should rifampicin be taken on an empty stomach?",
+			"Does food affect efavirenz?", "Can she take her nevirapine at night?", "Can she crush her aspirin tablets?" }) {
+			org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart asked = chart(question);
+			assertTrue(asked.asksOnlyAboutADrugsRecord(), question);
+			assertNull(asked.getModuleAnswer(), question);
+			for (org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping record : asked.getMappings()) {
+				assertFalse("safety_finding".equals(record.getResourceType()) || "drug_reference".equals(record.getResourceType()),
+					question + " carried " + record.getResourceType());
+			}
+		}
+		for (String question : new String[] { "Can she take efavirenz with warfarin?", "Can she take warfarin?",
+			"Should warfarin be avoided?" }) {
+			assertFalse(chart(question).asksOnlyAboutADrugsRecord(), "a question of its safety: " + question);
 		}
 	}
 

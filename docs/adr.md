@@ -22553,3 +22553,34 @@ them *"No —"* or *"Yes, interactions are recorded"*, with no clearance.
 - *"What happens if I add X to her regimen?"* is Decision 251's *"What happens if I give her X?"*.
 
 Pinned by `ClinicianWordingsTest.twoOfHerGroupsClashingOrADrugAddedToHerRegimenIsTheQuestionItSpells`.
+
+## Decision 450: When or how she takes a drug asks nothing of its safety
+
+**Status: Accepted** (October 2026) — found asking 40 food, drink and supplement questions of 15 patients on the 3.7.1
+standalone on 2026-10-26.
+
+### Context
+
+*"When should she take her efavirenz?"* was answered *"Efavirenz can be given, with two cautions to note"*. The question asks
+when she takes it, and nothing of its interactions. Decision 399 hands the model no drug-safety material for a question of a
+drug's record, but only for a question opening as one (*"When was …"*, *"Who prescribed …"*) with no word of advice in it.
+Here *"should"* kept the drug's findings, and the model read them as a proposal.
+
+*"Can she take efavirenz with food?"*, *"Does food affect efavirenz?"* and *"Should rifampicin be taken on an empty
+stomach?"* also carried the drug's findings as chips, though the model answered each that the records do not address it.
+
+### The decision
+
+A question of when or how she takes one drug is handed the model as Decision 399's questions are: no reference record, no
+finding about the drug, and no chip (`QueryScopeRouter.asksOnlyAboutADrugsRecord`). The grammar is closed. It reads:
+- *"When (how, what time) should she take X?"*;
+- *"Can she take X with (without, before, after) food (meals, water)?"*, *"… on an empty stomach (at night, in the
+  morning)?"*;
+- *"Should X be taken with food?"*;
+- *"Does food affect X?"*;
+- *"Can she crush (split, chew) X?"*.
+
+A second drug or a substance the data carries is not a meal: *"Can she take efavirenz with warfarin?"* and *"Can she take
+calcium with ciprofloxacin?"* are the questions they were.
+
+Pinned by `ClinicianWordingsTest.howOrWhenSheTakesADrugCarriesNoDrugSafetyMaterial`.

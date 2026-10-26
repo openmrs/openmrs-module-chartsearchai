@@ -2381,8 +2381,16 @@ public final class QueryScopeRouter {
 	public static boolean asksOnlyAboutADrugsRecord(List<String> wordsWithTheDrugMarked) {
 		// Nor "What about fluconazole?", which says nothing of its record (ADR Decision 405).
 		if (wordsWithTheDrugMarked == null || Collections.frequency(wordsWithTheDrugMarked, DRUG_NAME) != 1
-				|| wordsWithTheDrugMarked.size() < 3 || !RECORD_OPENERS.contains(wordsWithTheDrugMarked.get(0))
-				|| "about".equals(wordsWithTheDrugMarked.get(1))) {
+				|| wordsWithTheDrugMarked.size() < 3) {
+			return false;
+		}
+		// How or when she takes it asks nothing of its safety either, whatever modal it opens with: "When should she take her
+		// efavirenz?" was handed the drug's findings for "should", and the model answered "Efavirenz can be given, with two
+		// cautions" (ADR Decision 450).
+		if (fitsAShape(wordsWithTheDrugMarked, HOW_TO_TAKE_A_DRUG_SHAPES)) {
+			return true;
+		}
+		if (!RECORD_OPENERS.contains(wordsWithTheDrugMarked.get(0)) || "about".equals(wordsWithTheDrugMarked.get(1))) {
 			return false;
 		}
 		// The dose she is on, or her drug's dose, is a fact of her record: a dose asked of a drug proposed is not (ADR
@@ -2421,6 +2429,24 @@ public final class QueryScopeRouter {
 		}
 		return !fitsAOneDrugShape(wordsWithTheDrugMarked) && residualReading(wordsWithTheDrugMarked) == Residual.NONE;
 	}
+
+	/** When to take a drug, with food or without, and how — "When should she take her efavirenz?", "Should rifampicin be taken
+	 *  on an empty stomach?", "Can she crush her tablets of X?" (ADR Decision 450): how it is taken, which no finding weighs. */
+	private static final String MEALS = "(?:food|meals?|a meal|eating|breakfast|lunch|dinner|supper|water)";
+
+	private static final String A_TIME_OF_TAKING = "(?:(?:with|without|before|after) " + MEALS + "|on an empty stomach|at night"
+			+ "|at bedtime|in the morning|in the evening|at the same time (?:each|every) day)";
+
+	private static final List<Pattern> HOW_TO_TAKE_A_DRUG_SHAPES = shapes(
+			"(?:when|what time|how) (?:should|do|does|can|must|would) (?:she|he|they|the patient|this patient) take (?:"
+					+ POSSESSIVE + " )?" + D + "(?: tablets?| pills?| doses?)?",
+			"(?:can|should|must|does|do|could) (?:she|he|they|the patient|this patient) (?:need to )?take (?:" + POSSESSIVE + " )?"
+					+ D + " " + A_TIME_OF_TAKING,
+			"(?:should|must|can|could|does|do) (?:" + POSSESSIVE + " )?" + D + " (?:need to )?be taken " + A_TIME_OF_TAKING,
+			"(?:does|do|will|would|can) (?:food|eating|a meal|meals) (?:affect|change|reduce|increase|alter) (?:the absorption of )?(?:"
+					+ POSSESSIVE + " )?" + D,
+			"(?:can|should|could|may) (?:i|we|she|he|they|the patient) (?:crush|split|chew|dissolve|break) (?:" + POSSESSIVE + " )?"
+					+ D + "(?: tablets?| pills?)?");
 
 	/** The possessives naming the drug as hers. */
 	private static final Set<String> RESIDUAL_POSSESSIVES = new HashSet<String>(Arrays.asList("her", "his", "their",

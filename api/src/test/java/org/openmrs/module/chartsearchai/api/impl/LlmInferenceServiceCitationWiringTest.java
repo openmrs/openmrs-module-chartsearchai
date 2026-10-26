@@ -230,6 +230,38 @@ public class LlmInferenceServiceCitationWiringTest {
 		assertEquals("limited", answer.getSafetyStatus());
 	}
 
+	/** The early answer and a module-composed one would otherwise read as answers from a complete chart. */
+	@Test
+	public void theEarlyAndTheModuleComposedAnswersCarryTheWithheldTypesToo() {
+		service.setChartBuildingStrategy(new StubStrategy() {
+
+			@Override
+			PatientChart buildChart(Patient patient, String question) {
+				PatientChart chart = super.buildChart(patient, question);
+				chart.markWithheldTypes(Collections.singleton("allergy"));
+				return chart;
+			}
+		});
+		List<ChartAnswer> early = new java.util.ArrayList<>();
+		service.searchStreaming(patient(), "any allergies?", t -> { }, r -> { }, c -> { }, early::add);
+		assertEquals(Collections.singleton("allergy"), early.get(0).getWithheldTypes());
+
+		service.setDrugReferenceInjector(new DrugReferenceInjector() {
+
+			@Override
+			public PatientChart inject(PatientChart chart, Patient patient, String question,
+					org.openmrs.module.chartsearchai.reference.ChartReadStatus readStatus) {
+				chart.markModuleAnswer("Persistent fetal circulation [8].");
+				return chart;
+			}
+		});
+		early.clear();
+		ChartAnswer composed = service.searchStreaming(patient(), "any infections?", t -> { }, r -> { }, c -> { },
+				early::add);
+		assertEquals(Collections.singleton("allergy"), early.get(0).getWithheldTypes());
+		assertEquals(Collections.singleton("allergy"), composed.getWithheldTypes());
+	}
+
 	private void assertMappingsSeenIncludeIndex(int index) {
 		// Both overloads are stubbed, so this cannot pass by production having reached neither — which
 		// is exactly what a one-overload stub allows once production prefers the other (issue #336).

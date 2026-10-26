@@ -1576,6 +1576,20 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/** ADR Decision 463: a condition named "in her" is named as one named "given her" is. */
+	@Test
+	public void aConditionNamedInHerIsNamedAsOneGivenHer() {
+		String[][] pairs = { { "Is warfarin safe in her condition?", "Is warfarin safe given her condition?" },
+			{ "Is warfarin ok in her kidney disease?", "Is warfarin ok given her kidney disease?" },
+			{ "Is warfarin safe in her case?", "Is warfarin safe for her?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+		assertTrue(ask("Is warfarin safe in her condition?").contains("not the one the question names (condition)"));
+	}
+
 	private static String ask(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

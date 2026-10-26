@@ -22932,3 +22932,21 @@ verbs joined by *"and"*.
 - Both admit *"her"* before the drug stopped and *"her on"* before the drug started, as the switch shapes already do.
 
 Pinned by `ClinicianWordingsTest.startingOneDrugAndStoppingAnotherIsTheSwitchItSpells`.
+
+## Decision 463: A condition named "in her" is named as one named "given her" is
+
+**Status: Accepted** (October 2026) — found asking 40 further wordings of 15 patients on the 3.7.1 standalone on 2026-10-26.
+
+### Context
+
+*"Is fluconazole safe in her condition?"* went to the model, which answered *"Fluconazole can be given"* on 6 of 15
+patients. *"Is fluconazole safe given her condition?"* is the module's (Decision 394). It states the findings and says
+that the check weighs only the conditions her chart records, not the one the question names. `GIVEN_A_CONDITION` read
+*"given her"* and *"if she has"*, never *"in her"*.
+
+### The decision
+
+- `GIVEN_A_CONDITION` reads *"in her X"*, so the question is answered as *"given her X"* is, condition note included.
+- *"in her case"* and *"in her situation"* name no condition. They stay the plain proposal Decision 456 reads.
+
+Pinned by `ClinicianWordingsTest.aConditionNamedInHerIsNamedAsOneGivenHer`.

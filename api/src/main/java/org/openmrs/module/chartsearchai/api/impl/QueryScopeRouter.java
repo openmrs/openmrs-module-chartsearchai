@@ -417,8 +417,10 @@ public final class QueryScopeRouter {
 
 	private static final String A_TIMING = "(?: " + TIMING + ")?";
 
-	/** How a proposal names a condition: "given her kidney disease", "if she has kidney disease" (ADR Decisions 394, 402). */
-	private static final String GIVEN_A_CONDITION = "(?:given (?:" + POSSESSIVE + " )?|if (?:she|he|they) (?:has|have) (?:a |an )?)";
+	/** How a proposal names a condition: "given her kidney disease", "if she has kidney disease" (ADR Decisions 394, 402),
+	 *  "in her condition" — never "in her case", which names none (ADR Decision 463). */
+	private static final String GIVEN_A_CONDITION = "(?:given (?:" + POSSESSIVE + " )?|if (?:she|he|they) (?:has|have) (?:a |an )?"
+			+ "|in " + POSSESSIVE + " (?!(?:case|situation)$))";
 
 	private static final List<Pattern> PROPOSAL_SHAPES = besideHerMedications(
 			// "Can I give her ibuprofen?", "Should I start her on clarithromycin?", "Can I give

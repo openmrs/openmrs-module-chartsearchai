@@ -352,6 +352,14 @@ public class DrugSafetyValidator {
 
 	private static final Pattern FREQ_OD = Pattern.compile("\\b(?:once daily|once a day|once|od|daily)\\b");
 
+	/** A number, in digits or in words. */
+	private static final Pattern NUMBER = Pattern.compile(
+			"\\d+(?:\\.\\d+)?|\\b(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\\b");
+
+	/** A number that multiplies the amount after it ("two 500 mg tablets", "2 x 500 mg"). */
+	private static final Pattern NUMBER_BEFORE_AMOUNT = Pattern.compile(
+			"(?:\\d|\\b(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve))\\s*(?:[x\u00d7*]\\s*)?$");
+
 	/** A number immediately preceded (within {@link #LIMIT_CUE_LOOKBACK} chars) by one of these cues
 	 *  is a CEILING, not a prescribed dose, so it must not be flagged as an overdose — e.g. the
 	 *  reference "maximum 2400 mg/day" the injector feeds the LLM, recited back in the answer. Up to two
@@ -14756,7 +14764,7 @@ public class DrugSafetyValidator {
 		// the band it is about to be compared against.
 		List<AttributedDose> doses = attributedDoses(lowerAnswer, rows, allEntries);
 		if (coverage != null) {
-			boolean unreadDose = statesAnUnreadDose(lowerAnswer, rows);
+			boolean unreadDose = statesAnUnreadDose(lowerAnswer, rows) || anAmountUnread(doses);
 			for (DrugReference row : rows) {
 				DrugReference.AgeBand band = row.bandForAge(context.getAgeYears());
 				if (band == null) {
@@ -15004,7 +15012,8 @@ public class DrugSafetyValidator {
 	 * limit cue — "maximum", "up to", … make it a ceiling, not a prescribed dose — and (b) one of that
 	 * substance's aliases is the nearest drug name to it (no OTHER substance's alias sits strictly
 	 * closer). The frequency is read from the same clause, so a frequency stated for a different drug in
-	 * a neighbouring sentence is never applied.
+	 * a neighbouring sentence is never applied, and only when it follows the amount with no number
+	 * between them ({@link #frequencyFollowing}).
 	 *
 	 * <p><b>Scoped to the substance, not to the row (issue #245).</b> This took a single {@code ref} and
 	 * gated on {@code ref.matchesText}, so a substance filed as several rows was read once per row and
@@ -15064,7 +15073,17 @@ public class DrugSafetyValidator {
 			Matcher m = DOSE_MG.matcher(clause);
 			while (m.find()) {
 				int dosePos = m.start();
-				if (precededByLimitCue(clause, dosePos)
+				// A ceiling written with a thousands separator ("a maximum of 4,000 mg") is cued before
+				// its first group, not before the group DOSE_MG matched.
+				int numberStart = dosePos;
+				while (numberStart > 1 && clause.charAt(numberStart - 1) == ','
+						&& Character.isDigit(clause.charAt(numberStart - 2))) {
+					numberStart -= 2;
+					while (numberStart > 0 && Character.isDigit(clause.charAt(numberStart - 1))) {
+						numberStart--;
+					}
+				}
+				if (precededByLimitCue(clause, numberStart)
 						|| !substanceOwnsDose(clause, dosePos, rows, allEntries)) {
 					continue;
 				}
@@ -15075,7 +15094,9 @@ public class DrugSafetyValidator {
 				catch (NumberFormatException e) {
 					continue;
 				}
-				out.add(new AttributedDose(perDose, frequencyPerDay(clause)));
+				boolean amountRead = !NUMBER_BEFORE_AMOUNT.matcher(clause.substring(0, dosePos)).find();
+				boolean strength = CONCENTRATION.matcher(clause).region(dosePos, clause.length()).lookingAt();
+				out.add(new AttributedDose(perDose, frequencyFollowing(clause, m.end()), amountRead, strength));
 			}
 		}
 		return out;
@@ -15111,32 +15132,56 @@ public class DrugSafetyValidator {
 		return false;
 	}
 
-	/** One dose statement attributed to a drug: per-administration mg + the clause's stated
-	 *  doses-per-day ({@code 0} = no frequency stated). */
+	/** One dose statement attributed to a drug: per-administration mg + the doses-per-day the
+	 *  clause states for it ({@code 0} = none read), whether the amount was read as stated (false
+	 *  when a number before it multiplies it), and whether it is the strength of a liquid
+	 *  ("500 mg/5 ml") rather than an amount given. */
 	private static final class AttributedDose {
 
 		final double perDoseMg;
 
 		final int frequencyPerDay;
 
-		AttributedDose(double perDoseMg, int frequencyPerDay) {
+		final boolean amountRead;
+
+		final boolean strength;
+
+		AttributedDose(double perDoseMg, int frequencyPerDay, boolean amountRead, boolean strength) {
 			this.perDoseMg = perDoseMg;
 			this.frequencyPerDay = frequencyPerDay;
+			this.amountRead = amountRead;
+			this.strength = strength;
 		}
+	}
+
+	/** @return whether an attributed dose's amount was not read as stated */
+	private static boolean anAmountUnread(List<AttributedDose> doses) {
+		for (AttributedDose dose : doses) {
+			if (!dose.amountRead) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**
 	 * @return whether every attributed dose carries a stated frequency, so a daily total can be
 	 *         assessed: one dose stated without one leaves the day's total unknown, whatever another
-	 *         sentence states.
+	 *         sentence states. A liquid's strength is not a dose given, so it needs none, and a clause
+	 *         stating only strengths states no daily dose.
 	 */
 	private static boolean dailyDoseStated(List<AttributedDose> doses) {
+		boolean stated = false;
 		for (AttributedDose dose : doses) {
+			if (dose.strength) {
+				continue;
+			}
 			if (dose.frequencyPerDay <= 0) {
 				return false;
 			}
+			stated = true;
 		}
-		return !doses.isEmpty();
+		return stated;
 	}
 
 	/**
@@ -15488,37 +15533,53 @@ public class DrugSafetyValidator {
 		return all;
 	}
 
-	/** @return doses-per-day implied by a frequency phrase in {@code window}, or 0 when none found.
-	 *          Word-forms are word-boundary anchored, so "bd"/"od" do not match inside larger words
-	 *          such as "abdominal" or "blood". */
-	private static int frequencyPerDay(String window) {
-		Matcher hours = EVERY_N_HOURS.matcher(window);
+	/**
+	 * @return doses-per-day implied by the frequency phrase in {@code clause}, when that phrase follows
+	 *         the amount ending at {@code amountEnd} with no number between them; otherwise 0. A phrase
+	 *         before the amount belongs to another dose ("every 8 hours and paracetamol 1000 mg"), and a
+	 *         number between them is one this reading cannot place ("1000 mg 5 times daily", "500 mg/5
+	 *         ml, four teaspoons four times daily"), so the dose is not read as given that often.
+	 *         Word-forms are word-boundary anchored, so "bd"/"od" do not match inside larger words
+	 *         such as "abdominal" or "blood".
+	 */
+	private static int frequencyFollowing(String clause, int amountEnd) {
+		int perDay = 0;
+		int phraseStart = -1;
+		Matcher hours = EVERY_N_HOURS.matcher(clause);
 		if (hours.find()) {
 			String n = hours.group(1) != null ? hours.group(1)
 					: hours.group(2) != null ? hours.group(2) : hours.group(3);
 			try {
 				int h = Integer.parseInt(n);
 				if (h > 0) {
-					return (int) Math.round(24.0 / h);
+					perDay = (int) Math.round(24.0 / h);
+					phraseStart = hours.start();
 				}
 			}
 			catch (NumberFormatException e) {
 				// fall through to word forms
 			}
 		}
-		if (FREQ_QID.matcher(window).find()) {
-			return 4;
+		Pattern[] words = { FREQ_QID, FREQ_TID, FREQ_BID, FREQ_OD };
+		int[] perDayOf = { 4, 3, 2, 1 };
+		for (int i = 0; phraseStart < 0 && i < words.length; i++) {
+			Matcher word = words[i].matcher(clause);
+			if (word.find()) {
+				perDay = perDayOf[i];
+				phraseStart = word.start();
+			}
 		}
-		if (FREQ_TID.matcher(window).find()) {
-			return 3;
+		if (phraseStart < amountEnd) {
+			return 0;
 		}
-		if (FREQ_BID.matcher(window).find()) {
-			return 2;
+		// A count of one ("1300 mg one tablet every 6 hours") leaves the amount as stated.
+		Matcher between = NUMBER.matcher(clause.substring(amountEnd, phraseStart));
+		while (between.find()) {
+			if (!between.group().equals("1") && !between.group().equals("one")) {
+				return 0;
+			}
 		}
-		if (FREQ_OD.matcher(window).find()) {
-			return 1;
-		}
-		return 0;
+		return perDay;
 	}
 
 	private static boolean toggle(String property, boolean defaultValue) {

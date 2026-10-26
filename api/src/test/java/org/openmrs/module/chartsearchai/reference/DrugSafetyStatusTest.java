@@ -286,6 +286,23 @@ public class DrugSafetyStatusTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/** Each states 5 g of paracetamol a day or more, which the warning arm reads as within its 4 g ceiling. */
+	@Test
+	public void aDoseTheWarningArmMisreadsIsNotAssessed() {
+		prepareCompletePatient();
+		for (String answer : Arrays.asList("Paracetamol 1000 mg 5 times daily.",
+				"Paracetamol 1000 mg six times daily.", "Paracetamol: two 500 mg tablets every 4 hours.",
+				"Paracetamol 2 x 500 mg every 4 hours.", "Paracetamol 1 500 mg four times daily.",
+				"Paracetamol 500 mg/5 ml oral suspension, four teaspoons four times daily.",
+				"Ibuprofen 400 mg every 8 hours and paracetamol 1000 mg every 4 hours.",
+				"Paracetamol 1000 mg every 6 hours plus 1000 mg at bedtime.")) {
+			DrugSafetyValidator.SafetyCheckResult result = validator.validateWithStatus(answer,
+					"Can I give her paracetamol?", patient, Collections.emptyList(), new PairChipExtent.Sink());
+			assertEquals("limited", result.getStatus(), answer + " " + result.getIssues());
+			assertTrue(result.getIssues().contains("dose_not_assessable"), answer + " " + result.getIssues());
+		}
+	}
+
 	/** A volume is a dose only beside a stated concentration, and not when it is a recited ceiling. */
 	@Test
 	public void aVolumeWithoutAConcentrationOrAsACeilingIsNotADose() {

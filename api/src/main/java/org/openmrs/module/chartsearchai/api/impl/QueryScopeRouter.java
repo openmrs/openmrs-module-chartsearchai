@@ -460,7 +460,8 @@ public final class QueryScopeRouter {
 					+ "|have|use|drink|get|receive|eat|consume) " + D + "(?: now| today)?",
 			// "Ibuprofen - yes or no?" (ADR Decision 431)
 			// and "Fluconazole - go or no go?" (ADR Decision 446)
-			D + "(?: for " + PATIENT + ")? (?:yes or no|ok or not|okay or not|safe or not|go or no go)",
+			// and "Fluconazole: yes/no?" (ADR Decision 454)
+			D + "(?: for " + PATIENT + ")? (?:yes or no|yes no|ok or not|okay or not|safe or not|go or no go)",
 			// "Would it be safe to start ibuprofen?", "OK to give ibuprofen?", "Is it safe to add ibuprofen to her regimen?"
 			// (ADR Decision 180)
 			"would it be (?:safe|ok|okay|appropriate) (?:for " + PATIENT + " )?to (?:(?:give|start|prescribe|administer|add) (?:"
@@ -684,6 +685,14 @@ public final class QueryScopeRouter {
 	 * "No" would answer it backwards.
 	 */
 	public static boolean asksWhetherNotToGiveADrug(List<String> wordsWithTheDrugMarked) {
+		// and the residual words asking whether it would harm her, "Will fluconazole harm her?", "Is fluconazole a risk?",
+		// which "No — … found a reason to withhold" answered backwards (ADR Decision 454)
+		return fitsANegatedShape(wordsWithTheDrugMarked) || residualReading(wordsWithTheDrugMarked) == Residual.HARMS;
+	}
+
+	/** {@link #asksWhetherNotToGiveADrug} by its shapes alone, which {@link #residualReading} reads before it reads the words
+	 *  (ADR Decision 454). */
+	private static boolean fitsANegatedShape(List<String> wordsWithTheDrugMarked) {
 		return fitsAShape(wordsWithTheDrugMarked, NEGATED_PROPOSAL_SHAPES);
 	}
 
@@ -2291,17 +2300,18 @@ public final class QueryScopeRouter {
 	}
 
 	public static boolean asksWhetherToGiveADrug(List<String> wordsWithTheDrugMarked) {
-		return fitsAProposalShape(wordsWithTheDrugMarked) || residualReading(wordsWithTheDrugMarked) == Residual.PROPOSES;
+		Residual residual = residualReading(wordsWithTheDrugMarked);
+		return fitsAProposalShape(wordsWithTheDrugMarked) || residual == Residual.PROPOSES || residual == Residual.HARMS;
 	}
 
 	/** {@link #asksWhetherToGiveADrug} by its shapes alone, as {@link #fitsAnInteractsShape} is (ADR Decision 396). */
 	public static boolean fitsAProposalShape(List<String> wordsWithTheDrugMarked) {
-		if (fitsAShape(wordsWithTheDrugMarked, PROPOSAL_SHAPES) || asksWhetherNotToGiveADrug(wordsWithTheDrugMarked)) {
+		if (fitsAShape(wordsWithTheDrugMarked, PROPOSAL_SHAPES) || fitsANegatedShape(wordsWithTheDrugMarked)) {
 			return true;
 		}
 		List<String> proposal = withoutAPurpose(wordsWithTheDrugMarked);
 		return proposal != null
-				&& (fitsAShape(proposal, PROPOSAL_SHAPES) || asksWhetherNotToGiveADrug(proposal));
+				&& (fitsAShape(proposal, PROPOSAL_SHAPES) || fitsANegatedShape(proposal));
 	}
 
 	/** How {@link #residualReading} reads a question about one drug that no shape fits. */
@@ -2311,7 +2321,9 @@ public final class QueryScopeRouter {
 		/** Whether the drug interacts with her medications. */
 		INTERACTS,
 		/** Whether to give the drug. */
-		PROPOSES
+		PROPOSES,
+		/** Whether the drug would harm her — a proposal "No" would answer backwards (ADR Decision 454). */
+		HARMS
 	}
 
 	/**
@@ -2332,6 +2344,8 @@ public final class QueryScopeRouter {
 		"you", "choice", "option",
 		// technical and conditional wordings (ADR Decision 414)
 		"verify", "concomitant", "patient's",
+		// "Does fluconazole pose a risk?" (ADR Decision 454)
+		"pose", "poses",
 		// "Any drug interactions I should be aware of before giving her clarithromycin?" (ADR Decision 426)
 		"aware",
 		// colloquial and non-native wordings (ADR Decision 415)
@@ -2345,10 +2359,17 @@ public final class QueryScopeRouter {
 
 	/** Words saying the question is about whether the drug is safe to give. */
 	private static final Set<String> RESIDUAL_SAFE = new HashSet<String>(Arrays.asList("safe", "safely", "ok", "okay",
-		"fine", "alright", "issue", "issues", "problem", "problems", "concern", "concerns", "risk", "risks", "risky",
-		"compatible", "contraindicated", "contraindication", "contraindications", "appropriate", "worried", "worry",
-		"worrying", "safety", "good", "suitable", "reasonable", "able", "recommended", "allowed", "harm", "harmful", "proper",
-		"well"));
+		"fine", "alright", "compatible", "appropriate", "safety", "good", "suitable", "reasonable", "able", "recommended",
+		"allowed", "proper", "well",
+		// "Fluconazole permitted?" (ADR Decision 454)
+		"permitted", "permissible"));
+
+	/** Words saying the question is about whether the drug would harm her, which "No" answers backwards (ADR Decision 454):
+	 *  "Will fluconazole harm her?", "Is fluconazole a risk?", "Is fluconazole contraindicated here?". */
+	private static final Set<String> RESIDUAL_HARMS = new HashSet<String>(Arrays.asList("issue", "issues", "problem",
+		"problems", "problematic", "concern", "concerns", "risk", "risks", "risky", "contraindicated", "contraindication",
+		"contraindications", "worried", "worry", "worrying", "harm", "harmful", "hurt", "toxic", "dangerous", "danger",
+		"unsafe"));
 
 	/** Words proposing to give the drug, where an asking word opens the question. */
 	private static final Set<String> RESIDUAL_GIVE = new HashSet<String>(Arrays.asList("give", "giving", "given", "start",
@@ -2534,6 +2555,7 @@ public final class QueryScopeRouter {
 		}
 		boolean interacts = false;
 		boolean safe = false;
+		boolean harms = false;
 		boolean gives = false;
 		for (String word : wordsWithTheDrugMarked) {
 			if (DRUG_NAME.equals(word) || RESIDUAL_FILLER.contains(word)) {
@@ -2543,6 +2565,8 @@ public final class QueryScopeRouter {
 				interacts = true;
 			} else if (RESIDUAL_SAFE.contains(word)) {
 				safe = true;
+			} else if (RESIDUAL_HARMS.contains(word)) {
+				harms = true;
 			} else if (RESIDUAL_GIVE.contains(word)) {
 				gives = true;
 			} else {
@@ -2556,7 +2580,7 @@ public final class QueryScopeRouter {
 		}
 		boolean asked = false;
 		// A drug, the patient and a word saying it is safe — "Warfarin for her - safe?" — is asked whole (ADR Decision 405).
-		boolean aQuestion = wordsWithTheDrugMarked.size() <= 2 || safe && wordsWithTheDrugMarked.size() <= 4;
+		boolean aQuestion = wordsWithTheDrugMarked.size() <= 2 || (safe || harms) && wordsWithTheDrugMarked.size() <= 4;
 		for (String word : wordsWithTheDrugMarked) {
 			asked |= RESIDUAL_ASKING.contains(word);
 			aQuestion |= RESIDUAL_QUESTION.contains(word);
@@ -2566,7 +2590,10 @@ public final class QueryScopeRouter {
 		if (!aQuestion) {
 			return Residual.NONE;
 		}
-		return interacts ? Residual.INTERACTS : safe || gives && asked ? Residual.PROPOSES : Residual.NONE;
+		// A word asking whether it would harm her makes the question one "No" answers backwards, though it also asks whether it
+		// is safe: "Is fluconazole safe or risky?" (ADR Decision 454).
+		return interacts ? Residual.INTERACTS : harms ? Residual.HARMS : safe || gives && asked ? Residual.PROPOSES
+				: Residual.NONE;
 	}
 
 	/**
@@ -2662,12 +2689,12 @@ public final class QueryScopeRouter {
 	 */
 	public static String statedPurpose(List<String> wordsWithTheDrugMarked) {
 		// Nor a question about the drug and her allergies, whose closing words are those allergies (ADR Decision 344).
-		if (fitsAShape(wordsWithTheDrugMarked, PROPOSAL_SHAPES) || asksWhetherNotToGiveADrug(wordsWithTheDrugMarked)
+		if (fitsAShape(wordsWithTheDrugMarked, PROPOSAL_SHAPES) || fitsANegatedShape(wordsWithTheDrugMarked)
 				|| fitsAShape(wordsWithTheDrugMarked, DRUG_AND_HER_ALLERGIES_SHAPES)) {
 			return null;
 		}
 		List<String> proposal = withoutAPurpose(wordsWithTheDrugMarked);
-		if (proposal == null || !fitsAShape(proposal, PROPOSAL_SHAPES) && !asksWhetherNotToGiveADrug(proposal)) {
+		if (proposal == null || !fitsAShape(proposal, PROPOSAL_SHAPES) && !fitsANegatedShape(proposal)) {
 			return null;
 		}
 		// After "for", or the whole closing statement of what she has (ADR Decision 325).

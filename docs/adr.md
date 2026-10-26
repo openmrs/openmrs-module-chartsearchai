@@ -22651,3 +22651,38 @@ Eleven wordings went to the model:
 - *"Any interaction: X, Y?"* and *"Interaction check: X and Y"* are whether the two interact.
 
 Pinned by `ClinicianWordingsTest.aDrugBadForHerOrAPairBadTogetherIsTheQuestionItSpells`.
+
+## Decision 454: A drug asked of as a harm is never answered "No"
+
+**Status: Accepted** (October 2026) — found asking 40 further wordings of 15 patients on the 3.7.1 standalone on 2026-10-26.
+
+### Context
+
+Decision 396's residual reading read every word of a drug's safety alike, as a proposal, which the module opens *"No — this
+module's drug-safety check found a reason to withhold X"*. Half of those words ask the question the other way round:
+- *"Is fluconazole harmful to her?"*, *"Will fluconazole harm her?"*, *"Is fluconazole a risk?"*, *"Any risk with
+  fluconazole?"*, *"Is fluconazole contraindicated here?"* and *"Would fluconazole be harmful?"* were each answered *"No —"*.
+  A clinician reads that *"No"* as *"it is not harmful"*, over a Major interaction.
+- *"Is fluconazole toxic for her?"*, *"Could fluconazole hurt her?"*, *"Fluconazole permitted?"* and *"Fluconazole:
+  yes/no?"* went to the model, which answered *"Fluconazole can be given"* on 5 to 7 of 15 patients.
+
+### The decision
+
+- The residual reading's words of safety are split by which way they ask:
+  - `RESIDUAL_SAFE` asks whether the drug is safe: *safe*, *ok*, *fine*, *allowed*, *permitted* and the like.
+  - `RESIDUAL_HARMS` asks whether it would harm her: *risk*, *harm*, *hurt*, *toxic*, *dangerous*, *problem*, *concern*,
+    *contraindicated* and the like.
+- A question carrying a word of harm is read `Residual.HARMS`. `asksWhetherNotToGiveADrug` admits it, so the answer has no
+  lead, as Decision 181's negated proposal has none. This holds even where the question also asks whether the drug is safe,
+  because a lead fits only one of the two.
+- `fitsAProposalShape` and `statedPurpose` read the negated shapes alone (`fitsANegatedShape`), since the residual reading
+  calls them before it reads the words.
+- *"pose"* is filler, so *"Does X pose a risk?"* is read.
+- *"X: yes/no?"* is Decision 431's *"X - yes or no?"*.
+- This supersedes one row each of Decisions 400 and 415. They pinned *"Should I be worried about giving her fluconazole?"* and
+  *"Will warfarin harm her?"* to *"Can I give her X?"*, whose *"No —"* lead answers both backwards. The rows now pin them to
+  *"Is X dangerous for her?"*.
+
+Pinned by `ClinicianWordingsTest.aDrugAskedOfAsAHarmIsNeverAnsweredNo`, and by the two rows above in
+`ClinicianWordingsTest.fiveMoreWordingsAreAnsweredAsTheQuestionsTheyAsk` and
+`ClinicianWordingsTest.colloquialWordingsAreAnsweredAsTheQuestionsTheyAsk`.

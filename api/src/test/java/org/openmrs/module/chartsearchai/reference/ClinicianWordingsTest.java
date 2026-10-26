@@ -160,7 +160,8 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 	public void fiveMoreWordingsAreAnsweredAsTheQuestionsTheyAsk() {
 		String[][] pairs = {
 			{ "Can ciprofloxacin be taken with her medicines?", "Can I give her ciprofloxacin?" },
-			{ "Should I be worried about giving her fluconazole?", "Can I give her fluconazole?" },
+			// whether to worry, which "No" answers backwards (ADR Decision 454)
+			{ "Should I be worried about giving her fluconazole?", "Is fluconazole dangerous for her?" },
 			{ "Does ciprofloxacin clash with any of her medicines?", "Does ciprofloxacin interact with her medications?" },
 			{ "Is it ok to give warfarin and metronidazole to her?", "Can I give her warfarin and metronidazole together?" },
 			{ "Which of her medications should I stop if I start rifampicin?",
@@ -397,7 +398,8 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 			{ "Is warfarin allowed for her?", "Can I give her warfarin?" },
 			{ "Can she be put on warfarin?", "Can I give her warfarin?" },
 			{ "Can we put her on warfarin?", "Can I give her warfarin?" },
-			{ "Will warfarin harm her?", "Can I give her warfarin?" },
+			// whether it would harm her, which "No" answers backwards (ADR Decision 454)
+			{ "Will warfarin harm her?", "Is warfarin dangerous for her?" },
 			{ "Is it proper to give her warfarin?", "Can I give her warfarin?" },
 			{ "Can the client take warfarin?", "Can I give her warfarin?" },
 			{ "Can my patient take warfarin?", "Can I give her warfarin?" },
@@ -1384,6 +1386,27 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 			assertEquals(canonical, ask(pair[0]), pair[0]);
 		}
 		assertFalse(chart("Is warfarin bad for her?").asksOnlyAboutADrugsRecord());
+	}
+
+	/** ADR Decision 454: a question whether a drug would HARM her is the negated proposal — "No" answers it backwards — and
+	 *  "permitted", "yes/no" are the proposal. */
+	@Test
+	public void aDrugAskedOfAsAHarmIsNeverAnsweredNo() {
+		String negated = ask("Is warfarin dangerous for her?");
+		assertNotNull(negated, "precondition: the module answers the negated proposal");
+		assertFalse(negated.startsWith("No"), negated);
+		for (String harm : new String[] { "Will warfarin harm her?", "Is warfarin harmful to her?", "Is warfarin a risk?",
+				"Warfarin - risky?", "warfarin risk", "Is there harm in warfarin?", "Any risk with warfarin?",
+				"Is warfarin contraindicated here?", "Would warfarin be harmful?", "Is warfarin toxic for her?",
+				"Could warfarin hurt her?", "Does warfarin pose a risk?", "Warfarin - concerns?", "Is warfarin a danger to her?" }) {
+			assertEquals(negated, ask(harm), harm);
+		}
+		String proposal = ask("Is warfarin allowed?");
+		assertNotNull(proposal, "precondition: the module answers the proposal");
+		assertTrue(proposal.startsWith("No"), proposal);
+		assertEquals(proposal, ask("Warfarin permitted?"));
+		assertEquals(ask("Warfarin - yes or no?"), ask("Warfarin: yes/no?"));
+		assertNotNull(ask("Warfarin: yes/no?"));
 	}
 
 	private static String ask(String question) {

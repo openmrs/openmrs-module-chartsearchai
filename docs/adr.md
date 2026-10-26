@@ -22624,3 +22624,30 @@ Four wordings went to the model:
   check does not weigh, which includes the pregnancy.
 
 Pinned by `ClinicianWordingsTest.oneOfTwoForAComplaintOrADrugForAPatientOnAGroupIsTheQuestionItSpells`.
+
+## Decision 453: A drug bad for her, or a pair bad together, is the question it spells
+
+**Status: Accepted** (October 2026) — found asking 40 further wordings of 15 patients on the 3.7.1 standalone on 2026-10-26.
+
+### Context
+
+Eleven wordings went to the model:
+- *"Interaction check: rifampicin and efavirenz"* was answered *"Efavirenz can be given"* on 12 of 15 patients.
+- *"Is it bad to give fluconazole?"* and *"Any reason to worry about fluconazole?"* were answered *"Fluconazole can be given"* on
+  6 each.
+- *"Is fluconazole bad for her?"* raised no chip at all. It opens as a question of fact and has no word of Decision 399's
+  safety vocabulary, so it was read as a question of the drug's record and handed no finding. The model answered *"The
+  records do not address fluconazole"* to patients whose orders fluconazole interacts with on a Major rating.
+
+### The decision
+
+- *"bad"*, *"worse"* and *"wrong"* are words of safety (`SAFETY_WORDS`), so a question carrying one is never read as a
+  question of a drug's record alone.
+- *"Is X bad for her?"*, *"Is it bad to give X?"* and *"Any reason to worry about X?"* are Decision 255's questions of the
+  risk, with no lead.
+- *"Are X and Y a bad combination?"* and *"Is X bad with Y?"* are the same question of the two together.
+- *"X and Y ok together?"*, with no verb, is Decision 203's proposal of the two together.
+- *"Does X work with Y?"* is Decision 444's *"Will X work with Y?"*.
+- *"Any interaction: X, Y?"* and *"Interaction check: X and Y"* are whether the two interact.
+
+Pinned by `ClinicianWordingsTest.aDrugBadForHerOrAPairBadTogetherIsTheQuestionItSpells`.

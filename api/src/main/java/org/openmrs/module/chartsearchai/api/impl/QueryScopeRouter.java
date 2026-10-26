@@ -561,6 +561,13 @@ public final class QueryScopeRouter {
 			D + "(?: for \\p{L}+(?: \\p{L}+){0,2})? (?:(?:are there )?any )?(?:issues|concerns|problems|risks)",
 			// and "Fluconazole in this patient - concerns?" (ADR Decision 445)
 			D + " (?:in|for) " + PATIENT + " (?:(?:are there )?any )?(?:issues|concerns|problems|risks|thoughts)",
+			// "Is fluconazole bad for her?", "Is it bad to give fluconazole?", "Any reason to worry about fluconazole?" (ADR
+			// Decision 453)
+			"is " + D + " (?:bad|not good|wrong) (?:for|in) " + PATIENT,
+			"(?:is|would) it (?:be )?(?:bad|wrong) to (?:give|start|prescribe|add|use) (?:" + PATIENT + " )?(?:on )?" + D
+					+ "(?: (?:to|for) " + PATIENT + ")?",
+			"(?:is there )?(?:any |a )?reason to (?:worry|be worried|be concerned) about (?:giving )?" + D + "(?: (?:for|in) "
+					+ PATIENT + ")?",
 			// "Is fluconazole not safe for her?", "Can't I give her fluconazole?" — asked in the negative, answered with no "Yes"
 			// or "No" (ADR Decision 406)
 			"is " + D + " (?:not (?:safe|ok|okay|appropriate|suitable)|unsafe)(?: (?:for|in) " + PATIENT + ")?",
@@ -951,6 +958,8 @@ public final class QueryScopeRouter {
 					+ " (?:and|with) " + HER_D + "(?: together)? (?:safe|ok|okay|appropriate|fine)(?: (?:for|in) " + PATIENT + ")?",
 			// "Fluconazole for oral thrush - safe with efavirenz?" (ADR Decision 452)
 			HER_D + " for \\p{L}+(?: \\p{L}+){0,2} (?:safe|ok|okay|fine) (?:with|alongside) " + HER_D,
+			// "Rifampicin and nevirapine ok together?", with no verb (ADR Decision 453)
+			HER_D + " and " + HER_D + " (?:ok|okay|fine|safe) together",
 			// "Clarithromycin safe with efavirenz or not?" (ADR Decision 448)
 			"(?:is )?" + HER_D + " (?:safe|ok|okay|fine) (?:with|alongside) " + HER_D + " or not",
 			// "Ibuprofen on top of aspirin - ok?" (ADR Decision 445)
@@ -1583,6 +1592,9 @@ public final class QueryScopeRouter {
 			+ "|is it contraindicated to (?:give|combine|use|take|prescribe) " + HER_D + " (?:and|with|alongside) " + HER_D
 			+ "(?: together)?"
 			+ "|(?:is|are) " + HER_D + " (?:and|with|plus) " + HER_D + " contraindicated(?: together| with each other| in combination)?"
+			// "Are rifampicin and nevirapine a bad combination?", "Is rifampicin bad with nevirapine?" (ADR Decision 453)
+			+ "|(?:is|are) " + HER_D + " (?:and|with|plus) " + HER_D + " (?:a )?bad (?:combination|combo|mix|idea)"
+			+ "|is " + HER_D + " bad (?:with|alongside|for|in combination with) " + HER_D
 			// "Is there a risk of myopathy with clarithromycin and simvastatin?", "Heparin and aspirin together - bleeding risk?"
 			// (ADR Decision 447)
 			+ "|is there (?:a |any )?(?:increased |higher )?risk of (?:\\p{L}+ ){1,3}(?:with|when|if|from) (?:(?:combining|giving|"
@@ -1756,6 +1768,8 @@ public final class QueryScopeRouter {
 			CHANGE_HERS_IF_STARTING,
 			// "Fluconazole and nevirapine", "Fluconazole plus nevirapine" — two names and a joining word alone (ADR Decision 413)
 			HER_D + " (?:and|plus|with) " + HER_D,
+			// "Any interaction: ibuprofen, aspirin?", "Interaction check: rifampicin and efavirenz" (ADR Decision 453)
+			"(?:(?:are|is) there )?(?:any )?(?:drug )?interactions? (?:check )?(?:for |on |of |between )?" + HER_D + " (?:and )?" + HER_D,
 			// and "fluconazole nevirapine", the two names alone (ADR Decision 428)
 			D + " " + D,
 			// "Can I give fluconazole after she finishes rifampicin?", "Is it safe to give fluconazole and then rifampicin later?"
@@ -1846,6 +1860,8 @@ public final class QueryScopeRouter {
 			// "Will rifampicin cause her nevirapine to fail?", "Is efavirenz still effective with rifampicin?" (ADR Decision 444)
 			"(?:does|do|will|would|can|could|might) " + HER_D + " cause " + HER_D + " to (?:fail|stop working|not work|be less "
 					+ "effective|work less)",
+			// and "Does rifampicin work with her nevirapine?" (ADR Decision 453)
+			"(?:does|do) " + HER_D + " (?:still )?work (?:with|alongside|on) " + HER_D,
 			"(?:is|are|will|would) " + HER_D + " (?:still )?(?:be )?(?:as )?(?:effective|work|working) (?:with|alongside|on|if (?:i|we) "
 					+ "(?:add|give|start|prescribe)) " + HER_D,
 			AVOID_ONE_WITH_THE_OTHER, WHAT_COMBINING_THEM_DOES, DOSE_BECAUSE_OF_THE_OTHER, STOP_OR_KEEP_ONE_FOR_THE_OTHER,
@@ -2386,6 +2402,8 @@ public final class QueryScopeRouter {
 	private static final Set<String> SAFETY_WORDS = new HashSet<String>(Arrays.asList("ok", "okay", "fine", "hold", "give",
 		"giving", "add", "adding", "prescribe", "prescribing", "start", "starting", "stop", "stopping", "best", "vs", "can", "able",
 		"allowed", "harm", "proper", "put", "mix", "mixed", "combine",
+		// "Is fluconazole bad for her?" was read as a question of its record and handed no finding (ADR Decision 453)
+		"bad", "worse", "wrong",
 		"could", "should", "may", "might", "would", "will", "must", "need", "needs"));
 
 	/**

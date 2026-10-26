@@ -1360,6 +1360,32 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/**
+	 * A drug "bad for her", "bad to give" or a "reason to worry about", a pair "a bad combination" or one "bad with" another,
+	 * two "ok together" with no verb, one that "works with" another, and "Any interaction: X, Y" or "Interaction check: X and
+	 * Y" are the questions they spell (ADR Decision 453). On the 3.7.1 standalone "Is fluconazole bad for her?" was read as a
+	 * question of the drug's record and handed no finding, and the model answered "The records do not address fluconazole";
+	 * "Interaction check: rifampicin and efavirenz" was answered "Efavirenz can be given" on 12 of 15 patients.
+	 */
+	@Test
+	public void aDrugBadForHerOrAPairBadTogetherIsTheQuestionItSpells() {
+		String[][] pairs = { { "Is warfarin bad for her?", "Is warfarin dangerous for her?" },
+			{ "Is it bad to give warfarin?", "Is it risky to give her warfarin?" },
+			{ "Any reason to worry about warfarin?", "Any reason to avoid warfarin?" },
+			{ "Are warfarin and nevirapine a bad combination?", "Is warfarin dangerous with her nevirapine?" },
+			{ "Is warfarin bad with nevirapine?", "Is warfarin dangerous with her nevirapine?" },
+			{ "Warfarin and nevirapine ok together?", "Can I give her warfarin with nevirapine?" },
+			{ "Does warfarin work with her nevirapine?", "Will warfarin work with nevirapine?" },
+			{ "Any interaction: warfarin, nevirapine?", "Does warfarin interact with nevirapine?" },
+			{ "Interaction check: warfarin and nevirapine", "Does warfarin interact with nevirapine?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+		assertFalse(chart("Is warfarin bad for her?").asksOnlyAboutADrugsRecord());
+	}
+
 	private static String ask(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

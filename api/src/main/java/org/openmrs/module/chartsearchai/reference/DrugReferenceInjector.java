@@ -6287,10 +6287,14 @@ public class DrugReferenceInjector {
 		List<Integer> relating = new ArrayList<Integer>();
 		// Each drug as the question names it — a combination's name one of the two (ADR Decision 272).
 		List<AskedDrug> asked = askedDrugs(question, questionDrugs, null, false);
-		// Or whether to keep taking both (ADR Decision 380).
+		// Or whether to keep taking both (ADR Decision 380), or whether one changes the other however it is asked: "Does
+		// rifampicin make efavirenz less effective?" of a patient taking both went to the model, which answered "Efavirenz can be
+		// given" (ADR Decision 444); and the two names alone, "Ibuprofen and aspirin".
+		List<String> words = wordsBesideItsNames(question, questionDrugs);
 		if (asked.size() != 2 || !asked.get(0).isHers(herSubstances) || !asked.get(1).isHers(herSubstances)
-				|| !QueryScopeRouter.asksAboutTwoDrugsTogether(wordsBesideItsNames(question, questionDrugs))
-						&& !QueryScopeRouter.asksWhetherToContinueBothDrugs(wordsBesideItsNames(question, questionDrugs))) {
+				|| !QueryScopeRouter.asksAboutTwoDrugsTogether(words) && !QueryScopeRouter.asksWhetherToContinueBothDrugs(words)
+						&& !QueryScopeRouter.asksWhetherOneDrugChangesTheOther(words)
+						&& !QueryScopeRouter.asksWhetherTwoDrugsInteract(words)) {
 			return relating;
 		}
 		List<Set<Object>> sides = Arrays.asList(ofHerOrders(asked.get(0), orderEntries, context),

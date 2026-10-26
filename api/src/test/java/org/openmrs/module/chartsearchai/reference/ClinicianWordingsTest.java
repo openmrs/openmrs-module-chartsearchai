@@ -1129,6 +1129,57 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/**
+	 * A drug "and her ARVs - ok?", avoided "while on ART", the drugs to avoid with it, a pair "how bad", given "while on",
+	 * "at the same time", "if she's on" or "used with" another, one "causing" another "to fail" or "still effective" with it,
+	 * a pair's "dose change", one "while on" another "- risky?", what to do if she needs one while on another, and one stopped
+	 * "if she takes" another are the questions they spell (ADR Decision 444). On the 3.7.1 standalone each went to the model,
+	 * which answered "Can I use clarithromycin with her efavirenz?" and "Is efavirenz still effective with rifampicin?" "can
+	 * be given" on 14 and 15 of 15 patients.
+	 */
+	@Test
+	public void aPairGivenWhileOnTheOtherOrFailingWithItIsTheQuestionItSpells() {
+		String[][] pairs = { { "Warfarin and her ARVs - ok?", "Is warfarin safe with her ARVs?" },
+			{ "Should she avoid warfarin while on ART?", "Should she avoid warfarin?" },
+			{ "What drugs should she avoid with warfarin?", "Which of her drugs should I avoid giving with warfarin?" },
+			{ "How bad is warfarin with nevirapine?", "Is warfarin dangerous with her nevirapine?" },
+			{ "Warfarin while on nevirapine?", "Can I give her warfarin with nevirapine?" },
+			{ "Warfarin and nevirapine at the same time?", "Can I give her warfarin with nevirapine?" },
+			{ "Can I prescribe warfarin if she's on nevirapine?", "Can I give her warfarin with nevirapine?" },
+			{ "Can I use warfarin with her nevirapine?", "Can I give her warfarin with nevirapine?" },
+			{ "Will warfarin cause her nevirapine to fail?", "Will warfarin lower her nevirapine levels?" },
+			{ "Is nevirapine still effective with warfarin?", "Will warfarin lower her nevirapine levels?" },
+			{ "Warfarin with nevirapine - any dose change?", "Warfarin and nevirapine: dose adjustment needed?" },
+			{ "Warfarin while on nevirapine - risky?", "Is warfarin dangerous with her nevirapine?" },
+			{ "What should I do if she needs warfarin and is on nevirapine?",
+				"How do I manage the interaction between warfarin and nevirapine?" },
+			{ "Should she stop nevirapine if she takes warfarin?", "Do I need to stop nevirapine before starting warfarin?" },
+			{ "Ibuprofen and aspirin together?", "Can she take ibuprofen and aspirin together?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+	}
+
+	/**
+	 * One drug making another she also takes "less effective" or "causing it to fail", and two of hers named alone, are
+	 * answered as two of hers asked about together, as the other ways of asking them are (ADR Decision 444). On the 3.7.1
+	 * standalone the module left "Does rifampicin make efavirenz less effective?" to the model for a patient taking both,
+	 * which answered "Efavirenz can be given, with one caution".
+	 */
+	@Test
+	public void oneOfHersFailingWithAnotherOfHersIsAnsweredAsTwoOfHers() {
+		String[][] pairs = { { "Does ibuprofen make aspirin less effective?", "Does ibuprofen reduce the effect of aspirin?" },
+			{ "Will ibuprofen cause her aspirin to fail?", "Does ibuprofen reduce the effect of aspirin?" },
+			{ "Ibuprofen and aspirin", "Do ibuprofen and aspirin interact?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+	}
+
 	private static String ask(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

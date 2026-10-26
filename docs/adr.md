@@ -22370,3 +22370,34 @@ medications, then each gets what the check found about it, with no verdict. Eith
 way, is still left to the model (`DrugReferenceInjector.composeTwoProposalsTogether`).
 
 Pinned by `ClinicianWordingsTest.whichOfTwoSheBothTakesIsSaferStatesEachAsHers`.
+
+## Decision 444: A drug given while she is on another, or failing with it, is the question it spells, of two of hers too
+
+**Status: Accepted** (October 2026) — found asking 40 further wordings of 15 patients on the 3.7.1 standalone on 2026-10-26.
+
+### Context
+
+Fifteen wordings went to the model. It answered *"Is efavirenz still effective with rifampicin?"* *"Efavirenz can be
+given"* on all 15 patients, and *"Can I use clarithromycin with her efavirenz?"* *"Clarithromycin can be given"* on 14. For
+a patient taking both rifampicin and efavirenz, the module answered *"Does rifampicin make efavirenz less effective?"* for no
+other patient but left it to the model, which answered *"Efavirenz can be given, with one caution"*. The answer to two drugs
+she both takes (Decision 203) admitted only the effect shapes `asksAboutTwoDrugsTogether` lists, not the later ones
+`asksWhetherOneDrugChangesTheOther` reads (Decisions 391, 431), nor the two names alone (Decision 413).
+
+### The decision
+
+- *"X and her ARVs - ok?"* is whether X is safe beside them. *"Should she avoid X while on ART?"* is Decision 247's
+  question with no lead, and *"What drugs should she avoid with X?"* is which of her medications interact with X.
+- *"X while on Y?"*, *"X and Y at the same time?"*, *"X and Y together?"*, *"Can I prescribe X if she's on Y?"* and *"Can I
+  use X with Y?"* are Decision 203's proposal of the two together.
+- These are Decisions 249-255's questions of what one does beside the other, each with no lead:
+  - *"How bad is X with Y?"* and *"X while on Y - risky?"*;
+  - *"Will X cause her Y to fail?"* and *"Is Y still effective with X?"*;
+  - *"X with Y - any dose change?"*;
+  - *"Should she stop Y if she takes X?"*.
+- *"What should I do if she needs X and is on Y?"* is Decision 418's question of managing the interaction.
+- Two drugs she both takes are answered as two of hers (`DrugReferenceInjector.twoOfHerOwnAskedTogether`) whenever the
+  question asks whether one changes the other, or whether the two interact, however it is worded.
+
+Pinned by `ClinicianWordingsTest.aPairGivenWhileOnTheOtherOrFailingWithItIsTheQuestionItSpells` and
+`ClinicianWordingsTest.oneOfHersFailingWithAnotherOfHersIsAnsweredAsTwoOfHers`.

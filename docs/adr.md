@@ -22463,3 +22463,28 @@ decision:
   - *"Does Y need adjusting with X?"*.
 
 Pinned by `ClinicianWordingsTest.aDrugAffectedByOrDosedWithAnotherIsTheQuestionItSpells`.
+
+## Decision 447: The risk of an effect with two drugs, and a drug named with an article and its form, are the questions they spell
+
+**Status: Accepted** (October 2026) — found asking 40 further wordings of 15 patients on the 3.7.1 standalone on 2026-10-26.
+
+### Context
+
+Five wordings went to the model. It answered:
+- *"Can she get heparin while on aspirin?"* with *"Heparin can be given, with one caution"* on 13 of 15 patients;
+- *"Heparin and aspirin together - bleeding risk?"* with a clearance on 9;
+- *"Any problem with giving her a lidocaine injection?"* with a clearance on 7.
+
+*"Any problem with giving her lidocaine?"* was the module's. The form *"injection"* was already read (Decision 334), but the
+article before the drug was not removed with it.
+
+### The decision
+
+- *"Is there a risk of myopathy with X and Y?"* and *"X and Y together - bleeding risk?"* are Decision 255's question of the
+  two together, with no lead. The word before *"risk"* must not be *"any"*, so that *"X and Y - any concerns?"* stays
+  Decision 426's.
+- *"Can I give X to someone on Y?"* and *"Can she get X while on Y?"* are Decision 203's proposal of the two together.
+- A form named after the drug takes the article before it, *"a lidocaine injection"*. The question is read as one about
+  lidocaine, with Decision 334's statement that the form was not weighed.
+
+Pinned by `ClinicianWordingsTest.aPairsRiskOrADrugGivenToSomeoneOnAnotherIsTheQuestionItSpells`.

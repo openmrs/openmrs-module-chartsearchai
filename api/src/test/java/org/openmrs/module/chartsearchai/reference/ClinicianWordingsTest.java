@@ -1229,6 +1229,30 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/**
+	 * The risk of an effect "with" two drugs, a pair "together - bleeding risk?", one given "to someone on" another, one she
+	 * may "get while on" another, and a drug named with an article and its form — "a lidocaine injection" — are the questions
+	 * they spell (ADR Decision 447). On the 3.7.1 standalone each went to the model, which answered "Can she get heparin while
+	 * on aspirin?" "Heparin can be given, with one caution" on 13 of 15 patients.
+	 */
+	@Test
+	public void aPairsRiskOrADrugGivenToSomeoneOnAnotherIsTheQuestionItSpells() {
+		String[][] pairs = { { "Is there a risk of bleeding with warfarin and nevirapine?",
+			"Is warfarin dangerous with her nevirapine?" },
+			{ "Warfarin and nevirapine together - bleeding risk?", "Is warfarin dangerous with her nevirapine?" },
+			{ "Can I give warfarin to someone on nevirapine?", "Can I give her warfarin with nevirapine?" },
+			{ "Can she get warfarin while on nevirapine?", "Can I give her warfarin with nevirapine?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+		String canonical = ask("Any problem with giving her warfarin?");
+		assertNotNull(canonical, "precondition: the module answers Any problem with giving her warfarin?");
+		assertEquals(canonical + "\nThis check did not weigh the form asked about (injection).",
+			ask("Any problem with giving her a warfarin injection?"));
+	}
+
 	private static String ask(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

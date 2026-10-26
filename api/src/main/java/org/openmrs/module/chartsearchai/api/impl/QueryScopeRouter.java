@@ -892,7 +892,9 @@ public final class QueryScopeRouter {
 			// "Can she take warfarin and ibuprofen together?", "Can she drink alcohol while on metronidazole?", "Can she have
 			// alcohol with her metronidazole?" (ADR Decision 268), "Can he have ibuprofen as well as his warfarin?" (ADR
 			// Decision 355)
-			"(?:can|could|may|should) (?:she|he|they|the patient|this patient) (?:safely )?(?:take|be given|drink|have) " + HER_D
+			// and "Can she get heparin while on aspirin?" (ADR Decision 447)
+			"(?:can|could|may|should) (?:she|he|they|the patient|this patient) (?:safely )?(?:take|be given|drink|have|get|receive|use) "
+					+ HER_D
 					// and "at the same time" (ADR Decision 441)
 					+ " (?:and|with|alongside|as well as|while on|while taking) " + HER_DS + AT_ONCE + "(?: now| today)?",
 			// "Rifampicin and nevirapine together - yes or no?" (ADR Decision 441)
@@ -937,8 +939,10 @@ public final class QueryScopeRouter {
 			"(?:can|could|may|should) (?:i|we) (?:safely )?(?:combine|mix) " + HER_D + " (?:and|with) " + HER_DS + "(?: (?:in|for) "
 					+ PATIENT + ")?",
 			// "Can I give clarithromycin to a patient on simvastatin?" — given with it (ADR Decision 352)
-			"(?:can|could|may|should) (?:i|we) (?:safely )?(?:give|start|prescribe|administer) " + HER_D + " to (?:a|the|this) "
-					+ "patient (?:on|taking|who takes|who is (?:on|taking)) " + HER_DS + "(?: now| today)?",
+			// and "to someone on methotrexate" (ADR Decision 447)
+			"(?:can|could|may|should) (?:i|we) (?:safely )?(?:give|start|prescribe|administer) " + HER_D + " to (?:(?:a|the|this) "
+					+ "patient|someone|somebody|anyone|a person) (?:on|taking|who takes|who is (?:on|taking)) " + HER_DS
+					+ "(?: now| today)?",
 			// "Can I add fluconazole to her cotrimoxazole?", "Is it safe to add fluconazole to her cotrimoxazole?" — given
 			// with it (ADR Decision 343)
 			"(?:can|could|may|should) (?:i|we) (?:safely )?add " + HER_D + " to " + HER_DS + "(?: for " + PATIENT
@@ -1535,6 +1539,11 @@ public final class QueryScopeRouter {
 			+ "|is it contraindicated to (?:give|combine|use|take|prescribe) " + HER_D + " (?:and|with|alongside) " + HER_D
 			+ "(?: together)?"
 			+ "|(?:is|are) " + HER_D + " (?:and|with|plus) " + HER_D + " contraindicated(?: together| with each other| in combination)?"
+			// "Is there a risk of myopathy with clarithromycin and simvastatin?", "Heparin and aspirin together - bleeding risk?"
+			// (ADR Decision 447)
+			+ "|is there (?:a |any )?(?:increased |higher )?risk of (?:\\p{L}+ ){1,3}(?:with|when|if|from) (?:(?:combining|giving|"
+			+ "taking|using) )?" + HER_D + " (?:and|with|plus) " + HER_D + "(?: together)?"
+			+ "|" + HER_D + " (?:and|with|plus) " + HER_D + "(?: together)? (?!any )\\p{L}+ (?:risks?|problems?|concerns?)"
 			// "Should rifampicin and nevirapine not be given together?" (ADR Decision 446)
 			+ "|(?:should|must) " + HER_D + " and " + HER_D + " not be (?:given|taken|used|combined|prescribed)(?: together| at the "
 			+ "same time)?"
@@ -1959,8 +1968,10 @@ public final class QueryScopeRouter {
 			+ "(?:another|a second|a further|an extra|an additional|a repeat|a single|one|a one off|a stat|a loading) dose of) (" + D
 			+ ")");
 
-	/** A form named right after the drug — "ketoconazole cream", "chloramphenicol eye drops" (ADR Decision 334). */
-	private static final Pattern FORM_AFTER_THE_DRUG = Pattern.compile("(" + D + ") (cream|ointment|gel|lotion|eye drops|ear "
+	/** A form named right after the drug — "ketoconazole cream", "chloramphenicol eye drops" (ADR Decision 334) — and the
+	 *  article before it, which the form carried: "a lidocaine injection" (ADR Decision 447). */
+	private static final Pattern FORM_AFTER_THE_DRUG = Pattern.compile("(?:(?<=^| )(?:a|an|some) )?(" + D + ") (cream|ointment|gel"
+			+ "|lotion|eye drops|ear "
 			+ "drops|drops|spray|nasal spray|inhaler|patch|patches|suppository|suppositories|pessary|pessaries|injection|"
 			+ "syrup|suspension|tablets?|capsules?"
 			// and what a herb or a fruit is taken as — "chamomile tea", "cranberry juice", "garlic supplements": "Can she have

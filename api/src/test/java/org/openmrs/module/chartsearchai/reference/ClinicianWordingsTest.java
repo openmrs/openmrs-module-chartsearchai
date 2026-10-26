@@ -1590,6 +1590,31 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		assertTrue(ask("Is warfarin safe in her condition?").contains("not the one the question names (condition)"));
 	}
 
+	/**
+	 * A food or a drink taken with her drug, and her drug crushed, ask nothing of its safety, and are handed the model with no
+	 * drug-safety material, as Decision 450's questions of how she takes it are (ADR Decision 464). On the 3.7.1 standalone
+	 * "Can she eat oranges with her nevirapine?" carried nevirapine's interactions with her other medications as chips.
+	 */
+	@Test
+	public void aFoodWithHerDrugOrHerDrugCrushedCarriesNoDrugSafetyMaterial() {
+		for (String question : new String[] { "Can she eat oranges with her nevirapine?", "Can she drink milk with her nevirapine?",
+			"Can she eat oranges while on nevirapine?", "Can she have orange juice with nevirapine?",
+			"Can she eat bread with her efavirenz?", "Can nevirapine be crushed?", "Can her aspirin tablets be crushed?" }) {
+			org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart asked = chart(question);
+			assertTrue(asked.asksOnlyAboutADrugsRecord(), question);
+			assertNull(asked.getModuleAnswer(), question);
+			for (org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping record : asked.getMappings()) {
+				assertFalse("safety_finding".equals(record.getResourceType()) || "drug_reference".equals(record.getResourceType()),
+					question + " carried " + record.getResourceType());
+			}
+		}
+		// A word that may be a drug, misspelt or not, beside hers is still a question of the two.
+		for (String question : new String[] { "Can she have ibuprofn with her nevirapine?", "Can she have warfarin with her nevirapine?",
+			"Can she drink alcohol with her nevirapine?" }) {
+			assertFalse(chart(question).asksOnlyAboutADrugsRecord(), "a question of its safety: " + question);
+		}
+	}
+
 	private static String ask(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

@@ -2677,6 +2677,15 @@ public final class QueryScopeRouter {
 	private static final String A_TIME_OF_TAKING = "(?:(?:with|without|before|after) " + MEALS + "|on an empty stomach|at night"
 			+ "|at bedtime|in the morning|in the evening|at the same time (?:each|every) day)";
 
+	/** An everyday food or drink, the closed list {@link #HOW_TO_TAKE_A_DRUG_SHAPES} reads after "drink" or "have" (ADR
+	 *  Decision 464). */
+	private static final String EVERYDAY_FOOD = "(?:(?:an? |some )?(?:oranges?|orange juice|juice|fruit juice|fruits?|milk|tea|coffee"
+			+ "|water|soda|bananas?|mangoes|mangos?|pineapples?|apples?|eggs?|porridge|bread|rice|beans|food|meals?|breakfast|lunch"
+			+ "|dinner|supper|soup|yoghurt|yogurt|vegetables|meat|fish|chicken|sweets|sugar|honey))";
+
+	/** The words a food is taken beside her drug with (ADR Decision 464). */
+	private static final String BESIDE_HER_DRUG = "(?:with|while on|while taking|alongside|together with) (?:" + POSSESSIVE + " )?";
+
 	private static final List<Pattern> HOW_TO_TAKE_A_DRUG_SHAPES = shapes(
 			"(?:when|what time|how) (?:should|do|does|can|must|would) (?:she|he|they|the patient|this patient) take (?:"
 					+ POSSESSIVE + " )?" + D + "(?: tablets?| pills?| doses?)?",
@@ -2686,7 +2695,14 @@ public final class QueryScopeRouter {
 			"(?:does|do|will|would|can) (?:food|eating|a meal|meals) (?:affect|change|reduce|increase|alter) (?:the absorption of )?(?:"
 					+ POSSESSIVE + " )?" + D,
 			"(?:can|should|could|may) (?:i|we|she|he|they|the patient) (?:crush|split|chew|dissolve|break) (?:" + POSSESSIVE + " )?"
-					+ D + "(?: tablets?| pills?)?");
+					+ D + "(?: tablets?| pills?)?",
+			// "Can nevirapine be crushed?", "Can her aspirin tablets be crushed?" (ADR Decision 464)
+			"(?:can|should|could|may) (?:" + POSSESSIVE + " )?" + D + "(?: tablets?| pills?)? be (?:crushed|split|chewed|dissolved|broken)",
+			// "Can she eat oranges with her nevirapine?", "Can she have orange juice with nevirapine?" — a food beside her drug:
+			// any food she eats, and of what she drinks or has only an everyday food or drink, since a word there may be a
+			// drug, misspelt or not, which the module checks (ADR Decision 464)
+			"(?:can|could|may|should) (?:she|he|they|the patient|this patient) (?:eat \\p{L}+(?: \\p{L}+){0,2}|(?:drink|have) "
+					+ EVERYDAY_FOOD + ") " + BESIDE_HER_DRUG + D);
 
 	/** The possessives naming the drug as hers. */
 	private static final Set<String> RESIDUAL_POSSESSIVES = new HashSet<String>(Arrays.asList("her", "his", "their",

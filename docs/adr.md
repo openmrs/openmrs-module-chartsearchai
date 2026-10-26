@@ -22950,3 +22950,29 @@ that the check weighs only the conditions her chart records, not the one the que
 - *"in her case"* and *"in her situation"* name no condition. They stay the plain proposal Decision 456 reads.
 
 Pinned by `ClinicianWordingsTest.aConditionNamedInHerIsNamedAsOneGivenHer`.
+
+## Decision 464: A food with her drug, and her drug crushed, carry no drug-safety material
+
+**Status: Accepted** (October 2026) — found asking 12 food and record wordings of 5 patients on the 3.7.1 standalone on
+2026-10-27.
+
+### Context
+
+*"Can she eat oranges with her nevirapine?"* is a food question, yet on 9 of 15 patients its answer carried chips: nevirapine's
+interactions with her other medications, which the question does not ask about. *"Can she drink milk with her
+nevirapine?"*, *"Can she eat oranges while on nevirapine?"*, *"Can she have orange juice with nevirapine?"* and *"Can
+nevirapine be crushed?"* did the same. *"Can she take nevirapine with food?"* carried none. Decision 450 hands the model a
+question of how she takes her drug as a question of its record, with no drug-safety material. Its shapes read *"take X
+with food"* and *"Can she crush X?"*, never a food as the object with her drug after *"with"*, nor the passive *"be
+crushed"*. A question naming one resolved drug keeps its chips whenever `asksOnlyAboutADrugsRecord` is false.
+
+### The decision
+
+- `HOW_TO_TAKE_A_DRUG_SHAPES` reads *"Can she eat F with / while on her X?"*, where F is any food she eats.
+- It reads *"Can she drink / have F with her X?"* only where F is an everyday food or drink on a closed list
+  (`EVERYDAY_FOOD`). A word there may be a drug, misspelt or not, which the module checks: *"Can she have ibuprofn with
+  her nevirapine?"* keeps its check.
+- It reads *"Can X (tablets) be crushed / split / chewed?"*.
+- A second drug beside hers is two drugs and never a record question: *"Can she drink alcohol with her nevirapine?"*.
+
+Pinned by `ClinicianWordingsTest.aFoodWithHerDrugOrHerDrugCrushedCarriesNoDrugSafetyMaterial`.

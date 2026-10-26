@@ -1538,6 +1538,28 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		assertNull(ask("Is warfarin safe or not effective?"));
 	}
 
+	/** ADR Decision 461: two drugs joined "on top of", "to her", "plan", by a verb with no asking word, or after "these", are
+	 *  the pair questions they spell, and "DDI" asks what an interaction check asks. */
+	@Test
+	public void aPairJoinedByAVerbAPlanOrTheWordsOnTopOfIsThePairQuestionItSpells() {
+		String[][] pairs = { { "Warfarin on top of nevirapine?", "Can I give her warfarin with nevirapine?" },
+			{ "Adding warfarin to her nevirapine - ok?", "Can I give her warfarin with nevirapine?" },
+			{ "Mixing warfarin and nevirapine?", "Can I give her warfarin with nevirapine?" },
+			{ "Coadminister warfarin with nevirapine?", "Can I give her warfarin with nevirapine?" },
+			{ "Can these be given together: warfarin and nevirapine?", "Can I give her warfarin with nevirapine?" },
+			{ "Any DDI warfarin nevirapine?", "Does warfarin interact with nevirapine?" },
+			{ "Patient on nevirapine, plan warfarin. Any issue?", "Is nevirapine dangerous with warfarin?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+		// A switch, "instead of", and a past giving stay the model's.
+		assertNull(ask("Warfarin instead of nevirapine?"));
+		assertNull(ask("Switch warfarin to nevirapine?"));
+		assertNull(ask("Was warfarin given with nevirapine?"));
+	}
+
 	private static String ask(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

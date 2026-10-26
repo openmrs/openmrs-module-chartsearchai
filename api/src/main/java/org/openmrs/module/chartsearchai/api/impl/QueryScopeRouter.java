@@ -1808,7 +1808,8 @@ public final class QueryScopeRouter {
 			// "Fluconazole and nevirapine", "Fluconazole plus nevirapine" — two names and a joining word alone (ADR Decision 413)
 			HER_D + " (?:and|plus|with) " + HER_D,
 			// "Any interaction: ibuprofen, aspirin?", "Interaction check: rifampicin and efavirenz" (ADR Decision 453)
-			"(?:(?:are|is) there )?(?:any )?(?:drug )?interactions? (?:check )?(?:for |on |of |between )?" + HER_D + " (?:and )?" + HER_D,
+			// and "Any DDI fluconazole nevirapine?" (ADR Decision 461)
+			"(?:(?:are|is) there )?(?:any )?(?:drug )?(?:interactions?|ddis?) (?:check )?(?:for |on |of |between )?" + HER_D + " (?:and )?" + HER_D,
 			// and "fluconazole nevirapine", the two names alone (ADR Decision 428)
 			D + " " + D,
 			// "Can I give fluconazole after she finishes rifampicin?", "Is it safe to give fluconazole and then rifampicin later?"
@@ -2009,10 +2010,45 @@ public final class QueryScopeRouter {
 	private static final Set<String> RESIDUAL_PAIR_JOINS = new HashSet<String>(Arrays.asList("and", "with", "plus",
 		"alongside", "on", "taking"));
 
+	/**
+	 * The words joining the second of two drugs only in the phrase each comes from (ADR Decision 461): "of" after "on top",
+	 * "to" where the question adds the drug, and "plan" after "on" and the first drug — "Warfarin on top of nevirapine?",
+	 * "Adding warfarin to her nevirapine?", "Patient on nevirapine, plan warfarin". Never on their own: an unrecognised name
+	 * is looked for by trying words in the drugs' places, and "Which of her meds are dangerous?" or "Any interactions I need
+	 * to know about?" would be read as a pair.
+	 */
+	private static boolean joinedInItsPhrase(List<String> words, int first, int join) {
+		String word = words.get(join);
+		if ("of".equals(word)) {
+			return join >= 2 && "top".equals(words.get(join - 1)) && "on".equals(words.get(join - 2));
+		}
+		if ("to".equals(word)) {
+			return words.contains("add") || words.contains("adding");
+		}
+		if ("plan".equals(word) || "planning".equals(word) || "planned".equals(word)) {
+			return join == first + 1 && first > 0 && "on".equals(words.get(first - 1));
+		}
+		return false;
+	}
+
+	/** The words {@link #joinedInItsPhrase} admits between the two drugs. */
+	private static final Set<String> RESIDUAL_PAIR_PHRASE_WORDS = new HashSet<String>(Arrays.asList("of", "to", "plan",
+		"planning", "planned"));
+
 	/** The words a question about TWO drugs may join them with and still be read without a shape (ADR Decision 456). */
 	private static final Set<String> RESIDUAL_PAIR_WORDS = new HashSet<String>(Arrays.asList("plus", "combination", "combo",
 		"combining", "combined", "mixing", "between", "concurrently", "simultaneously", "same", "time", "use", "using",
-		"coadministration", "administration", "given", "together"));
+		"coadministration", "administration", "given", "together",
+		// "on top of", and "these" or "both" standing for the two (ADR Decision 461)
+		"top", "these", "those", "both"));
+
+	/** The words proposing two drugs together when no asking word opens the question: "Mixing warfarin and nevirapine?",
+	 *  "Coadminister warfarin with nevirapine?", "Warfarin on top of nevirapine?" — never a past giving, "Warfarin given
+	 *  with nevirapine?" being her history (ADR Decision 461). */
+	private static final Set<String> RESIDUAL_PAIR_PROPOSING = new HashSet<String>(Arrays.asList("give", "giving", "start",
+		"starting", "prescribe", "prescribing", "add", "adding", "administer", "administering", "coadminister",
+		"coadministering", "coadministration", "use", "using", "mix", "mixing", "combine", "combining", "combination", "combo",
+		"together", "top", "concurrently", "simultaneously"));
 
 	/**
 	 * How a question about TWO drugs that no pair shape fits is read (ADR Decision 456), as {@link #residualReading} reads one
@@ -2033,7 +2069,15 @@ public final class QueryScopeRouter {
 		// pregnancy?" is no pair, and a word standing there would be read as an unrecognised drug.
 		int first = wordsWithTheDrugsMarked.indexOf(DRUG_NAME);
 		int second = wordsWithTheDrugsMarked.lastIndexOf(DRUG_NAME);
-		if (!RESIDUAL_PAIR_JOINS.contains(wordsWithTheDrugsMarked.get(second - 1))) {
+		// A drug she is on may stand after "her" only in the phrase that adds it: "Adding warfarin to her nevirapine" (ADR
+		// Decision 461).
+		int join = second - 1;
+		boolean afterHer = RESIDUAL_POSSESSIVES.contains(wordsWithTheDrugsMarked.get(join)) && join - 1 > first;
+		if (afterHer) {
+			join--;
+		}
+		boolean phrased = joinedInItsPhrase(wordsWithTheDrugsMarked, first, join);
+		if (afterHer ? !phrased : !RESIDUAL_PAIR_JOINS.contains(wordsWithTheDrugsMarked.get(join)) && !phrased) {
 			return Residual.NONE;
 		}
 		// Between the two, only what joins them or says what is asked of them: "Will rifampicin harm her with nevirapine?" —
@@ -2041,6 +2085,7 @@ public final class QueryScopeRouter {
 		// places a word read as an unrecognised drug would.
 		for (String word : wordsWithTheDrugsMarked.subList(first + 1, second)) {
 			if (!RESIDUAL_PAIR_JOINS.contains(word) && !RESIDUAL_PAIR_WORDS.contains(word) && !RESIDUAL_HARMS.contains(word)
+					&& !(phrased && RESIDUAL_PAIR_PHRASE_WORDS.contains(word))
 					&& !RESIDUAL_SAFE.contains(word) && !"her".equals(word) && !"him".equals(word) && !"them".equals(word)) {
 				return Residual.NONE;
 			}
@@ -2058,9 +2103,11 @@ public final class QueryScopeRouter {
 		boolean gives = false;
 		boolean asked = false;
 		boolean aQuestion = false;
+		boolean proposing = false;
 		for (String word : wordsWithTheDrugsMarked) {
 			asked |= RESIDUAL_ASKING.contains(word);
 			aQuestion |= RESIDUAL_QUESTION.contains(word);
+			proposing |= RESIDUAL_PAIR_PROPOSING.contains(word) || asked && "given".equals(word);
 			if (DRUG_NAME.equals(word) || RESIDUAL_FILLER.contains(word) || RESIDUAL_PAIR_WORDS.contains(word)) {
 				continue;
 			}
@@ -2076,12 +2123,13 @@ public final class QueryScopeRouter {
 				return Residual.NONE;
 			}
 		}
-		// A question it must be, or the two drugs and a word saying what is asked of them: "Rifampicin and nevirapine: risk?"
-		if (!aQuestion && !((interacts || safe || harms) && wordsWithTheDrugsMarked.size() <= 6)) {
+		// A question it must be, or the two drugs and a word saying what is asked of them: "Rifampicin and nevirapine: risk?",
+		// "Mixing warfarin and nevirapine?", "Adding warfarin to her nevirapine - ok?" (ADR Decision 461)
+		if (!aQuestion && !((interacts || safe || harms || proposing) && wordsWithTheDrugsMarked.size() <= 8)) {
 			return Residual.NONE;
 		}
-		return interacts ? Residual.INTERACTS : harms ? Residual.HARMS : safe || gives && asked ? Residual.PROPOSES
-				: Residual.NONE;
+		return interacts ? Residual.INTERACTS : harms ? Residual.HARMS
+				: safe || (gives || proposing) && asked || proposing && !aQuestion ? Residual.PROPOSES : Residual.NONE;
 	}
 
 	/**

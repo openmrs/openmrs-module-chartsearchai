@@ -22878,3 +22878,37 @@ is no word it admits.
   *"Warfarin ok for her kidneys?"* stays the model's as it did.
 
 Pinned by `ClinicianWordingsTest.aPurposeAfterAProposalNoShapeListsIsSetAsideAsAfterOneItLists`.
+
+## Decision 461: A pair joined "on top of", "to her", by a plan or by a verb alone is the pair question it spells
+
+**Status: Accepted** (October 2026) — found asking 30 further wordings of 15 patients on the 3.7.1 standalone on 2026-10-27.
+
+### Context
+
+Seven wordings of fluconazole with a patient's nevirapine went to the model. It answered *"Fluconazole can be given with
+Nevirapine, with one caution"* on 8 to 14 of 15 patients: *"Fluconazole on top of nevirapine?"*, *"Adding fluconazole to
+her nevirapine - ok?"*, *"Mixing fluconazole and nevirapine?"*, *"Coadminister fluconazole with nevirapine?"*, *"Any DDI
+fluconazole nevirapine?"*, *"Can these be given together: fluconazole and nevirapine?"* and *"Patient on nevirapine, plan
+fluconazole. Any issue?"*. Decision 456's residual pair reading missed each of them for one of these reasons:
+
+- it joined the second drug only by *"and"*, *"with"*, *"plus"*, *"alongside"*, *"on"* or *"taking"*, never after *"her"*;
+- it read no proposal without an asking word;
+- it admitted no *"these"*;
+- the interaction-check shape of Decision 453 had no *"DDI"*.
+
+### The decision
+
+- The residual pair reading joins the second drug by *"of"*, *"to"* and *"plan"*, each only in the phrase it comes from:
+  *"on top of"*, *"to"* where the question adds the drug, and *"plan"* right after *"on"* and the first drug. Only in
+  *"to her"* may a possessive stand before the second drug. *"top"*, *"these"*, *"those"* and *"both"* are words it admits.
+- The phrases are what keep the scan for an unrecognised drug name out. That scan tries words in the two drugs' places,
+  and with *"of"* and *"to"* joining on their own, *"Which of her meds are dangerous?"* and *"Any interactions I need to
+  know about?"* were read as pairs and lost the screen. `LlmInferenceServiceAnswerFromFindingsContextTest` caught both.
+- Two drugs and a word proposing them together (*"mixing"*, *"coadminister"*, *"on top of"*, *"adding"*) are a proposal
+  of the pair when no question word opens the question. A past giving (*"given"*, *"started"*) is never such a word, so
+  *"Was warfarin given with nevirapine?"* stays the model's.
+- The interaction-check shape reads *"DDI"* where it reads *"interaction"*.
+- A word no reading admits still leaves the question to the model. *"Warfarin instead of nevirapine?"* and *"Switch
+  warfarin to nevirapine?"* are left there.
+
+Pinned by `ClinicianWordingsTest.aPairJoinedByAVerbAPlanOrTheWordsOnTopOfIsThePairQuestionItSpells`.

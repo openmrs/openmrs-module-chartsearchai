@@ -956,7 +956,11 @@ public final class QueryScopeRouter {
 			// "Fluconazole and rifampicin, can they be given together?" (ADR Decision 415)
 			HER_D + " and " + HER_D + " (?:can|could|may|should) they be (?:safely )?(?:given|taken|used|combined|mixed)"
 					+ "(?: together)?(?: (?:to|for) " + PATIENT + ")?",
-			"is " + HER_D + " (?:safe|ok|okay|appropriate) (?:with|alongside) " + HER_DS + "(?: for " + PATIENT + ")?",
+			// and with no verb, or "suitable": "Rifampicin appropriate with her nevirapine?" (ADR Decision 455)
+			"(?:is )?" + HER_D + " (?:safe|ok|okay|appropriate|suitable) (?:with|alongside) " + HER_DS + "(?: for " + PATIENT + ")?",
+			// "Rifampicin in a patient on nevirapine?" — Decision 352's "Can I give X to a patient on Y?" (ADR Decision 455)
+			HER_D + " (?:in|for|to) (?:(?:a|the|this) patient|someone|somebody|a person) (?:on|taking|who takes|who is (?:on|taking)) "
+					+ HER_DS,
 			// "Is fluconazole ok to use with nevirapine?", "fluconazole with nevirapine ok?" (ADR Decision 424)
 			"is " + HER_D + " (?:safe|ok|okay|appropriate|fine) to (?:use|give|take|combine) (?:with|alongside) " + HER_DS
 					+ "(?: for " + PATIENT + ")?",
@@ -1557,7 +1561,11 @@ public final class QueryScopeRouter {
 			// Decision 433)
 			+ "|(?:should|must) " + HER_D + " be avoided (?:with|alongside|in combination with|together with) " + HER_D
 			// "Does fluconazole have to be avoided with nevirapine?" (ADR Decision 434)
-			+ "|(?:does|do) " + HER_D + " (?:have|need) to be avoided (?:with|alongside|in combination with|together with) " + HER_D;
+			+ "|(?:does|do) " + HER_D + " (?:have|need) to be avoided (?:with|alongside|in combination with|together with) " + HER_D
+			// "Rifampicin and nevirapine - avoid?", "Should rifampicin be avoided in someone on nevirapine?" (ADR Decision 455)
+			+ "|" + HER_D + " (?:and|with|plus) " + HER_D + "(?: together)? avoid(?:ed)?"
+			+ "|(?:should|must) " + HER_D + " be avoided (?:in|for) (?:(?:a|the|this) patient|someone|somebody|a person|patients"
+			+ "|people) (?:on|taking|who takes|who is (?:on|taking)|who are (?:on|taking)) " + HER_D;
 
 	private static final String WHAT_COMBINING_THEM_DOES = "(?:what (?:happens|would happen|will happen) if (?:i|we) (?:give|add"
 			+ "|start|combine|prescribe) (?:" + PATIENT + " )?(?:on )?" + HER_D + " (?:to|with|and|alongside) " + HER_D
@@ -1579,8 +1587,10 @@ public final class QueryScopeRouter {
 	/** "Is clarithromycin dangerous with her simvastatin?", "Is it risky to combine X and Y?", "Could metronidazole cause
 	 *  problems with his warfarin?", "Is the combination of warfarin and amiodarone dangerous?" — whether the two are
 	 *  dangerous together, whose "No" would say they are not (ADR Decision 255). */
-	private static final String DANGEROUS_TOGETHER = "(?:is " + HER_D + " (?:dangerous|risky|unsafe|harmful|contraindicated"
-			+ "|a problem|problematic) (?:with|alongside|in combination with) " + HER_D + "|is it (?:dangerous|risky|unsafe|harmful"
+	// and with no verb, or "toxic": "Rifampicin dangerous with nevirapine?", "Is rifampicin toxic with nevirapine?" (ADR
+	// Decision 455)
+	private static final String DANGEROUS_TOGETHER = "(?:(?:is )?" + HER_D + " (?:dangerous|risky|unsafe|harmful|toxic"
+			+ "|contraindicated|a problem|problematic) (?:with|alongside|in combination with) " + HER_D + "|is it (?:dangerous|risky|unsafe|harmful"
 			+ "|a problem) to (?:combine|give|take|use) " + HER_D + " (?:and|with) " + HER_D + "(?: together)?|(?:could|would|will"
 			+ "|might|can) " + HER_D + " cause (?:any )?(?:problems?|issues?|harm) (?:with|for|alongside) " + HER_D + "|(?:would"
 			+ "|will|could) " + HER_D + " be (?:harmful|dangerous|risky|unsafe|a problem) (?:with|alongside) " + HER_D
@@ -1619,7 +1629,9 @@ public final class QueryScopeRouter {
 			// "How bad is rifampicin with nevirapine?", "Clarithromycin while on nevirapine - risky?" (ADR Decision 444)
 			+ "|how (?:bad|dangerous|risky|harmful|serious|safe) is " + HER_D + " (?:with|alongside|and|plus|while on|while taking) "
 			+ HER_D
-			+ "|" + HER_D + " (?:with|and|plus|while on|while taking) " + HER_D + " (?:risky|dangerous|harmful|unsafe|a problem)"
+			// and "Rifampicin with nevirapine contraindicated?" (ADR Decision 455)
+			+ "|" + HER_D + " (?:with|and|plus|while on|while taking) " + HER_D + " (?:risky|dangerous|harmful|unsafe|toxic"
+			+ "|contraindicated|a problem)"
 			// "Any issue mixing rifampicin and efavirenz?", "Rifampicin + efavirenz combination?" (ADR Decision 440)
 			+ "|(?:(?:is|are) there )?any (?:problems?|issues?|concerns?|risks?) (?:with |in )?(?:mixing|combining|giving|using|taking) "
 			+ HER_D + " (?:and|with) " + HER_D + "(?: together)?"

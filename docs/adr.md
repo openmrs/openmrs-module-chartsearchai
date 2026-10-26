@@ -22686,3 +22686,30 @@ module's drug-safety check found a reason to withhold X"*. Half of those words a
 Pinned by `ClinicianWordingsTest.aDrugAskedOfAsAHarmIsNeverAnsweredNo`, and by the two rows above in
 `ClinicianWordingsTest.fiveMoreWordingsAreAnsweredAsTheQuestionsTheyAsk` and
 `ClinicianWordingsTest.colloquialWordingsAreAnsweredAsTheQuestionsTheyAsk`.
+
+## Decision 455: A pair asked with no verb, or of a patient on the other, is the question it spells
+
+**Status: Accepted** (October 2026) — found asking 40 further wordings of 15 patients on the 3.7.1 standalone on 2026-10-26.
+
+### Context
+
+Ten wordings of two drugs went to the model on all 15 patients:
+- *"Rifampicin dangerous with nevirapine?"*, *"Rifampicin risky with nevirapine?"* and *"Is rifampicin toxic with
+  nevirapine?"*
+- *"Rifampicin with nevirapine contraindicated?"*
+- *"Rifampicin and nevirapine - avoid?"*, *"Ibuprofen with aspirin - avoid?"* and *"Should rifampicin be avoided in someone
+  on nevirapine?"*
+- *"Rifampicin in a patient on nevirapine?"*
+- *"Is rifampicin suitable with nevirapine?"* and *"Rifampicin appropriate with her nevirapine?"*
+
+The model withheld rifampicin in each answer, but from its own reading of the records rather than the module's findings.
+
+### The decision
+
+- *"X dangerous/risky/toxic with Y?"*, with or without *"is"*, and *"X with Y contraindicated?"* are Decision 433's question of
+  the two being dangerous together, with no lead.
+- *"X and Y - avoid?"* and *"Should X be avoided in someone on Y?"* are Decision 433's *"Should X be avoided with Y?"*.
+- *"X in a patient on Y?"* is Decision 352's *"Can I give X to a patient on Y?"*.
+- *"Is X suitable with Y?"* and *"X appropriate with Y?"* are *"Is X appropriate with Y?"*.
+
+Pinned by `ClinicianWordingsTest.aPairAskedWithNoVerbOrOfAPatientOnTheOtherIsTheQuestionItSpells`.

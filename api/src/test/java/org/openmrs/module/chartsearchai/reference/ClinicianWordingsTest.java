@@ -1409,6 +1409,26 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		assertNotNull(ask("Warfarin: yes/no?"));
 	}
 
+	/** ADR Decision 455: a pair asked with no verb — dangerous, contraindicated, to avoid, suitable — or of a patient on the
+	 *  other is the question it spells. */
+	@Test
+	public void aPairAskedWithNoVerbOrOfAPatientOnTheOtherIsTheQuestionItSpells() {
+		String[][] pairs = { { "Warfarin dangerous with nevirapine?", "Is warfarin dangerous with her nevirapine?" },
+			{ "Warfarin risky with nevirapine?", "Is warfarin dangerous with her nevirapine?" },
+			{ "Is warfarin toxic with nevirapine?", "Is warfarin dangerous with her nevirapine?" },
+			{ "Warfarin with nevirapine contraindicated?", "Is warfarin dangerous with her nevirapine?" },
+			{ "Warfarin and nevirapine - avoid?", "Should warfarin be avoided with nevirapine?" },
+			{ "Should warfarin be avoided in someone on nevirapine?", "Should warfarin be avoided with nevirapine?" },
+			{ "Warfarin in a patient on nevirapine?", "Can I give warfarin to a patient on nevirapine?" },
+			{ "Is warfarin suitable with nevirapine?", "Is warfarin appropriate with nevirapine?" },
+			{ "Warfarin appropriate with her nevirapine?", "Is warfarin appropriate with nevirapine?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+	}
+
 	private static String ask(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

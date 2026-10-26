@@ -1501,6 +1501,23 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 	}
 
 	@Test
+	public void aPurposeAfterAProposalNoShapeListsIsSetAsideAsAfterOneItLists() {
+		String[][] pairs = { { "Warfarin ok for her headache?", "Is warfarin ok for her headache?" },
+			{ "Warfarin fine for her back pain?", "Is warfarin fine for her back pain?" },
+			{ "Is it alright to use warfarin for her clot?", "Is warfarin ok for her clot?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertTrue(canonical.contains(pair[1].substring(pair[1].lastIndexOf(" for ") + 5, pair[1].length() - 1)),
+				"precondition: the answer says the purpose was not weighed: " + canonical);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+		// A factor the findings do not weigh stays the model's, as after a shape.
+		assertNull(ask("Warfarin ok for her kidneys?"));
+		assertNull(ask("Warfarin ok for her pregnancy?"));
+	}
+
+	@Test
 	public void aDrugAskedOfEitherWayOrOfSideEffectsWithHerMedicationsIsTheQuestionItSpells() {
 		String[][] pairs = { { "Is it safe or not to give warfarin?", "Is warfarin allowed?" },
 			{ "Can warfarin be given or not?", "Is warfarin allowed?" },

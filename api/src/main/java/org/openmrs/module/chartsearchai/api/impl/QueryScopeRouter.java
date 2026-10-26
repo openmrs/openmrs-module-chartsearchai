@@ -2673,6 +2673,12 @@ public final class QueryScopeRouter {
 		if (fitsAOneDrugShape(wordsWithTheDrugMarked)) {
 			return Residual.NONE;
 		}
+		// A purpose closing a proposal is set aside as after a proposal shape (ADR Decision 213): "Ibuprofen ok for her
+		// headache?" is "Ibuprofen ok?", whose answer says what it is for was not weighed (ADR Decision 460).
+		List<String> proposal = withoutAPurpose(wordsWithTheDrugMarked);
+		if (proposal != null && residualReading(proposal) == Residual.PROPOSES) {
+			return Residual.PROPOSES;
+		}
 		// Read as the one way it asks only once no shape has read it as written: a shape that spells "or not" is that
 		// shape's, and a shape that "or not" removed would read is no reading of the words the question has (ADR Decision 457).
 		wordsWithTheDrugMarked = withEitherWayAsked(wordsWithTheDrugMarked);
@@ -2872,7 +2878,9 @@ public final class QueryScopeRouter {
 			return null;
 		}
 		List<String> proposal = withoutAPurpose(wordsWithTheDrugMarked);
-		if (proposal == null || !fitsAShape(proposal, PROPOSAL_SHAPES) && !fitsANegatedShape(proposal)) {
+		// Or one the residual reading reads a proposal (ADR Decision 460).
+		if (proposal == null || !fitsAShape(proposal, PROPOSAL_SHAPES) && !fitsANegatedShape(proposal)
+				&& residualReading(proposal) != Residual.PROPOSES) {
 			return null;
 		}
 		// After "for", or the whole closing statement of what she has (ADR Decision 325).

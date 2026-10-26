@@ -22855,3 +22855,26 @@ Three wordings went to the model:
   reads any stated dose, and the answer says the dose was not checked.
 
 Pinned by `ClinicianWordingsTest.aReasonNotToGiveTwoDrugsTogetherADoseChangedForTheOtherAndASingleDoseAreTheQuestionsTheySpell`.
+
+## Decision 460: A purpose after a proposal no shape lists is set aside as after one a shape lists
+
+**Status: Accepted** (October 2026) — found asking 40 further wordings of 15 patients on the 3.7.1 standalone on 2026-10-26.
+
+### Context
+
+*"Ibuprofen ok for her headache?"* went to the model. It answered *"Ibuprofen can be given, with one caution"* on 6 of 15
+patients, the clearance the module never writes. *"Is ibuprofen ok for her headache?"* is the module's: Decision 213 sets
+a closing purpose aside where the rest fits a proposal SHAPE, and the answer says what the drug is for was not weighed.
+The residual reading of Decision 396 reads *"Ibuprofen ok?"*, but nothing set the purpose aside for it, and *"headache"*
+is no word it admits.
+
+### The decision
+
+- `residualReading` sets a closing purpose aside with `withoutAPurpose`, Decision 213's own rule, and reads the rest. A
+  proposal it reads (`Residual.PROPOSES`) is the question's reading.
+- `statedPurpose` returns that purpose for such a proposal too, so the answer says it was not weighed, as it does after a
+  shape.
+- A factor the findings do not weigh (`OTHER_FACTOR`: kidneys, pregnancy, liver, …) is never set aside as a purpose, so
+  *"Warfarin ok for her kidneys?"* stays the model's as it did.
+
+Pinned by `ClinicianWordingsTest.aPurposeAfterAProposalNoShapeListsIsSetAsideAsAfterOneItLists`.

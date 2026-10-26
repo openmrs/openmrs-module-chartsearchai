@@ -22430,3 +22430,36 @@ Seven wordings went to the model:
 - *"X on top of Y - ok?"* is whether the two are safe together.
 
 Pinned by `ClinicianWordingsTest.aSubstanceEatenOrADrugAcceptableBesideAnotherIsTheQuestionItSpells`.
+
+## Decision 446: A drug affected by another, or dosed with it, is the question it spells
+
+**Status: Accepted** (October 2026) — found asking 40 further wordings of 15 patients on the 3.7.1 standalone on 2026-10-26.
+
+### Context
+
+Nine wordings went to the model. It answered *"Is efavirenz affected by rifampicin?"* and *"Does efavirenz need adjusting
+with rifampicin?"* *"Efavirenz can be given"* on 14 of 15 patients. It answered *"Fluconazole - go or no go?"* and *"Should
+fluconazole be used cautiously in her?"* *"Fluconazole can be given"* on 6 and 5.
+
+The same batch asked ten chart questions that name a drug and ask nothing of interactions (its dose, its start, who
+prescribed it, how long she has taken it). None of them raised a finding or a module answer. Two others did, by an earlier
+decision:
+- *"Is she still taking nevirapine?"* is Decision 202's and 287's presence question. The answer says first whether she is on
+  it, then what the check found, because the model had answered such a question with a clearance.
+- *"Has she ever taken fluconazole?"* is Decision 151's history question. It raised a chip only where her allergy covers the
+  drug's class.
+
+### The decision
+
+- *"X - go or no go?"* is the proposal of X, as *"X - yes or no?"* is (Decision 431).
+- *"Should X be used cautiously in her?"* is Decision 247's question with no lead.
+- *"X: what interactions does she have?"* is which of her medications interact with X.
+- *"Is co-prescribing X and Y safe?"* is Decision 203's proposal of the two together.
+- These are Decisions 249-255's questions of what one does beside the other, with no lead:
+  - *"Does X decrease (increase, reduce, lower) Y?"*;
+  - *"Should X and Y not be given together?"*;
+  - *"Is Y affected by X?"*;
+  - *"Y dose with X?"*;
+  - *"Does Y need adjusting with X?"*.
+
+Pinned by `ClinicianWordingsTest.aDrugAffectedByOrDosedWithAnotherIsTheQuestionItSpells`.

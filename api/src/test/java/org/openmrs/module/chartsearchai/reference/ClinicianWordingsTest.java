@@ -1204,6 +1204,31 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/**
+	 * A drug "go or no go", "used cautiously", "what interactions she has" with it, a pair "co-prescribed", one "decreasing"
+	 * another, a pair "not to be given together", one "affected by" another, and one's dose "with" or "needing adjusting with"
+	 * another are the questions they spell (ADR Decision 446). On the 3.7.1 standalone each went to the model, which answered
+	 * "Is efavirenz affected by rifampicin?" and "Does efavirenz need adjusting with rifampicin?" "Efavirenz can be given" on
+	 * 14 of 15 patients.
+	 */
+	@Test
+	public void aDrugAffectedByOrDosedWithAnotherIsTheQuestionItSpells() {
+		String[][] pairs = { { "Warfarin - go or no go?", "Warfarin - yes or no?" },
+			{ "Should warfarin be used cautiously in her?", "Should warfarin be avoided?" },
+			{ "Warfarin: what interactions does she have?", "What are the interactions of warfarin?" },
+			{ "Is co-prescribing warfarin and nevirapine safe?", "Can I give her warfarin with nevirapine?" },
+			{ "Does warfarin decrease nevirapine?", "Does warfarin increase nevirapine levels?" },
+			{ "Should warfarin and nevirapine not be given together?", "Is warfarin dangerous with her nevirapine?" },
+			{ "Is nevirapine affected by warfarin?", "Will warfarin lower her nevirapine levels?" },
+			{ "Nevirapine dose with warfarin?", "What dose of nevirapine with warfarin?" },
+			{ "Does nevirapine need adjusting with warfarin?", "What dose of nevirapine with warfarin?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+	}
+
 	private static String ask(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

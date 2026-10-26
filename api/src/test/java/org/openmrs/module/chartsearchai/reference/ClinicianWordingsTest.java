@@ -1341,6 +1341,25 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/**
+	 * One of two drugs "for her fever", which of two is better "with her ARVs", a drug "for oral thrush - safe with" another,
+	 * and a drug given "to a pregnant patient on ARVs" are the questions they spell (ADR Decision 452). On the 3.7.1
+	 * standalone each went to the model, which answered "Paracetamol or ibuprofen for her fever?" "Ibuprofen can be given,
+	 * with one caution" on 5 of 15 patients and "Is rifabutin better than rifampicin with her ARVs?" "Rifabutin can be given".
+	 */
+	@Test
+	public void oneOfTwoForAComplaintOrADrugForAPatientOnAGroupIsTheQuestionItSpells() {
+		String[][] pairs = { { "Warfarin or fluconazole for her fever?", "Is warfarin or fluconazole better for her?" },
+			{ "Is warfarin better than fluconazole with her ARVs?", "Is warfarin better than fluconazole for her?" },
+			{ "Warfarin for oral thrush - safe with nevirapine?", "Is warfarin safe with nevirapine?" },
+			{ "Can I give warfarin to a pregnant patient on ARVs?", "Can I give her warfarin?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+	}
+
 	private static String ask(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

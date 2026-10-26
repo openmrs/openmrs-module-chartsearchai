@@ -949,6 +949,8 @@ public final class QueryScopeRouter {
 			// "Is co-prescribing rifampicin and nevirapine safe?" (ADR Decision 446)
 			"is (?:co prescribing|coprescribing|co administering|coadministering|combining|giving|using|mixing) " + HER_D
 					+ " (?:and|with) " + HER_D + "(?: together)? (?:safe|ok|okay|appropriate|fine)(?: (?:for|in) " + PATIENT + ")?",
+			// "Fluconazole for oral thrush - safe with efavirenz?" (ADR Decision 452)
+			HER_D + " for \\p{L}+(?: \\p{L}+){0,2} (?:safe|ok|okay|fine) (?:with|alongside) " + HER_D,
 			// "Clarithromycin safe with efavirenz or not?" (ADR Decision 448)
 			"(?:is )?" + HER_D + " (?:safe|ok|okay|fine) (?:with|alongside) " + HER_D + " or not",
 			// "Ibuprofen on top of aspirin - ok?" (ADR Decision 445)
@@ -1013,6 +1015,11 @@ public final class QueryScopeRouter {
 			"(?:should|can|could) (?:i|we) (?:give|use|prescribe|choose) " + D + " or " + D + "(?: (?:for|in) " + PATIENT + ")?",
 			"(?:which|what) (?:should|can|could) (?:i|we) (?:give|use|prescribe|choose)(?: (?:for|to) " + PATIENT + ")? " + D + " or "
 					+ D,
+			// "Paracetamol or ibuprofen for her fever?", answered by the model "Ibuprofen can be given" on 5 of 15 patients, and
+			// "Is rifabutin better than rifampicin with her ARVs?" — the choice made beside a group of hers (ADR Decision 452)
+			D + " or " + D + " for (?:" + POSSESSIVE + " )?\\p{L}+(?: \\p{L}+)?",
+			"(?:is|would) " + D + " (?:be )?(?:a (?:safer|better) (?:choice|option|alternative|drug)|safer|better|preferable) (?:than"
+					+ "|over) " + D + " (?:with|alongside|given|on top of) (?:any of )?" + HER_MEDICATION_GROUP,
 			BESIDE_ONE_OF_HERS_WHICH_OF_TWO);
 
 	/** Whether a question asks about either of two drugs, each proposed alone — or which of the two to choose, {@link
@@ -1291,6 +1298,10 @@ public final class QueryScopeRouter {
 			"(?:will|would|is) " + D + " (?:be )?(?:ok|okay|safe|fine) with what (?:she's|he's|they're|(?:she|he|the patient) is"
 					+ "|they are) (?:already |currently )?(?:on|taking)",
 			D + " on top of " + HER_MEDICATION_GROUP + " (?:safe|ok|okay|fine)",
+			// "Can I give fluconazole to a pregnant patient on ARVs?" (ADR Decision 452)
+			"(?:can|could|may|should) (?:i|we) (?:safely )?(?:give|start|prescribe|add) " + D + " to (?:a|the|this) (?:\\p{L}+ )?"
+					+ "(?:patient|woman|man|person|child) (?:on|taking|who is on|who is taking) (?:" + HER_MEDICATION_GROUP + "|"
+					+ MEDICATION_GROUP_NOUN + ")",
 			// "Fluconazole vs her ARVs?" (ADR Decision 448)
 			D + " (?:vs|versus) " + HER_MEDICATION_GROUP,
 			// "Fluconazole and her ARVs - ok?" (ADR Decision 444)

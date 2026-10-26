@@ -22602,3 +22602,25 @@ alcohol as ethanol), but the condition *"if she drinks"* matched no shape.
 203's proposal of the two together, as *"Can I give her X with Y?"* is.
 
 Pinned by `ClinicianWordingsTest.aDrugGivenIfSheDrinksOrTakesAnotherIsTheProposalOfTheTwo`.
+
+## Decision 452: One of two drugs for a complaint, and a drug for a patient on a group of medications, are the questions they spell
+
+**Status: Accepted** (October 2026) — found asking 40 further wordings of 15 patients on the 3.7.1 standalone on 2026-10-26.
+
+### Context
+
+Four wordings went to the model:
+- *"Paracetamol or ibuprofen for her fever?"* was answered *"Ibuprofen can be given, with one caution"* on 5 of 15 patients.
+- *"Is rifabutin better than rifampicin with her ARVs?"* was answered *"Rifabutin can be given, with one caution"*.
+- *"Can I give fluconazole to a pregnant patient on ARVs?"* was answered *"Fluconazole can be given"*.
+- *"Fluconazole for oral thrush - safe with efavirenz?"* was answered *"No — …"*, but by the model.
+
+### The decision
+
+- *"X or Y for her fever?"* and *"Is X better than Y with her ARVs?"* are Decision 393's choice of two, answered under its
+  lead that the check chooses neither. The group, which names no drug, is what each is checked against: her orders.
+- *"X for oral thrush - safe with Y?"* is Decision 203's proposal of the two together; what X is for is not weighed.
+- *"Can I give X to a pregnant patient on ARVs?"* is the proposal of X against her orders. The answer's scope says what the
+  check does not weigh, which includes the pregnancy.
+
+Pinned by `ClinicianWordingsTest.oneOfTwoForAComplaintOrADrugForAPatientOnAGroupIsTheQuestionItSpells`.

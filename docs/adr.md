@@ -23826,3 +23826,27 @@ The verbless shapes admitted exactly two drugs.
   its two-drug form is.
 
 Pinned by `ClinicianWordingsTest.threeDrugsAskedTogetherWithNoVerbAreTheListAskedWithOne`.
+
+## Decision 495: Several drugs asked about together state apart that one of hers is in several of her orders
+
+**Status: Accepted** (October 2026) — found asking three-drug wordings of 15 patients on the 3.7.1 standalone on
+2026-10-27.
+
+### Context
+
+*"Is it ok to give fluconazole with rifampicin and nevirapine?"* was answered by the module on 14 of 15 patients, and by
+the model on the fifth. That patient's two TB combination orders both carry rifampicin, so the check raised *"Rifampicin
+(rifampin) is already in active orders … — possible duplicate therapy"* (issue #477). It has no rating and no partner
+substance. `composeSeveralDrugsTogether` had no place for that finding about a drug of hers, so it left the answer to the
+model. The model's answer then listed findings *"Not stated above"*. The same question with one rifampicin order, and
+each two-drug question, were the module's.
+
+### The decision
+
+- The finding that a drug of hers the question names is in several of her own orders (`namesOnlyItsOwnOrders` over her
+  orders' displays) is stated after the rest, under `ABOUT_HER_OTHER_MEDICATIONS_LEAD`.
+- This is where Decision 358 states a contraindication to one of hers. It carries no verdict about her own drug, and each
+  drug she does not take keeps its own answer.
+- A rated rule whose partner order also carries the drug is still an interaction and is unchanged.
+
+Pinned by `TerseDrugQuestionWordingsTest.severalDrugsTogetherStateApartThatOneOfHersIsAlreadyInSeveralOrders`.

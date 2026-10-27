@@ -7300,6 +7300,12 @@ public class DrugReferenceInjector {
 		for (AskedDrug drug : sectioned) {
 			ofEach.put(drug, new ArrayList<Integer>());
 		}
+		Set<String> herOrderDisplays = new HashSet<String>();
+		for (PatientClinicalContext.ActiveDrugOrder order : context.getActiveDrugOrders()) {
+			if (order.getDisplay() != null) {
+				herOrderDisplays.add(order.getDisplay().trim());
+			}
+		}
 		for (int i = 0; i < findings.size(); i++) {
 			SafetyWarning finding = findings.get(i);
 			if (finding.statesOrdersSharingASubstance() || finding.isAboutAnotherOfHerMedications()) {
@@ -7332,10 +7338,12 @@ public class DrugReferenceInjector {
 			}
 			if (subject != null) {
 				ofEach.get(subject).add(i);
-			} else if (SafetyWarning.TYPE_CONTRAINDICATION.equals(finding.getType()) && !about.isEmpty()
+			} else if ((SafetyWarning.TYPE_CONTRAINDICATION.equals(finding.getType())
+					|| namesOnlyItsOwnOrders(finding, herOrderDisplays)) && !about.isEmpty()
 					&& unionOf(hers).containsAll(about)) {
 				// A contraindication to a drug of hers the question names — her allergy covering the aspirin she takes — is
-				// about her own medication, stated apart after the rest (ADR Decision 358).
+				// about her own medication, stated apart after the rest (ADR Decision 358); and so is that drug in several of
+				// her own orders, her rifampicin in two TB combinations (ADR Decision 495).
 				aboutHerOwn.add(i);
 			} else if (!Collections.disjoint(touched, unionOf(asked))) {
 				// About a drug asked about, in no way this answer knows how to state.

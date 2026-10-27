@@ -226,6 +226,42 @@ public class TerseDrugQuestionWordingsTest extends BaseModuleContextSensitiveTes
 	}
 
 	/**
+	 * Several drugs asked about together state apart that one of hers is already in several of her orders (ADR Decision
+	 * 495): on the 3.7.1 standalone a patient whose two TB combination orders both carry rifampicin, asked "Is it ok to give
+	 * fluconazole with rifampicin and nevirapine?", got the model's answer, which stated findings "Not stated above".
+	 */
+	@Test
+	public void severalDrugsTogetherStateApartThatOneOfHersIsAlreadyInSeveralOrders() {
+		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
+			DrugReferenceTestSupport.activeOrder("order-efv", "Efavirenz 600mg", "Efavirenz"),
+			DrugReferenceTestSupport.activeOrder("order-hzr", "Isoniazid / pyrazinamide / rifampin 75/400/150mg",
+				"Isoniazid / pyrazinamide / rifampin"),
+			DrugReferenceTestSupport.activeOrder("order-rhze", "Rifampicin isoniazid pyrazinamide and ethambutol 150/75/400/275mg",
+				"Rifampicin isoniazid pyrazinamide and ethambutol"));
+		LinkedHashSet<String> names = new LinkedHashSet<String>();
+		for (PatientClinicalContext.ActiveDrugOrder order : orders) {
+			names.addAll(order.getNames());
+		}
+		for (String question : new String[] { "Is it ok to give fluconazole with rifampicin and nevirapine?",
+				"Fluconazole, rifampicin and nevirapine together?" }) {
+			String answer = DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.shippedServiceWithGroups())
+					.injectRecords(DrugReferenceTestSupport.oneRecordChart(),
+						DrugReferenceTestSupport.ctx(45, null, names, null, null, null, orders), question)
+					.getModuleAnswer();
+			assertNotNull(answer, "the module answers " + question);
+			String[] lines = answer.split("\n");
+			assertEquals("Rifampicin (rifampin) is one of this patient's active medications; Fluconazole and Nevirapine are not.",
+				lines[0], "was: " + answer);
+			int lead = Arrays.asList(lines).indexOf(DrugReferenceInjector.ABOUT_HER_OTHER_MEDICATIONS_LEAD);
+			org.junit.jupiter.api.Assertions.assertTrue(lead > 0 && lines[lead + 1].startsWith("Rifampicin (rifampin) is already in "
+					+ "active orders"), "was: " + answer);
+			int apart = answer.indexOf(DrugReferenceInjector.ABOUT_HER_OTHER_MEDICATIONS_LEAD);
+			org.junit.jupiter.api.Assertions.assertTrue(answer.lastIndexOf("No —") < apart && answer.indexOf("For Fluconazole:") < apart,
+				"no verdict about her own drug: " + answer);
+		}
+	}
+
+	/**
 	 * Whether a drug is contraindicated with one of hers, its findings making no verdict, is answered as it given with hers
 	 * is (ADR Decision 359): on the 3.7.1 standalone "Is naproxen contraindicated with her aspirin?" went to the model for
 	 * the three patients on aspirin recorded allergic to the NSAID group or to ibuprofen, which answered "No — Naproxen

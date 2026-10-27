@@ -2784,8 +2784,8 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		String[] lines = answer.getAnswer().split("\\n");
 		assertTrue(lines[1].startsWith(firstSentence(findings.get(0))),
 				"after its count, the pair it related, as a screen does: " + answer.getAnswer());
-		assertEquals("Not checked: 1 active order the drug data does not identify — Marevan. It was not screened "
-				+ "against this patient's other medications.", lines[lines.length - 1]);
+		// "Not checked" says it was not screened; the sentence repeating it went in ADR Decision 493.
+		assertEquals("Not checked: 1 active order the drug data does not identify — Marevan.", lines[lines.length - 1]);
 	}
 
 	/**
@@ -3446,8 +3446,7 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 
 		assertEquals(0, provider.calls, "the module answers: " + answer.getAnswer());
 		assertEquals(SCREEN_NOTE_WORDS + " [" + note + "]\n"
-				+ "Not checked: 1 active order the drug data does not identify — Marevan. It was not screened against "
-				+ "this patient's other medications.", answer.getAnswer());
+				+ "Not checked: 1 active order the drug data does not identify — Marevan.", answer.getAnswer());
 	}
 
 	/** A screen for a patient with no active medication orders says so (ADR Decision 162): there are none to check

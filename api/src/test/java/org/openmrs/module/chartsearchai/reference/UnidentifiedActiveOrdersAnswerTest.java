@@ -78,8 +78,8 @@ public class UnidentifiedActiveOrdersAnswerTest extends BaseModuleContextSensiti
 		String[] lines = answer.split("\n");
 		assertEquals("The drug data identifies none of this patient's 4 active medication orders, so there are none to "
 				+ "check against each other.", lines[0], "was: " + answer);
-		assertTrue(lines[1].startsWith("Not checked: 4 active orders the drug data does not identify — Polio vaccination, "
-				+ "oral; Measles vaccination; Hepatitis B vaccination (2 orders). "), "was: " + answer);
+		assertEquals("Not checked: 4 active orders the drug data does not identify — Polio vaccination, oral; Measles "
+				+ "vaccination; Hepatitis B vaccination (2 orders).", lines[1], "was: " + answer);
 		assertEquals(2, lines.length, "was: " + answer);
 	}
 

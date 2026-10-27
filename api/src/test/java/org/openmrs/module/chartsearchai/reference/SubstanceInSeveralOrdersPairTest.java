@@ -19,11 +19,14 @@ import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 
 /**
@@ -75,7 +78,7 @@ public class SubstanceInSeveralOrdersPairTest extends BaseModuleContextSensitive
 
 	/** The demo's own chart, as its REST API lists his active drug orders. */
 	@Test
-	public void theDemoPatientsAnswerListsIsoniazidAgainstRifampicin() {
+	public void theDemoPatientsScreenFindsIsoniazidAgainstRifampicin() {
 		List<PatientClinicalContext.ActiveDrugOrder> orders = new ArrayList<PatientClinicalContext.ActiveDrugOrder>();
 		addOrders(orders, "Abacavir", 2);
 		addOrders(orders, "Lamivudine", 3);
@@ -88,21 +91,22 @@ public class SubstanceInSeveralOrdersPairTest extends BaseModuleContextSensitive
 		orders.add(DrugReferenceTestSupport.activeOrder("order-rhz", RHZ,
 			new LinkedHashSet<String>(Arrays.asList(RHZ, "Rifampicin isoniazid and pyrazinamide", "Rifater")),
 			new LinkedHashSet<String>(Arrays.asList("J04AC51"))));
-		String answer = DrugReferenceTestSupport.injectorWithSafety(loaded())
+		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(loaded())
 				.injectRecords(DrugReferenceTestSupport.oneRecordChart(), context(orders),
-					"Does he have any drug contraindications?")
-				.getModuleAnswer();
+					"Does he have any drug contraindications?");
+		String answer = chart.getModuleAnswer();
 
 		assertNotNull(answer, "the module answers");
-		String[] lines = answer.split("\n");
-		assertTrue(lines[0].startsWith("10 interactions among this patient's active medications"), "was: " + answer);
-		boolean listed = false;
-		for (String line : lines) {
-			listed |= line.startsWith("Rifampicin (rifampin) interacts with active order Isoniazid — Minor.");
-		}
-		assertTrue(listed, "isoniazid against rifampicin is listed, Minor, the partner named as the substance: " + answer);
-		assertFalse(answer.contains("Rifampicin (rifampin) interacts with active order Rifampicin and isoniazid"),
-			"an order carrying the subject too does not name its partner: " + answer);
+		assertTrue(answer.startsWith("10 interactions among this patient's active medications"), "was: " + answer);
+		// The finding, as its chip and injected record state it, the partner named as the substance; a Minor, so the
+		// answer counts it among its cautions and cites its record (ADR Decision 493).
+		Matcher finding = Pattern.compile("\\[(\\d+)\\] " + Pattern.quote(DrugReferenceInjector.FINDING_PREFIX)
+				+ "[^:\\n]+: Rifampicin \\(rifampin\\) interacts with active order Isoniazid — Minor\\.")
+				.matcher(chart.getText());
+		assertTrue(finding.find(), "isoniazid against rifampicin is found, Minor: " + chart.getText());
+		assertTrue(answer.contains("[" + finding.group(1) + "]"), "and the answer cites it: " + answer);
+		assertFalse(chart.getText().contains("Rifampicin (rifampin) interacts with active order Rifampicin and isoniazid"),
+			"an order carrying the subject too does not name its partner: " + chart.getText());
 	}
 
 	private static DrugReferenceService loaded() {

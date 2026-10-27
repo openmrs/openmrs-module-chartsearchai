@@ -58,22 +58,21 @@ public class OrdersSharingASubstanceModuleAnswerContextTest extends BaseModuleCo
 		String answer = chart.getModuleAnswer();
 		assertNotNull(answer, "a pair was related, so the module answers: " + chart.getText());
 		List<String> lines = Arrays.asList(answer.split("\n"));
-		int lastShared = -1;
-		int firstPair = -1;
+		// Both cautions are counted on one line, and her two shared substances stated on one, before it (ADR Decision 493).
+		int shared = -1;
+		int cautions = -1;
 		for (int i = 0; i < lines.size(); i++) {
-			if (lines.get(i).contains(" — possible duplicate therapy")) {
-				lastShared = i;
+			if (lines.get(i).startsWith(DrugReferenceInjector.SHARED_SUBSTANCES_LEAD)) {
+				shared = i;
 			}
-			if (firstPair < 0 && lines.get(i).contains(" interacts with active order ")) {
-				firstPair = i;
+			if (lines.get(i).startsWith("2 more interactions, each a caution (1 Moderate, 1 Minor)")) {
+				cautions = i;
 			}
 		}
-		assertTrue(firstPair >= 0, "precondition: the pairs are in the answer: " + answer);
-		assertTrue(lastShared >= 0 && lastShared < firstPair, "the reasons to change lead the cautions: " + answer);
-		assertTrue(answer.contains("Isoniazid is in active orders " + RHZE + " and Isoniazid 300mg"
-				+ " — possible duplicate therapy"), "was: " + answer);
-		assertTrue(answer.contains("Ethambutol is in active orders " + RHZE + " and Ethambutol 400mg"
-				+ " — possible duplicate therapy"), "was: " + answer);
+		assertTrue(cautions >= 0, "precondition: the pairs are counted in the answer: " + answer);
+		assertTrue(shared >= 0 && shared < cautions, "the reasons to change lead the cautions: " + answer);
+		assertTrue(lines.get(shared).startsWith(DrugReferenceInjector.SHARED_SUBSTANCES_LEAD + "Ethambutol; Isoniazid. "),
+			"was: " + answer);
 	}
 
 	@Test
@@ -95,8 +94,8 @@ public class OrdersSharingASubstanceModuleAnswerContextTest extends BaseModuleCo
 			"the Major leads: " + answer);
 		assertTrue(lines.get(2).startsWith("Rifampicin (rifampin) is in active orders Isoniazid / pyrazinamide /"
 				+ " rifampin and Rifampicin 150mg — possible duplicate therapy."), "then this finding: " + answer);
-		assertTrue(lines.get(3).startsWith("Isoniazid interacts with active order Rifampicin (rifampin) — Minor."),
-			"then the caution: " + answer);
+		assertTrue(lines.get(3).startsWith("1 more interaction, a caution (1 Minor), is listed in full in the safety warnings "
+				+ "beside this answer. ["), "then the caution, counted (ADR Decision 493): " + answer);
 	}
 
 	@Test
@@ -112,8 +111,9 @@ public class OrdersSharingASubstanceModuleAnswerContextTest extends BaseModuleCo
 		String answer = chart.getModuleAnswer();
 		assertNotNull(answer, "a pair was related, so the module answers: " + chart.getText());
 		List<String> lines = Arrays.asList(answer.split("\n"));
-		assertEquals("2 interactions among this patient's active medications (the 1 most severe is listed; 1 more is "
-				+ "not shown), and 1 substance carried by more than one of this patient's orders:", lines.get(0),
+		// The answer lists only the Major, so the lead no longer says how many are listed (ADR Decision 493).
+		assertEquals("2 interactions among this patient's active medications (1 more, rated no higher, is not shown), and "
+				+ "1 substance carried by more than one of this patient's orders:", lines.get(0),
 			"the lead counts what the screen FOUND, and says how many the cap left out: " + answer);
 		assertTrue(lines.get(1).startsWith("Pyrazinamide interacts with active order Rifampicin (rifampin) — Major."),
 			"the Major is the pair listed: " + answer);

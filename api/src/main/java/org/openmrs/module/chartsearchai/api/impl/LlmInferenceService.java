@@ -1076,8 +1076,11 @@ public class LlmInferenceService implements ChartSearchService {
 						drugSafetyValidator.validate(findingLineMarkersOf(composed, mappings), question, patient, mappings,
 								pairExtent)),
 				mappings), chart, question);
+		// The orders of the findings it states, never of those it only counts: the chips beside it name those (ADR
+		// Decision 493).
 		String answer = FindingPartnerCoverageCheck.withUnstatedPartnersNamed(composed,
-				extractCitedReferences(composed, null, mappings), mappings, drugSafetyValidator);
+				extractCitedReferences(DrugReferenceInjector.withoutCountingLines(composed), null, mappings), mappings,
+				drugSafetyValidator);
 		// Issue #472's statement too, so the two paths cannot differ: a question proposing nothing about a drug
 		// her chart holds only as an ended order is composed from its findings (ADR Decision 321), and this says
 		// what the chart records of it.

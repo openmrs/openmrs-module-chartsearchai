@@ -1685,7 +1685,7 @@ public class DrugReferenceInjector {
 		if (moduleAnswer != null && questionDrugs.isEmpty() && QueryScopeRouter.asksOnlyToScreenHerMedications(question)
 				&& !QueryScopeRouter.asksOnlyAboutInteractions(question)
 				&& drugSafetyValidator.conditionRuleCoverage() == DrugReferenceLoad.Coverage.ABSENT) {
-			moduleAnswer = moduleAnswer + "\n" + CONDITIONS_NOT_CHECKED;
+			moduleAnswer = withConditionsNotChecked(moduleAnswer);
 		}
 		if (moduleAnswer != null) {
 			injected.markModuleAnswer(moduleAnswer);
@@ -3917,6 +3917,29 @@ public class DrugReferenceInjector {
 	/** What closes a screen's answer to a question asking more than whether her medications interact, where the data
 	 *  loaded carries no drug-condition rule ({@link DrugSafetyValidator#conditionRuleCoverage()} answers {@code ABSENT}):
 	 *  her conditions were not weighed against her orders, and nothing else in the answer says so (ADR Decision 467). */
+	/**
+	 * {@code answer} saying her conditions were not checked (ADR Decision 467): where it closes a screen's findings with
+	 * what they do not cover, one line saying both (ADR Decision 493) — <em>"Not checked: interactions the data does not
+	 * rate, anything beyond drug interactions and contraindications, and this patient's conditions, for which the drug
+	 * data loaded carries no drug-condition rules."</em> — else {@link #CONDITIONS_NOT_CHECKED} on a line of its own.
+	 */
+	static String withConditionsNotChecked(String answer) {
+		List<String> lines = new ArrayList<String>(Arrays.asList(answer.split("\n", -1)));
+		for (int n = 0; n < lines.size(); n++) {
+			String scope = SCREEN_SCOPE.equals(lines.get(n)) ? "anything beyond drug interactions and contraindications"
+					: BELOW_FLOOR_SCOPE.equals(lines.get(n)) ? "anything beyond drug interactions" : null;
+			if (scope != null) {
+				lines.set(n, "Not checked: interactions the data does not rate, " + scope + ", and " + CONDITIONS_UNCHECKED_PART);
+				return String.join("\n", lines);
+			}
+		}
+		return answer + "\n" + CONDITIONS_NOT_CHECKED;
+	}
+
+	/** Her conditions as one part of a screen's one "Not checked" line (ADR Decision 493). */
+	static final String CONDITIONS_UNCHECKED_PART = "this patient's conditions, for which the drug data loaded carries no "
+			+ "drug-condition rules.";
+
 	static final String CONDITIONS_NOT_CHECKED = "This patient's conditions were not checked against these medications: "
 			+ "the drug data loaded carries no drug-condition rules.";
 
@@ -5388,11 +5411,15 @@ public class DrugReferenceInjector {
 			merged.addAll(grid.subList(1, grid.size()));
 		}
 		Set<String> herOwnSharing = new HashSet<String>();
+		// Which findings each line states, so a screen can keep its strongest lines whole and count the rest (ADR Decision
+		// 492).
+		List<List<Integer>> lineFindings = new ArrayList<List<Integer>>(order.size());
 		for (Integer i : order) {
 			if (merged.contains(i)) {
 				continue;
 			}
 			List<Integer> grid = grids.get(i);
+			lineFindings.add(grid != null ? grid : Collections.singletonList(i));
 			lines.add(grid != null ? gridLine(findings, numbers, grid, herOrderRecords)
 					: findingLine(findings.get(i), numbers.get(i), orderRecordNumbers, herOrderRecords, true,
 							substances.get(findings.get(i)), saidOnce));
@@ -5453,12 +5480,139 @@ public class DrugReferenceInjector {
 			// drug proposed (ADR Decision 160).
 			lines.add(0, cautionLead(notHerOwnOrdersSharingASubstance(findings).size(), leadDrug));
 		} else if (!proposal) {
-			// A screen opens with what it found, counted, and closes with what it does not cover (ADR Decision 171).
+			// A screen opens with what it found, counted, and closes with what it does not cover (ADR Decision 171). Only
+			// its reasons to change a medication are stated whole; her orders sharing a substance are one line and its
+			// cautions a count, each citing its findings so their chips are published in full beside it (ADR Decision 493).
+			lines = briefScreenLines(findings, numbers, clauses, lines, lineFindings);
 			lines.add(0, screenLead(findings, pairs, saidOnce));
 			lines.addAll(1, groupLines);
 			lines.add(screenScope);
 		}
 		return String.join("\n", lines);
+	}
+
+	/**
+	 * A screen's finding lines as its answer states them (ADR Decision 493): a line stating a reason to change one of her
+	 * medications — a rated reason to withhold, an unrated rule, a contraindication — whole, as before; her orders
+	 * sharing a substance, where there are several, as ONE line naming each substance ({@link #sharedSubstancesLine});
+	 * and every caution as ONE count by rating ({@link #cautionsLine}). The answer is read by a clinician who asked a
+	 * short question, and the chips beside it state every finding in full: measured on the public demo, a screen's
+	 * answer ran to 16 lines and 305 words, its one Major the fourth of them. Each condensed line cites every finding it
+	 * stands for, so the chips pass, which reads the answer's markers, publishes them all, and none is marked stated.
+	 */
+	private static List<String> briefScreenLines(List<SafetyWarning> findings, List<Integer> numbers, String[] clauses,
+			List<String> lines, List<List<Integer>> lineFindings) {
+		List<String> whole = new ArrayList<String>();
+		List<Integer> sharing = new ArrayList<Integer>();
+		List<String> sharingLines = new ArrayList<String>();
+		List<Integer> cautions = new ArrayList<Integer>();
+		for (int n = 0; n < lines.size(); n++) {
+			List<Integer> stated = lineFindings.get(n);
+			boolean caution = true;
+			boolean sharesASubstance = stated.size() == 1 && findings.get(stated.get(0)).statesOrdersSharingASubstance();
+			for (Integer i : stated) {
+				caution &= STRENGTH_CAUTION.equals(clauses[i]) || STRENGTH_CAUTION_CURRENT_MEDICATION.equals(clauses[i]);
+			}
+			if (sharesASubstance) {
+				sharing.add(stated.get(0));
+				sharingLines.add(lines.get(n));
+			} else if (caution) {
+				cautions.addAll(stated);
+			} else {
+				whole.add(lines.get(n));
+			}
+		}
+		List<String> brief = new ArrayList<String>(whole);
+		if (sharing.size() == 1) {
+			brief.addAll(sharingLines);
+		} else if (!sharing.isEmpty()) {
+			brief.add(sharedSubstancesLine(findings, numbers, sharing));
+		}
+		if (!cautions.isEmpty()) {
+			brief.add(cautionsLine(findings, numbers, cautions, !brief.isEmpty()));
+		}
+		return brief;
+	}
+
+	/** Several of her orders sharing a substance, as one line (ADR Decision 493): <em>"Possible duplicate therapy — each in
+	 *  more than one of this patient's active orders: Lamivudine; Stavudine. [117] [118]"</em>. Semicolons, because a
+	 *  combination's name carries "and" of its own. */
+	static String sharedSubstancesLine(List<SafetyWarning> findings, List<Integer> numbers, List<Integer> sharing) {
+		List<String> names = new ArrayList<String>(sharing.size());
+		StringBuilder markers = new StringBuilder();
+		for (Integer i : sharing) {
+			names.add(findings.get(i).getDrug());
+			markers.append(" [").append(numbers.get(i)).append(']');
+		}
+		return SHARED_SUBSTANCES_LEAD + String.join("; ", names) + "." + markers;
+	}
+
+	/** {@link #sharedSubstancesLine}'s words before the substances it names. */
+	static final String SHARED_SUBSTANCES_LEAD = "Possible duplicate therapy — each in more than one of this patient's "
+			+ "active orders: ";
+
+	/**
+	 * A screen's cautions as one count by rating (ADR Decision 493): <em>"9 more interactions, each a caution (8 Moderate,
+	 * 1 Minor), are listed in full in the safety warnings beside this answer. [121] [122] …"</em> — "more" only after a
+	 * line stated whole. Counted as the screen's lead counts, a pair per order a line names; rated by each finding's own
+	 * severity, an unrated caution as having none rated.
+	 */
+	static String cautionsLine(List<SafetyWarning> findings, List<Integer> numbers, List<Integer> cautions, boolean more) {
+		Map<String, Integer> byRating = new LinkedHashMap<String, Integer>();
+		for (String rating : new String[] { "Major", "Moderate", "Minor" }) {
+			byRating.put(rating, 0);
+		}
+		int count = 0;
+		boolean allInteractions = true;
+		StringBuilder markers = new StringBuilder();
+		Set<Integer> cited = new LinkedHashSet<Integer>();
+		for (Integer i : cautions) {
+			SafetyWarning finding = findings.get(i);
+			int pairs = Math.max(1, finding.namedPartners().size());
+			count += pairs;
+			allInteractions &= SafetyWarning.TYPE_INTERACTION.equals(finding.getType());
+			String severity = finding.getSeverity();
+			String rating = severity == null || severity.trim().isEmpty() || "unknown".equalsIgnoreCase(severity.trim())
+					? "with no severity rated" : severity.trim();
+			Integer seen = byRating.get(rating);
+			byRating.put(rating, (seen == null ? 0 : seen) + pairs);
+			if (cited.add(numbers.get(i))) {
+				markers.append(" [").append(numbers.get(i)).append(']');
+			}
+		}
+		List<String> ratings = new ArrayList<String>();
+		for (Map.Entry<String, Integer> rating : byRating.entrySet()) {
+			if (rating.getValue() > 0) {
+				ratings.add(rating.getValue() + " " + rating.getKey());
+			}
+		}
+		String noun = allInteractions ? (count == 1 ? "interaction" : "interactions") : (count == 1 ? "finding" : "findings");
+		return count + (more ? " more " : " ") + noun + (count == 1 ? ", a caution (" : ", each a caution (")
+				+ String.join(", ", ratings) + "), " + (count == 1 ? "is" : "are") + CAUTIONS_LINE_TAIL + markers;
+	}
+
+	/** {@link #cautionsLine}'s words after its count, up to its markers. */
+	static final String CAUTIONS_LINE_TAIL = " listed in full in the safety warnings beside this answer.";
+
+	/**
+	 * {@code composed}, a module answer, without the lines that count or list findings rather than state them — {@link
+	 * #cautionsLine} and {@link #sharedSubstancesLine} (ADR Decision 493). Those lines cite every finding they stand for,
+	 * so the chips pass publishes each, but name none of the orders a finding covers, by design: the chips beside the
+	 * answer do. So the check naming every order a CITED finding covers that the answer leaves unnamed (ADR Decision
+	 * 100) reads the answer without them, and does not name, under the last line, the orders of findings the answer
+	 * only counted. The composer that writes them is the one place that knows their words.
+	 */
+	public static String withoutCountingLines(String composed) {
+		if (composed == null) {
+			return null;
+		}
+		List<String> kept = new ArrayList<String>();
+		for (String line : composed.split("\n", -1)) {
+			if (!line.startsWith(SHARED_SUBSTANCES_LEAD) && !line.contains(CAUTIONS_LINE_TAIL + " [")) {
+				kept.add(line);
+			}
+		}
+		return String.join("\n", kept);
 	}
 
 	/** What a screen's answer does not cover, stated under its findings (ADR Decision 171). A screen states her
@@ -5502,9 +5656,9 @@ public class DrugReferenceInjector {
 			int found = interactions + withheld;
 			counts.add(found + (found == 1 ? " interaction" : " interactions")
 					+ " among this patient's active medications"
+					// Not "the 10 most severe are listed": the answer states its cautions as a count (ADR Decision 493).
 					+ (withheld == 0 ? ""
-							: " (the " + interactions + " most severe " + (interactions == 1 ? "is" : "are")
-									+ " listed; " + withheld + " more " + (withheld == 1 ? "is" : "are")
+							: " (" + withheld + " more, rated no higher, " + (withheld == 1 ? "is" : "are")
 									+ " not shown)"));
 		}
 		// Beside another count, "unrated" qualifies its own noun: a trailing ", none with a severity rated" read as about the
@@ -5597,8 +5751,16 @@ public class DrugReferenceInjector {
 			List<Integer> findingNumbers, Map<String, Integer> orderRecordNumbers, Map<String, Integer> herOrderRecords,
 			PatientClinicalContext context, int unidentified) {
 		if (screenNoteIndex != null && onlyHerOwnOrdersSharingASubstance(findings)) {
-			return withHerOwnOrdersSharingASubstance(interactionScreenNoteWords(screened, screen) + " [" + screenNoteIndex + "]",
-					findings, findingNumbers, orderRecordNumbers, herOrderRecords);
+			String note = interactionScreenNoteWords(screened, screen) + " [" + screenNoteIndex + "]";
+			// Several, as one line, as a screen that related pairs states them (ADR Decision 493).
+			if (findings.size() > 1) {
+				List<Integer> all = new ArrayList<Integer>(findings.size());
+				for (int i = 0; i < findings.size(); i++) {
+					all.add(Integer.valueOf(i));
+				}
+				return note + "\n" + sharedSubstancesLine(findings, findingNumbers, all);
+			}
+			return withHerOwnOrdersSharingASubstance(note, findings, findingNumbers, orderRecordNumbers, herOrderRecords);
 		}
 		if (findings.isEmpty() && hasNoActiveDrug(context)) {
 			return "This patient has no active medication orders, so there are none to check against each other.";
@@ -5689,6 +5851,19 @@ public class DrugReferenceInjector {
 	}
 
 	static String unidentifiedOrdersLine(List<PatientClinicalContext.ActiveDrugOrder> orders, boolean screen) {
+		int k = orders.size();
+		String head = "Not checked: " + k + (k == 1 ? " active order" : " active orders")
+				+ " the drug data does not identify — " + unidentifiedOrderNames(orders) + ". ";
+		if (screen) {
+			// "Not checked" already says it was not screened (ADR Decision 493).
+			return head.trim();
+		}
+		return head + "Whether " + (k == 1 ? "it" : "one of them") + " is the drug asked about is not established.";
+	}
+
+	/** The names {@link #unidentifiedOrdersLine} gives the orders the drug data does not identify, each once with its
+	 *  count of orders, joined by semicolons. */
+	static String unidentifiedOrderNames(List<PatientClinicalContext.ActiveDrugOrder> orders) {
 		Map<String, Integer> byName = new LinkedHashMap<String, Integer>();
 		for (PatientClinicalContext.ActiveDrugOrder order : orders) {
 			String display = order.getDisplay();
@@ -5701,13 +5876,7 @@ public class DrugReferenceInjector {
 		for (Map.Entry<String, Integer> entry : byName.entrySet()) {
 			names.add(entry.getValue() > 1 ? entry.getKey() + " (" + entry.getValue() + " orders)" : entry.getKey());
 		}
-		int k = orders.size();
-		String head = "Not checked: " + k + (k == 1 ? " active order" : " active orders")
-				+ " the drug data does not identify — " + String.join("; ", names) + ". ";
-		if (screen) {
-			return head + (k == 1 ? "It was" : "They were") + " not screened against this patient's other medications.";
-		}
-		return head + "Whether " + (k == 1 ? "it" : "one of them") + " is the drug asked about is not established.";
+		return String.join("; ", names);
 	}
 
 	/**

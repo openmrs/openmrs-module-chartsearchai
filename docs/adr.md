@@ -23740,3 +23740,63 @@ owner's own example forbids: *"Can I give her oranges?"* must not be poisoned by
   own path.
 
 Pinned by `LlmInferenceServiceModelReadQuestionContextTest.aFoodOrDrinkAskedBesideHerMedicationsIsNotReadByTheModel`.
+
+
+## Decision 493: A screen's answer states its reasons to change a medication whole, and counts the rest
+
+**Status: Accepted** (October 2026) — on the owner's reading of the public demo's answer to *"What shouldn't I prescribe
+for this patient?"* for patient `dd8f98cf-1691-11df-97a5-7038c432aabf` on 2026-10-27: too much for the question asked.
+
+### Context
+
+That answer ran to 16 lines and 305 words, beside 14 chips. Its one Major, nelfinavir against rifampicin, was the fourth
+line, behind a lead and an allergy line. Four lines said four of her drugs were each in two orders. Nine lines stated a
+Moderate or Minor interaction in full, and then the client stated all of them again, since it renders every chip in a
+"Safety checks" section. Four sentences of scope followed. Decision 171 chose one brief line per finding so the answer
+and the chips could not disagree. Each line since was defensible on its own, and none of them was weighed against what a
+clinician reads before acting.
+
+### The decision
+
+On a screen of her medications — the module's own answer; a proposal's is unchanged — `DrugReferenceInjector.briefScreenLines`:
+
+- states whole each line whose finding's own clause is a reason to withhold or to change a medication: a rated reason, an
+  unrated rule, a contraindication. These are what licensed the module to answer at all;
+- states her orders sharing a substance, where there are several, on one line, `sharedSubstancesLine`: *"Possible
+  duplicate therapy — each in more than one of this patient's active orders: Lamivudine; Stavudine. [117] [118]"*;
+- counts every caution on one line by rating, `cautionsLine`: *"9 more interactions, each a caution (8 Moderate, 1
+  Minor), are listed in full in the safety warnings beside this answer. [121] …"*.
+
+Each condensed line cites every finding it stands for. The chips pass reads the answer's markers, so every chip is still
+published; one whose finding the answer no longer states whole is not marked `statedInTheAnswer`, so a client shows it
+in full. The check naming every order a cited finding covers that the answer leaves unnamed (Decision 100) reads the
+answer without those two lines (`DrugReferenceInjector.withoutCountingLines`): they name no order by design. Measured on
+the demo replica before that, the count's citations appended *"Also covered by those findings and not named above: active
+order Trimethoprim and sulfamethoxazole and active order Efavirenz."* to the line naming the orders the drug data does
+not identify, where they read as two more of them.
+
+The lead's *"(the 10 most severe are listed; 3 more are not shown)"*, false once the answer lists one, reads *"(3 more,
+rated no higher, are not shown)"*, which is what the screening arm's rank-then-cap establishes. The scope line and the
+conditions line (Decision 467) are one line where both are stated: *"Not checked: interactions the data does not rate,
+anything beyond drug interactions and contraindications, and this patient's conditions, for which the drug data loaded
+carries no drug-condition rules."* After a screen, the line naming orders the drug data does not identify (Decision 161)
+drops *"They were not screened against this patient's other medications."*, which its own *"Not checked:"* says. The
+names stay on that line of their own: they carry commas and semicolons a merged sentence could not keep apart.
+
+### Spec change
+
+Ten assertions pinned the old wording, in `ScreenSharedMechanismContextTest`, `ScreenBelowFloorPairsTest`,
+`OrdersSharingASubstanceModuleAnswerContextTest`, `UnidentifiedActiveOrdersAnswerTest`,
+`LlmInferenceServiceAnswerFromFindingsContextTest` and `SubstanceInSeveralOrdersPairTest`. Each now asserts the new
+form, and each still asserts what it was written for: the shared-mechanism grid of Decision 191 still counts four pairs
+and cites both its findings; Decision 486's isoniazid-against-rifampicin finding is asserted on its injected record and
+the count's citation of it, since a Minor is no longer a line.
+
+### Consequences
+
+- A screen's answer depends on the client rendering the chips beside it; the reference client does. A client reading
+  only `answer` gets the reasons to change a medication and a count of the rest.
+- Decision 191's grid and Decision 190's mechanism collapse now shape screen lines only where a reason to change a
+  medication is a grid. Neither is pinned on such a line by a screen case today.
+
+Pinned by `BriefScreenAnswerTest`, on the demo patient's own orders, and `BriefScreenAnswerContextTest`.

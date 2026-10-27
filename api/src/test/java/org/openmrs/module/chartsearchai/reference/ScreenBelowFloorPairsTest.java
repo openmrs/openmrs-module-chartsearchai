@@ -92,7 +92,8 @@ public class ScreenBelowFloorPairsTest extends BaseModuleContextSensitiveTest {
 			"was: " + answer);
 	}
 
-	/** The demo's own chart: each drug ordered three times, so each raises a duplicate-therapy finding beside the screen. */
+	/** The demo's own chart: each drug ordered three times, so each raises a duplicate-therapy finding beside the screen,
+	 *  the three stated on one line (ADR Decision 493). */
 	@Test
 	public void theDemoPatientsThreeOrdersOfEachDrugAreAnsweredWithTheScreenTheDuplicatesAndHisConditions() {
 		List<PatientClinicalContext.ActiveDrugOrder> orders = new ArrayList<PatientClinicalContext.ActiveDrugOrder>();
@@ -108,18 +109,15 @@ public class ScreenBelowFloorPairsTest extends BaseModuleContextSensitiveTest {
 
 		assertNotNull(answer, "the module answers");
 		String[] lines = answer.split("\n");
-		assertEquals(5, lines.length, "was: " + answer);
+		assertEquals(3, lines.length, "was: " + answer);
 		assertTrue(lines[0].startsWith("No interactions at or above the configured severity level were found among this "
 				+ "patient's active medications. 3 substances in them were checked against each other. The reference data "
 				+ "lists 3 pairs of them only below that level, none with a severity or mechanism on file."),
 			"was: " + answer);
-		assertTrue(lines[1].startsWith("Lamivudine is in active orders Lamivudine (3 orders) — possible duplicate therapy."),
-			"was: " + answer);
-		assertTrue(lines[2].startsWith("Nevirapine is in active orders Nevirapine (3 orders) — possible duplicate therapy."),
-			"was: " + answer);
-		assertTrue(lines[3].startsWith("Stavudine is in active orders Stavudine (3 orders) — possible duplicate therapy."),
-			"was: " + answer);
-		assertEquals(DrugReferenceInjector.CONDITIONS_NOT_CHECKED, lines[4], "was: " + answer);
+		// Her three drugs each in several orders, one line since ADR Decision 493.
+		assertTrue(lines[1].startsWith("Possible duplicate therapy — each in more than one of this patient's active orders: "
+				+ "Lamivudine; Nevirapine; Stavudine. ["), "was: " + answer);
+		assertEquals(DrugReferenceInjector.CONDITIONS_NOT_CHECKED, lines[2], "was: " + answer);
 	}
 
 	@Test

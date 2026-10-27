@@ -47,15 +47,14 @@ public class ScreenSharedMechanismContextTest extends BaseModuleContextSensitive
 	public void aDrugRelatedToSeveralOfHerOrdersByOneMechanismIsOneLineNamingThemAll() throws IOException {
 		String answer = screen().getModuleAnswer();
 
-		// Five pairs on two lines: both NSAIDs against both corticosteroids by one row is one grid, stated once with
-		// every finding it covers and every order (ADR Decision 191); the COX-2 row is its own. The question asks only
-		// about interactions, so the scope says the answer covers those (ADR Decision 190). Her two NSAIDs are said once
-		// as one drug group under the count (ADR Decision 197).
+		// Five pairs, every one a Moderate caution: since ADR Decision 493 a screen counts its cautions on one line citing
+		// every finding, the grid (ADR Decision 191) still counting both NSAIDs against both corticosteroids as four pairs
+		// and citing both its findings. The question asks only about interactions, so the scope says the answer covers
+		// those (ADR Decision 190). Her two NSAIDs are said once as one drug group under the count (ADR Decision 197).
 		assertEquals("5 interactions among this patient's active medications:\n"
 				+ "Ibuprofen and Celecoxib are in one drug group (NSAID) — possible duplicate therapy. [2] [3]\n"
-				+ "Each of Ibuprofen and Celecoxib interacts with active order Prednisone and Dexamethasone — Moderate. "
-				+ "[6] [8] [2] [3] [4] [5]\n"
-				+ "Ibuprofen interacts with active order Celecoxib — Moderate. [7] [2] [3]\n"
+				+ "5 interactions, each a caution (5 Moderate), are listed in full in the safety warnings beside this "
+				+ "answer. [6] [8] [7]\n"
 				+ DrugReferenceInjector.BELOW_FLOOR_SCOPE, answer);
 	}
 
@@ -63,13 +62,13 @@ public class ScreenSharedMechanismContextTest extends BaseModuleContextSensitive
 	public void pairsOfOneMechanismThatAreNotAGridKeepALinePerDrug() throws IOException {
 		// Ibuprofen against both corticosteroids and celecoxib against prednisone alone: no two drugs each against
 		// the same orders, so a line naming them together would claim a pair the data does not relate (ADR Decision 191).
+		// Every one a Moderate caution, counted on one line since ADR Decision 493: four pairs, each finding cited.
 		String answer = screen("chartsearchai-test/ddi-screen-shared-mechanism-not-a-grid.json").getModuleAnswer();
 
 		assertEquals("4 interactions among this patient's active medications:\n"
 				+ "Ibuprofen and Celecoxib are in one drug group (NSAID) — possible duplicate therapy. [2] [3]\n"
-				+ "Ibuprofen interacts with active order Prednisone and Dexamethasone — Moderate. [6] [2] [4] [5]\n"
-				+ "Ibuprofen interacts with active order Celecoxib — Moderate. [7] [2] [3]\n"
-				+ "Celecoxib interacts with active order Prednisone — Moderate. [8] [3] [4]\n"
+				+ "4 interactions, each a caution (4 Moderate), are listed in full in the safety warnings beside this "
+				+ "answer. [6] [7] [8]\n"
 				+ DrugReferenceInjector.BELOW_FLOOR_SCOPE, answer);
 	}
 

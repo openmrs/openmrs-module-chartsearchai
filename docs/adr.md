@@ -23887,3 +23887,29 @@ pinned the separate lines and now assert the merged ones.
 
 Pinned by `BriefScreenAnswerTest.theDemoPatientsAvoidAnswerStatesItsLeadAndHerAllergiesOnOneLine` and
 `.theDemoPatientsScreenStatesItsMajorWholeAndCountsTheRest`.
+
+## Decision 497: A plan to give a drug, stated with no asking word, proposes it
+
+**Status: Accepted** (October 2026) — found asking note-style wordings of 15 patients on the 3.7.1 standalone on
+2026-10-27.
+
+### Context
+
+*"Pt on NVP. Want to add fluconazole. OK?"* went to the model on all 15 patients. On 13 of them it answered
+*"Fluconazole can be given"*, clearing a drug the check withholds on most of them. *"Want to add fluconazole. OK?"*
+cleared on 7. The module answers *"Planning to start fluconazole - safe?"* (Decision 427) and *"Patient on nevirapine,
+plan warfarin. Safe?"* (Decisions 461, 469). But the one-drug reading took a giving verb as a proposal only after an
+asking word, and the pair reading joined the second drug only by a giving verb right after the first.
+
+### The decision
+
+- The speaker's plan to give the drug — *"want to"*, *"planning to"*, *"plan to"*, *"going to"* or *"intend to"*, with an
+  optional *"I"* or *"we"* before it, then give, start, prescribe, add, administer or use — opening the one-drug words
+  proposes the drug, as an asking word does.
+- The same plan right after *"on"* and the first drug joins the second as the pair the note spells.
+- Only the speaker's plan to give it counts. *"Does she want to start warfarin?"*, *"She wants to stop warfarin."* and
+  *"Want to stop warfarin?"* stay the model's.
+- The note naming several drugs she is on, *"Pt is HIV+ on NVP/3TC/AZT. Want to add fluconazole. OK?"*, names more than
+  two drugs. No pair reading admits it, and it stays the model's.
+
+Pinned by `ClinicianWordingsTest.aPlanToGiveADrugStatedWithNoAskingWordProposesIt`.

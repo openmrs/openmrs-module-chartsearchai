@@ -1893,6 +1893,25 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/** ADR Decision 497: "Want to add X", a plan stated with no asking word, proposes X, beside a drug she is said to be on too. */
+	@Test
+	public void aPlanToGiveADrugStatedWithNoAskingWordProposesIt() {
+		String[][] pairs = { { "Want to add warfarin?", "Can I add warfarin?" }, { "I want to start warfarin?", "Can I start warfarin?" },
+			{ "Want to add warfarin. OK?", "Planning to start warfarin - safe?" },
+			{ "Planning to give warfarin. Ok?", "Planning to start warfarin - safe?" },
+			{ "Pt on nevirapine. Want to add warfarin. OK?", "Patient on nevirapine, plan warfarin. Safe?" },
+			{ "Pt on nevirapine, planning to start warfarin. Safe?", "Patient on nevirapine, plan warfarin. Safe?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+		// Someone else's wish, and a plan for something other than giving it, stay the model's.
+		assertNull(ask("Does she want to start warfarin?"));
+		assertNull(ask("She wants to stop warfarin."));
+		assertNull(ask("Want to stop warfarin?"));
+	}
+
 	private static String ask(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

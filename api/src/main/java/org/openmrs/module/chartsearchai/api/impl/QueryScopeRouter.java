@@ -2183,9 +2183,11 @@ public final class QueryScopeRouter {
 		if (("patient".equals(word) || "pt".equals(word)) && join == first + 1) {
 			return true;
 		}
-		// and "Pt on nevirapine. Starting warfarin." (ADR Decision 469)
+		// and "Pt on nevirapine. Starting warfarin." (ADR Decision 469), or "Pt on nevirapine. Want to add warfarin." (ADR
+		// Decision 497)
 		if (RESIDUAL_PAIR_STARTS.contains(word)) {
-			return join == first + 1 && first > 0 && "on".equals(words.get(first - 1));
+			return (join == first + 1 || planToGiveAt(words, first + 1) == join) && first > 0
+					&& "on".equals(words.get(first - 1));
 		}
 		return false;
 	}
@@ -2197,7 +2199,31 @@ public final class QueryScopeRouter {
 	/** The words {@link #joinedInItsPhrase} admits between the two drugs. */
 	private static final Set<String> RESIDUAL_PAIR_PHRASE_WORDS = new HashSet<String>(Arrays.asList("patient", "pt", "of", "to",
 		"plan",
-		"planning", "planned", "starting", "start", "adding", "add", "giving", "give"));
+		"planning", "planned", "starting", "start", "adding", "add", "giving", "give",
+		// a plan to give the second (ADR Decision 497)
+		"i", "we", "want", "going", "intend"));
+
+	/** The words stating a plan before "to" and the verb giving the drug: "Want to add warfarin" (ADR Decision 497). */
+	private static final Set<String> PLAN_WORDS = new HashSet<String>(Arrays.asList("want", "planning", "plan", "going",
+		"intend"));
+
+	/** The verbs a plan gives the drug with (ADR Decision 497). */
+	private static final Set<String> PLANNED_GIVING = new HashSet<String>(Arrays.asList("give", "start", "prescribe", "add",
+		"administer", "use"));
+
+	/**
+	 * Where {@code words} state, from {@code from}, the speaker's plan to give a drug — "want to add", "I want to start",
+	 * "planning to give" — the index of the verb giving it; -1 where they do not (ADR Decision 497). Only the speaker's: "Does
+	 * she want to start warfarin?" opens with no plan, and "Want to stop warfarin?" plans no giving.
+	 */
+	private static int planToGiveAt(List<String> words, int from) {
+		int at = from;
+		if (at < words.size() && ("i".equals(words.get(at)) || "we".equals(words.get(at)))) {
+			at++;
+		}
+		return at + 2 < words.size() && PLAN_WORDS.contains(words.get(at)) && "to".equals(words.get(at + 1))
+				&& PLANNED_GIVING.contains(words.get(at + 2)) ? at + 2 : -1;
+	}
 
 	/** The words a question about TWO drugs may join them with and still be read without a shape (ADR Decision 456). */
 	private static final Set<String> RESIDUAL_PAIR_WORDS = new HashSet<String>(Arrays.asList("plus", "combination", "combo",
@@ -3104,9 +3130,11 @@ public final class QueryScopeRouter {
 			gives |= ("take".equals(wordsWithTheDrugMarked.get(i)) || "have".equals(wordsWithTheDrugMarked.get(i)))
 					&& RESIDUAL_SUBJECTS.contains(wordsWithTheDrugMarked.get(i - 1));
 		}
-		boolean asked = false;
+		// The speaker's plan to give it, opening the words, proposes it as an asking word does: "Want to add fluconazole?",
+		// "Want to add fluconazole. OK?" (ADR Decision 497).
+		boolean asked = planToGiveAt(wordsWithTheDrugMarked, 0) >= 0;
 		// A drug, the patient and a word saying it is safe — "Warfarin for her - safe?" — is asked whole (ADR Decision 405).
-		boolean aQuestion = wordsWithTheDrugMarked.size() <= 2 || (safe || harms) && wordsWithTheDrugMarked.size() <= 4;
+		boolean aQuestion = asked || wordsWithTheDrugMarked.size() <= 2 || (safe || harms) && wordsWithTheDrugMarked.size() <= 4;
 		for (String word : wordsWithTheDrugMarked) {
 			asked |= RESIDUAL_ASKING.contains(word);
 			aQuestion |= RESIDUAL_QUESTION.contains(word);

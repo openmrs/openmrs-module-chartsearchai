@@ -2035,15 +2035,20 @@ public final class QueryScopeRouter {
 		if ("to".equals(word)) {
 			return words.contains("add") || words.contains("adding");
 		}
-		if ("plan".equals(word) || "planning".equals(word) || "planned".equals(word)) {
+		// and "Pt on nevirapine. Starting warfarin." (ADR Decision 469)
+		if (RESIDUAL_PAIR_STARTS.contains(word)) {
 			return join == first + 1 && first > 0 && "on".equals(words.get(first - 1));
 		}
 		return false;
 	}
 
+	/** The words starting the second drug after "on" and the first (ADR Decisions 461, 469). */
+	private static final Set<String> RESIDUAL_PAIR_STARTS = new HashSet<String>(Arrays.asList("plan", "planning", "planned",
+		"starting", "start", "adding", "add", "giving", "give"));
+
 	/** The words {@link #joinedInItsPhrase} admits between the two drugs. */
 	private static final Set<String> RESIDUAL_PAIR_PHRASE_WORDS = new HashSet<String>(Arrays.asList("of", "to", "plan",
-		"planning", "planned"));
+		"planning", "planned", "starting", "start", "adding", "add", "giving", "give"));
 
 	/** The words a question about TWO drugs may join them with and still be read without a shape (ADR Decision 456). */
 	private static final Set<String> RESIDUAL_PAIR_WORDS = new HashSet<String>(Arrays.asList("plus", "combination", "combo",
@@ -2093,7 +2098,14 @@ public final class QueryScopeRouter {
 		// Between the two, only what joins them or says what is asked of them: "Will rifampicin harm her with nevirapine?" —
 		// never "Are any of his current medications interacting with each other?", whose "any" and "each" stand in the
 		// places a word read as an unrecognised drug would.
-		for (String word : wordsWithTheDrugsMarked.subList(first + 1, second)) {
+		List<String> between = wordsWithTheDrugsMarked.subList(first + 1, second);
+		for (int i = 0; i < between.size(); i++) {
+			String word = between.get(i);
+			// "Warfarin: any issues with nevirapine?" — "any" only before a word saying what is asked (ADR Decision 469)
+			if ("any".equals(word) && i + 1 < between.size()
+					&& (RESIDUAL_HARMS.contains(between.get(i + 1)) || RESIDUAL_INTERACTS.contains(between.get(i + 1)))) {
+				continue;
+			}
 			if (!RESIDUAL_PAIR_JOINS.contains(word) && !RESIDUAL_PAIR_WORDS.contains(word) && !RESIDUAL_HARMS.contains(word)
 					&& !(phrased && RESIDUAL_PAIR_PHRASE_WORDS.contains(word))
 					&& !RESIDUAL_SAFE.contains(word) && !"her".equals(word) && !"him".equals(word) && !"them".equals(word)) {
@@ -2530,7 +2542,9 @@ public final class QueryScopeRouter {
 		// colloquial and non-native wordings (ADR Decision 415)
 		"client", "my", "on", "we",
 		// when, how often, and what it would cause (ADR Decision 422)
-		"tomorrow", "tonight", "as", "needed", "prn", "top", "cause", "know", "before"));
+		"tomorrow", "tonight", "as", "needed", "prn", "top", "cause", "know", "before",
+		// "Pt on nevirapine. Starting warfarin." (ADR Decision 469)
+		"pt"));
 
 	/** Words saying the question is about the drug's interactions. */
 	private static final Set<String> RESIDUAL_INTERACTS = new HashSet<String>(Arrays.asList("interact", "interacts",

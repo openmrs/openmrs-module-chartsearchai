@@ -23074,3 +23074,30 @@ ONE drug. `HISTORY_SHAPES` reads one drug, and no grammar read the past tense of
 - The present tense stays Decision 458's: *"Is she on X and Y?"* is answered with which she is on and what relates them.
 
 Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aHistoryQuestionAboutTwoDrugsCarriesNoFindingAboutGivingTheOneSheIsNotOn`.
+
+## Decision 469: "Any issues" asked of two drugs, and a drug started after "on" another, are the pair questions they spell
+
+**Status: Accepted** (October 2026) — found asking 30 further wordings of 15 patients on the 3.7.1 standalone on 2026-10-27.
+
+### Context
+
+The model cleared two more wordings of fluconazole with nevirapine. *"Fluconazole: any issues with nevirapine?"* was
+answered *"Fluconazole can be given with Nevirapine"* on 14 of 15 patients, and *"Pt on NVP. Starting fluconazole.
+Safe?"* on 4. The residual pair reading of Decision 456 admits no *"any"* between the two drugs. It keeps that word out
+because a word read as an unrecognised drug could stand there. It joined the second drug after *"on"* and the first only
+by Decision 461's *"plan"*, and read *"pt"* as no word it admits.
+
+### The decision
+
+- Between the two drugs, *"any"* is admitted only right before a word saying what is asked: a harm (*"issues"*,
+  *"problems"*) or an interaction. *"Warfarin any with nevirapine?"* stays the model's.
+- After *"on"* and the first drug, *"starting"*, *"start"*, *"adding"*, *"add"*, *"giving"* and *"give"* join the second
+  drug as *"plan"* does.
+- *"pt"* is a word the residual readings admit, as *"patient"* is.
+- *"Is ibuprofen safe to add to omeprazole?"* is now the pair proposal it spells, answered as Decision 343's *"Is it safe to
+  add X to her Y?"* is. With *"add"* admitted between the drugs, the residual pair reading reads it. This supersedes the
+  row of `LlmInferenceServiceAnswerFromFindingsContextTest.aQuestionTheModuleDidNotResolveAsASuitabilityQuestionStillAsksTheModel`
+  that Decision 134 put there: one drug's proposal shapes cannot answer for two drugs, and a pair reading now does. The row
+  now points here.
+
+Pinned by `ClinicianWordingsTest.anyIssuesAskedOfTwoDrugsAndADrugStartedAfterAnotherAreThePairQuestionsTheySpell`.

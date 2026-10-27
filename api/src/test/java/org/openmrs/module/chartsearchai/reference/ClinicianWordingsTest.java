@@ -1643,6 +1643,24 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/** ADR Decision 469: "any issues" asked of two drugs, and a drug started after "on" another, are the pair questions they
+	 *  spell. */
+	@Test
+	public void anyIssuesAskedOfTwoDrugsAndADrugStartedAfterAnotherAreThePairQuestionsTheySpell() {
+		String[][] pairs = { { "Warfarin: any issues with nevirapine?", "Is warfarin dangerous with her nevirapine?" },
+			{ "Warfarin - any problems with nevirapine?", "Is warfarin dangerous with her nevirapine?" },
+			{ "Pt on nevirapine. Starting warfarin. Safe?", "Patient on nevirapine, plan warfarin. Safe?" },
+			{ "Patient on nevirapine, adding warfarin. Any issue?", "Is nevirapine dangerous with warfarin?" },
+			{ "Is warfarin safe to add to nevirapine?", "Is it safe to add warfarin to her nevirapine?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+		// "any" before no word saying what is asked stays out of the drugs' places.
+		assertNull(ask("Warfarin any with nevirapine?"));
+	}
+
 	private static String ask(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

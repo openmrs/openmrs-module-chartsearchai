@@ -2555,8 +2555,8 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 			// a factor the findings do not weigh is not.
 			"Is ibuprofen safe for her kidneys?",
 			"Can I give her ibuprofen for her kidney pain?",
-			// a second drug, in the drug-first shapes (ADR Decision 134)
-			"Is ibuprofen safe to add to omeprazole?",
+			// (a second drug added to the first, "Is ibuprofen safe to add to omeprazole?", is the pair proposal it spells since
+			// ADR Decision 469, anyIssuesAskedOfTwoDrugsAndADrugStartedAfterAnotherAreThePairQuestionsTheySpell)
 			// inverse polarity in the passive: a "No" lead would answer it backwards
 			"Should ibuprofen be stopped?",
 			"Can ibuprofen be avoided?",

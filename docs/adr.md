@@ -23462,3 +23462,56 @@ dose"*, *"the dose of her nevirapine"*.
   `statesADose` stamps it so the answer says the dose was not checked.
 
 Pinned by `ClinicianWordingsTest.herDrugsDoseAskedSafeIsHerDrugAskedSafeWithTheDoseNotChecked`.
+
+## Decision 486: Two substances from two different orders are a pair, even where each order carries both
+
+**Status: Accepted** (October 2026) — found asking *"Does he have any drug contraindications?"* of the public demo's patient
+`dd88589e-1691-11df-97a5-7038c432aabf` on 2026-10-27.
+
+### Context
+
+He has an active "Rifampicin and isoniazid" order and an active "Isoniazid / pyrazinamide / rifampin" order. The shipped
+DDInter knowledge base rates isoniazid against rifampicin Minor, the configured floor. The module's answer listed nine
+interactions and left this one out, not even counting it below the floor. It did list pyrazinamide against rifampicin,
+Major, which is carried in one of those orders the same way.
+
+The screen of her orders lets only an order that does not carry the subject witness its partner, so that one tablet is
+never its own constituents' pair (`activeOrdersOtherThan`). Rifampicin's second order is not pyrazinamide's, so that
+pair was related. But every order carrying isoniazid carries rifampicin too, and the reverse, so each substance's own
+orders were all the orders carrying the other. Nothing was left to witness the pair. The method's javadoc recorded this
+as a known bound, a pair missed rather than one invented, which "cannot be told from the one-order case". Production
+builds the per-order context, so it can.
+
+### The decision
+
+- A pair is related where its two substances come from two different orders. For a subject two or more of her orders
+  carry, a partner one of those orders carries beside it always does: the subject's other order is a different one.
+- `addActiveOrderPairInteractions` runs a second pass, after the first and sharing its pair ledger, over the subjects
+  `ownOrdersWitnessAPartner` names: carried by two or more orders, one of which carries another substance. The demo
+  seed re-orders every drug at each visit, so a subject carried by several single-drug orders is common, and the
+  second pass skips it rather than screening it again to find nothing. In it, `activeOrdersOtherThan` and `ordersOtherThan` let the subject's own orders
+  witness what they carry beside it. Witnessing is through the co-resolved entries' reference names and the codes the
+  order records for them, never the order's own names, which name the subject too.
+- Second rather than merged into the first, so a pair the first pass relates is stated exactly as before, from the
+  side it was stated from, with the same bridges. The second pass only adds pairs, and pairs below the floor, that the
+  first could not see. Merged, it turned "Isoniazid interacts with active order Rifampicin (rifampin)" around into
+  "Rifampicin (rifampin) interacts with active order Isoniazid" where rifampicin also has an order of its own, and named
+  a combination order as its own partner's source (`OrdersSharingASubstanceTest`, `BridgedOrderSelfWitnessContextTest`).
+- The second pass names the partner by the rule's own label, never through the partner-name reconciliation. Its
+  partner is witnessed by the subject's own orders, so the prescription the reconciliation names it by carries the
+  subject too: on the demo chart it printed *"Rifampicin (rifampin) interacts with active order Rifampicin and
+  isoniazid"*, a drug against itself. It now prints *"Rifampicin (rifampin) interacts with active order Isoniazid"*.
+- One combination order alone is still never its own constituents' pair: its subjects are carried by one order and get
+  no second pass.
+
+### Consequences
+
+- The demo patient's answer now lists ten interactions, isoniazid against rifampicin among them. Pinned on his orders
+  as the demo's dictionary records them, names and WHO ATC codes, since an order carrying only its display did not
+  reach the reconciliation that misnamed the partner.
+- Two orders of one combination (two "Rifampicin and isoniazid" orders) now relate isoniazid against rifampicin across
+  them, beside the duplicate-therapy finding for each substance. The pair is in each tablet by design, so this reads as
+  a second statement of what the duplicate finding already says. It is kept: the alternative is the bound this decision
+  removes, and the screen's posture is to state a relationship rather than to clear one.
+
+Pinned by `SubstanceInSeveralOrdersPairTest`.

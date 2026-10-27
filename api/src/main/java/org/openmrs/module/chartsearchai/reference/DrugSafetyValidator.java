@@ -9154,15 +9154,45 @@ public class DrugSafetyValidator {
 	 *         and read the failures rather than trusting this list.
 	 */
 	private static List<PatientClinicalContext.ActiveDrugOrder> ordersOtherThan(
-			List<DrugReference> subjectRows, PatientClinicalContext context, BridgedOrders bridged) {
+			List<DrugReference> subjectRows, PatientClinicalContext context, BridgedOrders bridged,
+			boolean ownOrdersWitness) {
 		List<PatientClinicalContext.ActiveDrugOrder> out =
 				new ArrayList<PatientClinicalContext.ActiveDrugOrder>();
 		for (PatientClinicalContext.ActiveDrugOrder order : context.getActiveDrugOrders()) {
-			if (!resolvesFromAny(subjectRows, order, bridged)) {
+			if (ownOrdersWitness || !resolvesFromAny(subjectRows, order, bridged)) {
 				out.add(order);
 			}
 		}
 		return out;
+	}
+
+	/**
+	 * Whether two or more of the patient's active orders carry {@code subjectRows}' substance and one of
+	 * them carries another substance beside it. That substance then comes from a DIFFERENT order than
+	 * the subject's other one, so the screen's second pass lets the subject's own orders witness a
+	 * partner ({@link #activeOrdersOtherThan}, {@link #ordersOtherThan}; ADR Decision 486). With one
+	 * such order the pair is that order's own constituents and stays unrelated; with several carrying
+	 * nothing else there is nothing for a second pass to find, and the demo seed's re-ordered drugs are
+	 * that shape, so they are not screened twice.
+	 */
+	private static boolean ownOrdersWitnessAPartner(List<DrugReference> subjectRows, List<DrugReference> orderDrugs,
+			PatientClinicalContext context, BridgedOrders bridged) {
+		int carriers = 0;
+		boolean carriesAnother = false;
+		for (PatientClinicalContext.ActiveDrugOrder order : context.getActiveDrugOrders()) {
+			if (!resolvesFromAny(subjectRows, order, bridged)) {
+				continue;
+			}
+			carriers++;
+			for (int n = 0; !carriesAnother && n < orderDrugs.size(); n++) {
+				DrugReference coResolved = orderDrugs.get(n);
+				carriesAnother = !subjectRows.contains(coResolved) && resolvesFrom(coResolved, order, bridged);
+			}
+			if (carriers > 1 && carriesAnother) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**
@@ -9763,184 +9793,197 @@ public class DrugSafetyValidator {
 		// position that row's chips have always had — and the map itself is the already-done ledger. The
 		// same drain-once-per-substance idiom validate() uses for the drug-in-play and dose arms, which
 		// since issue #206 drains a key set beside a shared row map rather than a map of its own.
-		Map<Object, List<DrugReference>> substances = substanceRows(orderDrugs);
-		// A substance she holds only as orders that have not started is visited LAST (issue #553), so a
-		// pair of a started and a scheduled order is stated from the started side — whose
-		// current-medication clause below is true of it — and names the other as a scheduled order. The
-		// pair key is unordered, so no pair is lost: one the started side does not relate is still reached
-		// from the scheduled one. What does move, on such a chart only, is WHICH chip the maxPairChips cap
-		// keeps inside one rating — the sort below is stable, so a pair with a scheduled-only subject now
-		// trails its equals. On a chart with no such order the visiting order is untouched.
-		for (DrugReference ref : startedSubjectsFirst(orderDrugs, substances, context, bridgedOrders)) {
-			List<DrugReference> substance = substances.remove(ref.substanceGroupKey());
-			if (substance == null) {
-				continue;
-			}
-			// Resolved once per subject SUBSTANCE, not per rule, and reduced by the whole group: with the
-			// group as subject, an order any of its rows resolves from is the subject's own order, so a
-			// sibling row may not witness the subject's pair either (see activeOrdersOtherThan).
-			PatientClinicalContext others = activeOrdersOtherThan(substance, orderDrugs, context,
-					bridgedOrders);
-			// The same reduction as a list of ORDERS, for the bridge (#349). Resolved here beside the
-			// context it mirrors and not at the chip site below, because it is invariant per subject
-			// SUBSTANCE while that site runs once per pair — and this walk calls resolvesFromAny for
-			// every order, which is the term chartOrderBridges' own cost measurement identifies.
-			List<PatientClinicalContext.ActiveDrugOrder> partnerWitnesses =
-					ordersOtherThan(substance, context, bridgedOrders);
-			// Whether the subject has STARTED (issue #553), over every order as the bridge asks it — per
-			// SUBSTANCE, beside the witnesses it mirrors, rather than once per pair.
-			Date subjectStart = scheduledStartOf(substance, context.getActiveDrugOrders(), bridgedOrders);
-			belowFloor.addAll(belowFloorPairs(substance, subjects, others, severityFloor, orderDrugs, bridgedOrders,
-					keyNames, seenBelowFloor));
-			// This subject's chips, collapsed by mechanism before the cap as the drug-in-play arm's are (ADR
-			// Decisions 99, 190): the cap then counts what a clinician reads, and the extent still counts pairs.
-			List<MechanismStatement> statements = new ArrayList<MechanismStatement>();
-			// bestRulePerPartner applies the severity floor and the hasActiveDrug join and returns at
-			// most ONE rule per partner label, most severe first (#121) — the same grouping, the same
-			// predicate and now the same subject unit the drug-in-play arm gets, asked of the OTHER
-			// orders instead of all of them. Reusing it is what stops this arm keeping a route variant's
-			// Moderate row for a pair whose Major row the other arm reports, and what keeps the cap
-			// below sorting on the severity a clinician would actually be shown.
-			for (SubjectRule matched : bestRulePerPartner(substance, others, severityFloor, orderDrugs)) {
-				DrugReference.Interaction i = matched.rule;
-				// The partner is an active order too, so it was looked up among the order entries rather
-				// than across the whole dataset, and it is carried on the matched rule rather than
-				// re-resolved here (see SubjectRule). Null when that order carries no reference entry of
-				// its own (a substance the dataset does not cover, matched by name): the finding still
-				// stands — the join above is what decides that — and the pair simply keys on the rule's
-				// own label, which no reverse direction can produce.
-				DrugReference partner = matched.partner;
-				String partnerName = partner != null ? keyNames.get(partner)
-						: partnerLabel(i).toLowerCase(Locale.ROOT);
-				// keyNames.get(ref) is the GROUP's key name, ref being the row the group was handed at.
-				// One name per substance rather than one per row, which is what pairKeyNames' token key
-				// already gives wherever another drug's rule names the substance at all — and where none
-				// does, its displayLabel fallback differs per ROW, so before the grouping above two rows
-				// of one substance could key two pairs and chip twice. Now one substance keys once.
-				if (!seenPairs.add(unorderedPairKey(keyNames.get(ref), partnerName))) {
+		// Two passes over the same subjects, sharing seenPairs (ADR Decision 486). The first lets only an
+		// order that does not carry the subject witness its partner. The second is for a substance two or
+		// more of her orders carry: a partner one of those orders carries beside it still comes from a
+		// different order than the subject's other one, which the first pass cannot see. Second, so a pair
+		// either pass relates is stated as the first states it, and the second only adds.
+		for (boolean ownOrdersWitness : new boolean[] { false, true }) {
+			Map<Object, List<DrugReference>> substances = substanceRows(orderDrugs);
+			// A substance she holds only as orders that have not started is visited LAST (issue #553), so a
+			// pair of a started and a scheduled order is stated from the started side — whose
+			// current-medication clause below is true of it — and names the other as a scheduled order. The
+			// pair key is unordered, so no pair is lost: one the started side does not relate is still reached
+			// from the scheduled one. What does move, on such a chart only, is WHICH chip the maxPairChips cap
+			// keeps inside one rating — the sort below is stable, so a pair with a scheduled-only subject now
+			// trails its equals. On a chart with no such order the visiting order is untouched.
+			for (DrugReference ref : startedSubjectsFirst(orderDrugs, substances, context, bridgedOrders)) {
+				List<DrugReference> substance = substances.remove(ref.substanceGroupKey());
+				if (substance == null || ownOrdersWitness
+						&& !ownOrdersWitnessAPartner(substance, orderDrugs, context, bridgedOrders)) {
 					continue;
 				}
-				// The screen's gate reads the QUESTION alone (see the call site — the pre-answer findings
-				// pass and the post-answer chips pass must gate identically), so a drug the ANSWER named
-				// can be in play beside it, and then addInteractionWarnings has already run this very rule
-				// over these very orders: measured, an answer naming a subject the screen also reaches put
-				// the identical "X interacts with active order Y — Major" line in safetyWarnings TWICE.
-				// Asked of the pair rather than of the rendered chip, so the two arms cannot disagree by
-				// wording — see InteractionPairs. After the pair key above, so the pair is marked seen
-				// either way and the reverse direction cannot re-report it.
-				if (reportedPairs.alreadyReported(ref, matched.partnerKey())) {
-					// Recorded, because the pair WAS related: skipping it silently is what let an empty
-					// kept list assert that the reference data related none of the pairs this screen
-					// enumerated (issue #370). Set at the cede itself and never inferred at the return
-					// from seenPairs.size(), which counts every pair this arm visited however it left
-					// — including the ones StatedInteractionChips collapses, whose exclusion is NOT a
-					// cede and which #339 review round 12 settled as a pair already SHOWN rather than
-					// one found.
+				// Resolved once per subject SUBSTANCE, not per rule, and reduced by the whole group: with the
+				// group as subject, an order any of its rows resolves from is the subject's own order, so a
+				// sibling row may not witness the subject's pair either (see activeOrdersOtherThan).
+				PatientClinicalContext others = activeOrdersOtherThan(substance, orderDrugs, context,
+						bridgedOrders, ownOrdersWitness);
+				// The same reduction as a list of ORDERS, for the bridge (#349). Resolved here beside the
+				// context it mirrors and not at the chip site below, because it is invariant per subject
+				// SUBSTANCE while that site runs once per pair — and this walk calls resolvesFromAny for
+				// every order, which is the term chartOrderBridges' own cost measurement identifies.
+				List<PatientClinicalContext.ActiveDrugOrder> partnerWitnesses =
+						ordersOtherThan(substance, context, bridgedOrders, ownOrdersWitness);
+				// Whether the subject has STARTED (issue #553), over every order as the bridge asks it — per
+				// SUBSTANCE, beside the witnesses it mirrors, rather than once per pair.
+				Date subjectStart = scheduledStartOf(substance, context.getActiveDrugOrders(), bridgedOrders);
+				belowFloor.addAll(belowFloorPairs(substance, subjects, others, severityFloor, orderDrugs, bridgedOrders,
+						keyNames, seenBelowFloor));
+				// This subject's chips, collapsed by mechanism before the cap as the drug-in-play arm's are (ADR
+				// Decisions 99, 190): the cap then counts what a clinician reads, and the extent still counts pairs.
+				List<MechanismStatement> statements = new ArrayList<MechanismStatement>();
+				// bestRulePerPartner applies the severity floor and the hasActiveDrug join and returns at
+				// most ONE rule per partner label, most severe first (#121) — the same grouping, the same
+				// predicate and now the same subject unit the drug-in-play arm gets, asked of the OTHER
+				// orders instead of all of them. Reusing it is what stops this arm keeping a route variant's
+				// Moderate row for a pair whose Major row the other arm reports, and what keeps the cap
+				// below sorting on the severity a clinician would actually be shown.
+				for (SubjectRule matched : bestRulePerPartner(substance, others, severityFloor, orderDrugs)) {
+					DrugReference.Interaction i = matched.rule;
+					// The partner is an active order too, so it was looked up among the order entries rather
+					// than across the whole dataset, and it is carried on the matched rule rather than
+					// re-resolved here (see SubjectRule). Null when that order carries no reference entry of
+					// its own (a substance the dataset does not cover, matched by name): the finding still
+					// stands — the join above is what decides that — and the pair simply keys on the rule's
+					// own label, which no reverse direction can produce.
+					DrugReference partner = matched.partner;
+					String partnerName = partner != null ? keyNames.get(partner)
+							: partnerLabel(i).toLowerCase(Locale.ROOT);
+					// keyNames.get(ref) is the GROUP's key name, ref being the row the group was handed at.
+					// One name per substance rather than one per row, which is what pairKeyNames' token key
+					// already gives wherever another drug's rule names the substance at all — and where none
+					// does, its displayLabel fallback differs per ROW, so before the grouping above two rows
+					// of one substance could key two pairs and chip twice. Now one substance keys once.
+					if (!seenPairs.add(unorderedPairKey(keyNames.get(ref), partnerName))) {
+						continue;
+					}
+					// The screen's gate reads the QUESTION alone (see the call site — the pre-answer findings
+					// pass and the post-answer chips pass must gate identically), so a drug the ANSWER named
+					// can be in play beside it, and then addInteractionWarnings has already run this very rule
+					// over these very orders: measured, an answer naming a subject the screen also reaches put
+					// the identical "X interacts with active order Y — Major" line in safetyWarnings TWICE.
+					// Asked of the pair rather than of the rendered chip, so the two arms cannot disagree by
+					// wording — see InteractionPairs. After the pair key above, so the pair is marked seen
+					// either way and the reverse direction cannot re-report it.
+					if (reportedPairs.alreadyReported(ref, matched.partnerKey())) {
+						// Recorded, because the pair WAS related: skipping it silently is what let an empty
+						// kept list assert that the reference data related none of the pairs this screen
+						// enumerated (issue #370). Set at the cede itself and never inferred at the return
+						// from seenPairs.size(), which counts every pair this arm visited however it left
+						// — including the ones StatedInteractionChips collapses, whose exclusion is NOT a
+						// cede and which #339 review round 12 settled as a pair already SHOWN rather than
+						// one found.
+						//
+						// Unconditional, and in particular NOT narrowed to a partner the dataset resolved
+						// to an entry: partnerKey falls back to the case-folded partnerLabel for the
+						// #155/#290 population, both arms key such a pair on that string, and a cede there
+						// is a cede on both sides of the ledger. `matched.partner != null` here republishes
+						// the false zero for exactly that population, and the case that reddens on it is
+						// PairChipExtentContextTest.aScreenWhoseCededPairIsKeyedOnALabelRatherThanAnEntryStatesNothingToo.
+						cededToDrugInPlayArm = true;
+						continue;
+					}
+					// The SUBSTANCE, not the row this iteration is on, so the chip names the substance and
+					// not whichever of its rows this iteration reached. Since issue #339 that holds for the
+					// PARTNER half too, by the chip's name reading the reconciliation's answer rather than
+					// re-deriving one. It no longer holds for the WITHHELD-pair WARN below, which since
+					// issue #439 names no drug at all — see there.
 					//
-					// Unconditional, and in particular NOT narrowed to a partner the dataset resolved
-					// to an entry: partnerKey falls back to the case-folded partnerLabel for the
-					// #155/#290 population, both arms key such a pair on that string, and a cede there
-					// is a cede on both sides of the ledger. `matched.partner != null` here republishes
-					// the false zero for exactly that population, and the case that reddens on it is
-					// PairChipExtentContextTest.aScreenWhoseCededPairIsKeyedOnALabelRatherThanAnEntryStatesNothingToo.
-					cededToDrugInPlayArm = true;
-					continue;
+					// The naming group (SubstanceSubjects.groupOf's namingGroups map) IS this arm's own
+					// fold, not merely close to it — since issue #238. This method's only call site
+					// (validate(), gated on questionDrugs.isEmpty()) hands namingRows =
+					// resolvedSubstanceRows(questionDrugs, orderEntries), which for THIS arm reduces to
+					// resolvedSubstanceRows(<empty set>, orderEntries): substanceRows(<empty set>) is an
+					// empty map, so the fold does nothing but walk orderEntries and groupFor/add each row
+					// in list order — byte-for-byte the `substances = substanceRows(orderDrugs)` map this
+					// method builds for itself a few lines above, same membership and the same order.
+					// Both rows this loop ever hands subjectOf are drawn from that same orderDrugs list —
+					// ref, always one of substance's own rows, and partner, always
+					// activeOrderEntryFor(orderDrugs, ref, i)'s answer or null — so the lookup always hits
+					// the naming group and never falls through to allGroups (the fuller resolvedRows,
+					// built from inPlay, which can differ from questionDrugs wherever the ANSWER named a
+					// substance the question and the orders did not). There is no re-ordering to have and
+					// no fallback to reach: for this arm the two maps are not merely equal, they are the
+					// same construction over the same list. That is a stronger guarantee than the
+					// question-pair arm gets (its own comment above, near addQuestionPairInteractions' use of
+					// interactionSubject): there, namingRows is substanceRows(questionDrugs) with THIS
+					// arm's own order rows appended on top, by design (issue #175) — a substance the
+					// question names can still pick up an order row in its naming group that the pair loop
+					// itself never iterates, so the two are provably non-empty for every row that arm asks
+					// about but not provably the identical construction the way they are here, where
+					// orderEntries is the only source either map draws from.
+					//
+					// ddinter symmetry is what makes a labelling divergence hypothetically possible at
+					// all, so it is still worth naming even though the reduction above closes it for this
+					// arm: DdiDrugReferenceSource writes each interaction row onto BOTH drugs' entries (its
+					// two partners.computeIfAbsent calls), so a ddinter pair's rule is symmetric or absent
+					// and only a curated json file could carry different rules per direction.
+					// Unified anyway, as a design choice and not only as this arm's happy accident: the
+					// arms must not hold two answers to one question, which is what let them disagree
+					// before issue #236.
+					DrugReference subject = subjects.subjectOf(ref);
+					// This arm cannot fold — classRelationships runs per in-play substance and a screening
+					// question names none — but since issue #339 that no longer decides what the order is
+					// called, or one prescription would answer to two names depending on which question
+					// reached it. The same reconciliation, the same gate.
+					// Not on the second pass (ADR Decision 486): there the partner is witnessed by the subject's own
+					// orders, so the prescription the reconciliation would name it by carries the subject too, and
+					// "Rifampicin interacts with active order Rifampicin and isoniazid" reads as a drug against itself.
+					// The rule's own label names the substance instead.
+					ReconciledPartner reconciled = ownOrdersWitness ? null
+							: reconciledPartnerFor(matched, subjects, coMedications);
+					// Asked of the name the chip is about to print, and of the orders THIS pass used: the
+					// subject's own orders name the subject, and only the orders activeOrdersOtherThan kept
+					// may name the partner (#349 — see chartOrderBridges).
+					String chipPartnerName = reconciled != null ? reconciled.chipName : printedPartnerLabel(i);
+					// Only the orders THIS arm let witness the partner — the same reduction
+					// activeOrdersOtherThan applied to `others` above, through its own predicate, so the
+					// bridge cannot name an order this arm refused as a self-witness.
+					Set<String> matchedNames = new LinkedHashSet<String>();
+					List<SafetyWarning.ChartOrderBridge> bridges = chartOrderBridges(substance, subject,
+						partner, chipPartnerName, context, partnerWitnesses, orderDrugs, bridgedOrders, subjects,
+						matchedNames);
+					// Whether the partner has STARTED (issue #553), over the witnesses this arm kept. A side known
+					// only through orders that have not started is named as scheduled, with its date.
+					Date partnerStart = scheduledStartOf(orderDrugs, partner, partnerWitnesses, bridgedOrders);
+					// TRUE, and this is one of the two ORDER-DRIVEN arms that say so: both of this pair's drugs
+					// are the patient's own prescriptions, so the finding licenses a call about her current
+					// therapy and never a refusal of a proposal nobody made (issue #348). Established here
+					// rather than derived downstream — see SafetyWarning.isAboutACurrentMedication. Still TRUE
+					// where the subject has not started (issue #553): the proposal clause on a question that
+					// proposed nothing is #348's own defect, and it opened a module-composed screening answer
+					// with "No —". The subject's start date is in the detail instead. The visiting order above
+					// gives such a subject to a pair of two not-started orders, and to a pair the started side's
+					// rules do not relate (ADR Decision 126).
+					SafetyWarning chip = (reconciled == null
+							? interactionWarning(subject, i, bridges, true, subjectStart, partnerStart)
+							: interactionWarning(subject, i, reconciled.chipName, reconciled.noteName, null,
+								bridges, true, subjectStart, partnerStart)).withMatchedOrderNames(matchedNames)
+							.withPartnerRows(Collections.singletonMap(chipPartnerName,
+									rowsOfSubstance(orderDrugs, partner)));
+					// Before the candidate is collected rather than after the cap, so the extent this arm
+					// states counts what a clinician can tell apart: a restatement is not a pair that was
+					// found and withheld, it is a pair already shown. Same ledger as the drug-in-play arm —
+					// see StatedInteractionChips, and note that a combination prescription reaches this arm
+					// with both constituents as partners of one subject exactly as it reaches that one.
+					if (!statedChips.isFirstStatementOf(chip)) {
+						continue;
+					}
+					// The RATING and no name (issue #439). Both sides of a screened pair are this patient's
+					// own prescriptions — this arm iterates orderDrugs — so a pair label is two entries of
+					// her medication list, and the WARN below is what wrote them to the server log. The
+					// sibling pairwise arm has always logged its withheld candidates as ratings alone, so
+					// this is that arm's shape and not a new one. The two are not one spelling: there the
+					// dataset's own severity goes through verbatim, so a candidate carrying none prints as
+					// `null`, while here it prints as `unrated`. That is a difference in how a MISSING
+					// rating renders, not in what either line says about the patient. → ADR Decision 102.
+					statements.add(new MechanismStatement(chip, i, chipPartnerName, false, bridges));
 				}
-				// The SUBSTANCE, not the row this iteration is on, so the chip names the substance and
-				// not whichever of its rows this iteration reached. Since issue #339 that holds for the
-				// PARTNER half too, by the chip's name reading the reconciliation's answer rather than
-				// re-deriving one. It no longer holds for the WITHHELD-pair WARN below, which since
-				// issue #439 names no drug at all — see there.
-				//
-				// The naming group (SubstanceSubjects.groupOf's namingGroups map) IS this arm's own
-				// fold, not merely close to it — since issue #238. This method's only call site
-				// (validate(), gated on questionDrugs.isEmpty()) hands namingRows =
-				// resolvedSubstanceRows(questionDrugs, orderEntries), which for THIS arm reduces to
-				// resolvedSubstanceRows(<empty set>, orderEntries): substanceRows(<empty set>) is an
-				// empty map, so the fold does nothing but walk orderEntries and groupFor/add each row
-				// in list order — byte-for-byte the `substances = substanceRows(orderDrugs)` map this
-				// method builds for itself a few lines above, same membership and the same order.
-				// Both rows this loop ever hands subjectOf are drawn from that same orderDrugs list —
-				// ref, always one of substance's own rows, and partner, always
-				// activeOrderEntryFor(orderDrugs, ref, i)'s answer or null — so the lookup always hits
-				// the naming group and never falls through to allGroups (the fuller resolvedRows,
-				// built from inPlay, which can differ from questionDrugs wherever the ANSWER named a
-				// substance the question and the orders did not). There is no re-ordering to have and
-				// no fallback to reach: for this arm the two maps are not merely equal, they are the
-				// same construction over the same list. That is a stronger guarantee than the
-				// question-pair arm gets (its own comment above, near addQuestionPairInteractions' use of
-				// interactionSubject): there, namingRows is substanceRows(questionDrugs) with THIS
-				// arm's own order rows appended on top, by design (issue #175) — a substance the
-				// question names can still pick up an order row in its naming group that the pair loop
-				// itself never iterates, so the two are provably non-empty for every row that arm asks
-				// about but not provably the identical construction the way they are here, where
-				// orderEntries is the only source either map draws from.
-				//
-				// ddinter symmetry is what makes a labelling divergence hypothetically possible at
-				// all, so it is still worth naming even though the reduction above closes it for this
-				// arm: DdiDrugReferenceSource writes each interaction row onto BOTH drugs' entries (its
-				// two partners.computeIfAbsent calls), so a ddinter pair's rule is symmetric or absent
-				// and only a curated json file could carry different rules per direction.
-				// Unified anyway, as a design choice and not only as this arm's happy accident: the
-				// arms must not hold two answers to one question, which is what let them disagree
-				// before issue #236.
-				DrugReference subject = subjects.subjectOf(ref);
-				// This arm cannot fold — classRelationships runs per in-play substance and a screening
-				// question names none — but since issue #339 that no longer decides what the order is
-				// called, or one prescription would answer to two names depending on which question
-				// reached it. The same reconciliation, the same gate.
-				ReconciledPartner reconciled = reconciledPartnerFor(matched, subjects, coMedications);
-				// Asked of the name the chip is about to print, and of the orders THIS pass used: the
-				// subject's own orders name the subject, and only the orders activeOrdersOtherThan kept
-				// may name the partner (#349 — see chartOrderBridges).
-				String chipPartnerName = reconciled != null ? reconciled.chipName : printedPartnerLabel(i);
-				// Only the orders THIS arm let witness the partner — the same reduction
-				// activeOrdersOtherThan applied to `others` above, through its own predicate, so the
-				// bridge cannot name an order this arm refused as a self-witness.
-				Set<String> matchedNames = new LinkedHashSet<String>();
-				List<SafetyWarning.ChartOrderBridge> bridges = chartOrderBridges(substance, subject,
-					partner, chipPartnerName, context, partnerWitnesses, orderDrugs, bridgedOrders, subjects,
-					matchedNames);
-				// Whether the partner has STARTED (issue #553), over the witnesses this arm kept. A side known
-				// only through orders that have not started is named as scheduled, with its date.
-				Date partnerStart = scheduledStartOf(orderDrugs, partner, partnerWitnesses, bridgedOrders);
-				// TRUE, and this is one of the two ORDER-DRIVEN arms that say so: both of this pair's drugs
-				// are the patient's own prescriptions, so the finding licenses a call about her current
-				// therapy and never a refusal of a proposal nobody made (issue #348). Established here
-				// rather than derived downstream — see SafetyWarning.isAboutACurrentMedication. Still TRUE
-				// where the subject has not started (issue #553): the proposal clause on a question that
-				// proposed nothing is #348's own defect, and it opened a module-composed screening answer
-				// with "No —". The subject's start date is in the detail instead. The visiting order above
-				// gives such a subject to a pair of two not-started orders, and to a pair the started side's
-				// rules do not relate (ADR Decision 126).
-				SafetyWarning chip = (reconciled == null
-						? interactionWarning(subject, i, bridges, true, subjectStart, partnerStart)
-						: interactionWarning(subject, i, reconciled.chipName, reconciled.noteName, null,
-							bridges, true, subjectStart, partnerStart)).withMatchedOrderNames(matchedNames)
-						.withPartnerRows(Collections.singletonMap(chipPartnerName,
-								rowsOfSubstance(orderDrugs, partner)));
-				// Before the candidate is collected rather than after the cap, so the extent this arm
-				// states counts what a clinician can tell apart: a restatement is not a pair that was
-				// found and withheld, it is a pair already shown. Same ledger as the drug-in-play arm —
-				// see StatedInteractionChips, and note that a combination prescription reaches this arm
-				// with both constituents as partners of one subject exactly as it reaches that one.
-				if (!statedChips.isFirstStatementOf(chip)) {
-					continue;
+				for (SafetyWarning chip : collapseSharedMechanisms(subjects.subjectOf(ref), statements, true, subjectStart)) {
+					pairs.add(new ScreenedPair(chip, severityPriority(chip.getSeverity()),
+							ChartSearchAiUtils.firstNonBlank(chip.getSeverity(), "unrated"),
+							Math.max(1, chip.namedPartners().size())));
 				}
-				// The RATING and no name (issue #439). Both sides of a screened pair are this patient's
-				// own prescriptions — this arm iterates orderDrugs — so a pair label is two entries of
-				// her medication list, and the WARN below is what wrote them to the server log. The
-				// sibling pairwise arm has always logged its withheld candidates as ratings alone, so
-				// this is that arm's shape and not a new one. The two are not one spelling: there the
-				// dataset's own severity goes through verbatim, so a candidate carrying none prints as
-				// `null`, while here it prints as `unrated`. That is a difference in how a MISSING
-				// rating renders, not in what either line says about the patient. → ADR Decision 102.
-				statements.add(new MechanismStatement(chip, i, chipPartnerName, false, bridges));
-			}
-			for (SafetyWarning chip : collapseSharedMechanisms(subjects.subjectOf(ref), statements, true, subjectStart)) {
-				pairs.add(new ScreenedPair(chip, severityPriority(chip.getSeverity()),
-						ChartSearchAiUtils.firstNonBlank(chip.getSeverity(), "unrated"),
-						Math.max(1, chip.namedPartners().size())));
 			}
 		}
 		if (pairs.isEmpty()) {
@@ -10082,13 +10125,16 @@ public class DrugSafetyValidator {
 	 *         below treats such a disagreement as untrusted.
 	 *
 	 *         <p>Restoration reaches every order EXCEPT one that is itself the subject's own, and that
-	 *         bounds what this can find: when every order carrying one member of a pair also carries the
-	 *         other's code, both members' orders are own-classified from both sides and the pair goes
-	 *         unreported — two brand-named, ATC-mapped multi-substance orders covering the same two
-	 *         substances (measured shape: two differently-named orders both mapped to
-	 *         {@code C10AA01} + {@code J01FA09}). That is the safe direction — a pair missed, never one
-	 *         invented — and it cannot be told from the one-order case without more order structure than
-	 *         a code set carries, which is why the one-order suppression wins.
+	 *         bounds what the first pass can find: when every order carrying one member of a pair also
+	 *         carries the other, both members' orders are own-classified from both sides — two
+	 *         multi-substance orders covering the same two substances (measured shapes: two
+	 *         differently-named orders both mapped to {@code C10AA01} + {@code J01FA09}; the public
+	 *         demo's "Rifampicin and isoniazid" beside "Isoniazid / pyrazinamide / rifampin"). With
+	 *         {@code ownOrdersWitness}, the screen's second pass for a subject two or more orders carry,
+	 *         those own orders witness what they carry beside the subject, through the co-resolved
+	 *         entries' reference names and codes and never their own names (ADR Decision 486). A single
+	 *         order is still never its own constituents' pair: that subject is carried by one order and
+	 *         gets no second pass.
 	 *
 	 *         <p>A nameless order used to be a second such bound, its codes reaching the union while it
 	 *         was itself absent from the list so nothing could restore them. Issue #290 removed it, and
@@ -10115,7 +10161,8 @@ public class DrugSafetyValidator {
 	 *         no order identity there is nothing to attribute an entry to.
 	 */
 	private static PatientClinicalContext activeOrdersOtherThan(List<DrugReference> subjectRows,
-			List<DrugReference> orderDrugs, PatientClinicalContext context, BridgedOrders bridged) {
+			List<DrugReference> orderDrugs, PatientClinicalContext context, BridgedOrders bridged,
+			boolean ownOrdersWitness) {
 		Set<String> names = new LinkedHashSet<String>();
 		Set<String> referenceNames = new LinkedHashSet<String>();
 		Set<String> codes = new LinkedHashSet<String>(context.getActiveDrugAtcCodes());
@@ -10170,6 +10217,17 @@ public class DrugSafetyValidator {
 				for (DrugReference coResolved : orderDrugs) {
 					if (!subjectRows.contains(coResolved) && resolvesFrom(coResolved, order, bridged)) {
 						ownCodes.addAll(coResolved.normalizedAtcCodes());
+						if (ownOrdersWitness) {
+							// The subject is in another order too, so a substance this order carries
+							// beside it comes from a different order than that one (ADR Decision 486).
+							// Witnessed by the co-resolved entry's reference names and the codes this
+							// order records for it, never by the order's own names: those name the
+							// subject as well, and a partner token inside one is the self-witness above.
+							referenceNames.addAll(coResolved.getAliases());
+							Set<String> carried = new LinkedHashSet<String>(order.getAtcCodes());
+							carried.retainAll(coResolved.normalizedAtcCodes());
+							otherCodes.addAll(carried);
+						}
 					}
 				}
 			}

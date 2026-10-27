@@ -23344,3 +23344,32 @@ clinician drops the possessive as often as not.
 - The answer is the same for a drug she is not on: Decision 341 says which of her medications it is not.
 
 Pinned by `ClinicianWordingsTest.continuingADrugAskedWithoutHerIsContinuingHerDrug`.
+
+## Decision 481: A pair joined "and her", or named by the patient on the other, is the pair question it spells
+
+**Status: Accepted** (October 2026) — found asking 25 further wordings of 15 patients on the 3.7.1 standalone on 2026-10-27.
+
+### Context
+
+The model cleared three more wordings of fluconazole with a patient's nevirapine:
+
+- *"Should I worry about fluconazole and her nevirapine?"*, on 14 of 15 patients;
+- *"Nevirapine patient - fluconazole safe?"*, on 13;
+- *"Fluconazole ok? (pt on NVP)"*, on 9.
+
+Decision 456's residual pair reading misses each:
+
+- it admitted no possessive before the second drug except in Decision 461's *"to her"*;
+- it read no *"patient"* right after the first drug;
+- it admitted no *"pt"* between the two drugs.
+
+### The decision
+
+- A possessive may stand before the second drug after *"and"*: *"X and her Y"*. Never after *"with"*: *"with her
+  pregnancy"* names a factor as often as *"with her nevirapine"* names a drug, and the unrecognised-name scan tries
+  words in the drugs' places.
+- *"patient"* or *"pt"* right after the first drug joins the second: *"Y patient - X safe?"*, the patient named by the
+  drug she is on.
+- *"pt"* or *"patient"* between the two drugs is admitted right before *"on"* or *"taking"*: *"X ok? (pt on Y)"*.
+
+Pinned by `ClinicianWordingsTest.aPairJoinedAndHerOrNamedByThePatientOnTheOtherIsThePairQuestionItSpells`.

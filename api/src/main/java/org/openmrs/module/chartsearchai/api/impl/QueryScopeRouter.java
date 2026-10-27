@@ -2123,6 +2123,10 @@ public final class QueryScopeRouter {
 		if ("to".equals(word)) {
 			return words.contains("add") || words.contains("adding");
 		}
+		// "Nevirapine patient - fluconazole safe?" — the patient named by the first drug (ADR Decision 481)
+		if (("patient".equals(word) || "pt".equals(word)) && join == first + 1) {
+			return true;
+		}
 		// and "Pt on nevirapine. Starting warfarin." (ADR Decision 469)
 		if (RESIDUAL_PAIR_STARTS.contains(word)) {
 			return join == first + 1 && first > 0 && "on".equals(words.get(first - 1));
@@ -2135,7 +2139,8 @@ public final class QueryScopeRouter {
 		"starting", "start", "adding", "add", "giving", "give"));
 
 	/** The words {@link #joinedInItsPhrase} admits between the two drugs. */
-	private static final Set<String> RESIDUAL_PAIR_PHRASE_WORDS = new HashSet<String>(Arrays.asList("of", "to", "plan",
+	private static final Set<String> RESIDUAL_PAIR_PHRASE_WORDS = new HashSet<String>(Arrays.asList("patient", "pt", "of", "to",
+		"plan",
 		"planning", "planned", "starting", "start", "adding", "add", "giving", "give"));
 
 	/** The words a question about TWO drugs may join them with and still be read without a shape (ADR Decision 456). */
@@ -2180,7 +2185,10 @@ public final class QueryScopeRouter {
 			join--;
 		}
 		boolean phrased = joinedInItsPhrase(wordsWithTheDrugsMarked, first, join);
-		if (afterHer ? !phrased : !RESIDUAL_PAIR_JOINS.contains(wordsWithTheDrugsMarked.get(join)) && !phrased) {
+		// and after "and her": "Should I worry about fluconazole and her nevirapine?" — never "with her", where a factor such
+		// as her pregnancy stands as often as a drug (ADR Decision 481)
+		if (afterHer ? !phrased && !"and".equals(wordsWithTheDrugsMarked.get(join))
+				: !RESIDUAL_PAIR_JOINS.contains(wordsWithTheDrugsMarked.get(join)) && !phrased) {
 			return Residual.NONE;
 		}
 		// Between the two, only what joins them or says what is asked of them: "Will rifampicin harm her with nevirapine?" —
@@ -2192,6 +2200,11 @@ public final class QueryScopeRouter {
 			// "Warfarin: any issues with nevirapine?" — "any" only before a word saying what is asked (ADR Decision 469)
 			if ("any".equals(word) && i + 1 < between.size()
 					&& (RESIDUAL_HARMS.contains(between.get(i + 1)) || RESIDUAL_INTERACTS.contains(between.get(i + 1)))) {
+				continue;
+			}
+			// "Fluconazole ok? (pt on nevirapine)" — the patient, right before what she is on (ADR Decision 481)
+			if (("pt".equals(word) || "patient".equals(word)) && i + 1 < between.size()
+					&& ("on".equals(between.get(i + 1)) || "taking".equals(between.get(i + 1)))) {
 				continue;
 			}
 			// and what it asks of them as an interaction: "Clarithromycin: any interactions with efavirenz?" (ADR Decision 471)

@@ -1789,6 +1789,22 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/** ADR Decision 481: two drugs joined "and her", a drug after "a patient on" another named first, and "pt on" after a
+	 *  proposal, are the pair questions they spell. */
+	@Test
+	public void aPairJoinedAndHerOrNamedByThePatientOnTheOtherIsThePairQuestionItSpells() {
+		String[][] pairs = { { "Should I worry about warfarin and her nevirapine?", "Is warfarin dangerous with her nevirapine?" },
+			{ "Nevirapine patient - warfarin safe?", "Is warfarin safe for a patient on nevirapine?" },
+			{ "Warfarin ok? (pt on nevirapine)", "Is warfarin safe for a patient on nevirapine?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+		// A word after "and her" that is no drug the data knows stays out of the pair: "Is warfarin risky for her pregnancy?"
+		assertNull(ask("Is warfarin risky for her pregnancy?"));
+	}
+
 	private static String ask(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

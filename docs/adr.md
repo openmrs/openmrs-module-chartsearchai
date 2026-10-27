@@ -23438,3 +23438,27 @@ this second reading of *"her X"* never consulted it.
 - `UnrecognisedDrugName` reads the same predicate where Decision 482 read its own copy.
 
 Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aLabValueNamedAsHersCarriesNoChip`.
+
+## Decision 485: "Her X dose" asked safe is her X asked safe, the dose said not checked
+
+**Status: Accepted** (October 2026) — found asking 30 further wordings of 15 patients on the 3.7.1 standalone on 2026-10-27.
+
+### Context
+
+*"Is her nevirapine dose safe?"* went to the model, which answered *"Nevirapine can be given, with one caution"* on 8 of
+15 patients. *"Is her nevirapine safe?"* is the module's (Decision 374). Decision 269 reads past a stated dose (*"her
+nevirapine 200 mg"*) and says the dose was not checked. It read no dose named without an amount: *"her nevirapine
+dose"*, *"the dose of her nevirapine"*.
+
+### The decision
+
+- `THE_DOSE_OF_THE_DRUG` reads her dose named without an amount: *"her X dose"* and *"(the) dose of her X"*. It is set
+  aside wherever a stated dose is.
+- It reads only a drug named as hers. In the first build it read any *"X dose"*. *"Nevirapine dose with warfarin?"* then
+  read as the bare pair *"nevirapine with warfarin"*. It lost Decision 446's reading of it as Decision 432's dose
+  adjustment for the pair.
+  `ClinicianWordingsTest.aDrugAffectedByOrDosedWithAnotherIsTheQuestionItSpells` caught it.
+- Once it is set aside, the question is answered as its dose-free wording is, and
+  `statesADose` stamps it so the answer says the dose was not checked.
+
+Pinned by `ClinicianWordingsTest.herDrugsDoseAskedSafeIsHerDrugAskedSafeWithTheDoseNotChecked`.

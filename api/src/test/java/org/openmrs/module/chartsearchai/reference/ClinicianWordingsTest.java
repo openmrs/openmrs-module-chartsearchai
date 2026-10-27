@@ -1827,6 +1827,19 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/** ADR Decision 485: "her X dose" asked safe is her X asked safe, the dose said not checked. */
+	@Test
+	public void herDrugsDoseAskedSafeIsHerDrugAskedSafeWithTheDoseNotChecked() {
+		String[][] pairs = { { "Is her nevirapine dose safe?", "Is her nevirapine safe?" },
+			{ "Is her warfarin dose ok?", "Is her warfarin ok?" }, { "Is the dose of her nevirapine safe?", "Is her nevirapine safe?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+			assertTrue(chart(pair[0]).statesADose(), pair[0] + " says the dose was not checked");
+		}
+	}
+
 	private static String ask(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

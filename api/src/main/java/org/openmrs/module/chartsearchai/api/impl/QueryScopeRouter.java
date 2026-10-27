@@ -2327,6 +2327,11 @@ public final class QueryScopeRouter {
 			// how often alone, "fluconazole once a week" (ADR Decision 428)
 			+ FREQUENCY + ")(?= |$)");
 
+	/** "her nevirapine dose", "the dose of her nevirapine" — HER dose named without an amount (ADR Decision 485). Only of a
+	 *  drug named as hers: "Nevirapine dose with warfarin?" asks of a dose beside the other drug, which its own shape reads. */
+	private static final Pattern THE_DOSE_OF_THE_DRUG = Pattern.compile("(?<=^| )(?:(?:the )?(?:dose|dosage) of (" + POSSESSIVE
+			+ " " + D + ")|(" + POSSESSIVE + " " + D + ") (?:dose|dosage))(?= |$)");
+
 	/**
 	 * "Is it safe to increase her simvastatin dose?", "Is it safe to increase her simvastatin to 40 mg?", "Should I reduce
 	 * her simvastatin dose?" — whether to change the dose of her drug (ADR Decision 346): asked about her drug beside her
@@ -2399,8 +2404,8 @@ public final class QueryScopeRouter {
 
 	/** {@code joined} without the dose stated beside its drug, or {@code null} where it states none (ADR Decisions 269, 326). */
 	private static String withoutAStatedDose(String joined) {
-		String without = DOSE_AFTER_THE_DRUG.matcher(DOSE_BEFORE_THE_DRUG.matcher(
-				AMOUNT_IN_WORDS_BEFORE_THE_DRUG.matcher(joined).replaceAll("$1")).replaceAll("$1")).replaceAll("$1");
+		String without = DOSE_AFTER_THE_DRUG.matcher(DOSE_BEFORE_THE_DRUG.matcher(THE_DOSE_OF_THE_DRUG.matcher(
+				AMOUNT_IN_WORDS_BEFORE_THE_DRUG.matcher(joined).replaceAll("$1")).replaceAll("$1$2")).replaceAll("$1")).replaceAll("$1");
 		return without.equals(joined) ? null : without;
 	}
 

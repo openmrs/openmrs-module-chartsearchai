@@ -2796,7 +2796,8 @@ public final class QueryScopeRouter {
 			+ "|dinner|supper|soup|yoghurt|yogurt|vegetables|meat|fish|chicken|sweets|sugar|honey))";
 
 	/** The words a food is taken beside her drug with (ADR Decision 464). */
-	private static final String BESIDE_HER_DRUG = "(?:with|while on|while taking|alongside|together with) (?:" + POSSESSIVE + " )?";
+	private static final String BESIDE_HER_DRUG = "(?:with|while on|while taking|alongside|together with|after|before) (?:"
+			+ POSSESSIVE + " )?";
 
 	private static final List<Pattern> HOW_TO_TAKE_A_DRUG_SHAPES = shapes(
 			"(?:when|what time|how) (?:should|do|does|can|must|would) (?:she|he|they|the patient|this patient) take (?:"
@@ -2814,7 +2815,9 @@ public final class QueryScopeRouter {
 			// any food she eats, and of what she drinks or has only an everyday food or drink, since a word there may be a
 			// drug, misspelt or not, which the module checks (ADR Decision 464)
 			"(?:can|could|may|should) (?:she|he|they|the patient|this patient) (?:eat \\p{L}+(?: \\p{L}+){0,2}|(?:drink|have) "
-					+ EVERYDAY_FOOD + ") " + BESIDE_HER_DRUG + D);
+					+ EVERYDAY_FOOD + ") " + BESIDE_HER_DRUG + D
+					// and after or before her dose: "Can she eat oranges after her nevirapine dose?" (ADR Decision 476)
+					+ "(?: dose| doses| tablets?| pills?)?");
 
 	/** The possessives naming the drug as hers. */
 	private static final Set<String> RESIDUAL_POSSESSIVES = new HashSet<String>(Arrays.asList("her", "his", "their",

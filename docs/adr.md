@@ -23241,3 +23241,23 @@ drug, so the branch needed two spaces in a row. Only the *"if she takes"* branch
 - All are answered as the monitoring question is: what relates the two, under no lead (Decision 252).
 
 Pinned by `ClinicianWordingsTest.whatToWatchOrMonitorOnTwoDrugsIsTheMonitoringQuestion`.
+
+## Decision 476: A food after or before her drug's dose carries no drug-safety material, as one with it does
+
+**Status: Accepted** (October 2026) — found asking 8 timing wordings of 15 patients on the 3.7.1 standalone on 2026-10-27.
+
+### Context
+
+*"Can she eat oranges after her nevirapine dose?"* is a food question. Yet its answer carried nevirapine's interactions
+with her other medications as chips on 9 of 15 patients. Decision 464 hands the model a food taken WITH her drug as a
+question of how she takes it, with no drug-safety material. Its shape joined the food to her drug by *"with"*, *"while
+on"*, *"while taking"*, *"alongside"* and *"together with"*, never by *"after"* or *"before"*.
+
+### The decision
+
+- `BESIDE_HER_DRUG` reads *"after"* and *"before"* too.
+- The food shape of `HOW_TO_TAKE_A_DRUG_SHAPES` reads *"dose"*, *"tablets"* or *"pills"* after her drug.
+- *"Can she eat F after / before her X (dose)?"* is a question of how she takes it, as Decision 464's are.
+- A second drug there is still two drugs and never such a question: *"Can she have ibuprofen after her nevirapine?"*.
+
+Pinned by `ClinicianWordingsTest.aFoodAfterOrBeforeHerDrugsDoseCarriesNoDrugSafetyMaterial`.

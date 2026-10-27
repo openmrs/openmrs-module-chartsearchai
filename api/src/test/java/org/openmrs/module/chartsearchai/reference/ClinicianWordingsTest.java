@@ -1729,6 +1729,18 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/** ADR Decision 476: a food after or before her drug's dose carries no drug-safety material, as one with it does. */
+	@Test
+	public void aFoodAfterOrBeforeHerDrugsDoseCarriesNoDrugSafetyMaterial() {
+		for (String question : new String[] { "Can she eat oranges after her nevirapine dose?", "Can she drink milk before her efavirenz?",
+			"Can she have tea after her nevirapine?" }) {
+			org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart asked = chart(question);
+			assertTrue(asked.asksOnlyAboutADrugsRecord(), question);
+			assertNull(asked.getModuleAnswer(), question);
+		}
+		assertFalse(chart("Can she have ibuprofen after her nevirapine?").asksOnlyAboutADrugsRecord(), "two drugs");
+	}
+
 	private static String ask(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

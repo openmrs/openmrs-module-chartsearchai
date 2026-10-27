@@ -22998,3 +22998,20 @@ switch only after a verb.
   `aPairJoinedByAVerbAPlanOrTheWordsOnTopOfIsThePairQuestionItSpells` now points here.
 
 Pinned by `ClinicianWordingsTest.aDrugInsteadOfAnotherWithNoVerbIsTheSwitchItSpells`.
+
+## Decision 466: Two drugs "at once" are two drugs together
+
+**Status: Accepted** (October 2026) — found asking 30 further wordings of 15 patients on the 3.7.1 standalone on 2026-10-27.
+
+### Context
+
+*"Fluconazole and nevirapine at once?"* went to the model, which answered *"Fluconazole can be given with Nevirapine"*
+on 13 of 15 patients. *"Fluconazole and nevirapine together?"* is the module's (Decision 444). The pair grammars read
+*"together"*, *"at the same time"*, *"concurrently"* and *"simultaneously"*, never *"at once"*.
+
+### The decision
+
+- `AT_ONCE`, the passive *"be given … together"* tail and Decision 444's verbless shape read *"(all) at once"* where they
+  read *"together"*. The question is answered as its *"together"* wording is.
+
+Pinned by `ClinicianWordingsTest.twoDrugsAtOnceAreTwoDrugsTogether`.

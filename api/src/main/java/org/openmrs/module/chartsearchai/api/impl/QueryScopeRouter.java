@@ -879,8 +879,8 @@ public final class QueryScopeRouter {
 	/** Several drug slots after "with": "with her nevirapine and lopinavir" (ADR Decision 263). */
 	private static final String HER_DS = HER_D + "(?:(?: and)? " + HER_D + ")*";
 
-	/** "together", "at the same time" — two drugs given at once (ADR Decision 432). */
-	private static final String AT_ONCE = "(?: together| at the same time| concurrently| simultaneously)?";
+	/** "together", "at the same time" — two drugs given at once (ADR Decision 432), and "(all) at once" (ADR Decision 466). */
+	private static final String AT_ONCE = "(?: together| at the same time| concurrently| simultaneously| (?:all )?at once)?";
 
 	/**
 	 * The question shapes asking whether TWO drugs may be given together, over {@link #words} with each drug's name
@@ -907,7 +907,7 @@ public final class QueryScopeRouter {
 			// and "go together" (ADR Decision 429)
 			"(?:can|could|may|should) " + HER_D + " (?:and|with) " + HER_D
 					+ " (?:go|be (?:safely )?(?:given|started|prescribed|administered|taken|used|co administered|coadministered|co prescribed"
-					+ "|coprescribed|combined))(?: together| at the same time| concurrently| simultaneously)?(?: safely)?(?: (?:to|for) "
+					+ "|coprescribed|combined))(?: together| at the same time| concurrently| simultaneously| (?:all )?at once)?(?: safely)?(?: (?:to|for) "
 					+ PATIENT + ")?(?: now| today)?",
 			// and "co-administered" (ADR Decision 428)
 			"(?:can|could|may|should) " + HER_D + " be (?:safely )?(?:given|started|prescribed|administered|taken|used|co administered"
@@ -954,7 +954,7 @@ public final class QueryScopeRouter {
 			// "Rifampicin while on nevirapine?", "Rifampicin and nevirapine at the same time?", "Ibuprofen and aspirin together?"
 			// (ADR Decision 444)
 			HER_D + " (?:while|when) (?:on|taking) " + HER_D,
-			HER_D + " (?:and|with|plus) " + HER_D + " (?:together|at the same time|concurrently|simultaneously)",
+			HER_D + " (?:and|with|plus) " + HER_D + " (?:together|at the same time|concurrently|simultaneously|(?:all )?at once)",
 			// "Fluconazole and rifampicin, can they be given together?" (ADR Decision 415)
 			HER_D + " and " + HER_D + " (?:can|could|may|should) they be (?:safely )?(?:given|taken|used|combined|mixed)"
 					+ "(?: together)?(?: (?:to|for) " + PATIENT + ")?",

@@ -1629,6 +1629,20 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/** ADR Decision 466: two drugs "at once" are two drugs together. */
+	@Test
+	public void twoDrugsAtOnceAreTwoDrugsTogether() {
+		String[][] pairs = { { "Warfarin and nevirapine at once?", "Warfarin and nevirapine together?" },
+			{ "Can I give warfarin and nevirapine at once?", "Can I give warfarin and nevirapine together?" },
+			{ "Can she take warfarin and nevirapine at once?", "Can she take warfarin and nevirapine together?" },
+			{ "Is it safe to give warfarin and nevirapine all at once?", "Is it safe to give warfarin and nevirapine together?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+	}
+
 	private static String ask(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

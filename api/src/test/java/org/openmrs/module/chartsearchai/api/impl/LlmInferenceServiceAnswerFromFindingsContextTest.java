@@ -1738,6 +1738,28 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		}
 	}
 
+	/**
+	 * A question asking whether she was given two drugs together is her history too, and puts no finding about GIVING the
+	 * one she is not on in the prompt (ADR Decision 468). On the 3.7.1 standalone <em>"Was fluconazole given with
+	 * nevirapine?"</em> was answered "Fluconazole can be given with Nevirapine, with one caution" on 6 of 15 patients.
+	 */
+	@Test
+	public void aHistoryQuestionAboutTwoDrugsCarriesNoFindingAboutGivingTheOneSheIsNotOn() {
+		boolean proposalCarriesIt = false;
+		for (Finding finding : findingsInThePromptFor("Can I give her ibuprofen with aspirin?", shipped())) {
+			proposalCarriesIt |= finding.text.startsWith("Ibuprofen interacts with active order");
+		}
+		assertTrue(proposalCarriesIt, "precondition: a proposal of the two carries ibuprofen's finding against her aspirin");
+
+		for (String question : new String[] { "Was ibuprofen given with aspirin?", "Has she taken ibuprofen and aspirin together?",
+				"Did she take ibuprofen with aspirin before?", "Was she ever on ibuprofen and aspirin?" }) {
+			for (Finding finding : findingsInThePromptFor(question, shipped())) {
+				assertFalse(finding.text.startsWith("Ibuprofen interacts with active order"),
+						question + " carries no finding about giving ibuprofen: " + finding.text);
+			}
+		}
+	}
+
 	/** On a question asking whether she has ever taken a drug she IS taking, that drug's conflicts with her other
 	 *  orders stay (ADR Decision 151): they are her chart's, not a proposal's. Her warfarin relates Major to her aspirin. */
 	@Test

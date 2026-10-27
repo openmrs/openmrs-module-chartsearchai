@@ -3077,6 +3077,28 @@ public final class QueryScopeRouter {
 	}
 
 	/**
+	 * The question shapes asking whether the patient WAS given two drugs together — her history, as {@link #HISTORY_SHAPES}
+	 * asks of one (ADR Decision 468): "Was fluconazole given with nevirapine?", "Has she taken X and Y together?", "Did she
+	 * take X with Y before?", "Was she ever on X and Y?". Past tense only: "Is she on X and Y?" is Decision 458's.
+	 */
+	private static final List<Pattern> PAIR_HISTORY_SHAPES = shapes(
+			"(?:was|were|has|have) " + D + " (?:ever )?(?:been )?(?:given|prescribed|taken|used|administered|co administered"
+					+ "|coadministered|combined) (?:with|alongside|together with) " + D + "(?: (?:to|for) " + PATIENT + ")?"
+					+ "(?: together)?" + BEFORE,
+			"(?:has|have) " + SUBJECT + " (?:ever )?(?:taken|used|had|received|been on|been given|been prescribed) (?:both )?" + D
+					+ " (?:and|with|alongside) " + D + "(?: together| at the same time)?" + BEFORE,
+			"did " + SUBJECT + " (?:ever )?(?:take|use|have|receive|get) (?:both )?" + D + " (?:and|with|alongside) " + D
+					+ "(?: together| at the same time)?" + BEFORE,
+			"(?:was|were) " + SUBJECT + " (?:ever )?(?:on|given|prescribed) (?:both )?" + D + " (?:and|with|alongside) " + D
+					+ "(?: together| at the same time)?" + BEFORE);
+
+	/** Whether a question asks whether she was given two drugs together, and nothing else — one of {@link
+	 *  #PAIR_HISTORY_SHAPES} (ADR Decision 468). Fail-CLOSED as {@link #asksWhetherToGiveADrug} is. */
+	public static boolean asksWhetherSheWasGivenTwoDrugsTogether(List<String> wordsWithTheDrugsMarked) {
+		return fitsAShape(wordsWithTheDrugsMarked, PAIR_HISTORY_SHAPES);
+	}
+
+	/**
 	 * Whether a question naming no drug asks to screen the patient's OWN medications against each other
 	 * and nothing else — one of {@link #SCREEN_SHAPES}, for the reason {@link #asksWhetherToGiveADrug}
 	 * gives. Issue #469. It does not ask {@link #isInteractionScreening} as well, and the reason is its

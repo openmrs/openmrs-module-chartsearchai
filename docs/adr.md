@@ -23051,3 +23051,26 @@ Test literals pinned the old lead over arrangements DDInter rates `Unknown` (Pre
 and Metformin in `LlmInferenceServiceAnswerFromFindingsContextTest`). They now state the new lead. That is this decision's spec change, made on the owner's request, and not an accommodation.
 
 Pinned by `ScreenBelowFloorPairsTest`, over the shipped knowledge base as production loads it.
+## Decision 468: Whether she was given two drugs together is her history, and carries no finding about giving them
+
+**Status: Accepted** (October 2026) — found asking 30 further wordings of 15 patients on the 3.7.1 standalone on 2026-10-27.
+
+### Context
+
+*"Was fluconazole given with nevirapine?"* asks about her history. The model answered *"Fluconazole can be given with
+Nevirapine, with one caution"* on 6 of 15 patients: a proposal's verdict, written from the findings about giving
+fluconazole that the prompt carried. Decision 151 keeps those findings off a question asking whether she has ever taken
+ONE drug. `HISTORY_SHAPES` reads one drug, and no grammar read the past tense of a pair.
+
+### The decision
+
+- `PAIR_HISTORY_SHAPES` (`asksWhetherSheWasGivenTwoDrugsTogether`) reads *"Was / has X (ever) been given / taken with Y
+  (before)?"*, *"Has she taken X and Y (together)?"*, *"Did she take X with Y?"* and *"Was she ever on X and Y?"*.
+- Where it reads the question, `DrugReferenceInjector` takes both drugs' rows as Decision 151 takes the one drug's row.
+  The findings and chips about giving either drug are kept off; those about a medication she is on stay, as Decision 151
+  keeps them. The model answers from her records.
+- It is a grammar of its own, never part of `HISTORY_SHAPES`. Decision 155's module answer to a one-drug history question
+  states every order of THAT drug, and two drugs are not its question.
+- The present tense stays Decision 458's: *"Is she on X and Y?"* is answered with which she is on and what relates them.
+
+Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aHistoryQuestionAboutTwoDrugsCarriesNoFindingAboutGivingTheOneSheIsNotOn`.

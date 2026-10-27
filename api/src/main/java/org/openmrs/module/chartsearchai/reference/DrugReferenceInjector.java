@@ -700,9 +700,11 @@ public class DrugReferenceInjector {
 				listed, pairExtent);
 		// A question asking whether she has ever taken the drug it names carries no finding about GIVING it (ADR
 		// Decision 151): the model answered such a question with the proposal's verdict, "Acetaminophen can be given,
-		// but there are cautions", from those findings. The same test the published chips are put to.
+		// but there are cautions", from those findings. The same test the published chips are put to. Whether she was given
+		// two drugs together is her history as well (ADR Decision 468).
 		List<String> historyQuestionDrugRows = !questionDrugs.isEmpty()
-				&& QueryScopeRouter.asksWhetherSheHasTakenADrug(wordsBesideItsNames(question, questionDrugs))
+				&& (QueryScopeRouter.asksWhetherSheHasTakenADrug(wordsBesideItsNames(question, questionDrugs))
+						|| QueryScopeRouter.asksWhetherSheWasGivenTwoDrugsTogether(wordsBesideItsNames(question, questionDrugs)))
 						? rowIds(questionDrugs)
 						: Collections.<String> emptyList();
 		if (!historyQuestionDrugRows.isEmpty()) {

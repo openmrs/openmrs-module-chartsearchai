@@ -23397,3 +23397,22 @@ and a non-drug question was poisoned with a drug-check answer.
   follows the precedent of `NOT_A_NAME`, which already holds *"blood"* and *"oxygen"*.
 
 Pinned by `ClinicianWordingsTest.aLabValueNamedAsHersIsHerResultAndNoDrug`.
+
+## Decision 483: A missed or skipped dose of her drug is how she takes it, and carries no drug-safety material
+
+**Status: Accepted** (October 2026) — found asking 30 further wordings of 15 patients on the 3.7.1 standalone on 2026-10-27.
+
+### Context
+
+*"Can she skip a dose of nevirapine?"* asks about adherence, not an interaction. Yet on 9 of 15 patients it carried
+nevirapine's interactions with her other medications as chips. On 7 the model answered with the proposal's verdict,
+*"Nevirapine can be given, with one caution"*, which answers nothing that was asked. Decision 450 hands the model a
+question of how she takes her drug with no drug-safety material, but its shapes read no dose missed.
+
+### The decision
+
+- `HOW_TO_TAKE_A_DRUG_SHAPES` reads *"Can she skip / miss (a) dose of (her) X?"*, *"What (happens) if she misses / forgets
+  (a dose of) (her) X?"* and *"What should she do if she misses / forgets her X?"*.
+- They are handed the model with no drug-safety material, as Decision 450's questions are.
+
+Pinned by `ClinicianWordingsTest.aMissedOrSkippedDoseOfHerDrugCarriesNoDrugSafetyMaterial`.

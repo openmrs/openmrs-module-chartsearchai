@@ -2859,7 +2859,13 @@ public final class QueryScopeRouter {
 					+ POSSESSIVE + " )?" + D,
 			// "She is on nevirapine. Can she eat oranges?", "Can she have oranges? She is on nevirapine." (ADR Decision 478)
 			SHE_IS_ON_HER_D + " " + A_FOOD_OR_ACTIVITY_ASKED,
-			A_FOOD_OR_ACTIVITY_ASKED + " " + SHE_IS_ON_HER_D);
+			A_FOOD_OR_ACTIVITY_ASKED + " " + SHE_IS_ON_HER_D,
+			// "Can she skip a dose of nevirapine?", "What if she misses a dose of her efavirenz?", "What should she do if she
+			// forgets her nevirapine?" — a dose missed, which no finding weighs (ADR Decision 483)
+			"(?:(?:can|could|may|should) (?:she|he|they|the patient|this patient) (?:skip|miss)|(?:what|what happens) if (?:she|he|they"
+					+ "|the patient) (?:misses|missed|skips|skipped|forgets|forgot)|what should (?:she|he|they) do if (?:she|he|they) "
+					+ "(?:misses|skips|forgets)) (?:(?:a|one|her|his|their|the) )?(?:dose|doses|tablet|pill)? ?(?:of )?(?:"
+					+ POSSESSIVE + " )?" + D + "(?: dose)?");
 
 	/** The possessives naming the drug as hers. */
 	private static final Set<String> RESIDUAL_POSSESSIVES = new HashSet<String>(Arrays.asList("her", "his", "their",

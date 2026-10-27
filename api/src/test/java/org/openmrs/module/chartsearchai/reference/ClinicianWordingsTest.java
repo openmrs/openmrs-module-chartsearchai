@@ -1816,6 +1816,17 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		assertNotNull(ask("Can I give her potassium?"), "potassium given her is a drug proposed");
 	}
 
+	/** ADR Decision 483: a missed or skipped dose of her drug is how she takes it, and carries no drug-safety material. */
+	@Test
+	public void aMissedOrSkippedDoseOfHerDrugCarriesNoDrugSafetyMaterial() {
+		for (String question : new String[] { "Can she skip a dose of nevirapine?", "What if she misses a dose of her efavirenz?",
+			"What should she do if she forgets her nevirapine?", "Can she miss one dose of nevirapine?" }) {
+			org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart asked = chart(question);
+			assertTrue(asked.asksOnlyAboutADrugsRecord(), question);
+			assertNull(asked.getModuleAnswer(), question);
+		}
+	}
+
 	private static String ask(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

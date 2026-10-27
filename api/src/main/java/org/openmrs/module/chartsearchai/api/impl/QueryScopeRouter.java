@@ -1512,8 +1512,11 @@ public final class QueryScopeRouter {
 	 *  nothing else of it (ADR Decision 391). */
 	private static final String BEFORE_AN_OCCASION = "(?: (?:before|ahead of) (?:the |her |his |their )?\\p{L}+)?";
 
-	/** The speaker's plan, before "to" and the verb: "Want to stop nevirapine?" asks whether to stop it (ADR Decision 498). */
-	private static final String A_PLAN_TO = "(?:(?:i|we) )?(?:want|planning|plan|going|intend) to ";
+	/** The speaker's plan, before "to" and the verb: "Want to stop nevirapine?" asks whether to stop it (ADR Decision 498);
+	 *  and hers, "She wants to stop nevirapine.", "Can she stop nevirapine?" (ADR Decision 499). */
+	private static final String A_PLAN_TO = "(?:(?:(?:i|we) )?(?:want|planning|plan|going|intend) to "
+			+ "|(?:she|he|they|the patient|this patient|patient|pt) (?:wants|would like|wishes|plans|is planning|is asking) to "
+			+ "|(?:can|could|may) (?:she|he|they|the patient|this patient) (?:safely )?)";
 
 	// Her drug, "her" or not: "Can I stop nevirapine?" is "Can I stop her nevirapine?", as continuing it is (ADR Decisions
 	// 480, 498).

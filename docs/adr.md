@@ -23938,3 +23938,24 @@ before Decision 480.
   question.
 
 Pinned by `ClinicianWordingsTest.stoppingADrugAskedWithoutHerIsStoppingHerDrug`.
+
+## Decision 499: Her wish to stop her drug asks what stopping it is
+
+**Status: Accepted** (October 2026) — found asking stop wordings of 15 patients on the 3.7.1 standalone on 2026-10-28.
+
+### Context
+
+*"She wants to stop nevirapine."* went to the model. On 5 of 15 patients it answered *"Nevirapine can be given, with
+one caution"*, turning a request to stop the drug into a clearance to give it. Decision 498 left that wording with the
+model as someone else's wish. But the question it puts to the clinician is the stop question, which the module answers
+with what relates the drug to her other medications, which stopping it would end.
+
+### The decision
+
+- The patient's wish to stop her drug is read as *"Can I stop her X?"* is (Decisions 335, 498). This covers *"She wants
+  to stop X"*, *"Pt wants to stop X"*, *"Patient would like to stop X"* and *"Can she stop X?"*.
+- Her wish to stop something that is no drug, *"She wants to stop exercising."*, stays the model's.
+- This supersedes the lines of Decisions 497 and 498's tests that kept *"She wants to stop warfarin/nevirapine."* with
+  the model.
+
+Pinned by `ClinicianWordingsTest.herWishToStopHerDrugIsStoppingHerDrug`.

@@ -1906,9 +1906,9 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
 			assertEquals(canonical, ask(pair[0]), pair[0]);
 		}
-		// Someone else's wish, and a plan for something other than giving it, stay the model's.
+		// Someone else's wish to give it stays the model's. (Her wish to stop it is a stop question since ADR Decision 499,
+		// herWishToStopHerDrugIsStoppingHerDrug.)
 		assertNull(ask("Does she want to start warfarin?"));
-		assertNull(ask("She wants to stop warfarin."));
 	}
 
 	/** ADR Decision 498: stopping a drug asked without "her", or planned, is stopping her drug — one she is on or not. */
@@ -1924,8 +1924,23 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
 			assertEquals(canonical, ask(pair[0]), pair[0]);
 		}
-		// Someone else's wish stays the model's.
-		assertNull(ask("She wants to stop nevirapine."));
+	}
+
+	/** ADR Decision 499: the patient's own wish to stop her drug asks what stopping it is, as "Can I stop her X?" does. */
+	@Test
+	public void herWishToStopHerDrugIsStoppingHerDrug() {
+		String[][] pairs = { { "She wants to stop nevirapine.", "Can I stop her nevirapine?" },
+			{ "Pt wants to stop nevirapine?", "Can I stop her nevirapine?" },
+			{ "Patient would like to stop her nevirapine", "Can I stop her nevirapine?" },
+			{ "Can she stop nevirapine?", "Can I stop her nevirapine?" },
+			{ "She wants to stop warfarin.", "Can I stop her warfarin?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+		// Her wish to stop something that is no drug stays the model's.
+		assertNull(ask("She wants to stop exercising."));
 	}
 
 	private static String ask(String question) {

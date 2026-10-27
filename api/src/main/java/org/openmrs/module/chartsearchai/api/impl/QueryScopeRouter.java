@@ -201,6 +201,13 @@ public final class QueryScopeRouter {
 			"(?:should|must|do|would) (?:i|we) (?:monitor|watch)", "monitor(?:ing)? for", "watch (?:out )?for");
 
 	/**
+	 * The question the module's medication check is run as where the model reads a question as asking about the safety
+	 * of her drugs and this router found no reading of its own (ADR Decision 489): a screen of her medications for
+	 * interactions and contraindications both, which {@code QueryScopeRouterMedicationCheckQuestionTest} pins.
+	 */
+	public static final String MEDICATION_CHECK_QUESTION = "Does this patient have any drug interactions or contraindications?";
+
+	/**
 	 * True when the question asks to be SCREENED for drug interactions — "are there any drug
 	 * interactions with her current medications?", "do any of her meds interact?" — as opposed to
 	 * merely mentioning medications. Consumed by {@code DrugSafetyValidator}, which has no way to

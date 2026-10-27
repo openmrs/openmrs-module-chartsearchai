@@ -1709,6 +1709,10 @@ public class DrugReferenceInjector {
 			}
 		}
 		injected.markQuestionSubstances(stampedSubstances);
+		// And whether the screen of her orders ran, the validator's own answer, so LlmInferenceService asks the model to
+		// read a question it did not run for (ADR Decision 489) without deriving its own.
+		injected.markScreenedHerOrders(DrugSafetyValidator.screensHerOrders(question, questionDrugs, context,
+			drugReferenceService));
 		// And a word in its drug place the data has no near name for, stated after the chart answer (ADR Decision 384).
 		injected.markUncheckedWordStatement(moduleAnswer == null ? uncheckedWord : null);
 		injected.markStatesADose(!questionDrugs.isEmpty()

@@ -23573,3 +23573,62 @@ residual reading admits *"her ARVs"* as words for her medications as a whole, bu
   group beside the drug proposed is what every proposal is screened against already.
 
 Pinned by `ClinicianWordingsTest.givingADrugWithAGroupOfHerMedicationsIsProposingItBesideThem`.
+
+## Decision 489: A question the wording rules do not know is read by the model, and a YES runs the medication check
+
+**Status: Accepted** (October 2026) — found asking *"any drugs that i should not give him?"* of the public demo's patient
+`dd88589e-1691-11df-97a5-7038c432aabf` on 2026-10-27.
+
+### Context
+
+The answer was *"The records do not address any drug contraindications or reasons to withhold it."*, from the model, with
+no chips and `interactionPairs` null. His chart holds two Major interactions, nevirapine and pyrazinamide each against
+rifampicin, which *"Does he have any drug contraindications?"* lists. The medication check runs for a question naming no
+drug only where `QueryScopeRouter` reads a screen of her medications in it, and the router is a closed grammar of
+English phrasings: Decisions 482 to 487 each added wordings it missed. On his orders, through the real injector, five
+plain wordings ran no screen at all — *"any drugs that i should not give him?"*, *"Are there any drugs I should not
+give him?"*, *"Any meds he can't take?"*, *"Anything I should avoid giving this patient?"*, *"Are any of his meds a bad
+combination?"* — counted by the findings each put in the prompt, against 15 for *"Does he have any drug
+contraindications?"* and 0 for *"What is his blood pressure?"*. A sixth, *"What drugs are dangerous for him?"*, ran the
+screen and handed the model its findings; an earlier count of six rested on a script that searched the prompt for the
+wrong string, and is withdrawn.
+
+Two wider fixes were declined. Running the check on every answer is the reach #143 reverted and the product scope rules
+out. Widening the grammar keeps it English-only and moves the gap: *"Anything I should avoid giving this patient?"*
+carries no medication word at all.
+
+### The decision
+
+- `LlmInferenceService.readForDrugSafety` injects for the question as before. Where that ran no screen of her orders
+  (`PatientChart.screenedHerOrders`, the validator's own `screensHerOrders` answer, stamped by the injector), the
+  question names no drug, no word stands in a drug's place, no module answer was composed and it does not ask about her
+  allergies, it asks the model `LlmProvider.asksAboutMedicationSafety`: one call, its reply constrained to
+  `{"drug_safety": true|false}`. A YES injects again for `QueryScopeRouter.MEDICATION_CHECK_QUESTION`, and every
+  drug-safety read after it takes that question. Retrieval and the model's own prompt keep the clinician's words.
+- The gate is the screen that ran, not the router's cue words: *"Any drugs that I should not give her?"* passes
+  `isInteractionScreening` and ran no screen, so a gate on that predicate left it to neither.
+- Only adds checks. A NO, an unreadable reply or a failed engine leaves the first injection. Behind
+  `chartsearchai.drugSafety.readQuestionsWithTheModel`, on by default.
+- The wordings become rows in `MedicationSafetyQuestionEvalTest`, an opt-in suite scoring production's prompt, format and
+  parsing against a real model, rather than rules in the router. Its gate: every drug-safety question naming no drug
+  reaches the check, through the router or the model, and the model reads no other question as one.
+
+### Measured
+
+On the demo's model, Gemma 4 E2B Q4_K_M, on CPU with 4 threads and reasoning off, as `LocalLlmEngine` starts it, through
+`MedicationSafetyQuestionEvalTest`: all 22 drug-safety questions reached the check, 20 of them by the model's reading
+alone — it read NO for *"Can his medications be taken together?"* and *"Any red flags in his medication list?"*, both of
+which the router screens — including one Spanish and one French. None of 15 other questions, medication questions among
+them, was read as one. A reading took a median 767 ms in the earlier run of these questions.
+
+The format is load-bearing. The same instruction ending in a request for a `"verdicts"` array of YES or NO, in the
+format citation grounding uses, read five of the six wordings it exists for as NO.
+
+### Consequences
+
+- A question that reaches the reading costs one more short model call before its answer.
+- A wrong YES answers a question that was not about drug safety with the medication check. The eval's second gate is
+  what watches for it, and it is a run against one model; another model, or a reworded prompt, is a change to measure
+  there first.
+
+Pinned by `LlmInferenceServiceModelReadQuestionContextTest` and `QueryScopeRouterMedicationCheckQuestionTest`.

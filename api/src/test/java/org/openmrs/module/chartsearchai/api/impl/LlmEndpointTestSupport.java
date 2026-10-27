@@ -28,7 +28,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
  * The one OpenAI-compatible-endpoint client for the opt-in LLM test suites — resolving the endpoint,
  * probing it, deciding whether the suite was opted into, and posting one completion. Shared by
  * {@link LlmAnswerQualityTest}, {@link PromptInjectionEvalTest}, {@link AbsentDataEvalTest},
- * {@link EndedOrderAnswerRuleTest} and {@link ReferenceRecordAttributionAnswerTest} so the request
+ * {@link EndedOrderAnswerRuleTest}, {@link ReferenceRecordAttributionAnswerTest} and {@link MedicationSafetyQuestionEvalTest} so the request
  * shape cannot drift between them, which is the rule CLAUDE.md states for {@code TestDatasetHelper}
  * and {@code DrugReferenceTestSupport}.
  *
@@ -169,13 +169,22 @@ final class LlmEndpointTestSupport {
 	 */
 	static String complete(String endpoint, String systemPrompt, String userMessage, int maxTokens)
 			throws Exception {
+		ObjectNode responseFormat = MAPPER.createObjectNode();
+		responseFormat.put("type", "json_object");
+		return complete(endpoint, systemPrompt, userMessage, maxTokens, responseFormat);
+	}
+
+	/**
+	 * As {@link #complete(String, String, String, int)}, constrained to the caller's {@code response_format} — the
+	 * structured calls production makes through {@code LlmEngine.infer(..., ObjectNode)}, such as the medication-safety
+	 * reading {@link MedicationSafetyQuestionEvalTest} scores.
+	 */
+	static String complete(String endpoint, String systemPrompt, String userMessage, int maxTokens,
+			ObjectNode responseFormat) throws Exception {
 		ObjectNode root = MAPPER.createObjectNode();
 		root.put("temperature", 0.0);
 		root.put("max_tokens", maxTokens);
 		root.put("stream", false);
-
-		ObjectNode responseFormat = MAPPER.createObjectNode();
-		responseFormat.put("type", "json_object");
 		root.set("response_format", responseFormat);
 
 		ArrayNode messages = MAPPER.createArrayNode();

@@ -914,6 +914,81 @@ public class LlmProvider {
 	}
 
 	/**
+	 * The words {@link #asksAboutMedicationSafety} asks the model in (ADR Decision 489). A constant because it is a
+	 * prompt: {@code MedicationSafetyQuestionEvalTest} scores these exact words and {@link #MEDICATION_SAFETY_FIELD}'s
+	 * format against a labelled set of questions, and rewording either is a change to measure there first. Measured:
+	 * the same instruction ending in a request for a {@code "verdicts"} array of YES or NO, in the grounding call's
+	 * format, read five of the six wordings it exists for as NO.
+	 */
+	static final String MEDICATION_SAFETY_QUESTION_SYSTEM_PROMPT = "You classify one question a clinician typed about "
+			+ "their patient. Set drug_safety to true when the question asks whether any drug - one the patient takes or one "
+			+ "being considered - is safe for this patient, interacts, is contraindicated, should be avoided, stopped or "
+			+ "not given, or causes a problem. Set it to false for every other question, including ones that only ask which "
+			+ "drugs the patient takes, a dose, a date, or why a drug was given.";
+
+	/** The one field the reading's reply carries, a JSON boolean. */
+	static final String MEDICATION_SAFETY_FIELD = "drug_safety";
+
+	/** How long the model may take to read a question (ADR Decision 489): it reads one sentence, so a slow reply is a
+	 *  busy or failing engine, and the question then goes on as the router read it rather than waiting. */
+	static final int MEDICATION_SAFETY_QUESTION_TIMEOUT_SECONDS = 20;
+
+	/**
+	 * Whether {@code question} asks about the safety of the patient's drugs, as the model reads it (ADR Decision 489) —
+	 * asked only where {@code QueryScopeRouter}'s closed grammar found no screen of her medications in a question
+	 * naming no drug, so a wording it does not know still reaches the module's medication check. One short call whose
+	 * reply is constrained to {@code {"drug_safety": true|false}}.
+	 *
+	 * @return {@code TRUE}/{@code FALSE}, or {@code null} where the question is blank or the engine failed or replied
+	 *         with no readable verdict — the caller then keeps the router's reading, which is what it did before
+	 */
+	public Boolean asksAboutMedicationSafety(String question) {
+		if (question == null || question.trim().isEmpty()) {
+			return null;
+		}
+		LlmEngine engine = getActiveEngine();
+		if (engine == null) {
+			return null;
+		}
+		try {
+			LlmEngine.InferenceResult inference = engine.infer(MEDICATION_SAFETY_QUESTION_SYSTEM_PROMPT, question.trim(),
+				Math.min(getTimeoutSeconds(), MEDICATION_SAFETY_QUESTION_TIMEOUT_SECONDS), medicationSafetyResponseFormat());
+			String text = inference == null ? null : inference.getText();
+			if (text == null || text.trim().isEmpty()) {
+				return null;
+			}
+			JsonNode verdict = MAPPER.readTree(text).get(MEDICATION_SAFETY_FIELD);
+			return verdict != null && verdict.isBoolean() ? Boolean.valueOf(verdict.booleanValue()) : null;
+		}
+		catch (JsonProcessingException | RuntimeException e) {
+			log.warn("The model could not read whether the question asks about medication safety; keeping the router's "
+					+ "reading: {}", e.toString());
+			return null;
+		}
+	}
+
+	/** {@code {"drug_safety": boolean}}, required and alone — the format the reading was measured in. */
+	static ObjectNode medicationSafetyResponseFormat() {
+		ObjectNode field = MAPPER.createObjectNode();
+		field.put("type", "boolean");
+		ObjectNode properties = MAPPER.createObjectNode();
+		properties.set(MEDICATION_SAFETY_FIELD, field);
+		ObjectNode schema = MAPPER.createObjectNode();
+		schema.put("type", "object");
+		schema.set("properties", properties);
+		schema.set("required", MAPPER.createArrayNode().add(MEDICATION_SAFETY_FIELD));
+		schema.put("additionalProperties", false);
+		ObjectNode jsonSchema = MAPPER.createObjectNode();
+		jsonSchema.put("name", "medication_safety_question");
+		jsonSchema.put("strict", true);
+		jsonSchema.set("schema", schema);
+		ObjectNode responseFormat = MAPPER.createObjectNode();
+		responseFormat.put("type", "json_schema");
+		responseFormat.set("json_schema", jsonSchema);
+		return responseFormat;
+	}
+
+	/**
 	 * Reads the YES/NO entailment verdict out of the LLM's raw reply. The shared response schema
 	 * ({@link ChartAnswerResponseFormat}) emits a leading {@code "reasoning"} field before
 	 * {@code "answer"}, and a fact-checker's reasoning routinely contains words like "no" ("no

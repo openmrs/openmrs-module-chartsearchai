@@ -565,6 +565,8 @@ public class PatientChartSerializer {
 		/** @see #asksOnlyAboutADrugsRecord() */
 		private boolean asksOnlyAboutADrugsRecord;
 
+		private boolean screenedHerOrders;
+
 		/** @see #getNamedClassAtcGroup() */
 		private String namedClassAtcGroup;
 
@@ -742,6 +744,19 @@ public class PatientChartSerializer {
 		public void markQuestionSubstances(Set<Object> substances) {
 			this.questionSubstances = substances == null ? Collections.<Object> emptySet()
 					: Collections.unmodifiableSet(new LinkedHashSet<Object>(substances));
+		}
+
+		/** Records whether the screen of her orders ran for the question — {@code DrugSafetyValidator.screensHerOrders}'s
+		 *  own answer, ADR Decision 489, and {@code DrugReferenceInjector} is the only caller. */
+		public void markScreenedHerOrders(boolean screened) {
+			this.screenedHerOrders = screened;
+		}
+
+		/** Whether the screen of her orders ran for the question (ADR Decision 489): where it did not, and the question
+		 *  names no drug, {@code LlmInferenceService} asks the model whether it asks about her drugs' safety. False on
+		 *  every chart the injector returned without stamping, which is one that resolved nothing to state. */
+		public boolean screenedHerOrders() {
+			return screenedHerOrders;
 		}
 
 		/** Records that the question named a drug only to ask of its record in her chart — ADR Decision 399, and

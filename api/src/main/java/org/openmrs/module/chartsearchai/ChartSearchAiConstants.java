@@ -592,6 +592,16 @@ public class ChartSearchAiConstants {
 	public static final boolean DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS = true;
 
 	/**
+	 * Whether the model reads a question the router found no drug-safety reading in, and a YES runs the module's
+	 * medication check (ADR Decision 489). The router's grammar is closed, so a wording it does not know asked for no
+	 * check at all: "Any drugs that I should not give him?" went to the model with no drug-safety material while his
+	 * chart held two Major interactions. On by default; it only adds checks.
+	 */
+	public static final String GP_DRUG_SAFETY_READ_QUESTIONS_WITH_THE_MODEL = "chartsearchai.drugSafety.readQuestionsWithTheModel";
+
+	public static final boolean DEFAULT_DRUG_SAFETY_READ_QUESTIONS_WITH_THE_MODEL = true;
+
+	/**
 	 * Whether the answer's prose is asked to SUMMARISE the safety findings rather than enumerate
 	 * them, on the grounds that the client already renders every finding in full — issue #403.
 	 *

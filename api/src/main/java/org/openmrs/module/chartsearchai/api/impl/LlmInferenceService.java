@@ -137,7 +137,12 @@ public class LlmInferenceService implements ChartSearchService {
 			// and no scope for a query-scoped slice.
 			String uninjectedRecords = chartTextOrPlaceholder(chart);
 			String kvCacheScope = chart.isQueryScoped() ? null : kvCacheScopeFor(patient);
-			chart = drugReferenceInjector.inject(chart, patient, question, chartRead);
+			// The question as the drug-safety layer reads it: the clinician's own words, or the module's medication check
+			// where the model read a question the router found no reading in as asking about her drugs (ADR Decision 489).
+			// Every safety read below takes it; retrieval above and the model's prompt keep the question as typed.
+			SafetyReading safetyReading = readForDrugSafety(patient, question, chart, chartRead);
+			chart = safetyReading.chart;
+			String safetyQuestion = safetyReading.question;
 			// Resolved once, off the chart that was actually assembled, and carried on the answer —
 			// so the audit row the REST layer writes states the mode instead of re-deriving it
 			// (issue #178). After inject() deliberately: that is the chart the LLM sees.
@@ -182,7 +187,7 @@ public class LlmInferenceService implements ChartSearchService {
 			// Issue #469: a question the module resolved itself is answered from its own findings, and
 			// the model is not asked to restate them. One method for both paths, so they cannot differ.
 			if (answersFromTheModule(chart)) {
-				ChartAnswer answer = answerFromTheModule(patient, question, chart, searchMode,
+				ChartAnswer answer = answerFromTheModule(patient, safetyQuestion, chart, searchMode,
 						referenceSlice, unresolvedDrugClass, chartRead.stated(), conditionRuleCoverage, doseCeilingCoverage,
 						token -> { }, refs -> { }, ungrounded -> { });
 				outcome = "ok";
@@ -312,7 +317,7 @@ public class LlmInferenceService implements ChartSearchService {
 			// no consumer can re-derive from the chips themselves. Which arm states it, and when none
 			// does, is PairChipExtent's and ChartAnswer.getPairChipExtent()'s to say, not a sink site's.
 			PairChipExtent.Sink pairExtent = new PairChipExtent.Sink();
-			List<SafetyWarning> safetyWarnings = drugSafetyValidator.validate(response.getAnswer(), question,
+			List<SafetyWarning> safetyWarnings = drugSafetyValidator.validate(response.getAnswer(), safetyQuestion,
 					patient, chart.getMappings(), pairExtent);
 			// MEASURED on the model's own prose, so the key reports what the MODEL stated; the answer is
 			// COMPLETED below, so what a client is handed names every order the findings it CITES cover
@@ -363,11 +368,11 @@ public class LlmInferenceService implements ChartSearchService {
 			// hands back are the ones the answer carries.
 			// ADR Decision 138's record numbers are joined first, so the records the statement cites are attached for
 			// the findings it states (ADR Decision 168).
-			ConflictingOrderStatement.Stated conflicting = ConflictingOrderStatement.state(question, completedAnswer,
+			ConflictingOrderStatement.Stated conflicting = ConflictingOrderStatement.state(safetyQuestion, completedAnswer,
 					DrugReferenceInjector.withFindingCitations(safetyWarnings, chart.getMappings()),
 					chart.getOrderRecordNumbers(), recordsTheModelCites(response.getAnswer(), cited), chart.getMappings());
 			completedAnswer = conflicting.getAnswer();
-			safetyWarnings = aboutTheDrugAsked(conflicting.getWarnings(), chart, question);
+			safetyWarnings = aboutTheDrugAsked(conflicting.getWarnings(), chart, safetyQuestion);
 			// And the order records it cites, as the module's, by the one method that decides which indices become
 			// references; after grounding, which judges what the MODEL cited.
 			List<RecordReference> answerReferences = withReferencesTheModuleStated(references,
@@ -684,7 +689,12 @@ public class LlmInferenceService implements ChartSearchService {
 			// injected chart instead, a drug question keys an entry of its own, made from whatever the
 			// slot last held — and the answer depends on that history again.
 			String uninjectedRecords = chartTextOrPlaceholder(chart);
-			chart = drugReferenceInjector.inject(chart, patient, question, chartRead);
+			// The question as the drug-safety layer reads it: the clinician's own words, or the module's medication check
+			// where the model read a question the router found no reading in as asking about her drugs (ADR Decision 489).
+			// Every safety read below takes it; retrieval above and the model's prompt keep the question as typed.
+			SafetyReading safetyReading = readForDrugSafety(patient, question, chart, chartRead);
+			chart = safetyReading.chart;
+			String safetyQuestion = safetyReading.question;
 			// One resolution for BOTH answers this method produces (issue #178). The early-done path
 			// audits the ungrounded answer and the classic path audits the returned one, so a mode
 			// each of them derived separately is two audit-write sites that can disagree — which is
@@ -725,7 +735,7 @@ public class LlmInferenceService implements ChartSearchService {
 			// progressive-reasoning preview deliberately: that preview is a model pass, and there is no
 			// model answer here for it to be a preview of.
 			if (answersFromTheModule(chart)) {
-				ChartAnswer answer = answerFromTheModule(patient, question, chart, searchMode,
+				ChartAnswer answer = answerFromTheModule(patient, safetyQuestion, chart, searchMode,
 						referenceSlice, unresolvedDrugClass, chartRead.stated(), conditionRuleCoverage, doseCeilingCoverage,
 						tokenConsumer, citationsConsumer, ungroundedAnswerConsumer);
 				outcome = "ok";
@@ -921,7 +931,7 @@ public class LlmInferenceService implements ChartSearchService {
 			// no consumer can re-derive from the chips themselves. Which arm states it, and when none
 			// does, is PairChipExtent's and ChartAnswer.getPairChipExtent()'s to say, not a sink site's.
 			PairChipExtent.Sink pairExtent = new PairChipExtent.Sink();
-			List<SafetyWarning> safetyWarnings = drugSafetyValidator.validate(response.getAnswer(), question,
+			List<SafetyWarning> safetyWarnings = drugSafetyValidator.validate(response.getAnswer(), safetyQuestion,
 					patient, chart.getMappings(), pairExtent);
 			// MEASURED on the model's own prose, so the key reports what the MODEL stated; the answer is
 			// COMPLETED below, so what a client is handed names every order the findings it CITES cover
@@ -972,11 +982,11 @@ public class LlmInferenceService implements ChartSearchService {
 			// hands back are the ones the answer carries.
 			// ADR Decision 138's record numbers are joined first, so the records the statement cites are attached for
 			// the findings it states (ADR Decision 168).
-			ConflictingOrderStatement.Stated conflicting = ConflictingOrderStatement.state(question, completedAnswer,
+			ConflictingOrderStatement.Stated conflicting = ConflictingOrderStatement.state(safetyQuestion, completedAnswer,
 					DrugReferenceInjector.withFindingCitations(safetyWarnings, chart.getMappings()),
 					chart.getOrderRecordNumbers(), recordsTheModelCites(response.getAnswer(), cited), chart.getMappings());
 			completedAnswer = conflicting.getAnswer();
-			safetyWarnings = aboutTheDrugAsked(conflicting.getWarnings(), chart, question);
+			safetyWarnings = aboutTheDrugAsked(conflicting.getWarnings(), chart, safetyQuestion);
 			// And the order records it cites, as the module's, by the one method that decides which indices become
 			// references; after grounding, which judges what the MODEL cited.
 			List<RecordReference> answerReferences = withReferencesTheModuleStated(references,
@@ -1166,6 +1176,54 @@ public class LlmInferenceService implements ChartSearchService {
 			}
 		}
 		return published;
+	}
+
+	/** The chart the drug-safety layer injected and the question it read, as {@link #readForDrugSafety} decided them. */
+	private static final class SafetyReading {
+
+		private final PatientChart chart;
+
+		private final String question;
+
+		private SafetyReading(PatientChart chart, String question) {
+			this.chart = chart;
+			this.question = question;
+		}
+	}
+
+	/**
+	 * Injects the drug-safety layer for {@code question}, and where that ran no check of her medications for a question
+	 * naming no drug, asks the model whether it asks about the safety of her drugs; a YES injects again for {@link
+	 * QueryScopeRouter#MEDICATION_CHECK_QUESTION} (ADR Decision 489). "Any drugs that I should not give him?" ran no
+	 * check at all, beside two Major interactions in his chart, while "What medications should he avoid?" ran one.
+	 *
+	 * <p>For a question naming no drug the screen of her orders is the only check, so the model is asked where that
+	 * screen did not run — {@link PatientChart#screenedHerOrders}, the validator's own answer as the injector stamped it.
+	 * Not where the router merely sees a safety cue, nor where {@link QueryScopeRouter#isInteractionScreening} holds:
+	 * "Any drugs that I should not give her?" passes both and ran no screen, so a gate on either left it to neither.
+	 * Asked AFTER the first injection, so the drugs the question names, a word standing in a drug's place and a module
+	 * answer already composed are the injector's own answers, never re-derived here; and not of a question about her
+	 * allergies, whose chips are drawn for that question. Only adds a check: a NO, an unreadable reply or a failed
+	 * engine keeps the first injection.
+	 */
+	private SafetyReading readForDrugSafety(Patient patient, String question, PatientChart built,
+			ChartReadStatus chartRead) {
+		PatientChart injected = drugReferenceInjector.inject(built, patient, question, chartRead);
+		if (injected == null || question == null || question.trim().isEmpty() || !ChartSearchAiUtils.isDrugReferenceEnabled()
+				|| !ChartSearchAiUtils.getBooleanGlobalProperty(
+					ChartSearchAiConstants.GP_DRUG_SAFETY_READ_QUESTIONS_WITH_THE_MODEL,
+					ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_READ_QUESTIONS_WITH_THE_MODEL)
+				|| !injected.getQuestionSubstances().isEmpty() || injected.getUncheckedWordStatement() != null
+				|| injected.getModuleAnswer() != null || injected.screenedHerOrders()
+				|| QueryScopeRouter.asksAboutAllergies(question)
+				|| !Boolean.TRUE.equals(llmProvider.asksAboutMedicationSafety(question))) {
+			return new SafetyReading(injected, question);
+		}
+		// The patient id and nothing of the question, which can name her medications (ADR Decision 102).
+		log.info("Patient {}: the model read the question as asking about her medications' safety; running the "
+				+ "medication check for it (ADR Decision 489)", patient == null ? null : patient.getPatientId());
+		return new SafetyReading(drugReferenceInjector.inject(built, patient, QueryScopeRouter.MEDICATION_CHECK_QUESTION,
+			chartRead), QueryScopeRouter.MEDICATION_CHECK_QUESTION);
 	}
 
 	/** Whether {@code question} asks anything of drug safety (ADR Decision 390): it names a drug the data resolved, asks for a

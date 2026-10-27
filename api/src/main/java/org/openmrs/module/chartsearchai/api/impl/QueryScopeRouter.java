@@ -1735,6 +1735,9 @@ public final class QueryScopeRouter {
 			// and "Can she continue efavirenz if she starts rifampicin?" (ADR Decision 445)
 			+ "|(?:she|he|they) (?:starts|start|takes|take|begins|begin|is given|are given|gets|get)) " + D + ")";
 
+	/** What a clinician monitors two drugs for, in their words (ADR Decision 475). */
+	private static final String TO_MONITOR = "(?:monitor(?: for)?|watch(?: out)?(?: for)?|check(?: for)?|look out for)";
+
 	/** "Does she need potassium monitoring on lisinopril and spironolactone?", "Does she need monitoring if I add
 	 *  spironolactone to her lisinopril?" — whether the two need monitoring (ADR Decision 252). */
 	private static final String MONITORING_ON_BOTH = "(?:does|do|will|would) (?:she|he|they|the patient|this patient) need"
@@ -1744,9 +1747,15 @@ public final class QueryScopeRouter {
 			// nevirapine?" (ADR Decision 431)
 			+ "|" + HER_D + " (?:and|with|plus) " + HER_D + " (?:should|do|must) (?:i|we) (?:need to )?monitor (?:for )?(?:anything|"
 			+ "something)"
-			+ "|what (?:should|do|must) (?:i|we) (?:need to )?monitor(?: for)? (?:if|when) (?:(?:she|he|they|the patient) (?:takes|"
-			+ "take|is on|are on|is taking)|(?:i|we) (?:give|add|start|prescribe) (?:" + PATIENT + " )?) " + HER_D + " (?:with|and|"
-			+ "alongside) " + HER_D;
+			// The "if I give" branch once spelled two spaces before the drug, and fitted no question (ADR Decision 475); and
+			// "watch (out) for", "check", "look out for" are what "monitor" asks
+			+ "|what (?:should|do|must) (?:i|we) (?:need to )?" + TO_MONITOR + " (?:if|when) (?:(?:she|he|they|the patient) (?:takes|"
+			+ "take|is on|are on|is taking)|(?:i|we) (?:give|add|start|prescribe)(?: " + PATIENT + ")?) " + HER_D + " (?:with|and|"
+			+ "alongside) " + HER_D
+			// "Fluconazole and nevirapine - what to monitor?", "What to monitor with fluconazole and nevirapine?" (ADR Decision 475)
+			+ "|" + HER_D + " (?:and|with|plus) " + HER_D + " what (?:to|should (?:i|we)|do (?:i|we) need to) " + TO_MONITOR
+			+ "|what (?:to|should (?:i|we)|do (?:i|we) need to) " + TO_MONITOR + " (?:with|on|for) " + HER_D + " (?:and|with|plus) "
+			+ HER_D;
 
 	/** "Is efavirenz OK with rifampicin or do I need to switch?" — safe together, or whether to change hers: one or the other,
 	 *  which neither "Yes" nor "No" answers, and no finding chooses a drug to change (ADR Decision 431). */

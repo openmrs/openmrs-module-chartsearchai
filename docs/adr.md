@@ -23216,3 +23216,28 @@ shape read a pair a while apart, or after her dose.
   weighed, as it does for a sequence.
 
 Pinned by `ClinicianWordingsTest.oneDrugGivenAWhileAfterAnotherIsWhatRelatesTheTwo`.
+
+## Decision 475: What to watch for or monitor on two drugs is the monitoring question, and its "if I give" branch fits
+
+**Status: Accepted** (October 2026) — found asking 30 further wordings of 15 patients on the 3.7.1 standalone on 2026-10-27.
+
+### Context
+
+*"What do I need to watch if I give fluconazole with nevirapine?"* went to the model, which answered *"Fluconazole can be
+given"* on all 15 patients. *"Fluconazole and nevirapine - what to monitor?"* did the same on 12.
+
+Decision 431's monitoring shape reads *"What should I monitor if I give X with Y?"*, but its *"if I give"* branch never
+fitted a question. The optional *"her "* group closed after its own space, and another space followed it before the
+drug, so the branch needed two spaces in a row. Only the *"if she takes"* branch ever read. The shape also knew only
+*"monitor"*, never *"watch"* or *"check"*, nor *"what to monitor"* after the two drugs.
+
+### The decision
+
+- The *"if I give"* branch spells one space before the drug. *"What should I monitor if I give X with Y?"* is now the
+  module's, as Decision 431 meant it to be.
+- `TO_MONITOR` reads *"monitor (for)"*, *"watch (out) (for)"*, *"check (for)"* and *"look out for"* wherever the shape read
+  *"monitor"*.
+- The shape also reads *"X and Y - what to monitor?"* and *"What to monitor with X and Y?"*.
+- All are answered as the monitoring question is: what relates the two, under no lead (Decision 252).
+
+Pinned by `ClinicianWordingsTest.whatToWatchOrMonitorOnTwoDrugsIsTheMonitoringQuestion`.

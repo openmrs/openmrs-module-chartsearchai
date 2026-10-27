@@ -1716,6 +1716,19 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/** ADR Decision 475: what to watch for or monitor on two drugs, in any of a clinician's wordings, is Decision 431's
+	 *  monitoring question. */
+	@Test
+	public void whatToWatchOrMonitorOnTwoDrugsIsTheMonitoringQuestion() {
+		String canonical = ask("What should I monitor if I give warfarin with nevirapine?");
+		assertNotNull(canonical, "precondition: the module answers Decision 431's monitoring question");
+		for (String question : new String[] { "What do I need to watch if I give warfarin with nevirapine?",
+			"What should I watch for if I give warfarin with nevirapine?", "Warfarin and nevirapine - what to monitor?",
+			"What to monitor with warfarin and nevirapine?", "What should I check if she takes warfarin with nevirapine?" }) {
+			assertEquals(canonical, ask(question), question);
+		}
+	}
+
 	private static String ask(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

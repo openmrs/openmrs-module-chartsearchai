@@ -54,13 +54,6 @@ final class UnrecognisedDrugName {
 		"anything", "another", "other", "same", "new", "one", "some", "any", "more", "her", "his", "their", "him", "you",
 		"she", "all", "too", "now", "two", "pain", "help", "food", "water", "fluids", "oxygen", "blood"));
 
-	/** What a chart measures of her, named as hers — "her potassium", "his creatinine": her result, never a drug in a drug's
-	 *  place (ADR Decision 482). Only named as hers: "give her potassium" proposes the drug. */
-	private static final Set<String> HER_RESULTS = new HashSet<String>(Arrays.asList("potassium", "sodium", "chloride",
-		"calcium", "magnesium", "phosphate", "glucose", "sugar", "sugars", "haemoglobin", "hemoglobin", "hb", "creatinine",
-		"urea", "cholesterol", "triglycerides", "platelets", "albumin", "bilirubin", "iron", "ferritin", "cd4", "inr",
-		"lactate", "bicarbonate"));
-
 	private static final int MAX_SUGGESTIONS = 4;
 
 	/** The words naming what follows as the patient's own: "his ARVs", "their tablets" (ADR Decision 250). "Her" is one
@@ -136,10 +129,11 @@ final class UnrecognisedDrugName {
 		return name;
 	}
 
-	/** Whether {@code word} is one of {@link #HER_RESULTS} named as hers — after "her", "his" or "their", never after a verb
-	 *  of {@link #GIVING} that gives it her (ADR Decision 482). */
+	/** Whether {@code word} is a result her chart measures ({@code QueryScopeRouter.namesHerResult}) named as hers — after
+	 *  "her", "his" or "their", never after a verb of {@link #GIVING} that gives it her (ADR Decision 482). Only named as
+	 *  hers: "give her potassium" proposes the drug. */
 	private static boolean aResultNamedAsHers(List<String> words, String word) {
-		if (!HER_RESULTS.contains(word)) {
+		if (!QueryScopeRouter.namesHerResult(word)) {
 			return false;
 		}
 		int at = words.indexOf(word);

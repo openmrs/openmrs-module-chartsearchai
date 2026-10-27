@@ -3061,6 +3061,23 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	}
 
 	/**
+	 * A lab value named as hers is her result: no screen of her medications and no chip of their contraindications is
+	 * attached (ADR Decision 484). On the 3.7.1 standalone "Is her potassium ok?" carried her orders' allergy
+	 * contraindications as chips on 5 of 15 patients, the question read as one about a drug named as hers.
+	 */
+	@Test
+	public void aLabValueNamedAsHersCarriesNoChip() throws Exception {
+		executeDataSet(WARFARIN_ORDER);
+		DrugReferenceTestSupport.recordFreeTextAllergy(patient, 88, "Warfarin");
+		ChartAnswer screen = serviceWith(new RecordingProvider(), shipped()).search(patient, "Is her warfarin ok?");
+		assertFalse(screen.getSafetyWarnings().isEmpty(), "precondition: her drug named as hers carries its chips");
+		for (String question : new String[] { "Is her potassium ok?", "Is her glucose ok?", "Is his creatinine fine?" }) {
+			ChartAnswer answer = serviceWith(new RecordingProvider(), shipped()).search(patient, question);
+			assertTrue(answer.getSafetyWarnings().isEmpty(), question + " carries no chip: " + answer.getSafetyWarnings());
+		}
+	}
+
+	/**
 	 * A word with no near drug name beside her drug leaves the pair asked about unchecked, so no chip about that drug's
 	 * other interactions is attached to the answer that says so (ADR Decision 479). On the 3.7.1 standalone "Can oranges be
 	 * given to a patient on nevirapine?" said no check was run for oranges and nevirapine, yet carried nevirapine's own

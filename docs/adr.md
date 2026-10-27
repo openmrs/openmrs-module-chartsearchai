@@ -23416,3 +23416,25 @@ question of how she takes her drug with no drug-safety material, but its shapes 
 - They are handed the model with no drug-safety material, as Decision 450's questions are.
 
 Pinned by `ClinicianWordingsTest.aMissedOrSkippedDoseOfHerDrugCarriesNoDrugSafetyMaterial`.
+
+## Decision 484: A lab value named as hers starts no screen of her medications either
+
+**Status: Accepted** (October 2026) — found re-asking Decision 482's wordings of 15 patients on the 3.7.1 standalone on
+2026-10-27.
+
+### Context
+
+After Decision 482, *"Is her potassium ok?"* went to the model as her result. Yet on 5 of 15 patients it still carried
+her orders' allergy contraindications as chips. *"What is her sodium?"* carried none. `isInteractionScreening` read the
+question through `asksAboutADrugNamedAsHersByAnyName` (Decision 374): *"her X ok"* about a drug named as hers by any name,
+the word after *"her"* marked a drug. Decision 482 had put the list of lab values in `UnrecognisedDrugName` alone, so
+this second reading of *"her X"* never consulted it.
+
+### The decision
+
+- The list moves to `QueryScopeRouter.namesHerResult`, the one list both readings of *"her X"* consult.
+- `asksAboutADrugNamedAsHersByAnyName` skips a word it names, as it skips a word naming a group of her medications. A lab
+  value named as hers then starts no screen and publishes no chip.
+- `UnrecognisedDrugName` reads the same predicate where Decision 482 read its own copy.
+
+Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aLabValueNamedAsHersCarriesNoChip`.

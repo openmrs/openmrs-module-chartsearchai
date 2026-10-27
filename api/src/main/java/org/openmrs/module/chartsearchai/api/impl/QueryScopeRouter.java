@@ -253,12 +253,27 @@ public final class QueryScopeRouter {
 				|| fitsAShape(words(question), SCREEN_SHAPES));
 	}
 
+	/** What a chart measures of her — "her potassium", "his creatinine": named as hers, her result and never her drug (ADR
+	 *  Decisions 482, 484). */
+	private static final Set<String> HER_RESULTS = new HashSet<String>(Arrays.asList("potassium", "sodium", "chloride",
+		"calcium", "magnesium", "phosphate", "glucose", "sugar", "sugars", "haemoglobin", "hemoglobin", "hb", "creatinine",
+		"urea", "cholesterol", "triglycerides", "platelets", "albumin", "bilirubin", "iron", "ferritin", "cd4", "inr",
+		"lactate", "bicarbonate"));
+
+	/** Whether {@code word}, named as hers, is a result her chart measures rather than a drug she takes (ADR Decisions 482,
+	 *  484). The one list both readings of "her X" consult. */
+	public static boolean namesHerResult(String word) {
+		return word != null && HER_RESULTS.contains(word);
+	}
+
 	/** Whether {@code question} asks about one word named as hers as about her drug beside her medications — {@link
-	 *  #BESIDE_HER_MEDICATIONS_SHAPES} with the word after "her" marked a drug (ADR Decision 374). */
+	 *  #BESIDE_HER_MEDICATIONS_SHAPES} with the word after "her" marked a drug (ADR Decision 374). Never a result her chart
+	 *  measures: "Is her potassium ok?" (ADR Decision 484). */
 	public static boolean asksAboutADrugNamedAsHersByAnyName(String question) {
 		List<String> words = words(question);
 		for (int i = 0; i + 1 < words.size(); i++) {
-			if (!words.get(i).matches("her|his|their") || namesAMedicationGroup(words.get(i + 1))) {
+			if (!words.get(i).matches("her|his|their") || namesAMedicationGroup(words.get(i + 1))
+					|| namesHerResult(words.get(i + 1))) {
 				continue;
 			}
 			List<String> marked = new ArrayList<String>(words);

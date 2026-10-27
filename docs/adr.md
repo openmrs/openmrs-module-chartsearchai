@@ -23800,3 +23800,29 @@ the count's citation of it, since a Minor is no longer a line.
   medication is a grid. Neither is pinned on such a line by a screen case today.
 
 Pinned by `BriefScreenAnswerTest`, on the demo patient's own orders, and `BriefScreenAnswerContextTest`.
+
+## Decision 494: Three drugs asked together with no verb are the list asked with one
+
+**Status: Accepted** (October 2026) — found asking note-style wordings of 15 patients on the 3.7.1 standalone on
+2026-10-27.
+
+### Context
+
+*"Fluconazole, rifampicin and nevirapine together?"* went to the model on all 15 patients. On one it answered
+*"Fluconazole can be given, with one caution"*, clearing a drug in a question whose other two drugs it had just called a
+Major problem. The module answers the same list asked with a verb, *"Can I give fluconazole, rifampicin and nevirapine
+together?"* (Decision 356), and two drugs asked with no verb, *"Rifampicin and nevirapine together?"* (Decision 444).
+The verbless shapes admitted exactly two drugs.
+
+### The decision
+
+- After the first drug, the verbless "together" shapes admit a list ending in "and" as the verb shape does, a list's
+  commas being no words. They also admit "with" before several drugs. The shapes are *"X, Y and Z together"* (and "at
+  the same time", "concurrently", "at once"), *"X, Y and Z ok together"* (Decision 453), and *"X, Y and Z together - yes
+  or no"* (Decision 441).
+- The answer is the one the verb shape gets: which named drugs she is on, the pairs between them, and each one's
+  findings.
+- A list with no word saying what is asked, *"Fluconazole with rifampicin and nevirapine?"*, is still the model's, as
+  its two-drug form is.
+
+Pinned by `ClinicianWordingsTest.threeDrugsAskedTogetherWithNoVerbAreTheListAskedWithOne`.

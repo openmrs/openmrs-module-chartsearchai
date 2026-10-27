@@ -994,6 +994,14 @@ public final class QueryScopeRouter {
 	private static final String AT_ONCE = "(?: together| at the same time| concurrently| simultaneously| (?:all )?at once)?";
 
 	/**
+	 * What follows the first drug of a verbless "together" question: the second, or a list of them ending in "and", a list's
+	 * commas being no words — "Fluconazole, rifampicin and nevirapine together?" is the list "Can I give fluconazole,
+	 * rifampicin and nevirapine together?" asks (ADR Decision 494).
+	 */
+	private static final String TWO_OR_MORE_JOINED = " (?:(?:and|with|plus) " + HER_D + "|with " + HER_DS + "|(?:" + HER_D
+			+ " )+and " + HER_D + ")";
+
+	/**
 	 * The question shapes asking whether TWO drugs may be given together, over {@link #words} with each drug's name
 	 * marked {@link #DRUG_NAME} — ADR Decision 169. A grammar for the reason {@link #PROPOSAL_SHAPES} is, and kept apart
 	 * from it, since that one's readers answer for ONE drug proposed: its one reader states the findings about either
@@ -1042,7 +1050,7 @@ public final class QueryScopeRouter {
 					// and "at the same time" (ADR Decision 441)
 					+ " (?:and|with|alongside|as well as|while on|while taking) " + HER_DS + AT_ONCE + "(?: now| today)?",
 			// "Rifampicin and nevirapine together - yes or no?" (ADR Decision 441)
-			HER_D + " (?:and|with|plus) " + HER_D + "(?: together)? (?:yes or no|ok or not|okay or not|safe or not)",
+			HER_D + TWO_OR_MORE_JOINED + "(?: together)? (?:yes or no|ok or not|okay or not|safe or not)",
 			// "Is it safe to give her warfarin and ibuprofen together?", "Is it safe to take warfarin with ibuprofen?", "Is it OK
 			// to co-prescribe warfarin with her ibuprofen?" (ADR Decision 250)
 			// and "acceptable" (ADR Decision 445)
@@ -1065,7 +1073,7 @@ public final class QueryScopeRouter {
 			// "Rifampicin while on nevirapine?", "Rifampicin and nevirapine at the same time?", "Ibuprofen and aspirin together?"
 			// (ADR Decision 444)
 			HER_D + " (?:while|when) (?:on|taking) " + HER_D,
-			HER_D + " (?:and|with|plus) " + HER_D + " (?:together|at the same time|concurrently|simultaneously|(?:all )?at once)",
+			HER_D + TWO_OR_MORE_JOINED + " (?:together|at the same time|concurrently|simultaneously|(?:all )?at once)",
 			// "Fluconazole and rifampicin, can they be given together?" (ADR Decision 415)
 			HER_D + " and " + HER_D + " (?:can|could|may|should) they be (?:safely )?(?:given|taken|used|combined|mixed)"
 					+ "(?: together)?(?: (?:to|for) " + PATIENT + ")?",
@@ -1085,7 +1093,7 @@ public final class QueryScopeRouter {
 			// "Fluconazole for oral thrush - safe with efavirenz?" (ADR Decision 452)
 			HER_D + " for \\p{L}+(?: \\p{L}+){0,2} (?:safe|ok|okay|fine) (?:with|alongside) " + HER_D,
 			// "Rifampicin and nevirapine ok together?", with no verb (ADR Decision 453)
-			HER_D + " and " + HER_D + " (?:ok|okay|fine|safe) together",
+			HER_D + TWO_OR_MORE_JOINED + " (?:ok|okay|fine|safe) together",
 			// "Clarithromycin safe with efavirenz or not?" (ADR Decision 448)
 			"(?:is )?" + HER_D + " (?:safe|ok|okay|fine) (?:with|alongside) " + HER_D + " or not",
 			// "Ibuprofen on top of aspirin - ok?" (ADR Decision 445)

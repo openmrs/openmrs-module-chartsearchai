@@ -1880,6 +1880,19 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		assertNull(ask("Can she eat bananas?"));
 	}
 
+	/** ADR Decision 494: three drugs asked together with no verb are the list "Can I give X, Y and Z together?" asks. */
+	@Test
+	public void threeDrugsAskedTogetherWithNoVerbAreTheListAskedWithOne() {
+		String canonical = ask("Can I give fluconazole, rifampicin and nevirapine together?");
+		assertNotNull(canonical, "precondition: the module answers the list with a verb");
+		String[] wordings = { "Fluconazole, rifampicin and nevirapine together?", "Fluconazole, rifampicin and nevirapine ok together?",
+			"Fluconazole, rifampicin and nevirapine at the same time?", "Fluconazole with rifampicin and nevirapine together?",
+			"Fluconazole, rifampicin and nevirapine together - yes or no?" };
+		for (String wording : wordings) {
+			assertEquals(canonical, ask(wording), wording);
+		}
+	}
+
 	private static String ask(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

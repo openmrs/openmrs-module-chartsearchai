@@ -1512,13 +1512,18 @@ public final class QueryScopeRouter {
 	 *  nothing else of it (ADR Decision 391). */
 	private static final String BEFORE_AN_OCCASION = "(?: (?:before|ahead of) (?:the |her |his |their )?\\p{L}+)?";
 
+	/** The speaker's plan, before "to" and the verb: "Want to stop nevirapine?" asks whether to stop it (ADR Decision 498). */
+	private static final String A_PLAN_TO = "(?:(?:i|we) )?(?:want|planning|plan|going|intend) to ";
+
+	// Her drug, "her" or not: "Can I stop nevirapine?" is "Can I stop her nevirapine?", as continuing it is (ADR Decisions
+	// 480, 498).
 	private static final List<Pattern> STOP_HER_DRUG_SHAPES = shapes(
-			"is it (?:safe|ok|okay|alright|appropriate) to (?:stop|discontinue|hold) " + POSSESSIVE + " " + D
-					+ "(?: now)?" + BEFORE_AN_OCCASION,
-			"(?:can|could|may) (?:i|we) (?:safely )?(?:stop|discontinue|hold) " + POSSESSIVE + " " + D
-					+ "(?: now)?" + BEFORE_AN_OCCASION,
-			"(?:should|must|do) (?:i|we) (?:need to )?(?:stop|discontinue|hold) " + POSSESSIVE + " " + D
-					+ "(?: now)?" + BEFORE_AN_OCCASION,
+			"is it (?:safe|ok|okay|alright|appropriate) to (?:stop|discontinue|hold) " + HER_D + "(?: now)?"
+					+ BEFORE_AN_OCCASION,
+			"(?:(?:can|could|may) (?:i|we) (?:safely )?|" + A_PLAN_TO + ")(?:stop|discontinue|hold) " + HER_D + "(?: now)?"
+					+ BEFORE_AN_OCCASION,
+			"(?:should|must|do) (?:i|we) (?:need to )?(?:stop|discontinue|hold) " + HER_D + "(?: now)?"
+					+ BEFORE_AN_OCCASION,
 			ONE_OF_HER_D_ORDERS_STOPPED);
 
 	/** Whether it asks whether stopping it is safe or allowed — not whether it should be stopped, which ADR Decision 259
@@ -1581,12 +1586,12 @@ public final class QueryScopeRouter {
 	private static final List<Pattern> BESIDE_HER_MEDICATIONS_SHAPES = shapes(
 			SAFE_WITH_HER_MEDICATIONS,
 			// "Is it safe to stop her nevirapine?" (ADR Decision 335)
-			"is it (?:safe|ok|okay|alright|appropriate) to (?:stop|discontinue|hold) " + POSSESSIVE + " " + D
-					+ "(?: now)?" + BEFORE_AN_OCCASION,
-			"(?:can|could|may) (?:i|we) (?:safely )?(?:stop|discontinue|hold) " + POSSESSIVE + " " + D
-					+ "(?: now)?" + BEFORE_AN_OCCASION,
-			"(?:should|must|do) (?:i|we) (?:need to )?(?:stop|discontinue|hold) " + POSSESSIVE + " " + D
-					+ "(?: now)?" + BEFORE_AN_OCCASION,
+			"is it (?:safe|ok|okay|alright|appropriate) to (?:stop|discontinue|hold) " + HER_D + "(?: now)?"
+					+ BEFORE_AN_OCCASION,
+			"(?:(?:can|could|may) (?:i|we) (?:safely )?|" + A_PLAN_TO + ")(?:stop|discontinue|hold) " + HER_D + "(?: now)?"
+					+ BEFORE_AN_OCCASION,
+			"(?:should|must|do) (?:i|we) (?:need to )?(?:stop|discontinue|hold) " + HER_D + "(?: now)?"
+					+ BEFORE_AN_OCCASION,
 			ONE_OF_HER_D_ORDERS_STOPPED,
 			// "If I stop her rifampicin, which interactions go away?" (ADR Decision 333)
 			"if (?:i|we) (?:stop|discontinue|remove|hold) " + POSSESSIVE + " " + D + " (?:which|what) (?:drug )?interactions? "

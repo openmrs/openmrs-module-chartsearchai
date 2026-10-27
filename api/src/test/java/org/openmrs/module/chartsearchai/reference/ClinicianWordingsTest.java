@@ -1909,7 +1909,23 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		// Someone else's wish, and a plan for something other than giving it, stay the model's.
 		assertNull(ask("Does she want to start warfarin?"));
 		assertNull(ask("She wants to stop warfarin."));
-		assertNull(ask("Want to stop warfarin?"));
+	}
+
+	/** ADR Decision 498: stopping a drug asked without "her", or planned, is stopping her drug — one she is on or not. */
+	@Test
+	public void stoppingADrugAskedWithoutHerIsStoppingHerDrug() {
+		String[][] pairs = { { "Can I stop nevirapine?", "Can I stop her nevirapine?" },
+			{ "Is it safe to stop nevirapine?", "Is it safe to stop her nevirapine?" },
+			{ "Should I stop nevirapine?", "Should I stop her nevirapine?" },
+			{ "Want to stop nevirapine?", "Can I stop her nevirapine?" },
+			{ "Can I stop warfarin?", "Can I stop her warfarin?" }, { "Want to stop warfarin?", "Can I stop her warfarin?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+		// Someone else's wish stays the model's.
+		assertNull(ask("She wants to stop nevirapine."));
 	}
 
 	private static String ask(String question) {

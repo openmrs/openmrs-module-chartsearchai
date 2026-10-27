@@ -23913,3 +23913,28 @@ asking word, and the pair reading joined the second drug only by a giving verb r
   two drugs. No pair reading admits it, and it stays the model's.
 
 Pinned by `ClinicianWordingsTest.aPlanToGiveADrugStatedWithNoAskingWordProposesIt`.
+
+## Decision 498: Stopping a drug asked without "her", or planned, is stopping her drug
+
+**Status: Accepted** (October 2026) — found asking note-style wordings of 15 patients on the 3.7.1 standalone on
+2026-10-28.
+
+### Context
+
+*"Want to stop fluconazole?"*, asked of patients not on fluconazole, went to the model. On 5 of 15 it answered
+*"Fluconazole can be given, with one caution"*, a clearance the question never asked for. *"Can I stop her
+nevirapine?"* is the module's (Decision 335), which states what relates the drug to her other medications and that the
+check does not weigh whether to stop it. Each stop shape spelled *"her"* before the drug, as the continue shapes did
+before Decision 480.
+
+### The decision
+
+- The stop shapes read the possessive as optional. *"Can I stop X?"*, *"Is it safe to stop X?"* and *"Should I stop
+  X?"* are answered as their *"her X"* wordings are, for a drug she is on or not, as Decision 480 answers continuing it.
+- The speaker's plan to stop it, *"Want to stop X?"* or *"Planning to stop X"*, asks whether stopping it is allowed, as
+  *"Can I stop her X?"* does.
+- Someone else's wish, *"She wants to stop nevirapine."*, stays the model's.
+- This supersedes the line of Decision 497's test that kept *"Want to stop warfarin?"* with the model: it is now a stop
+  question.
+
+Pinned by `ClinicianWordingsTest.stoppingADrugAskedWithoutHerIsStoppingHerDrug`.

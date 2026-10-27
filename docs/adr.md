@@ -23373,3 +23373,27 @@ Decision 456's residual pair reading misses each:
 - *"pt"* or *"patient"* between the two drugs is admitted right before *"on"* or *"taking"*: *"X ok? (pt on Y)"*.
 
 Pinned by `ClinicianWordingsTest.aPairJoinedAndHerOrNamedByThePatientOnTheOtherIsThePairQuestionItSpells`.
+
+## Decision 482: A lab value named as hers is her result, never a drug in a drug's place
+
+**Status: Accepted** (October 2026) — found asking 30 further wordings of 15 patients on the 3.7.1 standalone on 2026-10-27.
+
+### Context
+
+*"Is her potassium ok?"* asks about her lab result. On all 15 patients the module answered it as a drug question: *"None
+of this patient's active orders is named "potassium". No interaction check was run: "potassium" is not a drug name the
+interaction data recognises. Did you mean … Potassium chloride?"*. On one it also attached a chip. Decision 374 reads the
+word after *"her"* as standing in her drug's place. The data carries potassium salts, so the word got drug suggestions,
+and a non-drug question was poisoned with a drug-check answer.
+
+### The decision
+
+- `UnrecognisedDrugName` reads a word of `HER_RESULTS` named as hers as no word in a drug's place. That list holds what
+  a chart measures of her: potassium, sodium, glucose, haemoglobin, creatinine, CD4, and so on. *"Named as hers"* means
+  after *"her"*, *"his"* or *"their"*, and never after a verb that gives it (`GIVING`).
+- The question then resolves no drug and asks for no safety reading, so the model answers it from her chart, with no
+  chip.
+- Given her, the word is the drug proposed: *"Can I give her potassium?"* keeps its check and its suggestions. The list
+  follows the precedent of `NOT_A_NAME`, which already holds *"blood"* and *"oxygen"*.
+
+Pinned by `ClinicianWordingsTest.aLabValueNamedAsHersIsHerResultAndNoDrug`.

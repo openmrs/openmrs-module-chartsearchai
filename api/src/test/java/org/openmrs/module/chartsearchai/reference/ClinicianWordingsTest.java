@@ -1805,6 +1805,17 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		assertNull(ask("Is warfarin risky for her pregnancy?"));
 	}
 
+	/** ADR Decision 482: a lab value named as hers — "her potassium" — is her result, never a drug in a drug's place. */
+	@Test
+	public void aLabValueNamedAsHersIsHerResultAndNoDrug() {
+		for (String question : new String[] { "Is her potassium ok?", "What is her sodium?", "Is her glucose normal?",
+			"How is her haemoglobin?", "Is his creatinine high?" }) {
+			assertNull(ask(question), question + " is her result, which her chart answers");
+		}
+		// The drug given her keeps its check.
+		assertNotNull(ask("Can I give her potassium?"), "potassium given her is a drug proposed");
+	}
+
 	private static String ask(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

@@ -54,6 +54,13 @@ final class UnrecognisedDrugName {
 		"anything", "another", "other", "same", "new", "one", "some", "any", "more", "her", "his", "their", "him", "you",
 		"she", "all", "too", "now", "two", "pain", "help", "food", "water", "fluids", "oxygen", "blood"));
 
+	/** What a chart measures of her, named as hers — "her potassium", "his creatinine": her result, never a drug in a drug's
+	 *  place (ADR Decision 482). Only named as hers: "give her potassium" proposes the drug. */
+	private static final Set<String> HER_RESULTS = new HashSet<String>(Arrays.asList("potassium", "sodium", "chloride",
+		"calcium", "magnesium", "phosphate", "glucose", "sugar", "sugars", "haemoglobin", "hemoglobin", "hb", "creatinine",
+		"urea", "cholesterol", "triglycerides", "platelets", "albumin", "bilirubin", "iron", "ferritin", "cd4", "inr",
+		"lactate", "bicarbonate"));
+
 	private static final int MAX_SUGGESTIONS = 4;
 
 	/** The words naming what follows as the patient's own: "his ARVs", "their tablets" (ADR Decision 250). "Her" is one
@@ -99,6 +106,10 @@ final class UnrecognisedDrugName {
 			// Or two words in a two-drug question's drug places, neither recognised (ADR Decision 382).
 			return twoIn(question, entries);
 		}
+		// "Is her potassium ok?" asks of her result, which her chart answers (ADR Decision 482).
+		if (aResultNamedAsHers(QueryScopeRouter.words(question), word)) {
+			return null;
+		}
 		// Something she would eat or drink is offered no drug's name: "Can she drink milk?" is no misspelled milk thistle
 		// (ADR Decision 390).
 		List<String> suggestions = toEatOrDrink(question, word) ? new ArrayList<String>() : suggestionsFor(word, entries);
@@ -123,6 +134,17 @@ final class UnrecognisedDrugName {
 				(" " + question.toLowerCase(java.util.Locale.ROOT) + " ").replaceFirst("(?<=[^\\p{L}])" + java.util.regex.Pattern
 						.quote(word) + "(?=[^\\p{L}])", " " + QueryScopeRouter.DRUG_NAME + " ")));
 		return name;
+	}
+
+	/** Whether {@code word} is one of {@link #HER_RESULTS} named as hers — after "her", "his" or "their", never after a verb
+	 *  of {@link #GIVING} that gives it her (ADR Decision 482). */
+	private static boolean aResultNamedAsHers(List<String> words, String word) {
+		if (!HER_RESULTS.contains(word)) {
+			return false;
+		}
+		int at = words.indexOf(word);
+		return at > 0 && ("her".equals(words.get(at - 1)) || "his".equals(words.get(at - 1)) || "their".equals(words.get(at - 1)))
+				&& (at < 2 || !GIVING.contains(words.get(at - 2)));
 	}
 
 	/** The second word, where two stand in a two-drug question's drug places and the data recognises neither (ADR Decision

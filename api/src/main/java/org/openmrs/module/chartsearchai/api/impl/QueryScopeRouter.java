@@ -938,6 +938,10 @@ public final class QueryScopeRouter {
 	/** Several drug slots after "with": "with her nevirapine and lopinavir" (ADR Decision 263). */
 	private static final String HER_DS = HER_D + "(?:(?: and)? " + HER_D + ")*";
 
+	/** "a patient on", "someone taking" — the patient a drug is asked of, by the drug she takes (ADR Decisions 352, 477). */
+	private static final String A_PATIENT_ON = "(?:(?:a|the|this) patient|someone|somebody|anyone|a person) (?:on|taking|who takes"
+			+ "|who is (?:on|taking)) ";
+
 	/** "together", "at the same time" — two drugs given at once (ADR Decision 432), and "(all) at once" (ADR Decision 466). */
 	private static final String AT_ONCE = "(?: together| at the same time| concurrently| simultaneously| (?:all )?at once)?";
 
@@ -1053,6 +1057,11 @@ public final class QueryScopeRouter {
 			"(?:can|could|may|should) (?:i|we) (?:safely )?(?:give|start|prescribe|administer) " + HER_D + " to (?:(?:a|the|this) "
 					+ "patient|someone|somebody|anyone|a person) (?:on|taking|who takes|who is (?:on|taking)) " + HER_DS
 					+ "(?: now| today)?",
+			// "Can fluconazole be safely used in a patient on nevirapine?", "Is fluconazole safe in a patient taking
+			// nevirapine?" — Decision 352's question in the passive, or asked of its safety (ADR Decision 477)
+			"(?:can|could|may|should) " + HER_D + " be (?:safely )?(?:given|used|prescribed|administered|started|taken) (?:in|to|for) "
+					+ A_PATIENT_ON + HER_DS,
+			"is " + HER_D + " (?:safe|ok|okay|appropriate|suitable|fine) (?:in|for|to give to) " + A_PATIENT_ON + HER_DS,
 			// "Can I add fluconazole to her cotrimoxazole?", "Is it safe to add fluconazole to her cotrimoxazole?" — given
 			// with it (ADR Decision 343)
 			"(?:can|could|may|should) (?:i|we) (?:safely )?add " + HER_D + " to " + HER_DS + "(?: for " + PATIENT

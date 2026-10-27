@@ -1741,6 +1741,18 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		assertFalse(chart("Can she have ibuprofen after her nevirapine?").asksOnlyAboutADrugsRecord(), "two drugs");
 	}
 
+	/** ADR Decision 477: a drug asked of "a patient on" another, in the passive or with "safe", is Decision 352's question. */
+	@Test
+	public void aDrugAskedOfAPatientOnAnotherInThePassiveIsTheQuestionOfTheTwo() {
+		String canonical = ask("Can I give warfarin to a patient on nevirapine?");
+		assertNotNull(canonical, "precondition: the module answers Decision 352's question");
+		for (String question : new String[] { "Can warfarin be safely used in a patient on nevirapine?",
+			"Can warfarin be given to a patient on nevirapine?", "Is warfarin safe in a patient taking nevirapine?",
+			"Is warfarin safe for a patient on nevirapine?" }) {
+			assertEquals(canonical, ask(question), question);
+		}
+	}
+
 	private static String ask(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

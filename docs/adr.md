@@ -23261,3 +23261,22 @@ on"*, *"while taking"*, *"alongside"* and *"together with"*, never by *"after"* 
 - A second drug there is still two drugs and never such a question: *"Can she have ibuprofen after her nevirapine?"*.
 
 Pinned by `ClinicianWordingsTest.aFoodAfterOrBeforeHerDrugsDoseCarriesNoDrugSafetyMaterial`.
+
+## Decision 477: A drug asked of "a patient on" another, in the passive or with "safe", is the question of the two
+
+**Status: Accepted** (October 2026) — found asking 30 further wordings of 15 patients on the 3.7.1 standalone on 2026-10-27.
+
+### Context
+
+*"Can fluconazole be safely used in a patient on nevirapine?"* went to the model, which answered *"Fluconazole can be
+given"* on all 15 patients. Decision 352 answers *"Can I give fluconazole to a patient on nevirapine?"*: given with it.
+Decision 455 answers the verbless *"Fluconazole in a patient on nevirapine?"*. Neither read the passive (*"can X be used
+in a patient on Y"*) or *"Is X safe in a patient taking Y?"*.
+
+### The decision
+
+- `TOGETHER_SHAPES` reads *"Can X be (safely) given / used / prescribed in / to a patient on / taking Y?"* and *"Is X safe /
+  ok in / for a patient on / taking Y?"*. Each is answered as Decision 352's question is.
+- `A_PATIENT_ON` names the patient by the drug she takes, as Decision 352's shape spelled it.
+
+Pinned by `ClinicianWordingsTest.aDrugAskedOfAPatientOnAnotherInThePassiveIsTheQuestionOfTheTwo`.

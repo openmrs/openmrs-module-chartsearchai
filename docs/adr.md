@@ -23708,3 +23708,35 @@ reading.
 Pinned by `LlmInferenceServiceModelReadQuestionContextTest.aQuestionReadAsAskingWhichDrugsToAvoidSaysTheCheckListsNone`,
 `.aQuestionReadAsAskingAboutHerDrugsKeepsTheScreensLead` and
 `QueryScopeRouterMedicationCheckQuestionTest.theDrugsToAvoidQuestionIsTheRoutersOwnAvoidQuestion`.
+## Decision 492: A food, a drink or her diet asked beside her medications is not read by the model as a medication check
+
+**Status: Accepted** (October 2026) — found re-asking 30 food and non-drug wordings of 15 patients on the 3.7.1
+standalone on 2026-10-27, after Decision 489.
+
+### Context
+
+Decision 489 asks the model whether a question the router found no reading in asks about her drugs' safety, and a YES
+runs the screen of her orders. Before it, *"Is orange juice ok with her meds?"*, *"Can she eat oranges with her ARVs?"*,
+*"Is coffee bad for her meds?"*, *"Can she have tea with her pills?"*, *"Is her diet ok with her medicines?"* and *"Should
+she avoid any foods?"* carried no chip. After it, the model read each as YES on all 15 patients, and the module answered
+each with the screen of her medications: 40 chips over the 15. *"Oranges: any interactions with her meds?"*, which Decision
+473 kept off the screen, was screened again. A food question answered with her medications' interactions is what the
+owner's own example forbids: *"Can I give her oranges?"* must not be poisoned by drug-interaction results.
+
+### The decision
+
+- `readForDrugSafety` does not ask the model where `QueryScopeRouter.asksOfSomethingElseWithHerMedications` reads the
+  question as something else asked beside her medications. The model's reading itself (Decisions 489, 491) is unchanged,
+  and so is everything it adds for a wording the router has no reading of.
+- That predicate also reads:
+  - *"Is F ok / bad with / for her meds?"*. Never *"safe"*: *"Is grapefruit juice safe with her medications?"* keeps the
+    screen of her orders it was handed before, which
+    `LlmInferenceServiceAnswerFromFindingsContextTest.aScreenNamingSomethingTheDatasetDoesNotResolveStillAsksTheModel`
+    pins. Its screen ran, so the model was never asked to read it;
+  - *"Can she eat / drink / have F with / while on her meds?"*;
+  - her diet (`HER_DIET`): *"Is her diet ok (with her medicines)?"*, *"Should she avoid any foods?"*.
+
+  F is no word of the screen's own (`NOT_SOMETHING_ELSE`), and a drug named there is still checked through the drug's
+  own path.
+
+Pinned by `LlmInferenceServiceModelReadQuestionContextTest.aFoodOrDrinkAskedBesideHerMedicationsIsNotReadByTheModel`.

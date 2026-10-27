@@ -1215,7 +1215,10 @@ public class LlmInferenceService implements ChartSearchService {
 					ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_READ_QUESTIONS_WITH_THE_MODEL)
 				|| !injected.getQuestionSubstances().isEmpty() || injected.getUncheckedWordStatement() != null
 				|| injected.getModuleAnswer() != null || injected.screenedHerOrders()
-				|| QueryScopeRouter.asksAboutAllergies(question)) {
+				|| QueryScopeRouter.asksAboutAllergies(question)
+				// Nor something else asked beside her medications, which the router reads as no question of their own
+				// safety: the model read "Is orange juice ok with her meds?" as one (ADR Decision 492).
+				|| QueryScopeRouter.asksOfSomethingElseWithHerMedications(question)) {
 			return new SafetyReading(injected, question);
 		}
 		LlmProvider.MedicationSafetyReading reading = llmProvider.readMedicationSafetyQuestion(question);

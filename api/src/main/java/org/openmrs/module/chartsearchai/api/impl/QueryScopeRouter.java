@@ -426,7 +426,23 @@ public final class QueryScopeRouter {
 			"(?:any )?(\\p{L}+(?: \\p{L}+){0,2}?) " + ITS_INTERACTIONS + " (?:with|and|alongside) " + HER_MEDICATIONS_AS_A_WHOLE,
 			"(?:(?:are|is) there )?" + ITS_INTERACTIONS + " (?:between|of) (\\p{L}+(?: \\p{L}+){0,2}?) (?:and|with) "
 					+ HER_MEDICATIONS_AS_A_WHOLE,
-			"(?:does|do|will|would|can|could|might) (\\p{L}+(?: \\p{L}+){0,2}?) (?:interact|clash) with " + HER_MEDICATIONS_AS_A_WHOLE);
+			"(?:does|do|will|would|can|could|might) (\\p{L}+(?: \\p{L}+){0,2}?) (?:interact|clash) with " + HER_MEDICATIONS_AS_A_WHOLE,
+			// "Is orange juice ok with her meds?", "Is coffee bad for her meds?" (ADR Decision 492) — never "safe", whose screen
+			// of her orders the model is handed for "Is grapefruit juice safe with her medications?"
+			// (LlmInferenceServiceAnswerFromFindingsContextTest.aScreenNamingSomethingTheDatasetDoesNotResolveStillAsksTheModel)
+			"(?:is|are) (\\p{L}+(?: \\p{L}+){0,2}?) (?:ok|okay|fine|bad|good|harmful|dangerous|a problem) (?:with|for|alongside) "
+					+ HER_MEDICATIONS_AS_A_WHOLE,
+			// "Can she have tea with her pills?", "Can she eat oranges with her ARVs?" (ADR Decision 492)
+			"(?:can|could|may|should) (?:she|he|they|the patient|this patient) (?:eat|drink|have) (\\p{L}+(?: \\p{L}+){0,2}?) "
+					+ "(?:with|while on|while taking|alongside|together with) " + HER_MEDICATIONS_AS_A_WHOLE);
+
+	/** Her diet, or the foods she should avoid, asked of — "Is her diet ok with her medicines?", "Should she avoid any
+	 *  foods?" — no question of her medications' own safety (ADR Decision 492). */
+	private static final List<Pattern> HER_DIET = shapes(
+			"(?:is|are) " + POSSESSIVE + " (?:diet|food|foods|meals?|eating) (?:ok|okay|safe|fine|bad|good|a problem)(?: (?:with|for) "
+					+ HER_MEDICATIONS_AS_A_WHOLE + ")?",
+			"(?:should|must|does|do|need) (?:she|he|they|the patient|this patient) (?:need to )?avoid (?:any |certain |some )?"
+					+ "(?:foods?|drinks?|fruits?|diets?)(?: (?:with|while on) " + HER_MEDICATIONS_AS_A_WHOLE + ")?");
 
 	/** The words the thing of {@link #SOMETHING_ELSE_WITH_HER_MEDICATIONS} may not be: the screen's own (ADR Decision 473). */
 	private static final Set<String> NOT_SOMETHING_ELSE = new HashSet<String>(Arrays.asList("any", "are", "is", "there",
@@ -450,6 +466,9 @@ public final class QueryScopeRouter {
 			return false;
 		}
 		String joined = String.join(" ", words(question));
+		if (fitsAShape(words(question), HER_DIET)) {
+			return true;
+		}
 		for (Pattern shape : SOMETHING_ELSE_WITH_HER_MEDICATIONS) {
 			Matcher m = shape.matcher(joined);
 			if (m.matches()) {

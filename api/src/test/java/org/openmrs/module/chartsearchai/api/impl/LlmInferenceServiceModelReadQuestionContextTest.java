@@ -175,6 +175,26 @@ public class LlmInferenceServiceModelReadQuestionContextTest extends BaseModuleC
 		assertTrue(provider.lastRecords.contains("interacts with active order"), "the screen's findings reached the model");
 	}
 
+	/**
+	 * A food, a drink or her diet asked beside her medications asks nothing of her medications' own safety, so the model is
+	 * not asked to read it and no screen is run, whatever it would answer (ADR Decision 492). On the 3.7.1 standalone the
+	 * model read "Is orange juice ok with her meds?" and "Oranges: any interactions with her meds?" as YES, and the screen
+	 * of her orders answered each.
+	 */
+	@Test
+	public void aFoodOrDrinkAskedBesideHerMedicationsIsNotReadByTheModel() {
+		for (String question : new String[] { "Is orange juice ok with her meds?", "Oranges: any interactions with her meds?",
+				"Can she eat oranges with her ARVs?", "Is coffee bad for her meds?", "Can she have tea with her pills?",
+				"Is her diet ok with her medicines?", "Should she avoid any foods?" }) {
+			RecordingProvider provider = new RecordingProvider("YES");
+			ChartAnswer answer = serviceWith(provider).search(patient, question);
+
+			assertEquals(0, provider.engine.readings, question + " is not read by the model");
+			assertFalse(answer.isAnsweredByTheModule(), question + " is not answered with the screen: " + answer.getAnswer());
+			assertTrue(answer.getSafetyWarnings().isEmpty(), question + " carries no chip: " + answer.getSafetyWarnings());
+		}
+	}
+
 	@Test
 	public void aQuestionNamingADrugIsNotReadByTheModel() {
 		RecordingProvider provider = new RecordingProvider("YES");

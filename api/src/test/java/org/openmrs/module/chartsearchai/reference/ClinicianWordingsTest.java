@@ -1855,6 +1855,18 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		assertNull(ask("Warfarin for her kidneys - safe?"));
 	}
 
+	/** ADR Decision 488: giving a drug with a group of her medications, by any of its names, is proposing it beside them. */
+	@Test
+	public void givingADrugWithAGroupOfHerMedicationsIsProposingItBesideThem() {
+		String[][] pairs = { { "Is it safe to give her warfarin with her antacid?", "Can I give her warfarin?" },
+			{ "Is it ok to start warfarin with her painkillers?", "Can I give her warfarin?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+	}
+
 	private static String ask(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

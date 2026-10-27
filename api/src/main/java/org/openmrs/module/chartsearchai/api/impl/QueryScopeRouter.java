@@ -2942,6 +2942,10 @@ public final class QueryScopeRouter {
 					+ "(?:misses|skips|forgets)) (?:(?:a|one|her|his|their|the) )?(?:dose|doses|tablet|pill)? ?(?:of )?(?:"
 					+ POSSESSIVE + " )?" + D + "(?: dose)?");
 
+	/** A group of her medications named by its own noun — "her antacid", "his TB painkillers" (ADR Decision 488). */
+	private static final Pattern A_GROUP_OF_HER_MEDICATIONS_BY_NAME = Pattern.compile("(?<=^| )" + POSSESSIVE
+			+ " (?:\\p{L}+ )?" + MEDICATION_GROUP_NOUN + "(?= |$)");
+
 	/** The possessives naming the drug as hers. */
 	private static final Set<String> RESIDUAL_POSSESSIVES = new HashSet<String>(Arrays.asList("her", "his", "their",
 		"patient's"));
@@ -2978,6 +2982,21 @@ public final class QueryScopeRouter {
 		if (withoutADuration != null) {
 			wordsWithTheDrugMarked = Arrays.asList(withoutADuration.split(" "));
 		}
+		// A group of her medications by any of its names — "her antacid", "her painkillers" — is her medications, as "her
+		// ARVs" is: "Is it safe to give her ciprofloxacin with her antacid?" proposes it beside them (ADR Decision 488).
+		// Only a group noun the readings do not already admit, so a wording they read stays read as it was: "her TB drugs".
+		Matcher group = A_GROUP_OF_HER_MEDICATIONS_BY_NAME.matcher(String.join(" ", wordsWithTheDrugMarked));
+		StringBuffer withHerMedications = new StringBuffer();
+		while (group.find()) {
+			String[] named = group.group().split(" ");
+			boolean admitted = true;
+			for (int w = 1; w < named.length; w++) {
+				admitted &= RESIDUAL_FILLER.contains(named[w]);
+			}
+			group.appendReplacement(withHerMedications, admitted ? Matcher.quoteReplacement(group.group()) : "her meds");
+		}
+		group.appendTail(withHerMedications);
+		wordsWithTheDrugMarked = Arrays.asList(withHerMedications.toString().split(" "));
 		String withoutAPurposeAfterIt = withoutAPurposeAfterTheDrug(String.join(" ", wordsWithTheDrugMarked));
 		if (withoutAPurposeAfterIt != null) {
 			wordsWithTheDrugMarked = Arrays.asList(withoutAPurposeAfterIt.split(" "));

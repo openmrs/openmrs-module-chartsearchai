@@ -23547,3 +23547,29 @@ after one drug, with the question following it, was read by neither.
   not weighed.
 
 Pinned by `ClinicianWordingsTest.aPurposeRightAfterTheDrugIsSetAsideAsAClosingOneIs`.
+
+## Decision 488: Giving a drug with a group of her medications, by any of its names, is proposing it beside them
+
+**Status: Accepted** (October 2026) — found asking 24 further wordings of 15 patients on the 3.7.1 standalone on 2026-10-27.
+
+### Context
+
+*"Is it safe to give her ciprofloxacin with her antacid?"* went to the model, which answered *"Ciprofloxacin can be
+given, with one caution"* on 3 of 15 patients. *"Is it safe to start rifampicin with her ARVs?"* is the module's
+proposal of rifampicin (Decision 396): every proposal is screened against her medications, under the proposal's lead. The
+residual reading admits *"her ARVs"* as words for her medications as a whole, but no other group noun: *"her antacid"*,
+*"her painkillers"*.
+
+### The decision
+
+- The residual reading reads a group of her medications named by its own noun (`MEDICATION_GROUP_NOUN`, after a
+  possessive) as *"her meds"*. The question is then the proposal it spells, answered as *"Can I give her X?"* is.
+- Only a group whose words the readings do not already admit is read so. In the first build every group was rewritten,
+  and *"Can she take fluconazole while on her TB drugs?"* lost the reading it had.
+  `ClinicianWordingsTest.sixMoreWordingsAreAnsweredAsTheQuestionsTheyAsk` caught it.
+- First tried, and rejected: reading it as Decision 428's *"Is X safe with her G?"*, which answers with no lead. That
+  contradicted Decision 396's answer to *"Is it safe to start rifampicin with her ARVs?"*.
+  `ClinicianWordingsTest.aQuestionAboutOneDrugInAnUnknownWordingIsAnsweredAsTheProposalOrTheInteraction` caught it. A
+  group beside the drug proposed is what every proposal is screened against already.
+
+Pinned by `ClinicianWordingsTest.givingADrugWithAGroupOfHerMedicationsIsProposingItBesideThem`.

@@ -3415,10 +3415,13 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 
 	/** The screen note's words for two substances, as {@code DrugReferenceInjector} renders them after its finding
 	 *  prefix — pinned here as a literal, so a reword of the note shows up as a changed answer. */
-	private static final String SCREEN_NOTE_WORDS = "No interactions were found among this patient's active medications. "
-			+ "2 substances in them were checked against each other, and the reference data relates none of them at or "
-			+ "above the configured severity level. This check compares individual substances: relationships resting only on two "
-			+ "drugs sharing a drug class are not part of it, so it is not a statement that no relationship exists.";
+	/** Her aspirin and metformin, which DDInter relates by one row rated Unknown, below the floor: counted, never "No
+	 *  interactions were found" (ADR Decision 467). */
+	private static final String SCREEN_NOTE_WORDS = "No interactions at or above the configured severity level were found "
+			+ "among this patient's active medications. 2 substances in them were checked against each other. The reference "
+			+ "data lists one pair of them only below that level, with no severity or mechanism on file. This check compares "
+			+ "individual substances: relationships resting only on two drugs sharing a drug class are not part of it, so it "
+			+ "is not a statement that no relationship exists.";
 
 	/** With the property off, the screen's prompt: the note is injected, and its record number. */
 	private int screenNoteIndex() {
@@ -3489,8 +3492,7 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		ChartAnswer answer = serviceWith(provider).search(patient, SCREEN);
 		assertEquals(0, provider.calls, "the module answers: " + answer.getAnswer());
 		String[] lines = answer.getAnswer().split("\n");
-		assertTrue(lines[0].startsWith("No interactions were found among this patient's active medications. "),
-				answer.getAnswer());
+		assertTrue(lines[0].startsWith(SCREEN_NOTE_WORDS), answer.getAnswer());
 		assertEquals("Found as well, beyond interactions:", lines[1], answer.getAnswer());
 		assertTrue(lines.length == 3 && lines[2].matches("The patient has a recorded allergy to Acetylsalicylic acid \\(aspirin\\)\\. "
 				+ "This finding is about a medication this patient is already taking\\. \\[\\d+\\]"), answer.getAnswer());

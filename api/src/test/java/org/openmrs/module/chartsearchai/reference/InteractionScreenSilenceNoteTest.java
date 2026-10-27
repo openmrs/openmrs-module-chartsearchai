@@ -128,9 +128,10 @@ public class InteractionScreenSilenceNoteTest {
 		// SUBSTANCES, not medications: the count is of the distinct substances the data resolved her orders to, so
 		// "2 of them" — read back against "active medications" — told the demo's clinician two prescriptions were
 		// checked where one co-trimoxazole prescription carried both (ADR Decision 163). A literal, for the reason
-		// the lead's needle below is one.
-		assertTrue(note.contains("2 substances in them were checked against each other, and the reference data "
-				+ "relates none of them at or above the configured severity level."),
+		// the lead's needle below is one. The fixture's one rule is rated Unknown, below the floor, so the note counts that
+		// pair rather than saying the data relates nothing (ADR Decision 467).
+		assertTrue(note.contains("2 substances in them were checked against each other. The reference data lists one pair "
+				+ "of them only below that level, with no severity or mechanism on file."),
 				"it says how many SUBSTANCES were checked against each other: " + note);
 		assertFalse(note.toLowerCase().contains("prednisolone"),
 				"and it names no drug — it is citable evidence with nothing to navigate to: " + note);
@@ -155,7 +156,9 @@ public class InteractionScreenSilenceNoteTest {
 		PatientChart chart = injected(UNRELATED_PAIR_FIXTURE, "Prednisolone", "Methylprednisolone");
 		String note = screenNotes(chart).get(0).getText();
 
-		int finding = note.indexOf("No interactions were found among this patient's active medications.");
+		// Scoped to the floor, since the fixture's pair is rated below it (ADR Decision 467); the polarity is unchanged.
+		int finding = note.indexOf("No interactions at or above the configured severity level were found among this "
+				+ "patient's active medications.");
 		int count = note.indexOf("2");
 		assertTrue(finding >= 0,
 				"the note must state its finding as a complete sentence in these words — the polarity, and the phrase, the answer copies: "

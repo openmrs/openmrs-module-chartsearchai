@@ -7363,6 +7363,19 @@ public class DrugSafetyValidator {
 	static List<PairChipExtent.BelowFloorPair> belowFloorPairs(List<DrugReference> rows,
 			SubstanceSubjects subjects, PatientClinicalContext context, int severityFloor,
 			List<DrugReference> orderEntries, BridgedOrders bridgedOrders) {
+		return belowFloorPairs(rows, subjects, context, severityFloor, orderEntries, bridgedOrders, null, null);
+	}
+
+	/**
+	 * As above, for the screen of her orders against each other (ADR Decision 467), where both sides of a pair are hers
+	 * and so each pair is reached from both: {@code seenPairs} is the screen's own ledger of unordered pairs, keyed as
+	 * {@link #addActiveOrderPairInteractions} keys the pairs it chips — the subject's {@code keyNames} name beside the
+	 * partner's — so a pair stated from one side is not stated again from the other. {@code null} keys nothing.
+	 */
+	private static List<PairChipExtent.BelowFloorPair> belowFloorPairs(List<DrugReference> rows,
+			SubstanceSubjects subjects, PatientClinicalContext context, int severityFloor,
+			List<DrugReference> orderEntries, BridgedOrders bridgedOrders, Map<DrugReference, String> keyNames,
+			Set<List<String>> seenPairs) {
 		if (context == null || rows.isEmpty()) {
 			return Collections.emptyList();
 		}
@@ -7394,6 +7407,14 @@ public class DrugSafetyValidator {
 		for (Map.Entry<Object, DrugReference.Interaction> pair : worst.entrySet()) {
 			DrugReference.Interaction i = pair.getValue();
 			DrugReference ref = worstRow.get(pair.getKey());
+			if (seenPairs != null) {
+				DrugReference partnerEntry = activeOrderEntryFor(orderEntries, ref, i);
+				String partnerName = partnerEntry != null ? keyNames.get(partnerEntry)
+						: partnerLabel(i).toLowerCase(Locale.ROOT);
+				if (!seenPairs.add(unorderedPairKey(keyNames.get(rows.get(0)), partnerName))) {
+					continue;
+				}
+			}
 			// Her orders the partner was matched against, by the walk an interaction chip's matched order names
 			// come from (ADR Decision 142): the partner side only, the subject being a proposal.
 			Set<String> matchedNames = new LinkedHashSet<String>();
@@ -9716,6 +9737,10 @@ public class DrugSafetyValidator {
 		// cross-arm sum this field exists to prevent. ADR Decision 71.
 		boolean cededToDrugInPlayArm = false;
 		Set<List<String>> seenPairs = new LinkedHashSet<List<String>>();
+		// The pairs of her orders the data relates only below the floor, each once (ADR Decision 467): a screen
+		// stating none of them let its answer say no interactions were found where the data lists them.
+		List<PairChipExtent.BelowFloorPair> belowFloor = new ArrayList<PairChipExtent.BelowFloorPair>();
+		Set<List<String>> seenBelowFloor = new LinkedHashSet<List<String>>();
 		// Keyed by the reference data's own name for each drug, not by entry, and resolved once per
 		// drug — issue #115's shape reaches the subjects here exactly as it reaches the question drugs
 		// in the pair arm, because one order name resolves every route variant sharing an
@@ -9765,6 +9790,8 @@ public class DrugSafetyValidator {
 			// Whether the subject has STARTED (issue #553), over every order as the bridge asks it — per
 			// SUBSTANCE, beside the witnesses it mirrors, rather than once per pair.
 			Date subjectStart = scheduledStartOf(substance, context.getActiveDrugOrders(), bridgedOrders);
+			belowFloor.addAll(belowFloorPairs(substance, subjects, others, severityFloor, orderDrugs, bridgedOrders,
+					keyNames, seenBelowFloor));
 			// This subject's chips, collapsed by mechanism before the cap as the drug-in-play arm's are (ADR
 			// Decisions 99, 190): the cap then counts what a clinician reads, and the extent still counts pairs.
 			List<MechanismStatement> statements = new ArrayList<MechanismStatement>();
@@ -9956,7 +9983,7 @@ public class DrugSafetyValidator {
 			// definition (a restatement is a pair already shown, not one found — PairChipExtent's
 			// javadoc, #339 review round 12), and reachable only where the repeated chip was not the
 			// drug-in-play arm's for this very pair, since alreadyReported above tests that first.
-			return PairChipExtent.of(0, 0);
+			return PairChipExtent.of(0, 0, belowFloor);
 		}
 		Collections.sort(pairs, SCREENED_PAIR_SEVERITY_DESCENDING);
 		// The same cap the question-pair arm applies, from the same GP — the two gates are mutually
@@ -10002,7 +10029,7 @@ public class DrugSafetyValidator {
 		for (int n = 0; n < reported; n++) {
 			warnings.add(pairs.get(n).warning);
 		}
-		return PairChipExtent.of(foundPairs, shownPairs);
+		return PairChipExtent.of(foundPairs, shownPairs, belowFloor);
 	}
 
 	/**

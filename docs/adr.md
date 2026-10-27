@@ -23015,3 +23015,39 @@ on 13 of 15 patients. *"Fluconazole and nevirapine together?"* is the module's (
   read *"together"*. The question is answered as its *"together"* wording is.
 
 Pinned by `ClinicianWordingsTest.twoDrugsAtOnceAreTwoDrugsTogether`.
+
+## Decision 467: A screen states the pairs of her orders it relates below the floor, and says when her conditions were not checked
+
+**Status: Accepted** (October 2026) — found asking *"Does he have any drug contraindications?"* of the public demo's patient
+`dd74dc61-1691-11df-97a5-7038c432aabf` on 2026-10-27.
+
+### Context
+
+He is on Lamivudine, Nevirapine and Stavudine. The module answered *"No interactions were found among this patient's active
+medications. 3 substances in them were checked against each other, and the reference data relates none of them at or above
+the configured severity level. …"*, then a duplicate-therapy line per drug, with `interactionPairs` `{found: 0, reported: 0,
+belowFloor: null}` and `conditionRuleCoverage: "absent"`. The shipped DDInter knowledge base relates all three pairs, each
+rated `Unknown` with no mechanism text, which `DrugSafetyValidator.severityRank` ranks below the shipped `minor` floor. The
+note's second clause was true; its lead was not. Decision 127 left this as its residue: *"Only the drug-in-play arm measures
+it … a screen says nothing below the floor."* The answer also said nothing of his conditions, against which the shipped
+data carries no drug-condition rule to check (Decision 75), on a question asking about contraindications.
+
+### The decision
+
+- The screen of her orders (`addActiveOrderPairInteractions`) states `belowFloor` too: `belowFloorPairs` asked of each of her
+  substances against her OTHER orders, as the screen asks its above-floor rules, each unordered pair once on the screen's
+  own pair key. A screen that ceded a pair still states `null`.
+- Where that list is not empty, the screen note's lead is scoped to the floor and the pairs are counted, never named:
+  *"No interactions at or above the configured severity level were found among this patient's active medications. 3
+  substances in them were checked against each other. The reference data lists 3 pairs of them only below that level, none
+  with a severity or mechanism on file."* The negative polarity still comes first (Decision 87). The module's answer quotes
+  the note word for word, as before (Decision 162). A screen relating no pair at any rating keeps the old words.
+- A screen's composed answer to a question asking more than whether her medications interact closes with
+  `CONDITIONS_NOT_CHECKED` where `conditionRuleCoverage()` answers `ABSENT`: *"This patient's conditions were not checked
+  against these medications: the drug data loaded carries no drug-condition rules."*
+
+Test literals pinned the old lead over arrangements DDInter rates `Unknown` (Prednisolone and Methylprednisolone in
+`InteractionScreenSilenceNoteTest`, Dexamethasone and Prednisone in `ScreenBesideHerOwnConflictsTest`, Acetylsalicylic acid
+and Metformin in `LlmInferenceServiceAnswerFromFindingsContextTest`). They now state the new lead. That is this decision's spec change, made on the owner's request, and not an accommodation.
+
+Pinned by `ScreenBelowFloorPairsTest`, over the shipped knowledge base as production loads it.

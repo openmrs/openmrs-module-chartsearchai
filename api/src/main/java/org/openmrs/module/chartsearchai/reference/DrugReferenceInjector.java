@@ -957,7 +957,7 @@ public class DrugReferenceInjector {
 		Integer screenNoteIndex = null;
 		if (screenRelatedNothing) {
 			screenNoteIndex = Integer.valueOf(index);
-			String rendered = renderInteractionScreenNote(screenedSubstances.size());
+			String rendered = renderInteractionScreenNote(screenedSubstances.size(), pairExtent.stated());
 			mappings.add(new RecordMapping(index,
 					ChartSearchAiConstants.RESOURCE_TYPE_INTERACTION_SCREEN_NOTE,
 					// No resourceKey: the note stands for no entry and names no drug, so there is
@@ -1487,7 +1487,8 @@ public class DrugReferenceInjector {
 						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS)
 				&& context.chartReadForSafety() && questionDrugs.isEmpty()
 				&& QueryScopeRouter.asksOnlyToScreenHerMedications(question)) {
-			moduleAnswer = composeFromAScreenThatRelatedNothing(question, screenNoteIndex, screenedSubstances.size(), findings,
+			moduleAnswer = composeFromAScreenThatRelatedNothing(question, screenNoteIndex, screenedSubstances.size(),
+					pairExtent.stated(), findings,
 					findingNumbers, orderRecordNumbers,
 					orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers,
 					context, unidentified.size());
@@ -1676,6 +1677,13 @@ public class DrugReferenceInjector {
 			for (String word : unrecognisedWordsInAProduct(question, questionDrugs)) {
 				moduleAnswer = moduleAnswer + "\n" + notCheckedInTheProduct(word);
 			}
+		}
+		// A screen asked about more than interactions — "Does he have any drug contraindications?" — where the data carries no
+		// drug-condition rule weighed none of her conditions, and says so (ADR Decision 467).
+		if (moduleAnswer != null && questionDrugs.isEmpty() && QueryScopeRouter.asksOnlyToScreenHerMedications(question)
+				&& !QueryScopeRouter.asksOnlyAboutInteractions(question)
+				&& drugSafetyValidator.conditionRuleCoverage() == DrugReferenceLoad.Coverage.ABSENT) {
+			moduleAnswer = moduleAnswer + "\n" + CONDITIONS_NOT_CHECKED;
 		}
 		if (moduleAnswer != null) {
 			injected.markModuleAnswer(moduleAnswer);
@@ -3900,6 +3908,12 @@ public class DrugReferenceInjector {
 		}
 	}
 
+	/** What closes a screen's answer to a question asking more than whether her medications interact, where the data
+	 *  loaded carries no drug-condition rule ({@link DrugSafetyValidator#conditionRuleCoverage()} answers {@code ABSENT}):
+	 *  her conditions were not weighed against her orders, and nothing else in the answer says so (ADR Decision 467). */
+	static final String CONDITIONS_NOT_CHECKED = "This patient's conditions were not checked against these medications: "
+			+ "the drug data loaded carries no drug-condition rules.";
+
 	/** What a below-floor answer's bottom line does not cover, stated under it (ADR Decision 144). */
 	static final String BELOW_FLOOR_SCOPE =
 			"Interactions the data does not rate, and anything beyond drug interactions, are not covered.";
@@ -5537,7 +5551,7 @@ public class DrugReferenceInjector {
 	 * it (ADR Decision 228). Anything else — a contraindication finding among them — keeps the model call.
 	 */
 	private static String composeFromAScreenThatRelatedNothing(String question, Integer screenNoteIndex, int screened,
-			List<SafetyWarning> findings, List<Integer> findingNumbers, Map<String, Integer> orderRecordNumbers,
+			PairChipExtent screen, List<SafetyWarning> findings, List<Integer> findingNumbers, Map<String, Integer> orderRecordNumbers,
 			Map<String, Integer> herOrderRecords, PatientClinicalContext context, int unidentified) {
 		// Her own records directly conflicting with her orders are no pair the screen relates (ADR Decision 236): on a
 		// safety question what the screen found is answered from the rest, and they follow it. A question asking only about
@@ -5554,7 +5568,7 @@ public class DrugReferenceInjector {
 			(herOwnConflict ? contraindications : rest).add(finding);
 			(herOwnConflict ? contraindicationNumbers : restNumbers).add(findingNumbers.get(i));
 		}
-		String opening = noPairOpening(screenNoteIndex, screened, rest, restNumbers, orderRecordNumbers, herOrderRecords,
+		String opening = noPairOpening(screenNoteIndex, screened, screen, rest, restNumbers, orderRecordNumbers, herOrderRecords,
 				context, unidentified);
 		if (opening == null || contraindications.isEmpty()) {
 			return opening;
@@ -5573,11 +5587,11 @@ public class DrugReferenceInjector {
 	}
 
 	/** {@link #composeFromAScreenThatRelatedNothing}'s answer to what the screen found, her own conflicts set apart. */
-	private static String noPairOpening(Integer screenNoteIndex, int screened, List<SafetyWarning> findings,
+	private static String noPairOpening(Integer screenNoteIndex, int screened, PairChipExtent screen, List<SafetyWarning> findings,
 			List<Integer> findingNumbers, Map<String, Integer> orderRecordNumbers, Map<String, Integer> herOrderRecords,
 			PatientClinicalContext context, int unidentified) {
 		if (screenNoteIndex != null && onlyHerOwnOrdersSharingASubstance(findings)) {
-			return withHerOwnOrdersSharingASubstance(interactionScreenNoteWords(screened) + " [" + screenNoteIndex + "]",
+			return withHerOwnOrdersSharingASubstance(interactionScreenNoteWords(screened, screen) + " [" + screenNoteIndex + "]",
 					findings, findingNumbers, orderRecordNumbers, herOrderRecords);
 		}
 		if (findings.isEmpty() && hasNoActiveDrug(context)) {
@@ -9245,8 +9259,8 @@ public class DrugReferenceInjector {
 	 *        through {@link DrugReference#substanceGroupKey()} by the caller, never as rows
 	 * @return the rendered note
 	 */
-	private static String renderInteractionScreenNote(int screened) {
-		return FINDING_PREFIX + "interaction screen. " + interactionScreenNoteWords(screened);
+	private static String renderInteractionScreenNote(int screened, PairChipExtent screen) {
+		return FINDING_PREFIX + "interaction screen. " + interactionScreenNoteWords(screened, screen);
 	}
 
 	/**
@@ -9255,15 +9269,52 @@ public class DrugReferenceInjector {
 	 * the record states (the configured floor, and that a shared drug class is not part of the screen): the model,
 	 * quoting the record, dropped both on the demo.
 	 */
-	private static String interactionScreenNoteWords(int screened) {
+	private static String interactionScreenNoteWords(int screened, PairChipExtent screen) {
+		List<PairChipExtent.BelowFloorPair> below = screen == null || screen.getBelowFloor() == null
+				? Collections.<PairChipExtent.BelowFloorPair> emptyList() : screen.getBelowFloor();
 		// SUBSTANCES, said so: the count is of distinct substances, and "N of them" read back against "active
 		// medications" told a clinician one co-trimoxazole prescription was two (ADR Decision 163).
-		return SCREEN_NOTE_FINDING_LEAD + screened
-				+ " substances in them were checked against each other, and the "
-				+ "reference data relates none of them at or above the configured severity level. This "
+		String checked = below.isEmpty()
+				? SCREEN_NOTE_FINDING_LEAD + screened + " substances in them were checked against each other, and the "
+						+ "reference data relates none of them at or above the configured severity level. "
+				// Pairs of hers the data relates below the floor are no finding, but "No interactions were found" is false
+				// of them (ADR Decision 467): the lead keeps its negative polarity, scoped to the floor, and the pairs are
+				// counted, never named — the note names no drug.
+				: SCREEN_NOTE_BELOW_FLOOR_LEAD + screened + " substances in them were checked against each other. The "
+						+ "reference data lists " + (below.size() == 1 ? "one pair" : below.size() + " pairs")
+						+ " of them only below that level, " + belowFloorRatings(below) + ". ";
+		return checked + "This "
 				+ "check compares individual substances: relationships resting only on two drugs "
 				+ "sharing a drug class are not part of it, so it is not a statement that no "
 				+ "relationship exists.";
+	}
+
+	/** {@link #SCREEN_NOTE_FINDING_LEAD} where the screen related pairs of her orders below the floor (ADR Decision 467). */
+	private static final String SCREEN_NOTE_BELOW_FLOOR_LEAD =
+			"No interactions at or above the configured severity level were found among this patient's active medications. ";
+
+	/**
+	 * What the data rates the screen's below-floor pairs, in the words a below-floor answer uses for a drug's (ADR Decision
+	 * 144): "none with a severity or mechanism on file" where every pair is rated Unknown, the mechanism said only where
+	 * the data says of every one that none is on file; otherwise the ratings, "rated Minor and Unknown".
+	 */
+	private static String belowFloorRatings(List<PairChipExtent.BelowFloorPair> below) {
+		Set<String> ratings = new LinkedHashSet<String>();
+		boolean allUnknown = true;
+		boolean noMechanism = true;
+		for (PairChipExtent.BelowFloorPair pair : below) {
+			String severity = pair.getSeverity() == null ? "" : pair.getSeverity().trim();
+			allUnknown &= "unknown".equalsIgnoreCase(severity);
+			noMechanism &= Boolean.FALSE.equals(pair.mechanismOnFile());
+			if (!severity.isEmpty()) {
+				ratings.add(severity);
+			}
+		}
+		if (!allUnknown) {
+			return "rated " + joinedAsAList(new ArrayList<String>(ratings));
+		}
+		return (below.size() == 1 ? "with no severity" : "none with a severity") + (noMechanism ? " or mechanism" : "")
+				+ " on file";
 	}
 
 	/**

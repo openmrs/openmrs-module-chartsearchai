@@ -36,6 +36,12 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  */
 public class ScreenBesideHerOwnConflictsTest extends BaseModuleContextSensitiveTest {
 
+	/** What the screen of dexamethasone and prednisone found: DDInter rates the pair Unknown, below the floor, so the screen
+	 *  counts it rather than saying no interactions were found (ADR Decision 467). */
+	private static final String DEXAMETHASONE_PREDNISONE_SCREEN = "No interactions at or above the configured severity level "
+			+ "were found among this patient's active medications. 2 substances in them were checked against each other. The "
+			+ "reference data lists one pair of them only below that level, with no severity or mechanism on file. ";
+
 	@BeforeEach
 	public void answerFromFindings() {
 		Context.getAdministrationService().setGlobalProperty(
@@ -51,7 +57,7 @@ public class ScreenBesideHerOwnConflictsTest extends BaseModuleContextSensitiveT
 		assertNotNull(answer, "the module answers");
 		String[] lines = answer.split("\n");
 		assertEquals(5, lines.length, "was: " + answer);
-		assertEquals(true, lines[0].startsWith("No interactions were found among this patient's active medications. "),
+		assertEquals(true, lines[0].startsWith(DEXAMETHASONE_PREDNISONE_SCREEN),
 			"was: " + answer);
 		assertEquals("2 contraindications about medications this patient is already taking, none with a severity rated:",
 			lines[1], "was: " + answer);
@@ -91,7 +97,7 @@ public class ScreenBesideHerOwnConflictsTest extends BaseModuleContextSensitiveT
 			assertNotNull(answer, question + " — the module answers");
 			String[] lines = answer.split("\n");
 			assertEquals(DrugReferenceInjector.CHOOSES_NO_DRUG_LEAD, lines[0], question + " — was: " + answer);
-			assertEquals(true, lines[1].startsWith("No interactions were found among this patient's active medications. "),
+			assertEquals(true, lines[1].startsWith(DEXAMETHASONE_PREDNISONE_SCREEN),
 				question + " — was: " + answer);
 			assertEquals("2 contraindications about medications this patient is already taking, none with a severity rated:",
 				lines[2], question + " — was: " + answer);
@@ -114,7 +120,7 @@ public class ScreenBesideHerOwnConflictsTest extends BaseModuleContextSensitiveT
 				DrugReferenceTestSupport.activeOrder("order-pred", "Prednisone", "Prednisone"));
 			assertNotNull(answer, question + " — the module answers");
 			String[] lines = answer.split("\n");
-			assertEquals(true, lines[0].startsWith("No interactions were found among this patient's active medications. "),
+			assertEquals(true, lines[0].startsWith(DEXAMETHASONE_PREDNISONE_SCREEN),
 				question + " — was: " + answer);
 			assertEquals(DrugReferenceInjector.BEYOND_INTERACTIONS_LEAD, lines[1], question + " — was: " + answer);
 			assertEquals(true, lines[2].startsWith("The patient has a recorded allergy to Dexamethasone."),

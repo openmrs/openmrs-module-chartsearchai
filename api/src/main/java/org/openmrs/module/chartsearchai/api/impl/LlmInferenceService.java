@@ -1145,7 +1145,10 @@ public class LlmInferenceService implements ChartSearchService {
 	 * interacts with her NSAIDs.
 	 */
 	private static List<SafetyWarning> aboutTheDrugAsked(List<SafetyWarning> chips, PatientChart chart, String question) {
-		if (!asksAboutDrugSafety(question, chart)) {
+		// Nor where a word in a drug's place has no near drug name: the pair asked about was never checked, which the
+		// answer says, and the named drug's other findings are not what was asked (ADR Decision 479). "Can oranges be given
+		// to a patient on nevirapine?" carried nevirapine's own interactions as chips.
+		if (!asksAboutDrugSafety(question, chart) || chart.getUncheckedWordStatement() != null) {
 			return new ArrayList<SafetyWarning>();
 		}
 		boolean allergyToOneThing = QueryScopeRouter.asksWhetherAllergicToOneNamedThing(question);

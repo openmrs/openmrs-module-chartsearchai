@@ -23303,3 +23303,25 @@ shapes read an activity while on the drug, or a food asked beside a sentence say
   *"She is on nevirapine. Can she have ibuprofen?"*.
 
 Pinned by `ClinicianWordingsTest.anActivityOrAFoodWhileOnHerDrugCarriesNoDrugSafetyMaterial`.
+
+## Decision 479: A word with no near drug name beside her drug leaves no chip about that drug
+
+**Status: Accepted** (October 2026) — found asking 6 passive wordings of 15 patients on the 3.7.1 standalone on 2026-10-27.
+
+### Context
+
+*"Can oranges be given to a patient on nevirapine?"* was answered with the model's answer and Decision 384's statement:
+*"No interaction check was run for "oranges" and Nevirapine: "oranges" is not a drug name the interaction data
+recognises."*. Yet on 9 of 15 patients it carried nevirapine's own interactions with her other medications as chips.
+The pair the question asked about was never checked, and the answer says so. The chips answered a question nobody asked:
+what nevirapine does beside her other medications.
+
+### The decision
+
+- Where the pre-answer pass stamped a word with no near drug name in a drug's place (`getUncheckedWordStatement`),
+  `aboutTheDrugAsked` publishes no chip. This holds on every path that publishes chips, streaming included.
+- This holds for a drug-like word too (*"Does zorblatine interact with her warfarin?"*). There, too, the pair asked about
+  was not checked, and her warfarin's other interactions are not what was asked. A word WITH a near drug name is still
+  answered by the module with its suggestions (Decision 250), and its chips are unchanged.
+
+Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aWordWithNoNearDrugNameBesideHerDrugCarriesNoChipAboutThatDrug`.

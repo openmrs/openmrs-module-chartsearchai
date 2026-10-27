@@ -3061,6 +3061,26 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	}
 
 	/**
+	 * A word with no near drug name beside her drug leaves the pair asked about unchecked, so no chip about that drug's
+	 * other interactions is attached to the answer that says so (ADR Decision 479). On the 3.7.1 standalone "Can oranges be
+	 * given to a patient on nevirapine?" said no check was run for oranges and nevirapine, yet carried nevirapine's own
+	 * interactions as chips.
+	 */
+	@Test
+	public void aWordWithNoNearDrugNameBesideHerDrugCarriesNoChipAboutThatDrug() throws Exception {
+		executeDataSet(WARFARIN_ORDER);
+		ChartAnswer proposal = serviceWith(new RecordingProvider(), shipped()).search(patient, "Can I give her warfarin?");
+		assertFalse(proposal.getSafetyWarnings().isEmpty(), "precondition: warfarin's own findings are chips of its proposal");
+		for (String question : new String[] { "Can oranges be given to a patient on warfarin?", "Is oranges safe with her warfarin?",
+				"Does zorblatine interact with her warfarin?" }) {
+			ChartAnswer answer = serviceWith(new RecordingProvider(), shipped()).search(patient, question);
+			assertTrue(answer.getAnswer().contains("is not a drug name the interaction data recognises"),
+					"precondition: the answer says the pair was not checked: " + answer.getAnswer());
+			assertTrue(answer.getSafetyWarnings().isEmpty(), question + " carries no chip: " + answer.getSafetyWarnings());
+		}
+	}
+
+	/**
 	 * A word in a drug question's drug place that the drug data neither recognises nor finds a near name for may be no drug
 	 * at all, so the question takes the chart answer, and the module states after it that no interaction check was run
 	 * (ADR Decision 384). On the 3.7.1 standalone "Can i give her oranges?" was answered by the module alone, "No interaction

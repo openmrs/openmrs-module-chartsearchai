@@ -41,10 +41,15 @@ public class HerDrugAllergiesListedTest extends BaseModuleContextSensitiveTest {
 	public void herDrugAllergiesAreListedFromHerRecords() {
 		PatientClinicalContext.ActiveDrugOrder metronidazole = DrugReferenceTestSupport.activeOrder("order-mtz",
 			"Metronidazole", "Metronidazole");
-		String expected = ask("What drugs should she avoid?", DrugReferenceTestSupport.set("dexamethasone", "clarithromycin"),
-			metronidazole).split("\n")[1];
-		assertTrue(expected.startsWith("Recorded drug allergies: ") && expected.toLowerCase().contains("dexamethasone")
-				&& expected.toLowerCase().contains("clarithromycin"), "precondition: the allergy line — " + expected);
+		// The allergies as the answer to which drugs to avoid spells them, inside its lead since ADR Decision 496.
+		String lead = ask("What drugs should she avoid?", DrugReferenceTestSupport.set("dexamethasone", "clarithromycin"),
+			metronidazole).split("\n")[0];
+		String opening = DrugReferenceInjector.LISTS_NO_DRUG_TO_AVOID_LEAD + " (";
+		assertTrue(lead.startsWith(opening) && lead.contains(") and what it found"), "precondition: the lead — " + lead);
+		String expected = "Recorded drug allergies: " + lead.substring(opening.length(), lead.indexOf(") and what it found"))
+				+ ".";
+		assertTrue(expected.toLowerCase().contains("dexamethasone") && expected.toLowerCase().contains("clarithromycin"),
+			"precondition: the allergy line — " + expected);
 		for (String question : Arrays.asList("What are her drug allergies?", "What are his drug allergies?",
 				"Does she have any drug allergies?", "List her medication allergies", "What drugs is she allergic to?")) {
 			String answer = ask(question, DrugReferenceTestSupport.set("dexamethasone", "clarithromycin"), metronidazole);

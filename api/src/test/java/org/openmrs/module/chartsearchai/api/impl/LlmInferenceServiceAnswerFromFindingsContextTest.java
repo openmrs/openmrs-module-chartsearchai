@@ -2784,8 +2784,9 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		String[] lines = answer.getAnswer().split("\\n");
 		assertTrue(lines[1].startsWith(firstSentence(findings.get(0))),
 				"after its count, the pair it related, as a screen does: " + answer.getAnswer());
-		// "Not checked" says it was not screened; the sentence repeating it went in ADR Decision 493.
-		assertEquals("Not checked: 1 active order the drug data does not identify — Marevan.", lines[lines.length - 1]);
+		// One line saying what the screen did not check, the order last (ADR Decisions 493, 496).
+		assertEquals("Not checked: interactions the data does not rate, anything beyond drug interactions, and 1 active order "
+				+ "the drug data does not identify: Marevan.", lines[lines.length - 1]);
 	}
 
 	/**

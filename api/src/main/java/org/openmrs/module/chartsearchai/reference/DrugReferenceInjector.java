@@ -1535,8 +1535,14 @@ public class DrugReferenceInjector {
 		findingNumbers = allFindingNumbers;
 		// An order the drug data does not identify no longer gives the question up (ADR Decision 161): the answer says
 		// which, and that it was not checked. History questions are answered below under their own gate, unchanged.
+		// On a screen, stated with what else it did not check, on one line, below (ADR Decision 496).
+		List<PatientClinicalContext.ActiveDrugOrder> unidentifiedOnAScreen = null;
 		if (moduleAnswer != null && !unidentified.isEmpty()) {
-			moduleAnswer = moduleAnswer + "\n" + unidentifiedOrdersLine(unidentified, questionDrugs.isEmpty());
+			if (questionDrugs.isEmpty()) {
+				unidentifiedOnAScreen = unidentified;
+			} else {
+				moduleAnswer = moduleAnswer + "\n" + unidentifiedOrdersLine(unidentified, false);
+			}
 		}
 		// And a recorded drug allergy the data does not identify was compared with nothing: said so, never left to read as
 		// checked (ADR Decision 223) — after a question that check bears on, and no other (ADR Decision 388).
@@ -1583,7 +1589,7 @@ public class DrugReferenceInjector {
 		// (ADR Decision 324). Not where her allergy records were not read: the allergy line would be a guess.
 		if (moduleAnswer != null && questionDrugs.isEmpty() && QueryScopeRouter.asksWhichDrugsToAvoid(question)) {
 			moduleAnswer = context == null || !context.contraindicationRecordsRead() ? null
-					: LISTS_NO_DRUG_TO_AVOID_LEAD + "\n" + recordedDrugAllergiesLine(context) + "\n" + moduleAnswer;
+					: listsNoDrugToAvoidLine(context) + "\n" + moduleAnswer;
 		}
 		// Whether to stop her drug: what relates it to her other medications, under a lead saying the check weighs no stopping
 		// (ADR Decision 335).
@@ -1682,10 +1688,12 @@ public class DrugReferenceInjector {
 		}
 		// A screen asked about more than interactions — "Does he have any drug contraindications?" — where the data carries no
 		// drug-condition rule weighed none of her conditions, and says so (ADR Decision 467).
-		if (moduleAnswer != null && questionDrugs.isEmpty() && QueryScopeRouter.asksOnlyToScreenHerMedications(question)
+		boolean conditionsUnchecked = moduleAnswer != null && questionDrugs.isEmpty()
+				&& QueryScopeRouter.asksOnlyToScreenHerMedications(question)
 				&& !QueryScopeRouter.asksOnlyAboutInteractions(question)
-				&& drugSafetyValidator.conditionRuleCoverage() == DrugReferenceLoad.Coverage.ABSENT) {
-			moduleAnswer = withConditionsNotChecked(moduleAnswer);
+				&& drugSafetyValidator.conditionRuleCoverage() == DrugReferenceLoad.Coverage.ABSENT;
+		if (moduleAnswer != null) {
+			moduleAnswer = withWhatWasNotChecked(moduleAnswer, conditionsUnchecked, unidentifiedOnAScreen);
 		}
 		if (moduleAnswer != null) {
 			injected.markModuleAnswer(moduleAnswer);
@@ -3918,27 +3926,57 @@ public class DrugReferenceInjector {
 	 *  loaded carries no drug-condition rule ({@link DrugSafetyValidator#conditionRuleCoverage()} answers {@code ABSENT}):
 	 *  her conditions were not weighed against her orders, and nothing else in the answer says so (ADR Decision 467). */
 	/**
-	 * {@code answer} saying her conditions were not checked (ADR Decision 467): where it closes a screen's findings with
-	 * what they do not cover, one line saying both (ADR Decision 493) — <em>"Not checked: interactions the data does not
-	 * rate, anything beyond drug interactions and contraindications, and this patient's conditions, for which the drug
-	 * data loaded carries no drug-condition rules."</em> — else {@link #CONDITIONS_NOT_CHECKED} on a line of its own.
+	 * {@code answer} saying what the check did not cover, on one line (ADR Decisions 467, 493, 496): where it closes a
+	 * screen's findings with its scope, that line becomes <em>"Not checked: interactions the data does not rate, anything
+	 * beyond drug interactions and contraindications, this patient's conditions (the drug data loaded carries no
+	 * drug-condition rules), and 10 active orders the drug data does not identify: Measles vaccination (2 orders); …"</em>,
+	 * each part only where it holds. The orders come last, after a colon: their names carry commas and semicolons of their
+	 * own. With no scope line — a screen note, an answer that no order was identified — her conditions and the orders keep
+	 * a line each, as before.
+	 *
+	 * @param unidentified the orders the drug data does not identify, on a screen; {@code null} or empty where none
 	 */
-	static String withConditionsNotChecked(String answer) {
+	static String withWhatWasNotChecked(String answer, boolean conditionsUnchecked,
+			List<PatientClinicalContext.ActiveDrugOrder> unidentified) {
+		boolean orders = unidentified != null && !unidentified.isEmpty();
+		if (!conditionsUnchecked && !orders) {
+			return answer;
+		}
 		List<String> lines = new ArrayList<String>(Arrays.asList(answer.split("\n", -1)));
 		for (int n = 0; n < lines.size(); n++) {
 			String scope = SCREEN_SCOPE.equals(lines.get(n)) ? "anything beyond drug interactions and contraindications"
 					: BELOW_FLOOR_SCOPE.equals(lines.get(n)) ? "anything beyond drug interactions" : null;
 			if (scope != null) {
-				lines.set(n, "Not checked: interactions the data does not rate, " + scope + ", and " + CONDITIONS_UNCHECKED_PART);
+				List<String> parts = new ArrayList<String>();
+				parts.add("interactions the data does not rate");
+				parts.add(scope);
+				if (conditionsUnchecked) {
+					parts.add(CONDITIONS_UNCHECKED_PART);
+				}
+				if (orders) {
+					int k = unidentified.size();
+					parts.add(k + (k == 1 ? " active order" : " active orders") + " the drug data does not identify: "
+							+ unidentifiedOrderNames(unidentified));
+				}
+				lines.set(n, "Not checked: " + String.join(", ", parts.subList(0, parts.size() - 1)) + ", and "
+						+ parts.get(parts.size() - 1) + ".");
 				return String.join("\n", lines);
 			}
 		}
-		return answer + "\n" + CONDITIONS_NOT_CHECKED;
+		StringBuilder kept = new StringBuilder(answer);
+		if (orders) {
+			kept.append('\n').append(unidentifiedOrdersLine(unidentified, true));
+		}
+		if (conditionsUnchecked) {
+			kept.append('\n').append(CONDITIONS_NOT_CHECKED);
+		}
+		return kept.toString();
 	}
 
-	/** Her conditions as one part of a screen's one "Not checked" line (ADR Decision 493). */
-	static final String CONDITIONS_UNCHECKED_PART = "this patient's conditions, for which the drug data loaded carries no "
-			+ "drug-condition rules.";
+	/** Her conditions as one part of a screen's one "Not checked" line (ADR Decisions 493, 496): bracketed, so the line's
+	 *  commas stay its own. */
+	static final String CONDITIONS_UNCHECKED_PART = "this patient's conditions (the drug data loaded carries no "
+			+ "drug-condition rules)";
 
 	static final String CONDITIONS_NOT_CHECKED = "This patient's conditions were not checked against these medications: "
 			+ "the drug data loaded carries no drug-condition rules.";
@@ -8697,18 +8735,37 @@ public class DrugReferenceInjector {
 
 	/** How the answer to which drugs to avoid in her opens (ADR Decision 324): no finding lists drugs to avoid. */
 	static final String LISTS_NO_DRUG_TO_AVOID_LEAD = "This check does not list drugs to avoid: it states this patient's"
-			+ " recorded drug allergies and what it found among the medications this patient is already taking.";
+			+ " recorded drug allergies";
+
+	/**
+	 * The answer to which drugs to avoid in her, opening (ADR Decision 324): that no finding lists drugs to avoid, with her
+	 * recorded drug allergies, each as the chart spells it, or that none is recorded, inside it — one line since ADR
+	 * Decision 496, where the allergies were a line of their own: <em>"This check does not list drugs to avoid: it states
+	 * this patient's recorded drug allergies (none is recorded) and what it found among the medications this patient is
+	 * already taking."</em>
+	 */
+	private static String listsNoDrugToAvoidLine(PatientClinicalContext context) {
+		Set<String> spelled = recordedDrugAllergies(context);
+		return LISTS_NO_DRUG_TO_AVOID_LEAD + " (" + (spelled.isEmpty() ? "none is recorded" : String.join("; ", spelled))
+				+ ") and what it found among the medications this patient is already taking.";
+	}
 
 	/** Her recorded drug allergies, each as the chart spells it, or that none is recorded (ADR Decision 324). */
 	private static String recordedDrugAllergiesLine(PatientClinicalContext context) {
+		Set<String> spelled = recordedDrugAllergies(context);
+		return spelled.isEmpty() ? "No drug allergies are recorded for this patient."
+				: "Recorded drug allergies: " + String.join("; ", spelled) + ".";
+	}
+
+	/** Her recorded drug allergies, each as the chart spells it, her other allergies aside. */
+	private static Set<String> recordedDrugAllergies(PatientClinicalContext context) {
 		Set<String> spelled = new LinkedHashSet<String>();
 		for (String token : context.getAllergyTokens()) {
 			if (!context.getNonDrugAllergyTokens().contains(token)) {
 				spelled.add(context.allergySpelling(token));
 			}
 		}
-		return spelled.isEmpty() ? "No drug allergies are recorded for this patient."
-				: "Recorded drug allergies: " + String.join("; ", spelled) + ".";
+		return spelled;
 	}
 
 	/** How the answer to whether to stop her drug opens (ADR Decision 335): no finding weighs stopping a medication. */

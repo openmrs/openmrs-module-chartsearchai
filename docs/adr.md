@@ -23850,3 +23850,40 @@ each two-drug question, were the module's.
 - A rated rule whose partner order also carries the drug is still an interaction and is unchanged.
 
 Pinned by `TerseDrugQuestionWordingsTest.severalDrugsTogetherStateApartThatOneOfHersIsAlreadyInSeveralOrders`.
+
+## Decision 496: The answer to which drugs to avoid states her allergies in its lead, and a screen says what it did not check on one line
+
+**Status: Accepted** (October 2026) — on the owner's request to shorten the answer Decision 493 left for *"What shouldn't I
+prescribe for this patient?"* on the public demo's patient `dd8f98cf-1691-11df-97a5-7038c432aabf`: 8 lines and 196 words.
+
+### Context
+
+Two lines opened it — Decision 324's *"This check does not list drugs to avoid: it states this patient's recorded drug
+allergies and what it found among the medications this patient is already taking."*, then *"No drug allergies are
+recorded for this patient."* — and two closed it, both *"Not checked: …"*: Decision 493's scope-and-conditions line, and
+Decision 161's line naming the 10 orders the drug data does not identify. Decision 493 kept the last apart because the
+orders' names carry commas and semicolons of their own (*"Polio vaccination, oral"*).
+
+### The decision
+
+- The lead states her drug allergies inside itself: *"This check does not list drugs to avoid: it states this patient's
+  recorded drug allergies (none is recorded) and what it found among the medications this patient is already taking."*,
+  or the allergies as the chart spells each, semicolon-separated, in place of *"none is recorded"*.
+- `DrugReferenceInjector.withWhatWasNotChecked` writes a screen's one *"Not checked:"* line where it closes with its scope:
+  *"Not checked: interactions the data does not rate, anything beyond drug interactions and contraindications, this
+  patient's conditions (the drug data loaded carries no drug-condition rules), and 10 active orders the drug data does not
+  identify: Measles vaccination (2 orders); …"*. Each part only where it holds. The orders come last, after a colon, so
+  their own commas and semicolons cannot be read as the line's; the conditions are bracketed for the same reason, where
+  Decision 493 wrote *", for which …"*. With no scope line — a screen note, an answer that none of her orders is
+  identified — her conditions and the orders keep a line each, as before.
+
+On the demo patient the answer is 6 lines, its one Major the third.
+
+### Spec change
+
+`DrugsToAvoidQuestionTest`, `HerDrugAllergiesListedTest` (which takes the allergy list from that answer, now from its lead's
+brackets), `BriefScreenAnswerTest` and `LlmInferenceServiceAnswerFromFindingsContextTest.aScreenBesideAnOrderTheDataCannotNameIsAnsweredNamingThatOrder`
+pinned the separate lines and now assert the merged ones.
+
+Pinned by `BriefScreenAnswerTest.theDemoPatientsAvoidAnswerStatesItsLeadAndHerAllergiesOnOneLine` and
+`.theDemoPatientsScreenStatesItsMajorWholeAndCountsTheRest`.

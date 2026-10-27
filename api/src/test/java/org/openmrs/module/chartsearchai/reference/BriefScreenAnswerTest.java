@@ -25,6 +25,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+import org.openmrs.module.chartsearchai.api.impl.QueryScopeRouter;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 
@@ -54,7 +55,7 @@ public class BriefScreenAnswerTest extends BaseModuleContextSensitiveTest {
 
 		assertNotNull(answer, "the module answers");
 		String[] lines = answer.split("\n");
-		assertEquals(6, lines.length, "was: " + answer);
+		assertEquals(5, lines.length, "was: " + answer);
 		assertEquals("13 interactions among this patient's active medications, and 4 substances carried by more than one of "
 				+ "this patient's orders:", lines[0]);
 		assertTrue(lines[1].startsWith("Nelfinavir interacts with active order Rifampin — Major. ["), "was: " + answer);
@@ -63,13 +64,32 @@ public class BriefScreenAnswerTest extends BaseModuleContextSensitiveTest {
 			"was: " + answer);
 		assertTrue(lines[3].startsWith("12 more interactions, each a caution (8 Moderate, 4 Minor), are listed in full in the "
 				+ "safety warnings beside this answer. ["), "was: " + answer);
-		assertEquals("Not checked: interactions the data does not rate, anything beyond drug interactions and "
-				+ "contraindications, and this patient's conditions, for which the drug data loaded carries no "
-				+ "drug-condition rules.", lines[4]);
-		assertEquals("Not checked: 10 active orders the drug data does not identify — Measles vaccination (2 orders); "
-				+ "Diphtheria tetanus and pertussis vaccination (2 orders); Hepatitis B vaccination (2 orders); Polio "
-				+ "vaccination, oral (2 orders); Hemophilus influenza B vaccine (2 orders).", lines[5]);
+		assertEquals(NOT_CHECKED, lines[4]);
 	}
+
+	/** Asked which drugs to avoid, the lead and her allergies are one line before the screen (ADR Decision 496). */
+	@Test
+	public void theDemoPatientsAvoidAnswerStatesItsLeadAndHerAllergiesOnOneLine() {
+		// The question the model's reading runs "What shouldn't I prescribe for this patient?" as (ADR Decision 491).
+		String answer = demoPatientsScreen(QueryScopeRouter.DRUGS_TO_AVOID_QUESTION).getModuleAnswer();
+
+		assertNotNull(answer, "the module answers");
+		String[] lines = answer.split("\n");
+		assertEquals(6, lines.length, "was: " + answer);
+		assertEquals("This check does not list drugs to avoid: it states this patient's recorded drug allergies (none is "
+				+ "recorded) and what it found among the medications this patient is already taking.", lines[0]);
+		assertTrue(lines[1].startsWith("13 interactions among this patient's active medications"), "was: " + answer);
+		assertTrue(lines[2].startsWith("Nelfinavir interacts with active order Rifampin — Major. ["), "was: " + answer);
+		assertEquals(NOT_CHECKED, lines[5]);
+	}
+
+	/** What a screen of the demo patient did not check, on one line, the orders the data does not identify last (ADR
+	 *  Decision 496). */
+	private static final String NOT_CHECKED = "Not checked: interactions the data does not rate, anything beyond drug "
+			+ "interactions and contraindications, this patient's conditions (the drug data loaded carries no drug-condition "
+			+ "rules), and 10 active orders the drug data does not identify: Measles vaccination (2 orders); Diphtheria "
+			+ "tetanus and pertussis vaccination (2 orders); Hepatitis B vaccination (2 orders); Polio vaccination, oral (2 "
+			+ "orders); Hemophilus influenza B vaccine (2 orders).";
 
 	/** Every finding the screen raised is cited by some line, so the chips pass publishes every one of them. */
 	@Test
@@ -93,6 +113,10 @@ public class BriefScreenAnswerTest extends BaseModuleContextSensitiveTest {
 	}
 
 	private static PatientChart demoPatientsScreen() {
+		return demoPatientsScreen(QUESTION);
+	}
+
+	private static PatientChart demoPatientsScreen(String question) {
 		List<PatientClinicalContext.ActiveDrugOrder> orders = new ArrayList<PatientClinicalContext.ActiveDrugOrder>();
 		add(orders, "Efavirenz", 1, null, "Efavirenz", "EFV", "Stocrin", "Sustiva");
 		add(orders, "Nelfinavir", 1, null, "Nelfinavir", "NFV", "Viracept");
@@ -114,7 +138,7 @@ public class BriefScreenAnswerTest extends BaseModuleContextSensitiveTest {
 		}
 		return DrugReferenceTestSupport.injectorWithSafety(new DrugReferenceService()).injectRecords(
 			DrugReferenceTestSupport.oneRecordChart(), DrugReferenceTestSupport.ctx(40, null, names, codes, null, null, orders),
-			QUESTION);
+			question);
 	}
 
 	private static void add(List<PatientClinicalContext.ActiveDrugOrder> orders, String display, int count, String atc,

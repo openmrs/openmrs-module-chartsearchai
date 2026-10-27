@@ -37,7 +37,7 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  * module's medication check (ADR Decision 489). On the public demo, "Any drugs that I should not give him?" ran no
  * check at all and the model answered "The records do not address any drug contraindications", beside two Major
  * interactions in his chart, while "What medications should he avoid?" ran one. The reading goes through the real
- * {@link LlmProvider#asksAboutMedicationSafety}; only the engine underneath it is a stub answering YES or NO.
+ * {@link LlmProvider#readMedicationSafetyQuestion}; only the engine underneath it is a stub answering YES or NO.
  */
 public class LlmInferenceServiceModelReadQuestionContextTest extends BaseModuleContextSensitiveTest {
 
@@ -64,8 +64,9 @@ public class LlmInferenceServiceModelReadQuestionContextTest extends BaseModuleC
 		ChartAnswer answer = serviceWith(provider).search(patient, UNKNOWN_WORDING);
 
 		assertEquals(1, provider.engine.readings, "the model was asked to read the question once");
+		assertEquals(1, provider.engine.avoidReadings, "and, after its YES, whether it asks which drugs to avoid");
 		assertEquals(LlmProvider.MEDICATION_SAFETY_QUESTION_SYSTEM_PROMPT, provider.engine.readingPrompt);
-		assertEquals(LlmProvider.medicationSafetyResponseFormat(), provider.engine.readingFormat,
+		assertEquals(LlmProvider.oneBooleanResponseFormat(LlmProvider.MEDICATION_SAFETY_FIELD), provider.engine.readingFormat,
 			"constrained to the format the reading was measured in");
 		assertEquals(UNKNOWN_WORDING, provider.engine.readQuestion, "the model reads the question as typed");
 		assertTrue(answer.isAnsweredByTheModule(), "the medication check answered it: " + answer.getAnswer());
@@ -89,6 +90,30 @@ public class LlmInferenceServiceModelReadQuestionContextTest extends BaseModuleC
 		}
 	}
 
+	/** A question the model reads as asking which drugs not to give her is answered as the router's own such question,
+	 *  which says first that the check lists no drug to avoid (ADR Decision 491). "What shouldn't I prescribe for this
+	 *  patient?" was answered as a screen, with no such sentence. */
+	@Test
+	public void aQuestionReadAsAskingWhichDrugsToAvoidSaysTheCheckListsNone() {
+		RecordingProvider provider = new RecordingProvider("AVOID");
+		ChartAnswer answer = serviceWith(provider).search(patient, "What shouldn't I prescribe for this patient?");
+
+		assertTrue(answer.isAnsweredByTheModule(), "was: " + answer.getAnswer());
+		assertTrue(answer.getAnswer().startsWith("This check does not list drugs to avoid"), "was: " + answer.getAnswer());
+		assertTrue(answer.getAnswer().contains(" interacts with active order "), "and states the findings: "
+				+ answer.getAnswer());
+	}
+
+	/** And one it reads as asking about the drugs she takes keeps the screen's own lead. */
+	@Test
+	public void aQuestionReadAsAskingAboutHerDrugsKeepsTheScreensLead() {
+		RecordingProvider provider = new RecordingProvider("YES");
+		ChartAnswer answer = serviceWith(provider).search(patient, "Are any of her meds a bad combination?");
+
+		assertTrue(answer.isAnsweredByTheModule(), "was: " + answer.getAnswer());
+		assertFalse(answer.getAnswer().startsWith("This check does not list drugs to avoid"), "was: " + answer.getAnswer());
+	}
+
 	@Test
 	public void theStreamingPathReadsTheQuestionTheSameWay() {
 		RecordingProvider provider = new RecordingProvider("YES");
@@ -105,6 +130,7 @@ public class LlmInferenceServiceModelReadQuestionContextTest extends BaseModuleC
 		ChartAnswer answer = serviceWith(provider).search(patient, UNKNOWN_WORDING);
 
 		assertEquals(1, provider.engine.readings);
+		assertEquals(0, provider.engine.avoidReadings, "the second call follows a YES only");
 		assertFalse(answer.isAnsweredByTheModule());
 		assertEquals(1, provider.answers, "the model answered it, as before");
 		assertTrue(answer.getSafetyWarnings().isEmpty(), "and no check ran: " + answer.getSafetyWarnings());
@@ -235,12 +261,18 @@ public class LlmInferenceServiceModelReadQuestionContextTest extends BaseModuleC
 		}
 	}
 
-	/** Answers the structured reading call with {@code verdict}, or fails it where {@code verdict} is null. */
+	/** Answers the first reading call with {@code verdict} — YES, NO, or AVOID for a YES whose second call reads it as
+	 *  asking which drugs to avoid — or with {@code verdict} verbatim where it is none of those, or fails it where
+	 *  {@code verdict} is null; and the second call with whether {@code verdict} is AVOID. */
 	private static final class ReadingEngine implements LlmEngine {
 
 		private final String verdict;
 
+		/** The first call's, whether the question asks about drug safety at all. */
 		private int readings;
+
+		/** The second call's, made only after a YES. */
+		private int avoidReadings;
 
 		private String readingPrompt;
 
@@ -255,6 +287,11 @@ public class LlmInferenceServiceModelReadQuestionContextTest extends BaseModuleC
 		@Override
 		public InferenceResult infer(String systemPrompt, String userMessage, int timeoutSeconds,
 				ObjectNode responseFormat) {
+			if (LlmProvider.DRUGS_TO_AVOID_QUESTION_SYSTEM_PROMPT.equals(systemPrompt)) {
+				avoidReadings++;
+				return new InferenceResult("{\"" + LlmProvider.DRUGS_TO_AVOID_FIELD + "\": " + "AVOID".equals(verdict) + "}",
+						1, 1, 0);
+			}
 			readings++;
 			readingPrompt = systemPrompt;
 			readQuestion = userMessage;
@@ -262,8 +299,8 @@ public class LlmInferenceServiceModelReadQuestionContextTest extends BaseModuleC
 			if (verdict == null) {
 				throw new IllegalStateException("engine down");
 			}
-			String text = "YES".equals(verdict) || "NO".equals(verdict)
-					? "{\"" + LlmProvider.MEDICATION_SAFETY_FIELD + "\": " + "YES".equals(verdict) + "}" : verdict;
+			String text = "YES".equals(verdict) || "NO".equals(verdict) || "AVOID".equals(verdict)
+					? "{\"" + LlmProvider.MEDICATION_SAFETY_FIELD + "\": " + !"NO".equals(verdict) + "}" : verdict;
 			return new InferenceResult(text, 1, 1, 0);
 		}
 

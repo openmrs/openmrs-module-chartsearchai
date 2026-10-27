@@ -208,6 +208,13 @@ public final class QueryScopeRouter {
 	public static final String MEDICATION_CHECK_QUESTION = "Does this patient have any drug interactions or contraindications?";
 
 	/**
+	 * The question the check runs as where the model reads a question as asking which drugs not to give her (ADR
+	 * Decision 491): {@link #asksWhichDrugsToAvoid}'s own example, whose answer says first that the check lists no drug to
+	 * avoid. Pinned by {@code QueryScopeRouterMedicationCheckQuestionTest}.
+	 */
+	public static final String DRUGS_TO_AVOID_QUESTION = "What drugs should I avoid in this patient?";
+
+	/**
 	 * True when the question asks to be SCREENED for drug interactions — "are there any drug
 	 * interactions with her current medications?", "do any of her meds interact?" — as opposed to
 	 * merely mentioning medications. Consumed by {@code DrugSafetyValidator}, which has no way to

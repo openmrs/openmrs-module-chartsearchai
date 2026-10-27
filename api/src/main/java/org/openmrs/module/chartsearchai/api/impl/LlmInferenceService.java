@@ -1215,15 +1215,21 @@ public class LlmInferenceService implements ChartSearchService {
 					ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_READ_QUESTIONS_WITH_THE_MODEL)
 				|| !injected.getQuestionSubstances().isEmpty() || injected.getUncheckedWordStatement() != null
 				|| injected.getModuleAnswer() != null || injected.screenedHerOrders()
-				|| QueryScopeRouter.asksAboutAllergies(question)
-				|| !Boolean.TRUE.equals(llmProvider.asksAboutMedicationSafety(question))) {
+				|| QueryScopeRouter.asksAboutAllergies(question)) {
 			return new SafetyReading(injected, question);
 		}
+		LlmProvider.MedicationSafetyReading reading = llmProvider.readMedicationSafetyQuestion(question);
+		if (reading == null || reading == LlmProvider.MedicationSafetyReading.OTHER) {
+			return new SafetyReading(injected, question);
+		}
+		// A question asking which drugs not to give her runs as the router's own such question, whose answer says first
+		// that the check lists none (ADR Decision 491); any other, as the screen of her medications.
+		String checkQuestion = reading == LlmProvider.MedicationSafetyReading.DRUGS_TO_AVOID
+				? QueryScopeRouter.DRUGS_TO_AVOID_QUESTION : QueryScopeRouter.MEDICATION_CHECK_QUESTION;
 		// The patient id and nothing of the question, which can name her medications (ADR Decision 102).
-		log.info("Patient {}: the model read the question as asking about her medications' safety; running the "
-				+ "medication check for it (ADR Decision 489)", patient == null ? null : patient.getPatientId());
-		return new SafetyReading(drugReferenceInjector.inject(built, patient, QueryScopeRouter.MEDICATION_CHECK_QUESTION,
-			chartRead), QueryScopeRouter.MEDICATION_CHECK_QUESTION);
+		log.info("Patient {}: the model read the question as {}; running the medication check for it (ADR Decision 489)",
+			patient == null ? null : patient.getPatientId(), reading);
+		return new SafetyReading(drugReferenceInjector.inject(built, patient, checkQuestion, chartRead), checkQuestion);
 	}
 
 	/** Whether {@code question} asks anything of drug safety (ADR Decision 390): it names a drug the data resolved, asks for a

@@ -23654,3 +23654,57 @@ its forms), and a misspelling only within one or two edits. *"clarithro"* is nei
 - Food is still offered no name (Decision 390).
 
 Pinned by `ClinicianWordingsTest.aDrugsNameClippedShortIsOfferedTheNamesItBegins`.
+
+## Decision 491: A question the model reads as asking which drugs to avoid says the check lists none, and what a reading costs on the demo
+
+**Status: Accepted** (October 2026) — found asking *"What shouldn't I prescribe for this patient?"* of the public demo's
+patient `dd8f98cf-1691-11df-97a5-7038c432aabf` on 2026-10-27, after Decision 489 shipped.
+
+### Context
+
+Decision 489's reading ran the check for it, as `MEDICATION_CHECK_QUESTION`: a screen of her medications, opening *"13
+interactions among this patient's active medications …"*. The router's own avoid question, *"What medications should
+he avoid?"*, opens instead with `DrugReferenceInjector.LISTS_NO_DRUG_TO_AVOID_LEAD` — *"This check does not list drugs
+to avoid: …"* — because no finding lists drugs to avoid (Decision 324). A question the router did not know lost that
+sentence. And Decision 489 said a reading took a median 767 ms: that was on a Mac's CPU, and the setting's description
+said *"under a second on the demo's CPU"*, which no one had measured.
+
+### The decision
+
+- `LlmProvider.readMedicationSafetyQuestion` (Decision 489's `asksAboutMedicationSafety`, renamed) returns a
+  `MedicationSafetyReading`. Its first call is Decision 489's, unchanged to the byte. After a YES a second call, its
+  reply constrained to `{"asks_which_drugs_to_avoid": true|false}`, asks whether the question asks which drugs not to
+  give her rather than about the drugs she takes. A YES to it runs the check as
+  `QueryScopeRouter.DRUGS_TO_AVOID_QUESTION`, *"What drugs should I avoid in this patient?"* — Decision 324's own example —
+  whose answer opens with the lead above. A failed or unreadable second call keeps the screen's own question.
+- A second CALL, not a second field in the first reply. Asked for both in one reply, the model read six drug-safety
+  questions as not being one, among them *"Any meds he can't take?"* and *"What shouldn't I prescribe for this
+  patient?"*, which the first call alone reads as one.
+
+### Measured
+
+`MedicationSafetyQuestionEvalTest` on Gemma 4 E2B Q4_K_M, on CPU with 4 threads and reasoning off, on 2026-10-27:
+
+- The first call read as before. Two wordings added to the labelled set this round reach neither the router nor the
+  model — *"Is it ok to keep giving all of these together?"* and *"Anything I need to watch out for before
+  prescribing?"* — and are listed as known gaps the suite prints rather than fails on.
+- The second call read none of the 12 questions about the drugs she takes as asking which to avoid, and 10 of the 12
+  avoid questions as such. *"Any meds he can't take?"* and *"is there anything off limits for him medication-wise"*
+  keep the screen's lead, as every model-read question did under Decision 489.
+
+On the public demo, through `/search/stream` for patient `dd8f98cf`, three rounds alternating a question the router
+reads with one only the model reads, both answered by the module with the same findings: 1110, 953 and 1324 ms against
+10965, 3962 and 3531 ms. So one reading costs about 2.5 to 3 seconds there with the engine warm, the first after a
+pause more; Decision 489's 767 ms is a Mac's. A question the model reads as asking which drugs to avoid pays a second
+reading.
+
+### Consequences
+
+- A question that only the model reads as a drug-safety question costs a few seconds more than one the router reads,
+  and an avoid question a few more again. Each still skips the model answer it took before, which was minutes on the
+  demo's CPU.
+- A question that reaches the reading and is read NO pays one reading before its model answer.
+
+Pinned by `LlmInferenceServiceModelReadQuestionContextTest.aQuestionReadAsAskingWhichDrugsToAvoidSaysTheCheckListsNone`,
+`.aQuestionReadAsAskingAboutHerDrugsKeepsTheScreensLead` and
+`QueryScopeRouterMedicationCheckQuestionTest.theDrugsToAvoidQuestionIsTheRoutersOwnAvoidQuestion`.

@@ -29,6 +29,14 @@ public class QueryScopeRouterMedicationCheckQuestionTest {
 	}
 
 	@Test
+	public void theDrugsToAvoidQuestionIsTheRoutersOwnAvoidQuestion() {
+		String avoid = QueryScopeRouter.DRUGS_TO_AVOID_QUESTION;
+		assertTrue(QueryScopeRouter.asksWhichDrugsToAvoid(avoid));
+		assertTrue(QueryScopeRouter.isInteractionScreening(avoid), "so the screen runs for it");
+		assertTrue(QueryScopeRouter.asksOnlyToScreenHerMedications(avoid), "so the module answers it");
+	}
+
+	@Test
 	public void itAsksAboutMoreThanInteractions() {
 		assertFalse(QueryScopeRouter.asksOnlyAboutInteractions(Q), "her contraindications stay in the answer");
 	}

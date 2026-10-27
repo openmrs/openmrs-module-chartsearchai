@@ -23101,3 +23101,24 @@ by Decision 461's *"plan"*, and read *"pt"* as no word it admits.
   now points here.
 
 Pinned by `ClinicianWordingsTest.anyIssuesAskedOfTwoDrugsAndADrugStartedAfterAnotherAreThePairQuestionsTheySpell`.
+
+## Decision 470: A proposal written as a prescription is the proposal it spells
+
+**Status: Accepted** (October 2026) — found asking 30 further wordings of 15 patients on the 3.7.1 standalone on 2026-10-27.
+
+### Context
+
+Two prescription-style wordings went to the model. *"Rx fluconazole 200mg od - any interactions?"* was answered
+*"Fluconazole can be given"* on 5 of 15 patients, and *"Fluconazole 200 mg daily x 14 days ok?"* on 7. The residual
+reading of Decision 396 sets a stated dose aside (Decision 422), but read *"rx"* as no word it admits. It set a duration
+aside only as a closing purpose after *"for"* (Decision 419), and *"for 14 days ok"* has a word after it. *"x 14 days"*
+was no duration at all.
+
+### The decision
+
+- `words` reads *"x N days / weeks / months"* as *"for N …"*, as a prescription writes a duration.
+- The residual reading sets *"for"* and a duration aside wherever it stands, as it sets a dose aside. The answer says the
+  duration was not weighed (`DURATION_NOT_WEIGHED`), as Decision 419's does.
+- *"rx"* is a word the residual readings admit.
+
+Pinned by `ClinicianWordingsTest.aProposalWrittenAsAPrescriptionIsTheProposalItSpells`.

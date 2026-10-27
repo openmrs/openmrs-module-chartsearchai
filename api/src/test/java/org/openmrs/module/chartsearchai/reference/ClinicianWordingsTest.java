@@ -1661,6 +1661,21 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		assertNull(ask("Warfarin any with nevirapine?"));
 	}
 
+	/** ADR Decision 470: a proposal written as a prescription — "Rx", a duration "x 14 days" — is the proposal it spells. */
+	@Test
+	public void aProposalWrittenAsAPrescriptionIsTheProposalItSpells() {
+		String[][] pairs = { { "Rx warfarin 5mg od - any interactions?", "Warfarin 5mg od - any interactions?" },
+			{ "Warfarin 5 mg daily x 14 days ok?", "Warfarin 5 mg daily for 14 days ok?" },
+			{ "Warfarin x 5 days - safe?", "Warfarin for 5 days - safe?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+		assertTrue(ask("Warfarin 5 mg daily x 14 days ok?").contains("did not weigh how long"),
+			"the answer says the duration was not weighed");
+	}
+
 	private static String ask(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

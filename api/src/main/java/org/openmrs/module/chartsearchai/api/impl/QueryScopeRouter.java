@@ -339,7 +339,9 @@ public final class QueryScopeRouter {
 		}
 		// "+" joins two names as "plus" does (ADR Decision 424): "rifampicin + efavirenz".
 		// "w/" is "with" and "w/o" "without", as a clinician abbreviates them (ADR Decision 431): "fluconazole w/ nevirapine ok?"
+		// "x 14 days" is "for 14 days", as a prescription writes a duration (ADR Decision 470).
 		String[] parts = text.toLowerCase(Locale.ROOT).replace("+", " plus ")
+				.replaceAll("(?<![\\p{L}\\p{N}])x\\s*(?=\\d+\\s*(?:days?|weeks?|months?)(?![\\p{L}]))", " for ")
 				.replaceAll("(?<![\\p{L}\\p{N}])w/o(?![\\p{L}\\p{N}])", " without ")
 				.replaceAll("(?<![\\p{L}\\p{N}])w/", " with ").split(Pattern.quote(DRUG_NAME), -1);
 		for (int p = 0; p < parts.length; p++) {
@@ -2544,7 +2546,9 @@ public final class QueryScopeRouter {
 		// when, how often, and what it would cause (ADR Decision 422)
 		"tomorrow", "tonight", "as", "needed", "prn", "top", "cause", "know", "before",
 		// "Pt on nevirapine. Starting warfarin." (ADR Decision 469)
-		"pt"));
+		"pt",
+		// "Rx fluconazole 200mg od - any interactions?", a prescription's mark (ADR Decision 470)
+		"rx"));
 
 	/** Words saying the question is about the drug's interactions. */
 	private static final Set<String> RESIDUAL_INTERACTS = new HashSet<String>(Arrays.asList("interact", "interacts",
@@ -2749,6 +2753,13 @@ public final class QueryScopeRouter {
 		String withoutADose = withoutAStatedDose(String.join(" ", wordsWithTheDrugMarked));
 		if (withoutADose != null) {
 			wordsWithTheDrugMarked = Arrays.asList(withoutADose.split(" "));
+		}
+		// And how long it would be given, which the answer says it did not weigh (ADR Decisions 419, 470): "Fluconazole 200 mg
+		// daily for 14 days ok?".
+		String joined = String.join(" ", wordsWithTheDrugMarked);
+		String withoutADuration = joined.replaceAll("(?:^| )for " + A_DURATION + "(?= |$)", "").trim();
+		if (!withoutADuration.equals(joined) && !withoutADuration.isEmpty()) {
+			wordsWithTheDrugMarked = Arrays.asList(withoutADuration.split(" "));
 		}
 		// A drug named as hers — not "give her X", where she is who it is given to — is her own medication's question,
 		// which its own shapes answer (ADR Decisions 335, 374).

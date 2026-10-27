@@ -2276,6 +2276,13 @@ public final class QueryScopeRouter {
 		return before.find() ? before.group(1) : null;
 	}
 
+	/** {@code joined} without a duration stated within it — "for 7 days" — or {@code null} where it states none, or nothing is
+	 *  left (ADR Decision 472). */
+	private static String withoutAStatedDuration(String joined) {
+		String without = joined.replaceAll("(?:^| )for " + A_DURATION + "(?= |$)", "").trim();
+		return without.equals(joined) || without.isEmpty() ? null : without;
+	}
+
 	/** {@code joined} without the dose stated beside its drug, or {@code null} where it states none (ADR Decisions 269, 326). */
 	private static String withoutAStatedDose(String joined) {
 		String without = DOSE_AFTER_THE_DRUG.matcher(DOSE_BEFORE_THE_DRUG.matcher(
@@ -2357,6 +2364,12 @@ public final class QueryScopeRouter {
 		// A dose stated beside the drug is no part of the question's shape (ADR Decision 269): "Is 1 g of paracetamol safe
 		// for him?" asks what "Is paracetamol safe for him?" asks, of a dose — which the answer then says it did not check.
 		String withoutADose = withoutAStatedDose(joined);
+		// And how long it would be given, which the answer says it did not weigh (ADR Decisions 419, 472): "Is warfarin 5 mg bd
+		// for 7 days ok for her?" asks what "Is warfarin ok for her?" asks.
+		String withoutADuration = withoutAStatedDuration(withoutADose != null ? withoutADose : joined);
+		if (withoutADuration != null) {
+			withoutADose = withoutADuration;
+		}
 		// And a form named beside it (ADR Decision 334): "Can I give her ketoconazole cream?".
 		String withoutAForm = withoutAStatedForm(withoutADose != null ? withoutADose : joined);
 		for (Pattern shape : shapes) {
@@ -2757,9 +2770,8 @@ public final class QueryScopeRouter {
 		}
 		// And how long it would be given, which the answer says it did not weigh (ADR Decisions 419, 470): "Fluconazole 200 mg
 		// daily for 14 days ok?".
-		String joined = String.join(" ", wordsWithTheDrugMarked);
-		String withoutADuration = joined.replaceAll("(?:^| )for " + A_DURATION + "(?= |$)", "").trim();
-		if (!withoutADuration.equals(joined) && !withoutADuration.isEmpty()) {
+		String withoutADuration = withoutAStatedDuration(String.join(" ", wordsWithTheDrugMarked));
+		if (withoutADuration != null) {
 			wordsWithTheDrugMarked = Arrays.asList(withoutADuration.split(" "));
 		}
 		// A drug named as hers — not "give her X", where she is who it is given to — is her own medication's question,

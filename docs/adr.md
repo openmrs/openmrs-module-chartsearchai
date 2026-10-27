@@ -23141,3 +23141,26 @@ with one caution"* on 12 of 15 patients. *"Clarithromycin: any issues with efavi
   a word saying what is asked.
 
 Pinned by `ClinicianWordingsTest.oneDrugsInteractionsWithAnotherAreWhetherTheTwoInteract`.
+
+## Decision 472: A duration anywhere in a proposal is set aside as a dose is, wherever the shapes read it
+
+**Status: Accepted** (October 2026) — found asking 7 prescription wordings of 15 patients on the 3.7.1 standalone on
+2026-10-27.
+
+### Context
+
+*"Ciprofloxacin 500mg bd x 7 days ok for her?"* went to the model, which answered *"Ciprofloxacin can be given"* on 5 of
+15 patients. Decision 470 set the duration aside inside the residual reading only. There *"Ciprofloxacin ok for her"*
+fits a proposal shape, so the residual reading stepped aside for the shape. Yet the callers ask the shapes of the words
+as written, duration included, and none fitted. The question fell between the two and reached the model.
+
+### The decision
+
+- `fitsAsWritten` sets a stated duration (*"for N days / weeks / months"*, which *"x N days"* reads as since Decision 470)
+  aside, as it sets a dose aside (Decision 269). Every shape reads the question as it reads the question without the
+  duration.
+- The residual reading sets it aside through the same `withoutAStatedDuration`, so the two never disagree on what the
+  question is.
+- The answer says the duration was not weighed (`DURATION_NOT_WEIGHED`).
+
+Pinned by `ClinicianWordingsTest.aDurationAnywhereInAProposalIsSetAsideAsADoseIs`.

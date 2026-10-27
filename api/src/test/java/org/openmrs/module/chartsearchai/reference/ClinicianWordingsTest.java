@@ -1690,6 +1690,20 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/** ADR Decision 472: a duration stated anywhere in a proposal is set aside wherever its shapes read it, as a dose is. */
+	@Test
+	public void aDurationAnywhereInAProposalIsSetAsideAsADoseIs() {
+		String[][] pairs = { { "Warfarin 5mg bd x 7 days ok for her?", "Warfarin 5mg bd ok for her?" },
+			{ "Warfarin for 7 days ok for her?", "Warfarin ok for her?" },
+			{ "Is warfarin for 2 weeks safe for her?", "Is warfarin safe for her?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertNotNull(ask(pair[0]), pair[0]);
+			assertEquals(canonical + "\n" + DrugReferenceInjector.DURATION_NOT_WEIGHED, ask(pair[0]), pair[0]);
+		}
+	}
+
 	private static String ask(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

@@ -1867,6 +1867,19 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/** ADR Decision 490: a drug's name clipped short — "clarithro", "flucon" — is offered the names it begins. */
+	@Test
+	public void aDrugsNameClippedShortIsOfferedTheNamesItBegins() {
+		String clipped = ask("Is nevirapine ok with clarithro?");
+		assertNotNull(clipped, "the module answers a clipped name with its suggestions");
+		assertTrue(clipped.contains("Clarithromycin"), clipped);
+		String alone = ask("Can I give her flucon?");
+		assertNotNull(alone, "the module answers a clipped name with its suggestions");
+		assertTrue(alone.contains("Fluconazole"), alone);
+		// A food is offered no drug's name, clipped or not.
+		assertNull(ask("Can she eat bananas?"));
+	}
+
 	private static String ask(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

@@ -23632,3 +23632,25 @@ format citation grounding uses, read five of the six wordings it exists for as N
   there first.
 
 Pinned by `LlmInferenceServiceModelReadQuestionContextTest` and `QueryScopeRouterMedicationCheckQuestionTest`.
+## Decision 490: A drug's name clipped short is offered the names it begins
+
+**Status: Accepted** (October 2026) — found asking 20 further wordings of 15 patients on the 3.7.1 standalone on 2026-10-27.
+
+### Context
+
+*"Is EFV ok with clarithro?"* went to the model, which answered *"Clarithromycin can be given, with one caution"* on 3
+of 15 patients. The drug data names no *"clarithro"*. Decision 384 states that no interaction check was run for a word
+with no near drug name and leaves the answer to the model. The model read the word as clarithromycin and cleared it, a
+pair no check ran on. `UnrecognisedDrugName` offered a name the word begins only where a word followed it (*"insulin"* →
+its forms), and a misspelling only within one or two edits. *"clarithro"* is neither.
+
+### The decision
+
+- A word of five letters or more that begins a one-word name of a medicine (*"clarithro"* → Clarithromycin, *"flucon"*
+  → Fluconazole) is offered those names, as a misspelling is.
+- These are offered only where no name it begins as a whole word, and no name within an edit, is found.
+- The module answers with the suggestions and asks again with the name it carries (Decision 250). It clears nothing, and
+  the model is not asked a question about a drug the data did not resolve.
+- Food is still offered no name (Decision 390).
+
+Pinned by `ClinicianWordingsTest.aDrugsNameClippedShortIsOfferedTheNamesItBegins`.

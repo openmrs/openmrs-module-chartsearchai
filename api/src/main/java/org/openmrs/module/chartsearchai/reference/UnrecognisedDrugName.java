@@ -426,6 +426,9 @@ final class UnrecognisedDrugName {
 		}
 		Map<Object, DrugReference> prefixed = new LinkedHashMap<Object, DrugReference>();
 		Map<Object, DrugReference> near = new LinkedHashMap<Object, DrugReference>();
+		// A name clipped short, "clarithro", "flucon": the one-word names it begins, offered only where nothing nearer is
+		// (ADR Decision 490). Five letters or more, as a misspelling is read in a word of six.
+		Map<Object, DrugReference> clipped = new LinkedHashMap<Object, DrugReference>();
 		// A word of five letters is one edit from too many names of what the data carries — "sugar" from "sular", a brand of
 		// nisoldipine — so a misspelling is read in a word of six letters or more (ADR Decision 439).
 		int best = w.length() >= 8 ? 2 : w.length() >= 6 ? 1 : 0;
@@ -447,6 +450,8 @@ final class UnrecognisedDrugName {
 				// wrong drug.
 				if (n.startsWith(w + " ") && n.indexOf('/') < 0 && !n.contains(" and ") && !n.contains(" with ")) {
 					keepCanonical(prefixed, entry);
+				} else if (w.length() >= 5 && n.indexOf(' ') < 0 && n.length() > w.length() && n.startsWith(w)) {
+					keepCanonical(clipped, entry);
 				} else if (best > 0 && n.indexOf(' ') < 0) {
 					int distance = editDistance(w, n);
 					if (distance > 0 && distance <= best) {
@@ -460,7 +465,7 @@ final class UnrecognisedDrugName {
 			}
 		}
 		List<String> labels = new ArrayList<String>();
-		for (DrugReference row : (prefixed.isEmpty() ? near : prefixed).values()) {
+		for (DrugReference row : (!prefixed.isEmpty() ? prefixed : !near.isEmpty() ? near : clipped).values()) {
 			if (labels.size() < MAX_SUGGESTIONS && !labels.contains(row.displayLabel())) {
 				labels.add(row.displayLabel());
 			}

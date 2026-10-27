@@ -1676,6 +1676,20 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 			"the answer says the duration was not weighed");
 	}
 
+	/** ADR Decision 471: one drug's interactions asked "with" another, after the first, are whether the two interact. */
+	@Test
+	public void oneDrugsInteractionsWithAnotherAreWhetherTheTwoInteract() {
+		String[][] pairs = { { "Warfarin: any interactions with nevirapine?", "Does warfarin interact with nevirapine?" },
+			{ "Warfarin - any interaction with nevirapine?", "Does warfarin interact with nevirapine?" },
+			{ "Warfarin any interactions with nevirapine?", "Does warfarin interact with nevirapine?" },
+			{ "Warfarin: interactions with nevirapine?", "Does warfarin interact with nevirapine?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+	}
+
 	private static String ask(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

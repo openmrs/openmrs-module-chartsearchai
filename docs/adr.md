@@ -23122,3 +23122,22 @@ was no duration at all.
 - *"rx"* is a word the residual readings admit.
 
 Pinned by `ClinicianWordingsTest.aProposalWrittenAsAPrescriptionIsTheProposalItSpells`.
+
+## Decision 471: One drug's interactions asked "with" another are whether the two interact
+
+**Status: Accepted** (October 2026) — found asking 11 further wordings of 15 patients on the 3.7.1 standalone on 2026-10-27.
+
+### Context
+
+*"Clarithromycin: any interactions with efavirenz?"* went to the model, which answered *"Clarithromycin can be given,
+with one caution"* on 12 of 15 patients. *"Clarithromycin: any issues with efavirenz?"* is the module's since Decision
+469. Between the two drugs, the residual pair reading admitted a harm or a safety word but no interaction word.
+
+### The decision
+
+- Between the two drugs, the residual pair reading admits an interaction word (`RESIDUAL_INTERACTS`). The question is
+  read `Residual.INTERACTS` and answered as *"Does X interact with Y?"* is.
+- Every other guard stands. A word for her medications as a whole still makes it a screen, and *"any"* stands only before
+  a word saying what is asked.
+
+Pinned by `ClinicianWordingsTest.oneDrugsInteractionsWithAnotherAreWhetherTheTwoInteract`.

@@ -2108,8 +2108,9 @@ public final class QueryScopeRouter {
 					&& (RESIDUAL_HARMS.contains(between.get(i + 1)) || RESIDUAL_INTERACTS.contains(between.get(i + 1)))) {
 				continue;
 			}
+			// and what it asks of them as an interaction: "Clarithromycin: any interactions with efavirenz?" (ADR Decision 471)
 			if (!RESIDUAL_PAIR_JOINS.contains(word) && !RESIDUAL_PAIR_WORDS.contains(word) && !RESIDUAL_HARMS.contains(word)
-					&& !(phrased && RESIDUAL_PAIR_PHRASE_WORDS.contains(word))
+					&& !RESIDUAL_INTERACTS.contains(word) && !(phrased && RESIDUAL_PAIR_PHRASE_WORDS.contains(word))
 					&& !RESIDUAL_SAFE.contains(word) && !"her".equals(word) && !"him".equals(word) && !"them".equals(word)) {
 				return Residual.NONE;
 			}

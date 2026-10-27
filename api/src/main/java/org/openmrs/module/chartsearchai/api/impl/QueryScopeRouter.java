@@ -1864,6 +1864,9 @@ public final class QueryScopeRouter {
 				|| residualPairReading(wordsWithTheDrugsMarked) != Residual.NONE;
 	}
 
+	/** A while between two doses — "2 hours", "a few minutes" (ADR Decision 474). */
+	private static final String A_GAP = "(?:\\p{N}+|one|two|three|four|six|eight|twelve|a few|several) (?:hours?|hrs?|minutes?|mins?)";
+
 	private static final List<Pattern> TWO_DRUGS_INTERACT_SHAPES = shapes(DOES_ONE_INTERACT_WITH_THE_OTHER, ANY_INTERACTION_BETWEEN,
 			CHANGE_HERS_IF_STARTING,
 			// "Fluconazole and nevirapine", "Fluconazole plus nevirapine" — two names and a joining word alone (ADR Decision 413)
@@ -1878,7 +1881,14 @@ public final class QueryScopeRouter {
 			"(?:can|could|may) (?:i|we) (?:give|start) (?:" + PATIENT + " )?(?:on )?" + HER_D + " after (?:she|he|they) (?:finishes|"
 					+ "stops|completes|has (?:finished|stopped|completed)|is done with) " + HER_D,
 			"is it (?:safe|ok|okay|fine) to (?:give|start) (?:" + PATIENT + " )?(?:on )?" + HER_D + " and then " + HER_D
-					+ "(?: later)?");
+					+ "(?: later)?",
+			// "Can she take fluconazole after her nevirapine dose?", "Fluconazole 2 hours after nevirapine - ok?" — a while after
+			// or before the other, a timing no finding weighs either (ADR Decision 474)
+			"(?:can|could|may|should) (?:she|he|they|the patient|this patient) (?:take|have|be given|get) " + HER_D + " (?:" + A_GAP
+					+ " )?(?:after|before) " + HER_D + "(?: dose| doses)?",
+			"(?:can|could|may|should) (?:i|we) (?:give|start) (?:" + PATIENT + " )?(?:on )?" + HER_D + " (?:" + A_GAP
+					+ " )?(?:after|before) " + HER_D + "(?: dose| doses)?",
+			HER_D + " (?:" + A_GAP + " )?(?:after|before) " + HER_D + "(?: dose| doses)? (?:ok|okay|safe|fine)");
 
 	/** "What is the mechanism of the interaction between simvastatin and clarithromycin?" — what relates the two, asked of
 	 *  the interaction itself (ADR Decision 264). */
@@ -2381,7 +2391,9 @@ public final class QueryScopeRouter {
 	/** One drug given after another — "after she finishes rifampicin", "and then rifampicin later" — a timing no finding
 	 *  weighs (ADR Decision 414). */
 	private static final String SEQUENCE = "(?:after (?:she|he|they) (?:finishes|stops|completes|has (?:finished|stopped|"
-			+ "completed)|is done with)|and then \\p{L}+(?: \\p{L}+)? later)";
+			+ "completed)|is done with)|and then \\p{L}+(?: \\p{L}+)? later"
+			// and "after her nevirapine dose", "before her nevirapine" (ADR Decision 474)
+			+ "|(?:after|before) (?:her|his|their) \\p{L}+(?: dose| doses)?)";
 
 	/** The condition a proposal names — "kidney disease" of "Is ibuprofen safe given her kidney disease?" — as the
 	 *  question writes it, or {@code null} (ADR Decision 394). */

@@ -1704,6 +1704,18 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/** ADR Decision 474: one drug given a while after or before another is what relates the two, the timing unweighed. */
+	@Test
+	public void oneDrugGivenAWhileAfterAnotherIsWhatRelatesTheTwo() {
+		String canonical = ask("Can I give warfarin after she finishes nevirapine?");
+		assertNotNull(canonical, "precondition: the module answers Decision 414's sequence");
+		for (String question : new String[] { "Can she take warfarin after her nevirapine dose?",
+			"Warfarin 2 hours after nevirapine - ok?", "Can I give warfarin 2 hours after her nevirapine?",
+			"Can she take warfarin before her nevirapine?" }) {
+			assertEquals(canonical, ask(question), question);
+		}
+	}
+
 	private static String ask(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

@@ -23195,3 +23195,24 @@ them.
 - A drug named as X is checked as the drug it is, through the drug's own path, which does not ask the screen.
 
 Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.somethingElsesInteractionsWithHerMedicationsCarryNoScreenOfThem`.
+
+## Decision 474: One drug given a while after or before another is what relates the two, the timing unweighed
+
+**Status: Accepted** (October 2026) — found asking 30 further wordings of 15 patients on the 3.7.1 standalone on 2026-10-27.
+
+### Context
+
+*"Can she take fluconazole after her nevirapine dose?"* went to the model, which answered *"Fluconazole can be given"*
+on all 15 patients. *"Fluconazole 2 hours after nevirapine - ok?"* did the same on 13. Decision 414 answers *"Can I give
+fluconazole after she finishes rifampicin?"* with what relates the two and a note that the timing was not weighed: no
+finding weighs when each is given, and spacing the doses does not undo an interaction such as an enzyme induction. No
+shape read a pair a while apart, or after her dose.
+
+### The decision
+
+- `TWO_DRUGS_INTERACT_SHAPES` reads *"Can she take / Can I give X (N hours) after / before (her) Y (dose)?"* and *"X (N
+  hours) after Y (dose) - ok?"*. They are answered as Decision 414's sequence is.
+- `SEQUENCE` reads *"after / before her Y (dose)"*. The answer then says that when the drug would be given was not
+  weighed, as it does for a sequence.
+
+Pinned by `ClinicianWordingsTest.oneDrugGivenAWhileAfterAnotherIsWhatRelatesTheTwo`.

@@ -230,7 +230,8 @@ public final class QueryScopeRouter {
 	 * {@link #isTemporal} — it deliberately stays out of the enumeration-scope mapping.
 	 */
 	public static boolean isInteractionScreening(String question) {
-		return question != null && (DDI_CUES.matcher(question).find() || asksForADrugSafetyReading(question)
+		// Never something else's interactions with her medications (ADR Decision 473).
+		return question != null && !asksOfSomethingElseWithHerMedications(question) && (DDI_CUES.matcher(question).find() || asksForADrugSafetyReading(question)
 				&& matchedIntents(question).contains(Intent.MEDICATIONS)
 				|| INTERACTION_NOUN_CUES.matcher(question).find() && !SOCIAL_CUES.matcher(question).find()
 				// Two groups of her own medications, named by words the MEDICATIONS cues need not know — "her TB treatment",
@@ -377,6 +378,62 @@ public final class QueryScopeRouter {
 	private static final String MEDICATIONS = "(?:current |active )?(?:medications|meds|medicines|prescriptions|drugs|regimen"
 			// "her medication list", "her current list" (ADR Decision 429)
 			+ "|(?:med |medication |medicine |drug )?list)";
+
+	/** Her medications as a whole, as a question asking something else's interactions with them names them (ADR Decision
+	 *  473). */
+	private static final String HER_MEDICATIONS_AS_A_WHOLE = POSSESSIVE + " (?:other |current |active |usual |regular )?"
+			+ "(?:medications|meds|medicines|prescriptions|drugs|regimen|treatment|treatments|arvs|tablets|pills)";
+
+	/** What a thing's interactions with her medications are asked as (ADR Decision 473). */
+	private static final String ITS_INTERACTIONS = "(?:any )?(?:drug )?(?:interactions?|ddis?|issues?|problems?|clash(?:es)?)";
+
+	/**
+	 * The shapes asking whether SOMETHING ELSE interacts with her medications — "Oranges: any interactions with her meds?",
+	 * "Any interactions between oranges and her medications?", "Do oranges interact with her medications?" (ADR Decision
+	 * 473). Group 1 is the thing.
+	 */
+	private static final List<Pattern> SOMETHING_ELSE_WITH_HER_MEDICATIONS = shapes(
+			// and "Any food interactions with her meds?"
+			"(?:any )?(\\p{L}+(?: \\p{L}+){0,2}?) " + ITS_INTERACTIONS + " (?:with|and|alongside) " + HER_MEDICATIONS_AS_A_WHOLE,
+			"(?:(?:are|is) there )?" + ITS_INTERACTIONS + " (?:between|of) (\\p{L}+(?: \\p{L}+){0,2}?) (?:and|with) "
+					+ HER_MEDICATIONS_AS_A_WHOLE,
+			"(?:does|do|will|would|can|could|might) (\\p{L}+(?: \\p{L}+){0,2}?) (?:interact|clash) with " + HER_MEDICATIONS_AS_A_WHOLE);
+
+	/** The words the thing of {@link #SOMETHING_ELSE_WITH_HER_MEDICATIONS} may not be: the screen's own (ADR Decision 473). */
+	private static final Set<String> NOT_SOMETHING_ELSE = new HashSet<String>(Arrays.asList("any", "are", "is", "there",
+		"drug", "drugs", "do", "does", "did", "check", "screen", "review", "what", "which", "her", "his", "their", "the", "she",
+		"he", "they", "medication", "medications", "meds", "medicine", "medicines", "prescriptions", "treatment",
+		"treatments", "regimen", "arvs", "arv", "interactions", "interaction", "all", "current", "these", "those", "please",
+		"list", "show", "tell", "me", "i", "we", "can", "could", "should", "will", "would", "significant", "major",
+		"important", "clinically", "harmful", "potential", "possible", "known", "new", "other", "each", "between", "among",
+		"with", "and", "for", "of", "in", "on", "to", "a", "an", "patient", "patient's", "this", "of", "how", "about",
+		"serious", "dangerous", "relevant", "notable", "some", "her", "need", "know", "watch", "worry", "look", "out", "it",
+		"anything", "something", "everything", "them", "they're", "both", "two", "together"));
+
+	/**
+	 * Whether {@code question} asks whether something other than her medications interacts with them — never a screen of
+	 * her medications among themselves (ADR Decision 473). "Oranges: any interactions with her meds?" carried the screen of
+	 * her orders as chips beside an answer about oranges. A drug named there is checked as the drug it is, through the
+	 * drug's own path; this only keeps the screen off.
+	 */
+	public static boolean asksOfSomethingElseWithHerMedications(String question) {
+		if (question == null) {
+			return false;
+		}
+		String joined = String.join(" ", words(question));
+		for (Pattern shape : SOMETHING_ELSE_WITH_HER_MEDICATIONS) {
+			Matcher m = shape.matcher(joined);
+			if (m.matches()) {
+				for (String word : m.group(1).split(" ")) {
+					if (NOT_SOMETHING_ELSE.contains(word)) {
+						return false;
+					}
+				}
+				return true;
+			}
+		}
+		return false;
+	}
 
 	/**
 	 * A group of her OWN medications as a clinician words it, closing on a noun of medication — "her TB treatment", "her

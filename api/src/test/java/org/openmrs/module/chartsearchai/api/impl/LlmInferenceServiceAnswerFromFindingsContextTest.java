@@ -3041,6 +3041,26 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	}
 
 	/**
+	 * Something else's interactions with her medications ask nothing of her medications among themselves, so no screen of
+	 * them is attached (ADR Decision 473). On the 3.7.1 standalone "Oranges: any interactions with her meds?" carried the
+	 * screen of her own orders as chips on 9 of 15 patients, beside an answer about oranges.
+	 */
+	@Test
+	public void somethingElsesInteractionsWithHerMedicationsCarryNoScreenOfThem() throws Exception {
+		executeDataSet(WARFARIN_ORDER);
+		// Her recorded allergy to a drug she is ordered: a contraindication chip about her own medication.
+		DrugReferenceTestSupport.recordFreeTextAllergy(patient, 88, "Warfarin");
+		ChartAnswer screen = serviceWith(new RecordingProvider(), shipped()).search(patient, "Any interactions with her meds?");
+		assertFalse(screen.getSafetyWarnings().isEmpty(), "precondition: the screen of her orders carries chips");
+		for (String question : new String[] { "Oranges: any interactions with her meds?",
+				"Any interactions between oranges and her medications?", "Do oranges interact with her medications?",
+				"Orange juice - any issues with her medicines?", "Any food interactions with her meds?" }) {
+			ChartAnswer answer = serviceWith(new RecordingProvider(), shipped()).search(patient, question);
+			assertTrue(answer.getSafetyWarnings().isEmpty(), question + " carries no screen: " + answer.getSafetyWarnings());
+		}
+	}
+
+	/**
 	 * A word in a drug question's drug place that the drug data neither recognises nor finds a near name for may be no drug
 	 * at all, so the question takes the chart answer, and the module states after it that no interaction check was run
 	 * (ADR Decision 384). On the 3.7.1 standalone "Can i give her oranges?" was answered by the module alone, "No interaction

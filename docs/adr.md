@@ -23164,3 +23164,34 @@ as written, duration included, and none fitted. The question fell between the tw
 - The answer says the duration was not weighed (`DURATION_NOT_WEIGHED`).
 
 Pinned by `ClinicianWordingsTest.aDurationAnywhereInAProposalIsSetAsideAsADoseIs`.
+
+## Decision 473: Something else's interactions with her medications carry no screen of them
+
+**Status: Accepted** (October 2026) — found asking 10 interaction and food wordings of 15 patients on the 3.7.1
+standalone on 2026-10-27.
+
+### Context
+
+*"Oranges: any interactions with her meds?"* is a food question. Its answer, the model's, said the records do not
+address oranges, yet on 9 of 15 patients it carried the screen of her own orders as chips: aspirin with warfarin, and
+the rest. `isInteractionScreening` reads an interaction word and a medication word as a request to screen her
+medications against each other. It cannot tell that request from a question about something else's interactions WITH
+them.
+
+### The decision
+
+- `asksOfSomethingElseWithHerMedications` reads three shapes:
+  - *"X: any interactions / issues with her meds?"*
+  - *"Any interactions between X and her medications?"*
+  - *"Do X interact with her medications?"*
+
+  In each, X is one to three words, none of them the screen's own words (`NOT_SOMETHING_ELSE`: *"any"*, *"drug"*, *"her"*,
+  *"medications"*, …).
+  The first shape also reads a leading *"any"*: *"Any food interactions with her meds?"*.
+- `isInteractionScreening` is false where it reads one, so no screen is run.
+- `LlmInferenceService.asksAboutDrugSafety` is false too, unless the question names a drug the data resolved. Her own
+  orders' contraindications are not attached either. The first build kept the screen off but still published those on 5
+  of 15 patients, one *"recorded allergy to"* chip per order.
+- A drug named as X is checked as the drug it is, through the drug's own path, which does not ask the screen.
+
+Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.somethingElsesInteractionsWithHerMedicationsCarryNoScreenOfThem`.

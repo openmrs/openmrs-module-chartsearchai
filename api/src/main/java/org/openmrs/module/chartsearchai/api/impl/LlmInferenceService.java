@@ -1170,9 +1170,12 @@ public class LlmInferenceService implements ChartSearchService {
 	private static boolean asksAboutDrugSafety(String question, PatientChart chart) {
 		// A drug named only to ask of its record in her chart asks nothing of its safety, whatever its words — "Was aspirin
 		// stopped?" (ADR Decision 399).
+		// Nor something else's interactions with her medications, a drug named there aside: "Oranges: any interactions with
+		// her meds?" asks nothing of her medications' own safety (ADR Decision 473).
 		return question != null && !chart.asksOnlyAboutADrugsRecord() && (!chart.getQuestionSubstances().isEmpty()
-				|| QueryScopeRouter.asksForADrugSafetyReading(question) || QueryScopeRouter.isInteractionScreening(question)
-				|| QueryScopeRouter.asksAboutAllergies(question));
+				|| !QueryScopeRouter.asksOfSomethingElseWithHerMedications(question)
+						&& (QueryScopeRouter.asksForADrugSafetyReading(question) || QueryScopeRouter.isInteractionScreening(question)
+								|| QueryScopeRouter.asksAboutAllergies(question)));
 	}
 
 	/**

@@ -1554,8 +1554,8 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
 			assertEquals(canonical, ask(pair[0]), pair[0]);
 		}
-		// A switch, "instead of", and a past giving stay the model's.
-		assertNull(ask("Warfarin instead of nevirapine?"));
+		// A switch and a past giving stay the model's. ("Warfarin instead of nevirapine?" is the switch it spells since ADR
+		// Decision 465, aDrugInsteadOfAnotherWithNoVerbIsTheSwitchItSpells.)
 		assertNull(ask("Switch warfarin to nevirapine?"));
 		assertNull(ask("Was warfarin given with nevirapine?"));
 	}
@@ -1612,6 +1612,20 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		for (String question : new String[] { "Can she have ibuprofn with her nevirapine?", "Can she have warfarin with her nevirapine?",
 			"Can she drink alcohol with her nevirapine?" }) {
 			assertFalse(chart(question).asksOnlyAboutADrugsRecord(), "a question of its safety: " + question);
+		}
+	}
+
+	/** ADR Decision 465: one drug "instead of" or "in place of" another, with no verb, is the switch it spells. */
+	@Test
+	public void aDrugInsteadOfAnotherWithNoVerbIsTheSwitchItSpells() {
+		String[][] pairs = { { "Warfarin instead of nevirapine?", "Can I give her warfarin instead of nevirapine?" },
+			{ "Warfarin instead of her nevirapine - ok?", "Can I give her warfarin instead of nevirapine?" },
+			{ "Is warfarin ok instead of nevirapine?", "Can I give her warfarin instead of nevirapine?" },
+			{ "Warfarin in place of nevirapine?", "Can I give her warfarin instead of nevirapine?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
 		}
 	}
 

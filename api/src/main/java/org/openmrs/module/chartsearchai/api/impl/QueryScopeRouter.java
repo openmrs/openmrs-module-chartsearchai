@@ -1987,6 +1987,8 @@ public final class QueryScopeRouter {
 			"(?:can|could|may|should) " + SUBJECT + " (?:take|have|use|receive|start|be on|be given|be started on) " + D
 					+ INSTEAD_OF,
 			"is it (?:safe|ok|okay|appropriate) to (?:give|use|start|prescribe) (?:" + PATIENT + " )?(?:on )?" + D + INSTEAD_OF,
+			// "Warfarin instead of nevirapine?", "Is warfarin ok instead of nevirapine?" — with no verb (ADR Decision 465)
+			"(?:is )?" + D + "(?: (?:ok|okay|safe|fine|better|appropriate|suitable))?" + INSTEAD_OF + "(?: (?:ok|okay|safe|fine))?",
 			// "Can I start warfarin and stop nevirapine?" (ADR Decision 462)
 			"(?:can|could|may|should) (?:i|we) (?:give|use|start|prescribe|begin) (?:" + PATIENT + " )?(?:on )?" + D + " and (?:stop"
 					+ "|discontinue) (?:" + POSSESSIVE + " )?" + D + "(?: now| today)?");

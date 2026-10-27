@@ -22976,3 +22976,25 @@ crushed"*. A question naming one resolved drug keeps its chips whenever `asksOnl
 - A second drug beside hers is two drugs and never a record question: *"Can she drink alcohol with her nevirapine?"*.
 
 Pinned by `ClinicianWordingsTest.aFoodWithHerDrugOrHerDrugCrushedCarriesNoDrugSafetyMaterial`.
+
+## Decision 465: One drug instead of another, with no verb, is the switch it spells
+
+**Status: Accepted** (October 2026) — found asking 30 further wordings of 15 patients on the 3.7.1 standalone on 2026-10-27.
+
+### Context
+
+*"Fluconazole instead of nevirapine?"* went to the model, which answered *"Fluconazole can be given"* on 9 of 15
+patients. *"Can I give her fluconazole instead of nevirapine?"* is the module's (Decision 230). Its answer says the switch
+replaces her nevirapine, and what relates fluconazole to the medications she keeps. `SWITCH_TO_FIRST_SHAPES` read the
+switch only after a verb.
+
+### The decision
+
+- `SWITCH_TO_FIRST_SHAPES` reads *"(Is) X (ok / safe / better) instead of / in place of (her) Y (ok)?"* with no verb. It
+  is answered as *"Can I give her X instead of Y?"* is.
+- This supersedes the negative control in Decision 461's test, which asserted that *"Warfarin instead of nevirapine?"*
+  stays the model's. That control guarded the residual pair reading against reading *"instead"* as a join. A shape now
+  reads the question as the switch it is, and the residual reading still never sees it. The control's line in
+  `aPairJoinedByAVerbAPlanOrTheWordsOnTopOfIsThePairQuestionItSpells` now points here.
+
+Pinned by `ClinicianWordingsTest.aDrugInsteadOfAnotherWithNoVerbIsTheSwitchItSpells`.

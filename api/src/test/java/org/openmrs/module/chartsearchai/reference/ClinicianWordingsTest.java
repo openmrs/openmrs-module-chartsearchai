@@ -1774,6 +1774,21 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/** ADR Decision 480: continuing a drug asked without "her" is continuing her drug. */
+	@Test
+	public void continuingADrugAskedWithoutHerIsContinuingHerDrug() {
+		String[][] pairs = { { "Can she continue nevirapine?", "Can she continue her nevirapine?" },
+			{ "Can I continue nevirapine?", "Can I continue her nevirapine?" },
+			{ "Is it ok to continue nevirapine?", "Is it ok to continue her nevirapine?" },
+			{ "Should she keep taking nevirapine?", "Should she keep taking her nevirapine?" },
+			{ "Can she continue warfarin?", "Can she continue her warfarin?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+	}
+
 	private static String ask(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

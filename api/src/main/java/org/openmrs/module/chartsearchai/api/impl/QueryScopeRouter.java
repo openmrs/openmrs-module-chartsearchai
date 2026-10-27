@@ -1483,17 +1483,18 @@ public final class QueryScopeRouter {
 
 	/** "Is it okay to continue her aspirin?" (ADR Decision 341). */
 	private static final String CONTINUE_HER_D = "is it (?:safe|ok|okay|alright|appropriate|fine) to (?:continue|keep (?:giving"
-			+ "|taking)) " + POSSESSIVE + " " + D
+			// and with no "her": "Is it ok to continue nevirapine?" (ADR Decision 480)
+			+ "|taking)) (?:" + POSSESSIVE + " )?" + D
 			// "Is it ok to continue her rifampicin with her ARVs?" (ADR Decision 426)
 			+ "(?: (?:with|alongside) (?:all )?" + HER_MEDICATION_GROUP + ")?(?: now)?";
 
 	/** "Can I continue her Advil?", "Can I keep giving her aspirin?" (ADR Decision 341). */
 	private static final String CONTINUE_HER_D_AS_I = "(?:can|could|may|should) (?:i|we) (?:safely )?(?:continue|keep giving)"
-			+ " " + POSSESSIVE + " " + D + "(?: now)?";
+			+ " (?:" + POSSESSIVE + " )?" + D + "(?: now)?";
 
 	/** "Can she keep taking her aspirin?" (ADR Decision 341). */
 	private static final String CONTINUE_HER_D_AS_SHE = "(?:can|could|may|should) (?:she|he|they|the patient|this patient) "
-			+ "(?:continue|keep taking) " + POSSESSIVE + " " + D + "(?: now)?";
+			+ "(?:continue|keep taking) (?:" + POSSESSIVE + " )?" + D + "(?: now)?";
 
 	/** Whether to continue her drug, "Is her aspirin safe to continue?" among them (ADR Decisions 301, 341). */
 	private static final List<Pattern> CONTINUE_HER_DRUG_SHAPES = shapes(CONTINUE_HER_D, CONTINUE_HER_D_AS_I,

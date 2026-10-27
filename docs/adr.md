@@ -23325,3 +23325,22 @@ what nevirapine does beside her other medications.
   answered by the module with its suggestions (Decision 250), and its chips are unchanged.
 
 Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aWordWithNoNearDrugNameBesideHerDrugCarriesNoChipAboutThatDrug`.
+
+## Decision 480: Continuing a drug asked without "her" is continuing her drug
+
+**Status: Accepted** (October 2026) — found asking 8 further wordings of 15 patients on the 3.7.1 standalone on 2026-10-27.
+
+### Context
+
+*"Can she continue nevirapine?"* went to the model, which answered *"Nevirapine can be given, with one caution"* on 3 of
+15 patients. *"Can she continue her nevirapine?"* is the module's (Decision 341). It states whether nevirapine is one of
+her active medications and what relates it to the others. Each continue shape spelled *"her"* before the drug. A
+clinician drops the possessive as often as not.
+
+### The decision
+
+- `CONTINUE_HER_D`, `CONTINUE_HER_D_AS_I` and `CONTINUE_HER_D_AS_SHE` read the possessive as optional. *"Can she / I continue
+  X?"*, *"Is it ok to continue X?"* and *"Should she keep taking X?"* are answered as their *"her X"* wordings are.
+- The answer is the same for a drug she is not on: Decision 341 says which of her medications it is not.
+
+Pinned by `ClinicianWordingsTest.continuingADrugAskedWithoutHerIsContinuingHerDrug`.

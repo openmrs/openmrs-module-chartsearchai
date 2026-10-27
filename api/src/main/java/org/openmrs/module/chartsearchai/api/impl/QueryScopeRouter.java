@@ -2397,6 +2397,56 @@ public final class QueryScopeRouter {
 
 	/** {@code joined} without a duration stated within it — "for 7 days" — or {@code null} where it states none, or nothing is
 	 *  left (ADR Decision 472). */
+	/** The words a purpose after the drug never holds: what a question asks of the drug, never what it is for (ADR Decision
+	 *  487). */
+	private static final Set<String> NOT_IN_A_PURPOSE = new HashSet<String>(Arrays.asList("any", "drug", "drugs", "some",
+		"it", "this", "that", "her", "his", "their", "she", "he", "they", "i", "we", "can", "could", "should", "is", "are",
+		"give", "giving", "use", "using", "take", "taking", "with", "without", "together"));
+
+	private static String withoutAPurposeAfterTheDrug(String joined) {
+		List<String> words = new ArrayList<String>(Arrays.asList(joined.split(" ")));
+		int at = words.indexOf(DRUG_NAME);
+		if (at < 0 || at + 3 >= words.size() || !"for".equals(words.get(at + 1))) {
+			return null;
+		}
+		// One to three words of purpose, and words after them that ask something: "Fluconazole for thrush - any concerns
+		// given her meds?" (ADR Decision 487).
+		// The longest first: "for her back pain - safe" is "her back pain", never "her back".
+		for (int length = 3; length >= 1; length--) {
+			if (at + 2 + length >= words.size()) {
+				continue;
+			}
+			List<String> purpose = words.subList(at + 2, at + 2 + length);
+			// A purpose ends on what it names, never on "a" or "her": "for a clot", "for her clot".
+			if (String.join(" ", purpose).matches(PATIENT) || String.join(" ", purpose).matches(A_DURATION)
+					|| purpose.get(length - 1).matches("a|an|the|her|his|their|my|some")) {
+				continue;
+			}
+			boolean aPurpose = true;
+			for (int w = 0; w < purpose.size(); w++) {
+				String word = purpose.get(w);
+				// "her clot", "a clot": an article or possessive may open what it names
+				if (w == 0 && length > 1 && word.matches("a|an|the|her|his|their|my")) {
+					continue;
+				}
+				// Nor a word of her medications or of what is asked — "drug", "any": "Check for drug interactions" is a screen,
+				// and the scan for an unrecognised name puts "check" in a drug's place.
+				if (DRUG_NAME.equals(word) || NOT_A_PURPOSE.contains(word) || OTHER_FACTOR.matcher(word).find()
+						|| RESIDUAL_SAFE.contains(word) || RESIDUAL_HARMS.contains(word) || RESIDUAL_INTERACTS.contains(word)
+						|| RESIDUAL_NOT_A_PAIR.contains(word) || NOT_IN_A_PURPOSE.contains(word)) {
+					aPurpose = false;
+					break;
+				}
+			}
+			if (aPurpose) {
+				List<String> rest = new ArrayList<String>(words.subList(0, at + 1));
+				rest.addAll(words.subList(at + 2 + length, words.size()));
+				return String.join(" ", rest);
+			}
+		}
+		return null;
+	}
+
 	private static String withoutAStatedDuration(String joined) {
 		String without = joined.replaceAll("(?:^| )for " + A_DURATION + "(?= |$)", "").trim();
 		return without.equals(joined) || without.isEmpty() ? null : without;
@@ -2490,6 +2540,11 @@ public final class QueryScopeRouter {
 		String withoutADuration = withoutAStatedDuration(withoutADose != null ? withoutADose : joined);
 		if (withoutADuration != null) {
 			withoutADose = withoutADuration;
+		}
+		// And a purpose right after the drug, before what is asked (ADR Decision 487).
+		String withoutAPurpose = withoutAPurposeAfterTheDrug(withoutADose != null ? withoutADose : joined);
+		if (withoutAPurpose != null) {
+			withoutADose = withoutAPurpose;
 		}
 		// And a form named beside it (ADR Decision 334): "Can I give her ketoconazole cream?".
 		String withoutAForm = withoutAStatedForm(withoutADose != null ? withoutADose : joined);
@@ -2922,6 +2977,10 @@ public final class QueryScopeRouter {
 		String withoutADuration = withoutAStatedDuration(String.join(" ", wordsWithTheDrugMarked));
 		if (withoutADuration != null) {
 			wordsWithTheDrugMarked = Arrays.asList(withoutADuration.split(" "));
+		}
+		String withoutAPurposeAfterIt = withoutAPurposeAfterTheDrug(String.join(" ", wordsWithTheDrugMarked));
+		if (withoutAPurposeAfterIt != null) {
+			wordsWithTheDrugMarked = Arrays.asList(withoutAPurposeAfterIt.split(" "));
 		}
 		// A drug named as hers — not "give her X", where she is who it is given to — is her own medication's question,
 		// which its own shapes answer (ADR Decisions 335, 374).

@@ -1840,6 +1840,21 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/** ADR Decision 487: a purpose right after the drug, with the question after it, is set aside as a closing one is. */
+	@Test
+	public void aPurposeRightAfterTheDrugIsSetAsideAsAClosingOneIs() {
+		String[][] pairs = { { "Warfarin for her clot - any concerns given her meds?", "Any concerns with warfarin given her meds?" },
+			{ "Warfarin for DVT - safe?", "Warfarin - safe?" }, { "Warfarin for a clot ok with her meds?", "Warfarin ok with her meds?" },
+			{ "Warfarin for her back pain - safe?", "Warfarin - safe?" }, { "Warfarin for TB ok with her ARVs?", "Warfarin ok with her ARVs?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+		// A factor the findings do not weigh, after "for", stays the model's.
+		assertNull(ask("Warfarin for her kidneys - safe?"));
+	}
+
 	private static String ask(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

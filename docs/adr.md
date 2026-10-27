@@ -23515,3 +23515,35 @@ builds the per-order context, so it can.
   removes, and the screen's posture is to state a relationship rather than to clear one.
 
 Pinned by `SubstanceInSeveralOrdersPairTest`.
+## Decision 487: A purpose right after the drug, with the question after it, is set aside as a dose is
+
+**Status: Accepted** (October 2026) — found asking 24 further wordings of 15 patients on the 3.7.1 standalone on 2026-10-27.
+
+### Context
+
+*"Fluconazole for thrush - any concerns given her meds?"* went to the model, which answered *"Fluconazole can be given,
+with one caution"* on 7 of 15 patients. Decision 213 sets aside a purpose that CLOSES a proposal (*"… for her knee
+pain?"*). Decision 452 reads one inside a pair (*"Fluconazole for oral thrush - safe with efavirenz?"*). A purpose right
+after one drug, with the question following it, was read by neither.
+
+### The decision
+
+- `withoutAPurposeAfterTheDrug` sets aside *"for P"* right after the drug, where P is one to three words and more words
+  follow.
+- P is never a drug, the patient, a duration, a word joining a second question, or a factor the findings do not weigh
+  (`OTHER_FACTOR`). *"Warfarin for her kidneys - safe?"* stays the model's.
+- P never ends on an article or a possessive, so *"for a clot"* is read whole.
+- Past an opening article or possessive, P has no word of her medications or of what is asked (`NOT_IN_A_PURPOSE`:
+  *"any"*, *"drug"*, *"with"*, …). *"Check for drug interactions"* is a screen: the unrecognised-name scan puts *"check"*
+  in a drug's place, and in the first build *"drug"* was set aside as its purpose.
+  `LlmInferenceServiceAnswerFromFindingsContextTest.everyWayOfAskingForAScreenIsAnsweredWithTheScreensCount` caught it.
+  The readings' whole filler list is too wide here: it holds *"tb"*, and *"Rifampicin for TB ok with her ARVs?"* lost its
+  purpose.
+- The longest purpose is tried first: *"for her back pain - safe"* is *"her back pain"*, never *"her back"*. The live
+  check of the first build missed both of these on all 15 patients.
+- `fitsAsWritten` and the residual reading both set it aside, as they do a dose and a duration (Decision 472), so the
+  shapes and the residual reading never disagree on what the question is.
+- The answer is the one the question without its purpose gets. Unlike a closing purpose, it does not say the purpose was
+  not weighed.
+
+Pinned by `ClinicianWordingsTest.aPurposeRightAfterTheDrugIsSetAsideAsAClosingOneIs`.

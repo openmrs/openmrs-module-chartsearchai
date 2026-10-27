@@ -23280,3 +23280,26 @@ in a patient on Y"*) or *"Is X safe in a patient taking Y?"*.
 - `A_PATIENT_ON` names the patient by the drug she takes, as Decision 352's shape spelled it.
 
 Pinned by `ClinicianWordingsTest.aDrugAskedOfAPatientOnAnotherInThePassiveIsTheQuestionOfTheTwo`.
+
+## Decision 478: An activity or a food asked of a patient on her drug carries no drug-safety material
+
+**Status: Accepted** (October 2026) — found asking 25 further wordings of 15 patients on the 3.7.1 standalone on 2026-10-27.
+
+### Context
+
+*"Can she drive on nevirapine?"*, *"Can she exercise while on nevirapine?"*, *"She is on nevirapine. Can she eat
+oranges?"* and *"Can she have oranges? She is on nevirapine."* ask nothing of a drug interaction. Yet on 9 of 15 patients
+each carried nevirapine's interactions with her other medications as chips. A question naming one resolved drug keeps its
+chips unless it is a question of the drug's record or of how she takes it (Decisions 399, 450, 464). None of those
+shapes read an activity while on the drug, or a food asked beside a sentence saying she is on it.
+
+### The decision
+
+- `HOW_TO_TAKE_A_DRUG_SHAPES` reads *"Can she A while on / on her X?"*, where A is an everyday activity on a closed list
+  (`AN_ACTIVITY`: exercise, drive, work, travel, swim, …).
+- It also reads a sentence saying she is on X before or after *"Can she eat F / drink or have an everyday food / A?"*.
+- These are handed the model with no drug-safety material, as Decision 450's questions are.
+- Taking, stopping, continuing or giving the drug is never such a question, and a second drug keeps the pair's check:
+  *"She is on nevirapine. Can she have ibuprofen?"*.
+
+Pinned by `ClinicianWordingsTest.anActivityOrAFoodWhileOnHerDrugCarriesNoDrugSafetyMaterial`.

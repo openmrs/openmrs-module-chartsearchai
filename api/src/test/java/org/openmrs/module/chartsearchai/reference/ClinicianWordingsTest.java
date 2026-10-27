@@ -1753,6 +1753,27 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/**
+	 * Something she would do while on her drug — exercise, drive, travel — and a food asked beside a sentence saying she is
+	 * on it ask nothing of its safety, and carry no drug-safety material (ADR Decision 478). On the 3.7.1 standalone "Can
+	 * she drive on nevirapine?" and "She is on nevirapine. Can she eat oranges?" carried nevirapine's interactions as chips.
+	 */
+	@Test
+	public void anActivityOrAFoodWhileOnHerDrugCarriesNoDrugSafetyMaterial() {
+		for (String question : new String[] { "Can she exercise while on nevirapine?", "Can she drive on nevirapine?",
+			"Can she travel while taking her efavirenz?", "She is on nevirapine. Can she eat oranges?",
+			"Can she have oranges? She is on nevirapine.", "She takes efavirenz. Can she drink milk?" }) {
+			org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart asked = chart(question);
+			assertTrue(asked.asksOnlyAboutADrugsRecord(), question);
+			assertNull(asked.getModuleAnswer(), question);
+		}
+		// Taking, stopping or giving a drug is still its question, and so is a second drug.
+		for (String question : new String[] { "Can she take nevirapine?", "Can she stop nevirapine?",
+			"She is on nevirapine. Can she have ibuprofen?", "Can she continue nevirapine?" }) {
+			assertFalse(chart(question).asksOnlyAboutADrugsRecord(), "a question of its safety: " + question);
+		}
+	}
+
 	private static String ask(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

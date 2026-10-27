@@ -2808,6 +2808,18 @@ public final class QueryScopeRouter {
 	private static final String BESIDE_HER_DRUG = "(?:with|while on|while taking|alongside|together with|after|before) (?:"
 			+ POSSESSIVE + " )?";
 
+	/** Something she would do while on her drug, the closed list {@link #HOW_TO_TAKE_A_DRUG_SHAPES} reads (ADR Decision 478). */
+	private static final String AN_ACTIVITY = "(?:exercise|drive|work|travel|swim|run|walk|fast|go (?:out|home|to work|to school)"
+			+ "|do (?:sports?|exercise)|play sports?|lift weights)";
+
+	/** A sentence saying she is on her drug (ADR Decision 478). */
+	private static final String SHE_IS_ON_HER_D = "(?:she|he|they|the patient|this patient|patient) (?:is on|are on|is taking"
+			+ "|are taking|takes|take) (?:" + POSSESSIVE + " )?" + D;
+
+	/** A food or an activity asked of her, with no drug (ADR Decision 478). */
+	private static final String A_FOOD_OR_ACTIVITY_ASKED = "(?:can|could|may|should) (?:she|he|they|the patient|this patient) "
+			+ "(?:eat \\p{L}+(?: \\p{L}+){0,2}?|(?:drink|have) " + EVERYDAY_FOOD + "|" + AN_ACTIVITY + ")";
+
 	private static final List<Pattern> HOW_TO_TAKE_A_DRUG_SHAPES = shapes(
 			"(?:when|what time|how) (?:should|do|does|can|must|would) (?:she|he|they|the patient|this patient) take (?:"
 					+ POSSESSIVE + " )?" + D + "(?: tablets?| pills?| doses?)?",
@@ -2826,7 +2838,14 @@ public final class QueryScopeRouter {
 			"(?:can|could|may|should) (?:she|he|they|the patient|this patient) (?:eat \\p{L}+(?: \\p{L}+){0,2}|(?:drink|have) "
 					+ EVERYDAY_FOOD + ") " + BESIDE_HER_DRUG + D
 					// and after or before her dose: "Can she eat oranges after her nevirapine dose?" (ADR Decision 476)
-					+ "(?: dose| doses| tablets?| pills?)?");
+					+ "(?: dose| doses| tablets?| pills?)?",
+			// "Can she drive on nevirapine?", "Can she exercise while on nevirapine?" — something she would do while on her drug
+			// (ADR Decision 478)
+			"(?:can|could|may|should) (?:she|he|they|the patient|this patient) " + AN_ACTIVITY + " (?:while on|while taking|on|with) (?:"
+					+ POSSESSIVE + " )?" + D,
+			// "She is on nevirapine. Can she eat oranges?", "Can she have oranges? She is on nevirapine." (ADR Decision 478)
+			SHE_IS_ON_HER_D + " " + A_FOOD_OR_ACTIVITY_ASKED,
+			A_FOOD_OR_ACTIVITY_ASKED + " " + SHE_IS_ON_HER_D);
 
 	/** The possessives naming the drug as hers. */
 	private static final Set<String> RESIDUAL_POSSESSIVES = new HashSet<String>(Arrays.asList("her", "his", "their",

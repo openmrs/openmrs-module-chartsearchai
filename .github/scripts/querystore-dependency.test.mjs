@@ -1,9 +1,10 @@
 // Self-test for querystore-dependency.mjs, run by build.yml before the job relies on it.
 //
 // It drives the real exported functions: the description parser over the forms a description can
-// take, and the resolver with a stubbed GitHub API, so a wrong predicate fails here instead of
-// quietly building QueryStore main. A last case runs the script as the job does, with no
-// description, which must resolve to main without calling the API.
+// take, and the description reader and resolver with a stubbed GitHub API, so a wrong predicate
+// fails here instead of quietly building QueryStore main. The last cases run the script as the job
+// does, outside a pull request, which must resolve to main without calling the API, and with a
+// malformed pull request number, which must fail before calling it.
 //
 // Usage: node .github/scripts/querystore-dependency.test.mjs
 
@@ -13,7 +14,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { githubPullFetcher, parseDependsOn, resolveSource } from './querystore-dependency.mjs';
+import {
+  currentDescription,
+  githubPullFetcher,
+  parseDependsOn,
+  pullNumber,
+  resolveSource,
+} from './querystore-dependency.mjs';
 
 let failed = 0;
 const check = (name, ok, detail) => {
@@ -80,26 +87,40 @@ check('a merged pull request builds main', merged.ref === '' && merged.summary.i
 
 check('a closed, unmerged pull request fails', await rejects(resolveSource(90, stub), 'closed without merging'));
 
+// currentDescription and pullNumber
+const descriptions = { 619: { body: 'Summary\n\nDepends-On: openmrs/openmrs-module-querystore#98' }, 618: { body: null } };
+const read = [];
+const pullsHere = async (number) => {
+  read.push(number);
+  return descriptions[number];
+};
+check('no pull request reads no description', (await currentDescription(null, pullsHere)) === '' && read.length === 0);
+check('the description is the one the API returns now', parseDependsOn(await currentDescription(619, pullsHere)) === 98);
+check('an empty description reads as none', (await currentDescription(618, pullsHere)) === '');
+check('an empty PR_NUMBER is no pull request', pullNumber('') === null && pullNumber(undefined) === null);
+check('PR_NUMBER is read as a number', pullNumber('619') === 619);
+check('a malformed PR_NUMBER fails', throws(() => pullNumber('619; echo'), 'is not a pull request number'));
+
 // githubPullFetcher
 let request;
 const fetchOk = async (url, init) => {
   request = { url, init };
   return { status: 200, json: async () => pulls[98] };
 };
-const fetched = await githubPullFetcher('token-value', fetchOk)(98);
+const fetched = await githubPullFetcher('openmrs/openmrs-module-querystore', 'token-value', fetchOk)(98);
 check('the fetcher reads the QueryStore pull request', request.url === 'https://api.github.com/repos/openmrs/openmrs-module-querystore/pulls/98');
 check('the fetcher sends the token', request.init.headers.Authorization === 'Bearer token-value');
 check('the fetcher returns the body', fetched === pulls[98]);
 const fetchMissing = async () => ({ status: 404, json: async () => ({}) });
-check('an HTTP error fails, naming the status', await rejects(githubPullFetcher('', fetchMissing)(99999), 'HTTP 404'));
+check('an HTTP error fails, naming the status', await rejects(githubPullFetcher('openmrs/openmrs-module-chartsearchai', '', fetchMissing)(99999), 'HTTP 404'));
 
-// The script as the job runs it, with no description: main, without touching the network.
+// The script as the job runs it, outside a pull request: main, without touching the network.
 const script = fileURLToPath(new URL('./querystore-dependency.mjs', import.meta.url));
 const scratch = mkdtempSync(join(tmpdir(), 'querystore-dependency-'));
 const output = join(scratch, 'output');
 const summary = join(scratch, 'summary');
 const printed = execFileSync(process.execPath, [script], {
-  env: { PATH: process.env.PATH, PR_BODY: '', GITHUB_OUTPUT: output, GITHUB_STEP_SUMMARY: summary },
+  env: { PATH: process.env.PATH, PR_NUMBER: '', GITHUB_OUTPUT: output, GITHUB_STEP_SUMMARY: summary },
   encoding: 'utf8',
 });
 check('the script writes an empty ref for main', readFileSync(output, 'utf8') === 'ref=\n');
@@ -109,14 +130,14 @@ let exitCode = 0;
 let stdout = '';
 try {
   execFileSync(process.execPath, [script], {
-    env: { PATH: process.env.PATH, PR_BODY: 'Depends-On: openmrs-module-querystore 98', GITHUB_OUTPUT: output },
+    env: { PATH: process.env.PATH, PR_NUMBER: 'abc', GITHUB_OUTPUT: output },
     encoding: 'utf8',
   });
 } catch (error) {
   exitCode = error.status;
   stdout = error.stdout;
 }
-check('the script fails a malformed line with an annotation', exitCode === 1 && stdout.startsWith('::error::'), stdout.trim());
+check('the script fails a malformed pull request number with an annotation', exitCode === 1 && stdout.startsWith('::error::'), stdout.trim());
 
 if (failed) {
   console.log(`${failed} failed`);

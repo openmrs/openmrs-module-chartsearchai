@@ -18,7 +18,11 @@
 // another repository is left alone. A QueryStore line in neither form, or two QueryStore lines
 // naming different pull requests, fails the job rather than quietly building main.
 //
-// Usage (the job sets these): PR_BODY, GITHUB_TOKEN, GITHUB_OUTPUT, GITHUB_STEP_SUMMARY.
+// The description is read from the API when the job runs, not from the event that started it: a
+// re-run replays the original event, so a line added after it would otherwise go unseen.
+//
+// Usage (the job sets these): PR_REPOSITORY, PR_NUMBER (empty outside pull requests: main),
+// GITHUB_TOKEN, GITHUB_OUTPUT, GITHUB_STEP_SUMMARY.
 //   node .github/scripts/querystore-dependency.mjs
 // Self-test: node .github/scripts/querystore-dependency.test.mjs
 
@@ -71,14 +75,27 @@ export async function resolveSource(number, fetchPull) {
   };
 }
 
-export function githubPullFetcher(token, fetchImpl = fetch) {
+// The pull request's description as it reads now, or '' when there is no pull request (null).
+export async function currentDescription(number, fetchPull) {
+  if (number === null) return '';
+  return (await fetchPull(number)).body ?? '';
+}
+
+// The pull request number in PR_NUMBER, or null when it is empty.
+export function pullNumber(value) {
+  if (!value) return null;
+  if (!/^[1-9]\d*$/.test(value)) throw new Error(`PR_NUMBER '${value}' is not a pull request number.`);
+  return Number(value);
+}
+
+export function githubPullFetcher(repository, token, fetchImpl = fetch) {
   return async (number) => {
-    const url = `https://api.github.com/repos/${REPOSITORY}/pulls/${number}`;
+    const url = `https://api.github.com/repos/${repository}/pulls/${number}`;
     const headers = { Accept: 'application/vnd.github+json', 'User-Agent': 'chartsearchai-ci' };
     if (token) headers.Authorization = `Bearer ${token}`;
     const response = await fetchImpl(url, { headers });
     if (response.status !== 200) {
-      throw new Error(`Reading QueryStore #${number} from ${url} returned HTTP ${response.status}.`);
+      throw new Error(`Reading ${repository}#${number} from ${url} returned HTTP ${response.status}.`);
     }
     return response.json();
   };
@@ -95,10 +112,12 @@ const entryHref = (() => {
 
 if (entryHref !== null && import.meta.url === entryHref) {
   try {
-    const source = await resolveSource(
-      parseDependsOn(process.env.PR_BODY),
-      githubPullFetcher(process.env.GITHUB_TOKEN),
+    const token = process.env.GITHUB_TOKEN;
+    const description = await currentDescription(
+      pullNumber(process.env.PR_NUMBER),
+      githubPullFetcher(process.env.PR_REPOSITORY, token),
     );
+    const source = await resolveSource(parseDependsOn(description), githubPullFetcher(REPOSITORY, token));
     console.log(source.summary);
     if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `ref=${source.ref}\n`);
     if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${source.summary}\n`);

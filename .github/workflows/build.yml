@@ -152,7 +152,8 @@ jobs:
   # current head instead of main; once it merges, main again. The required `build` stays red until
   # the API is published, which is the true merge state. .github/scripts/querystore-dependency.mjs
   # reads the line and says why it accepts or refuses one. Editing a description does not rerun
-  # checks: rerun this job after adding the line.
+  # checks, so rerun this job after adding the line: the script reads the description from the API
+  # when it runs, because a re-run replays the original event and its description.
   #
   # Deliberately NOT in the required set, and deliberately WITHOUT continue-on-error. Those are two
   # halves of one decision: the job has to be able to go red, because a job that cannot fail is not
@@ -170,9 +171,11 @@ jobs:
     runs-on: ubuntu-latest
     # Least privilege, declared here and not on the neighbouring jobs because the exposure is this
     # job's own: it builds a SECOND repository's source, so it runs Maven plugins this repository
-    # does not gate. Checking out two public repos needs nothing but read.
+    # does not gate. Checking out two public repos and reading this pull request's description
+    # need nothing but read.
     permissions:
       contents: read
+      pull-requests: read
     steps:
       # persist-credentials: false on both, for the same reason as the permissions block above —
       # querystore HEAD's unreviewed Maven plugins run in this job, and there is no need to leave a
@@ -190,10 +193,11 @@ jobs:
 
       - name: Pick querystore main or the Depends-On pull request
         id: querystore
-        # The description reaches the script through the environment, never pasted into the
-        # command, so its text cannot run as shell. It is empty outside pull requests: main.
+        # The script reads the description itself, so its text never reaches a command line. The
+        # number is empty outside pull requests: main.
         env:
-          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
           GITHUB_TOKEN: ${{ github.token }}
         run: node chartsearchai/.github/scripts/querystore-dependency.mjs
 

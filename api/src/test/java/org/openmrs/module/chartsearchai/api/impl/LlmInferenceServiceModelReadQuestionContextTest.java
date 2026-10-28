@@ -195,6 +195,25 @@ public class LlmInferenceServiceModelReadQuestionContextTest extends BaseModuleC
 		}
 	}
 
+	/**
+	 * A food or an activity asked beside one of her drugs, which the injector reads as a question of how she takes that drug
+	 * and nothing of its safety (ADR Decisions 464, 478), is not read again by the model (ADR Decision 500): on the 3.7.1
+	 * standalone the model read "Can she eat oranges with her nevirapine?" and "Can she drive on nevirapine?" as YES, and
+	 * the screen of her orders answered each with every chip of it.
+	 */
+	@Test
+	public void aFoodOrActivityAskedBesideHerDrugIsNotReadByTheModel() {
+		for (String question : new String[] { "Can she eat oranges with her warfarin?", "Can she drive on warfarin?",
+				"Can she drink coffee while on her aspirin?" }) {
+			RecordingProvider provider = new RecordingProvider("YES");
+			ChartAnswer answer = serviceWith(provider).search(patient, question);
+
+			assertEquals(0, provider.engine.readings, question + " is not read by the model");
+			assertFalse(answer.isAnsweredByTheModule(), question + " is not answered with the screen: " + answer.getAnswer());
+			assertTrue(answer.getSafetyWarnings().isEmpty(), question + " carries no chip: " + answer.getSafetyWarnings());
+		}
+	}
+
 	@Test
 	public void aQuestionNamingADrugIsNotReadByTheModel() {
 		RecordingProvider provider = new RecordingProvider("YES");

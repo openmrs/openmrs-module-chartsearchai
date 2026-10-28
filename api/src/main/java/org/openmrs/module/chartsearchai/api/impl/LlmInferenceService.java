@@ -1221,7 +1221,11 @@ public class LlmInferenceService implements ChartSearchService {
 				|| QueryScopeRouter.asksAboutAllergies(question)
 				// Nor something else asked beside her medications, which the router reads as no question of their own
 				// safety: the model read "Is orange juice ok with her meds?" as one (ADR Decision 492).
-				|| QueryScopeRouter.asksOfSomethingElseWithHerMedications(question)) {
+				|| QueryScopeRouter.asksOfSomethingElseWithHerMedications(question)
+				// Nor a question the injector read as one of a drug's record or of how she takes it, which asks nothing of
+				// its safety: the model read "Can she eat oranges with her nevirapine?" and "Can she drive on nevirapine?"
+				// as one (ADR Decision 500).
+				|| injected.asksOnlyAboutADrugsRecord()) {
 			return new SafetyReading(injected, question);
 		}
 		LlmProvider.MedicationSafetyReading reading = llmProvider.readMedicationSafetyQuestion(question);

@@ -23959,3 +23959,28 @@ with what relates the drug to her other medications, which stopping it would end
   the model.
 
 Pinned by `ClinicianWordingsTest.herWishToStopHerDrugIsStoppingHerDrug`.
+
+## Decision 500: A food or an activity asked beside one of her drugs is not read by the model as a medication check
+
+**Status: Accepted** (October 2026) — found re-asking a 64-question matrix of 15 patients on the 3.7.1 standalone on
+2026-10-28, after Decision 489.
+
+### Context
+
+*"Can she eat oranges with her nevirapine?"* and *"Can she drive on nevirapine?"* were answered by the model with no
+chips before Decision 489. After it, all 15 patients got the screen of her orders, with every chip of it. The injector
+reads both as questions of how she takes her drug (Decisions 464, 478), which carry no drug-safety material and leave no
+drug in its findings. `readForDrugSafety` asked the model of every question whose first injection named no drug and ran
+no screen. The model read both as YES. Decision 492 exempted something else asked beside her medications as a group, but
+not beside one drug of hers.
+
+### The decision
+
+- A question the injector read as one of a drug's record or of how she takes it (`PatientChart.asksOnlyAboutADrugsRecord`)
+  is not read again by the model. Its first injection stands.
+- This is the injector's own answer, so the two readings cannot disagree about what the question asks.
+- A question in another language naming a drug the data does not resolve, *"¿Puedo dar fluconazol?"*, is still read,
+  and the model reads it as asking which drugs to avoid. Its answer, the screen of her orders, names no fluconazole.
+  It is left as found.
+
+Pinned by `LlmInferenceServiceModelReadQuestionContextTest.aFoodOrActivityAskedBesideHerDrugIsNotReadByTheModel`.

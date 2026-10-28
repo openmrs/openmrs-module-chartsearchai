@@ -99,7 +99,8 @@ public class LlmInferenceServiceModelReadQuestionContextTest extends BaseModuleC
 		ChartAnswer answer = serviceWith(provider).search(patient, "What shouldn't I prescribe for this patient?");
 
 		assertTrue(answer.isAnsweredByTheModule(), "was: " + answer.getAnswer());
-		assertTrue(answer.getAnswer().split("\n")[0].endsWith("This check does not list other drugs to avoid."), "was: " + answer.getAnswer());
+		assertTrue(answer.getAnswer().split("\n")[0].endsWith("(this check does not list other drugs to avoid)."),
+				"was: " + answer.getAnswer());
 		assertTrue(answer.getAnswer().contains(" interacts with active order "), "and states the findings: "
 				+ answer.getAnswer());
 	}

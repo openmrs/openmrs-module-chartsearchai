@@ -71,7 +71,7 @@ public class TogetherWithHerOwnMedicationContextTest extends BaseModuleContextSe
 
 		// What ibuprofen is to her, then celecoxib's own answer — its cautions, the pair asked about among them.
 		assertEquals("Ibuprofen is one of this patient's active medications.\n"
-				+ "2 interaction cautions for Celecoxib:\n"
+				+ "2 interaction cautions for Celecoxib — 2 Moderate.\n"
 				+ "Celecoxib interacts with active order Prednisone and Dexamethasone — Moderate. [7] [3] [4]\n"
 				+ "Celecoxib interacts with active order Ibuprofen — Moderate. [8] [2]", answer);
 	}
@@ -345,7 +345,8 @@ public class TogetherWithHerOwnMedicationContextTest extends BaseModuleContextSe
 
 		assertTrue(answer != null && answer.startsWith("Nevirapine and Lopinavir are among this patient's active medications.\n"),
 			"was: " + answer);
-		assertTrue(answer.contains("interaction cautions for Fluconazole:"), "fluconazole's own answer: " + answer);
+		assertTrue(answer.contains("\n4 interaction cautions for Fluconazole — 3 Moderate, 1 Minor.\n"), "fluconazole's own answer: "
+				+ answer);
 		assertTrue(answer.contains("\nFluconazole interacts with active order Zidovudine — Moderate. ["),
 			"every caution, the one the model left out among them: " + answer);
 		assertTrue(!answer.contains("can be given"), "never a clearance: " + answer);
@@ -500,9 +501,11 @@ public class TogetherWithHerOwnMedicationContextTest extends BaseModuleContextSe
 
 		assertTrue(answer != null && answer.startsWith("Fluconazole and Clarithromycin, asked about together; neither is one of "
 				+ "this patient's active medications."), "was: " + answer);
-		assertTrue(answer.contains("\nFor Fluconazole:\n1 interaction caution for Fluconazole:\nFluconazole interacts with "
+		assertTrue(answer.contains("\nFor Fluconazole:\n1 interaction caution for Fluconazole — Moderate, with Nevirapine.\n"
+				+ "Fluconazole interacts with "
 				+ "active order Nevirapine — Moderate."), "fluconazole's own answer: " + answer);
-		assertTrue(answer.contains("\nFor Clarithromycin:\n1 interaction caution for Clarithromycin:\nClarithromycin interacts "
+		assertTrue(answer.contains("\nFor Clarithromycin:\n1 interaction caution for Clarithromycin — Moderate, with "
+				+ "Nevirapine.\nClarithromycin interacts "
 				+ "with active order Nevirapine — Moderate."), "clarithromycin's own answer: " + answer);
 		assertTrue(!answer.contains("can be given"), "never a clearance: " + answer);
 	}

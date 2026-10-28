@@ -43,8 +43,7 @@ public class ScreenBesideHerOwnConflictsTest extends BaseModuleContextSensitiveT
 			+ "below that level, with no severity or mechanism on file. Drug-class relationships were not checked. [";
 
 	/** The bottom line over that screen (ADR Decision 512): his two conflicts with his own orders, counted. */
-	private static final String BOTTOM_LINE = "No rated interaction found. To review: 2 contraindications. See details for "
-			+ "what was not checked.";
+	private static final String BOTTOM_LINE = "No rated interactions; 2 contraindications.";
 
 	@BeforeEach
 	public void answerFromFindings() {
@@ -101,8 +100,10 @@ public class ScreenBesideHerOwnConflictsTest extends BaseModuleContextSensitiveT
 
 			assertNotNull(answer, question + " — the module answers");
 			String[] lines = answer.split("\n");
-			assertEquals(DrugReferenceInjector.CHOOSES_NO_DRUG_LEAD, lines[0], question + " — was: " + answer);
-			assertEquals(BOTTOM_LINE, lines[1], question + " — was: " + answer);
+			// The lead's limit folded into the one sentence in view, the lead whole under it (ADR Decision 517).
+			assertEquals("No rated interactions; 2 contraindications (this check does not choose a medication to give this "
+					+ "patient, and states none as safe).", lines[0], question + " — was: " + answer);
+			assertEquals(DrugReferenceInjector.CHOOSES_NO_DRUG_LEAD, lines[1], question + " — was: " + answer);
 			assertEquals(true, lines[2].startsWith(DEXAMETHASONE_PREDNISONE_SCREEN),
 				question + " — was: " + answer);
 			assertEquals(true, lines[3].startsWith("The patient has a recorded allergy to Dexamethasone. This finding is about a medication this patient is already taking. ["),

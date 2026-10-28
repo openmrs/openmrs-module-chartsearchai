@@ -550,6 +550,9 @@ public class PatientChartSerializer {
 		 *  sets this on the chart it builds, which is the last one. */
 		private String moduleAnswer;
 
+		/** @see #getModuleAnswerSummary() */
+		private String moduleAnswerSummary;
+
 		/** @see #getListedDrugsWithNoActiveOrder() */
 		private List<String> listedDrugsWithNoActiveOrder = Collections.<String> emptyList();
 
@@ -696,6 +699,21 @@ public class PatientChartSerializer {
 		 */
 		public String getModuleAnswer() {
 			return moduleAnswer;
+		}
+
+		/** Records the bottom line {@code DrugReferenceInjector} opened its composed answer with — ADR Decision 517, and
+		 *  that class is the only production caller. */
+		public void markModuleAnswerSummary(String summary) {
+			this.moduleAnswerSummary = summary;
+		}
+
+		/**
+		 * The one sentence the module's composed answer opens with that a client shows, the rest of the answer collapsed
+		 * under it — ADR Decision 517 — or {@code null} where the answer opens with none, and is shown whole. Always the
+		 * answer's own first line, written where the answer is composed and never read back off its words.
+		 */
+		public String getModuleAnswerSummary() {
+			return moduleAnswerSummary;
 		}
 
 		/** Records the drugs the question lists that her chart holds no active order for — issue #515, and

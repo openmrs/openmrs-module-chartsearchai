@@ -38,11 +38,14 @@ public class DuplicateTherapyQuestionTest extends BaseModuleContextSensitiveTest
 	public void aQuestionWhetherSheIsOnDuplicateTherapyIsAnsweredWithTheDuplicatesTheScreenFound() throws IOException {
 		for (String question : Arrays.asList("Is she on any duplicate NSAIDs?", "Any duplicate therapy?",
 			"Are any of her medications duplicates?", "Is she on more than one drug from the same class?")) {
-			assertEquals("Yes — possible duplicate therapy among this patient's active medications:\nIbuprofen, Diclofenac "
+			// The bottom line names each duplicate, the rest under it (ADR Decision 517).
+			PatientChart chart = ask(question, THREE_NSAIDS);
+			String bottomLine = "Yes — 1 possible duplicate therapy: Ibuprofen, Diclofenac and Celecoxib (NSAID).";
+			assertEquals(bottomLine + "\nIbuprofen, Diclofenac "
 					+ "and Celecoxib are in one drug group (NSAID) — possible duplicate therapy. [2] [3] [4]\nThis check "
 					+ "compares the substances in her orders and the drug groups this module carries (NSAID and "
-					+ "Penicillins); other drug classes are not covered.", ask(question, THREE_NSAIDS).getModuleAnswer(),
-				question);
+					+ "Penicillins); other drug classes are not covered.", chart.getModuleAnswer(), question);
+			assertEquals(bottomLine, chart.getModuleAnswerSummary(), question);
 		}
 	}
 

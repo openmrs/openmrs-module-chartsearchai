@@ -24453,3 +24453,50 @@ drops the unit as often as not.
   a count.
 
 Pinned by `ClinicianWordingsTest.aDoseWrittenWithNoUnitIsSetAsideAsOneWithAUnitIs`.
+
+## Decision 517: The bottom line a client shows is one sentence, and every module answer that can say one opens with it
+
+**Status: Accepted** (October 2026) — on the owner's request that every answer show by default one small, simple sentence
+under a collapsed *"Show details"*, after 48 questions over six patients of the demo replica (8 wordings each) found
+Decision 512's bottom line three sentences — the finding, *"To review: …"*, *"See details for what was not checked."* —
+the answer to which drugs to avoid five, and the answers to a duplicate-therapy question (76–202 words) and to a proposal
+(14–66 words) not collapsed at all.
+
+### The decision
+
+- **A screen's bottom line is one sentence**, `DrugReferenceInjector.screenSummary`: *"1 Major interaction — Nelfinavir
+  with Rifampin — plus 4 possible duplicate therapies and 9 cautions."*, *"No Major interactions; 5 cautions."*, *"No rated
+  interactions; 3 possible duplicate therapies."* The pairs rated a reason to withhold sit between dashes, since a drug's
+  name can carry a bracket of its own (*"Acetylsalicylic acid (aspirin)"*). Decision 512's *"See details for what was not
+  checked."* is the client's toggle label now, *"Show details and what was not checked"*, so the caveat stays one click
+  away and out of the sentence.
+- **A lead folds its limit into it** (`withLeadsFoldedIntoTheBottomLine`): the sentence a question's lead opens with —
+  *"This check does not choose a medication to give this patient, and states none as safe"* — becomes a bracket at its end,
+  and the answer to which drugs to avoid's recorded allergies come before it: *"No drug allergies are recorded for this
+  patient; no rated interactions; 3 possible duplicate therapies (this check does not list other drugs to avoid)."* The
+  lead stays whole under it. A line above the bottom line that is no such lead leaves the answer shown whole.
+- **A proposal's cautions are one sentence**, `cautionSummary`, in place of Decision 140's heading *"1 interaction caution
+  for Ibuprofen:"*, which a client could not show alone: *"1 interaction caution for Ibuprofen — Moderate, with
+  Zidovudine."*, or the ratings counted for several. Written in `composeFromFindings`, so an answer that states a proposal
+  inside another — a switch, two drugs asked about together — says it alike. Still never that the drug can be given.
+- **Which line a client shows is recorded where the answer is composed**, `PatientChart.getModuleAnswerSummary()`, never
+  read back off the answer's words: a screen's bottom line; a proposal's *"No — …"* or its cautions; a duplicate-therapy
+  answer's *"Yes — 3 possible duplicate therapies: Lamivudine; Nevirapine; Stavudine."* (`duplicatesFound`); and, for any
+  other module answer, its first line where every line under it says only what was not checked
+  (`saysOnlyWhatWasNotChecked`) — so no sentence in view leaves a finding out of view that it does not count. Anything
+  else is shown whole.
+
+What stays whole: every answer a model writes — summarising one would take a second model call, or a sentence the answer
+does not say — and a module answer whose first line is a heading or would hide a finding it does not account for.
+
+### Spec change
+
+`BriefScreenAnswerTest`, `ScreenBelowFloorPairsTest`, `ScreenSharedMechanismContextTest`, `ScreenInteractionsOnlyContextTest`,
+`ScreenBesideHerOwnConflictsTest`, `OrdersSharingASubstanceModuleAnswerContextTest`, `DuplicateTherapyQuestionTest`,
+`DrugsToAvoidQuestionTest`, `LlmInferenceServiceAnswerFromFindingsContextTest`, `LlmInferenceServiceModelReadQuestionContextTest`,
+`LlmInferenceServiceNameAsAskedContextTest`, `ProposalBesideHerOwnConflictsTest`, `OwnMedicationSafetyContextTest`,
+`SwitchingHerDrugContextTest`, `TogetherWithHerOwnMedicationContextTest` and `CombinationOrderLineContextTest` pinned Decision 512's three sentences, a lead
+above the bottom line, or Decision 140's caution heading, and now assert these.
+
+Pinned by `BriefScreenAnswerTest`, `DuplicateTherapyQuestionTest.aQuestionWhetherSheIsOnDuplicateTherapyIsAnsweredWithTheDuplicatesTheScreenFound`
+and `LlmInferenceServiceAnswerFromFindingsContextTest.aScreensBottomLineOpensItsAnswerAndIsCarriedApart`.

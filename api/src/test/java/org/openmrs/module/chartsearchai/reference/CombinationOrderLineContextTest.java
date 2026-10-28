@@ -108,7 +108,7 @@ public class CombinationOrderLineContextTest extends BaseModuleContextSensitiveT
 	public void aSwitchAwayFromADrugSheTakesInACombinationNamesTheSubstanceOfEachLine() {
 		String answer = ask("Can I switch her lopinavir to atazanavir?");
 		assertTrue(answer.startsWith("Lopinavir is one of this patient's active medications, and this switch replaces it.\n"
-				+ DrugReferenceInjector.cautionLead(2, "Atazanavir") + "\n"), "was: " + answer);
+				+ "2 interaction cautions for Atazanavir — 2 Moderate.\n"), "was: " + answer);
 		int replaced = answer.indexOf("\nAbout the order the switch replaces:\n");
 		assertTrue(replaced > 0, "was: " + answer);
 		int ritonavir = answer.indexOf("\nAtazanavir" + HER_LPVR + "Moderate." + NAMED + "Ritonavir. [");

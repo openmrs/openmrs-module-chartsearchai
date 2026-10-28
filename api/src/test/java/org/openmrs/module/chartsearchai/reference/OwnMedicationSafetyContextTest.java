@@ -147,7 +147,7 @@ public class OwnMedicationSafetyContextTest extends BaseModuleContextSensitiveTe
 		assertNotNull(answer, "the module answers");
 		String[] lines = answer.split("\n");
 		assertEquals("Celecoxib is not one of this patient's active medications.", lines[0], "was: " + answer);
-		assertEquals("2 interaction cautions for Celecoxib:", lines[1], "was: " + answer);
+		assertEquals("2 interaction cautions for Celecoxib — 2 Moderate.", lines[1], "was: " + answer);
 		assertTrue(!answer.contains("can be given") && !answer.contains("No —") && !answer.contains("Yes —"),
 			"no verdict: " + answer);
 	}
@@ -177,7 +177,7 @@ public class OwnMedicationSafetyContextTest extends BaseModuleContextSensitiveTe
 		String tenofovir = answerOverTheShippedData("Is she taking tenofovir?", orders);
 		assertNotNull(tenofovir, "the module answers");
 		assertTrue(tenofovir.startsWith("Tenofovir is not one of this patient's active medications.\n"
-				+ "4 interaction cautions for Tenofovir:\n"), "was: " + tenofovir);
+				+ "4 interaction cautions for Tenofovir — none with a severity rated.\n"), "was: " + tenofovir);
 		assertTrue(!efavirenz.contains("can be given") && !tenofovir.contains("can be given"), "no clearance");
 	}
 

@@ -1621,15 +1621,16 @@ public interface ChartSearchService {
 		}
 
 		/**
-		 * The lines a module-composed answer opens with that a client shows, with the rest of {@link #getAnswer()}
-		 * collapsed under them — ADR Decision 512. A screen of her medications opens with its bottom line: what is rated a
-		 * reason to withhold, named, the rest counted, and that the details say what was not checked; any lead a question
-		 * takes (that the check lists no drug to avoid, chooses none, rates no risk) stays above it, in view. Always the
-		 * answer's own first lines, never other words: {@link #getAnswer()} is still the whole answer, for a client that
-		 * shows it all. Decided by {@code DrugReferenceInjector.summaryOf}, the composer that writes those lines.
+		 * The one sentence a module-composed answer opens with that a client shows, with the rest of {@link #getAnswer()}
+		 * collapsed under it — ADR Decisions 512, 517. A screen of her medications opens with its bottom line, what is
+		 * rated a reason to withhold named and the rest counted, any lead its question takes folded into it; a proposal
+		 * with its "No" or its cautions; a question whether her medications duplicate one another with the duplicates;
+		 * and an answer of one sentence and lines saying only what it did not check with that sentence. Always the
+		 * answer's own first line: {@link #getAnswer()} is still the whole answer, for a client that shows it all. Recorded
+		 * by {@code DrugReferenceInjector}, the composer that writes it ({@code PatientChart.getModuleAnswerSummary()}).
 		 *
-		 * @return those lines, newline-joined, or {@code null} where the answer opens with no bottom line — every answer a
-		 *         model wrote, and every module answer but a screen's
+		 * @return that sentence, or {@code null} where the answer opens with none — every answer a model wrote, and every
+		 *         module answer whose first line does not account for what the rest states
 		 */
 		public String getAnswerSummary() {
 			return answerSummary;

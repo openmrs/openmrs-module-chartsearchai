@@ -57,7 +57,7 @@ public class BriefScreenAnswerTest extends BaseModuleContextSensitiveTest {
 		String[] lines = answer.split("\n");
 		assertEquals(5, lines.length, "was: " + answer);
 		assertEquals(BOTTOM_LINE, lines[0], "was: " + answer);
-		assertEquals(BOTTOM_LINE, DrugReferenceInjector.summaryOf(answer), "the lines a client shows, the rest collapsed");
+		assertEquals(BOTTOM_LINE, chart.getModuleAnswerSummary(), "the line a client shows, the rest collapsed");
 		assertTrue(lines[1].startsWith("Nelfinavir interacts with active order Rifampin — Major. ["), "was: " + answer);
 		assertTrue(lines[2].startsWith(SHARED_SUBSTANCES), "was: " + answer);
 		assertTrue(lines[3].startsWith("Also in the safety warnings beside this answer: 12 interactions, each a caution (8 "
@@ -70,24 +70,28 @@ public class BriefScreenAnswerTest extends BaseModuleContextSensitiveTest {
 	@Test
 	public void theDemoPatientsAvoidAnswerStatesItsLeadAndHerAllergiesOnOneLine() {
 		// The question the model's reading runs "What shouldn't I prescribe for this patient?" as (ADR Decision 491).
-		String answer = demoPatientsScreen(QueryScopeRouter.DRUGS_TO_AVOID_QUESTION).getModuleAnswer();
+		PatientChart chart = demoPatientsScreen(QueryScopeRouter.DRUGS_TO_AVOID_QUESTION);
+		String answer = chart.getModuleAnswer();
 
 		assertNotNull(answer, "the module answers");
 		String[] lines = answer.split("\n");
 		assertEquals(6, lines.length, "was: " + answer);
-		String lead = "No drug allergies are recorded for this patient. This check does not list other drugs to avoid.";
-		assertEquals(lead, lines[0]);
-		assertEquals(BOTTOM_LINE, lines[1], "was: " + answer);
-		assertEquals(lead + "\n" + BOTTOM_LINE, DrugReferenceInjector.summaryOf(answer),
-			"the lead stays in view above the bottom line");
+		// One sentence in view: her allergies, the bottom line, and the lead's limit; the lead whole under it (ADR Decision
+		// 514).
+		String visible = "No drug allergies are recorded for this patient; 1 Major interaction — Nelfinavir with Rifampin — "
+				+ "plus 4 possible duplicate therapies and 12 cautions (this check does not list other drugs to avoid).";
+		assertEquals(visible, lines[0], "was: " + answer);
+		assertEquals(visible, chart.getModuleAnswerSummary());
+		assertEquals("No drug allergies are recorded for this patient. This check does not list other drugs to avoid.",
+			lines[1]);
 		assertTrue(lines[2].startsWith("Nelfinavir interacts with active order Rifampin — Major. ["), "was: " + answer);
 		assertEquals(NOT_CHECKED, lines[5]);
 	}
 
 	/** The bottom line a screen's answer opens with (ADR Decision 512): what is rated a reason to withhold, named, and the
 	 *  rest counted. */
-	private static final String BOTTOM_LINE = "1 Major interaction: Nelfinavir with Rifampin. Also to review: 4 possible "
-			+ "duplicate therapies, 12 cautions. See details for what was not checked.";
+	private static final String BOTTOM_LINE = "1 Major interaction — Nelfinavir with Rifampin — plus 4 possible duplicate "
+			+ "therapies and 12 cautions.";
 
 	/** Her orders sharing a substance, a reason to change one of them, named on one line (ADR Decisions 493, 506). */
 	private static final String SHARED_SUBSTANCES = "Possible duplicate therapy — each in more than one of this patient's "

@@ -1097,9 +1097,9 @@ public class LlmInferenceService implements ChartSearchService {
 		List<RecordReference> references = extractCitedReferences(answer, null, mappings);
 		List<ChartSearchService.OrderStopDate> orderStopDates =
 				ChartSearchAiUtils.orderStopDates(answer, references, mappings);
-		// The lines a client shows, the rest collapsed under them (ADR Decision 512): what the composer opened with, and
-		// only while the answer still opens with it — every statement above appends.
-		String summary = DrugReferenceInjector.summaryOf(composed);
+		// The sentence a client shows, the rest collapsed under it (ADR Decisions 512, 517): what the composer opened with,
+		// and only while the answer still opens with it — every statement above appends.
+		String summary = chart.getModuleAnswerSummary();
 		if (summary != null && !answer.startsWith(summary + "\n")) {
 			summary = null;
 		}

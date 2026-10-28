@@ -73,8 +73,8 @@ public class ScreenInteractionsOnlyContextTest extends BaseModuleContextSensitiv
 		// What is true of every contraindication line is said once, in the count (ADR Decision 191).
 		// No count opens a screen's answer (ADR Decision 506): her allergy, a reason to change a medication, is its first
 		// line, and says for itself that the drug is one she already takes.
-		assertTrue(answer.matches("No Major interaction found\\. To review: 1 contraindication, 1 possible duplicate "
-				+ "therapy, 5 cautions\\. See details for what was not checked\\.\n"
+		assertTrue(answer.matches("No Major interactions; 1 contraindication, 1 possible duplicate therapy and 5 "
+				+ "cautions\\.\n"
 				+ "The patient has a recorded allergy to Ibuprofen\\. This finding is about a medication "
 				+ "this patient is already taking\\. \\[\\d+\\]\n(?s).*"), "was: " + answer);
 		for (SafetyWarning chip : contraindications(SAFETY)) {

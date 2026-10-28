@@ -103,7 +103,7 @@ public class SwitchingHerDrugContextTest extends BaseModuleContextSensitiveTest 
 	public void aSwitchToTenofovirIsAnsweredForTenofovir() {
 		String answer = ask("Can I replace his stavudine with tenofovir?").getModuleAnswer();
 		assertTrue(answer != null && answer.startsWith("Stavudine is one of this patient's active medications, and this switch "
-				+ "replaces it.\n4 interaction cautions for Tenofovir:\n"), "was: " + answer);
+				+ "replaces it.\n4 interaction cautions for Tenofovir — none with a severity rated.\n"), "was: " + answer);
 		// Both forms are checked, and what the data states alike of the two is stated once (ADR Decision 291).
 		assertTrue(answer.contains("\nTenofovir disoproxil is in the same ATC class (J05AF) as active order Lamivudine — possible "
 				+ "duplicate therapy. No severity is rated for this finding." + DrugReferenceInjector.SAME_OF_FORMS_OPENING

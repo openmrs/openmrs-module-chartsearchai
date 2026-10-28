@@ -53,7 +53,7 @@ public class LlmInferenceServiceNameAsAskedContextTest extends BaseModuleContext
 			"Hydrochlorothiazide 25mg");
 		assertNotNull(chart.getModuleAnswer(), "precondition: the module answers it");
 		String composed = serviceOver(chart, "unused").search(patient(), question).getAnswer();
-		assertTrue(composed.startsWith("3 interaction cautions for Glyburide:\n"), composed);
+		assertTrue(composed.startsWith("3 interaction cautions for Glyburide — 3 Moderate.\n"), composed);
 		assertTrue(composed.endsWith("\n" + SAID), composed);
 
 		// The model's answer, and the module's own sentence after it, name it by the data's name alike.

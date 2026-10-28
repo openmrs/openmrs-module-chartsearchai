@@ -48,7 +48,7 @@ public class ProposalBesideHerOwnConflictsTest extends BaseModuleContextSensitiv
 
 		assertNotNull(answer, "the module answers");
 		String[] lines = answer.split("\n");
-		assertEquals("1 interaction caution for Omeprazole:", lines[0], "was: " + answer);
+		assertEquals("1 interaction caution for Omeprazole — Minor, with Acetylsalicylic acid (aspirin).", lines[0], "was: " + answer);
 		assertEquals(true, lines[1].startsWith("Omeprazole interacts with active order "), "was: " + answer);
 		// Her aspirin's conflict with her NSAID allergy is about aspirin, which the question does not name (ADR Decision 387).
 		assertEquals(-1, Arrays.asList(lines).indexOf(APART), "nothing about her own conflict, was: " + answer);

@@ -46,7 +46,7 @@ public class ChartSearchAiAnswerSummaryTest {
 
 	private static final String QUESTION = "Does she have any drug interactions?";
 
-	private static final String SUMMARY = "1 Major interaction: Warfarin with Aspirin. See details for what was not checked.";
+	private static final String SUMMARY = "1 Major interaction — Warfarin with Aspirin.";
 
 	private static final String COMPOSED = SUMMARY + "\nWarfarin interacts with active order Aspirin — Major. [3]";
 

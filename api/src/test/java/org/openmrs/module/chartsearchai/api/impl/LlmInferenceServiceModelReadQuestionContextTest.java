@@ -214,6 +214,24 @@ public class LlmInferenceServiceModelReadQuestionContextTest extends BaseModuleC
 		}
 	}
 
+	/**
+	 * Continuing her diet or a routine beside her medications asks nothing of their own safety (ADR Decision 510): on the
+	 * 3.7.1 standalone "Ok to continue her diet with her meds?" was answered with the screen of her orders, every chip of it,
+	 * on all 15 patients.
+	 */
+	@Test
+	public void continuingHerDietOrARoutineBesideHerMedicationsIsNoScreen() {
+		for (String question : new String[] { "Ok to continue her diet with her meds?", "Can she continue her exercise with her meds?",
+				"Is it ok to keep her diet with her medications?", "Can she stay on her diet while on her ARVs?" }) {
+			RecordingProvider provider = new RecordingProvider("YES");
+			ChartAnswer answer = serviceWith(provider).search(patient, question);
+
+			assertEquals(0, provider.engine.readings, question + " is not read by the model");
+			assertFalse(answer.isAnsweredByTheModule(), question + " is not answered with the screen: " + answer.getAnswer());
+			assertTrue(answer.getSafetyWarnings().isEmpty(), question + " carries no chip: " + answer.getSafetyWarnings());
+		}
+	}
+
 	@Test
 	public void aQuestionNamingADrugIsNotReadByTheModel() {
 		RecordingProvider provider = new RecordingProvider("YES");

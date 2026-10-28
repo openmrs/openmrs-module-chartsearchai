@@ -447,7 +447,12 @@ public final class QueryScopeRouter {
 			"(?:is|are) " + POSSESSIVE + " (?:diet|food|foods|meals?|eating) (?:ok|okay|safe|fine|bad|good|a problem)(?: (?:with|for) "
 					+ HER_MEDICATIONS_AS_A_WHOLE + ")?",
 			"(?:should|must|does|do|need) (?:she|he|they|the patient|this patient) (?:need to )?avoid (?:any |certain |some )?"
-					+ "(?:foods?|drinks?|fruits?|diets?)(?: (?:with|while on) " + HER_MEDICATIONS_AS_A_WHOLE + ")?");
+					+ "(?:foods?|drinks?|fruits?|diets?)(?: (?:with|while on) " + HER_MEDICATIONS_AS_A_WHOLE + ")?",
+			// and her diet or a routine continued beside them: "Ok to continue her diet with her meds?" (ADR Decision 510)
+			"(?:(?:is it )?(?:ok|okay|safe|fine|alright) (?:for (?:her|him|them) )?to|(?:can|could|may|should) (?:she|he|they"
+					+ "|the patient|this patient)) (?:continue|keep|follow|stay on|maintain) " + POSSESSIVE + " (?:diet|food|foods|meals?"
+					+ "|eating|exercise|exercises|exercising|routine|fasting|workouts?) (?:with|while on|while taking|alongside) "
+					+ HER_MEDICATIONS_AS_A_WHOLE);
 
 	/** The words the thing of {@link #SOMETHING_ELSE_WITH_HER_MEDICATIONS} may not be: the screen's own (ADR Decision 473). */
 	private static final Set<String> NOT_SOMETHING_ELSE = new HashSet<String>(Arrays.asList("any", "are", "is", "there",

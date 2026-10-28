@@ -24259,3 +24259,24 @@ these.
 
 Pinned by `ScreenBelowFloorPairsTest`, `BriefScreenAnswerTest.theDemoPatientsAvoidAnswerStatesItsLeadAndHerAllergiesOnOneLine`
 and `HerDrugAllergiesListedTest.herDrugAllergiesAreListedFromHerRecords`.
+
+## Decision 510: Continuing her diet or a routine beside her medications is no screen of them
+
+**Status: Accepted** (October 2026) — found among the controls of a live check of Decision 508 on 15 patients on the
+3.7.1 standalone on 2026-10-28.
+
+### Context
+
+*"Ok to continue her diet with her meds?"* was answered with the screen of her orders, every chip of it, on all 15
+patients. No wording rule read it, so the model was asked whether it asks about her medications' safety (Decision 489),
+and it read the question as YES. Decision 492 exempted her diet asked of beside her medications, *"Is her diet ok with
+her medicines?"*, but not her diet or a routine she continues beside them.
+
+### The decision
+
+- Continuing, keeping, following or staying on her diet, food, meals, exercise, routine or fasting with, while on or
+  alongside her medications is one of `HER_DIET`'s shapes. It asks nothing of her medications' own safety: no screen
+  runs, the model is not asked to read it, and no chip is attached.
+- Her diet beside one drug of hers named is Decision 500's, a question of how she takes that drug.
+
+Pinned by `LlmInferenceServiceModelReadQuestionContextTest.continuingHerDietOrARoutineBesideHerMedicationsIsNoScreen`.

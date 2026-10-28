@@ -2826,7 +2826,9 @@ public final class QueryScopeRouter {
 		// "Fluconazole permitted?" (ADR Decision 454)
 		"permitted", "permissible",
 		// "Fluconazole acceptable?" (ADR Decision 456)
-		"acceptable"));
+		"acceptable",
+		// "Fluconazole - go ahead?", asking leave to give it (ADR Decision 502)
+		"ahead"));
 
 	/** Words saying the question is about whether the drug would harm her, which "No" answers backwards (ADR Decision 454):
 	 *  "Will fluconazole harm her?", "Is fluconazole a risk?", "Is fluconazole contraindicated here?". */
@@ -3139,8 +3141,10 @@ public final class QueryScopeRouter {
 					&& RESIDUAL_SUBJECTS.contains(wordsWithTheDrugMarked.get(i - 1));
 		}
 		// The speaker's plan to give it, opening the words, proposes it as an asking word does: "Want to add fluconazole?",
-		// "Want to add fluconazole. OK?" (ADR Decision 497).
-		boolean asked = planToGiveAt(wordsWithTheDrugMarked, 0) >= 0;
+		// "Want to add fluconazole. OK?" (ADR Decision 497); and so does the verb giving it, bare: "Give fluconazole?",
+		// "Prescribe fluconazole for her?" (ADR Decision 502).
+		boolean asked = planToGiveAt(wordsWithTheDrugMarked, 0) >= 0
+				|| PLANNED_GIVING.contains(wordsWithTheDrugMarked.get(0));
 		// A drug, the patient and a word saying it is safe — "Warfarin for her - safe?" — is asked whole (ADR Decision 405).
 		boolean aQuestion = asked || wordsWithTheDrugMarked.size() <= 2 || (safe || harms) && wordsWithTheDrugMarked.size() <= 4;
 		for (String word : wordsWithTheDrugMarked) {

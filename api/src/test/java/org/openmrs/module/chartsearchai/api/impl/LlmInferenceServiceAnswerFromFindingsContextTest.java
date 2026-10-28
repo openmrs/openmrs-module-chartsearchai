@@ -2534,8 +2534,9 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 			// (whetherSheTakesADrugSheDoesNotIsAnsweredThatSheDoesNotThenWithTheFindings)
 			// two drugs: each would need its own answer — which, neither of them hers, the module now gives each
 			// (twoDrugsProposedTogetherAreEachAnsweredAsTheirOwnProposal, ADR Decision 222)
-			// no proposal at all, in words a proposal is made of
-			"Give her ibuprofen?",
+			// ("Give her ibuprofen?", once read here as no proposal at all, is the proposal its bare verb makes since ADR
+			// Decision 502, aBareImperativeGivingADrugProposesIt: the model answered "Give fluconazole?" "Fluconazole can be
+			// given".)
 			// a proposal cue beside a concern or a negation: "No" would answer it backwards
 			"Can I give her ibuprofen, or is it risky?",
 			// ("Can I give her ibuprofen or not?" asks the proposal either way, which "No" answers the right way round: the

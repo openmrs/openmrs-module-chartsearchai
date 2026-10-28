@@ -1926,6 +1926,21 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/** ADR Decision 502: a bare imperative giving a drug, or "go ahead", proposes it, and its verb is no drug's name. */
+	@Test
+	public void aBareImperativeGivingADrugProposesIt() {
+		String[][] pairs = { { "Give warfarin?", "Can I give warfarin?" }, { "Prescribe warfarin for her?", "Can I prescribe warfarin?" },
+			{ "Start warfarin?", "Can I start warfarin?" }, { "Warfarin - go ahead?", "Warfarin ok?" },
+			{ "Go ahead with warfarin?", "Warfarin ok?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+		// Giving something that is no drug stays the model's, and no verb is said to be an unrecognised drug.
+		assertNull(ask("Give her water?"));
+	}
+
 	/** ADR Decision 501: holding her drug "while on" another is holding it while she is on the other. */
 	@Test
 	public void holdingHerDrugWhileOnAnotherIsTheQuestionItSpells() {

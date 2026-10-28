@@ -52,7 +52,10 @@ final class UnrecognisedDrugName {
 	private static final Set<String> NOT_A_NAME = new HashSet<String>(Arrays.asList("this", "that", "these", "those",
 		"the", "a", "an", "it", "them", "drug", "drugs", "medication", "medications", "medicine", "medicines", "something",
 		"anything", "another", "other", "same", "new", "one", "some", "any", "more", "her", "his", "their", "him", "you",
-		"she", "all", "too", "now", "two", "pain", "help", "food", "water", "fluids", "oxygen", "blood"));
+		"she", "all", "too", "now", "two", "pain", "help", "food", "water", "fluids", "oxygen", "blood",
+		// the verbs giving or stopping a drug, which "Give fluconazole?" put in a bare pair's first place (ADR Decision 502)
+		"give", "start", "prescribe", "administer", "add", "use", "go", "ahead", "stop", "hold", "continue", "switch",
+		"swap"));
 
 	private static final int MAX_SUGGESTIONS = 4;
 

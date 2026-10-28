@@ -24003,3 +24003,29 @@ while she is on fluconazole?"* is the module's (Decision 428). The shape spelled
 - The answer is the one the spelled wording gets.
 
 Pinned by `ClinicianWordingsTest.holdingHerDrugWhileOnAnotherIsTheQuestionItSpells`.
+
+## Decision 502: A bare imperative giving a drug, or "go ahead", proposes it, and its verb is no drug's name
+
+**Status: Accepted** (October 2026) — found asking 26 further wordings of 15 patients on the 3.7.1 standalone on
+2026-10-28.
+
+### Context
+
+*"Give fluconazole?"* carried no chips at all. Tried in a drug's place, *"Give"* made the bare pair *"X Y?"*
+(Decision 428), so `UnrecognisedDrugName` reported *"No interaction check was run for "Give" and Fluconazole"*. Decision
+479 then withholds every chip from a question with an unchecked word, and the model answered *"Fluconazole can be
+given"*. *"Fluconazole - go ahead?"* went the same way. *"Prescribe fluconazole for her?"* had its chips, but the model's
+answer cleared the drug on 2 patients. The one-drug reading took a giving verb as a proposal only after an asking word.
+
+### The decision
+
+- The verbs giving or stopping a drug (give, start, prescribe, administer, add, use, go, ahead, stop, hold, continue,
+  switch, swap) are never an unrecognised drug's name.
+- A giving verb opening the one-drug words proposes the drug, as an asking word does: *"Give X?"*, *"Start X?"*,
+  *"Prescribe X for her?"*.
+- *"go ahead"* asks leave to give it, as *"ok"* does: *"X - go ahead?"*, *"Go ahead with X?"*.
+- Giving something that is no drug, *"Give her water?"*, stays the model's.
+- This supersedes the row of `LlmInferenceServiceAnswerFromFindingsContextTest.aQuestionTheModuleDidNotResolveAsASuitabilityQuestionStillAsksTheModel`
+  that kept *"Give her ibuprofen?"* with the model as no proposal at all.
+
+Pinned by `ClinicianWordingsTest.aBareImperativeGivingADrugProposesIt`.

@@ -24363,3 +24363,22 @@ pinned the screen's first line and now find the findings under the bottom line. 
 Pinned by `BriefScreenAnswerTest.theDemoPatientsScreenOpensWithItsMajorAndSaysWhereTheRestAre`,
 `ScreenBelowFloorPairsTest`, `LlmInferenceServiceAnswerFromFindingsContextTest.aScreensBottomLineOpensItsAnswerAndIsCarriedApart`
 and `ChartSearchAiAnswerSummaryTest`.
+
+## Decision 513: A drug "with" or "and" a group of her medications, with no verb, asks how it relates to them
+
+**Status: Accepted** (October 2026) — found asking 21 pair wordings of 15 patients on the 3.7.1 standalone on 2026-10-28.
+
+### Context
+
+*"Cipro with her antacid?"* went to the model, which answered *"Ciprofloxacin can be given"* on 2 of 15 patients.
+*"Cipro + her antacid?"* and *"Is cipro ok with her antacid?"* are the module's. They say the check cannot tell which of
+her medications are the group named, and checks the drug against all of them (Decision 271). The verbless shape of a
+drug beside a group (Decision 433) needed *"interactions"* after the group.
+
+### The decision
+
+- *"X with / and / plus her <group>"*, with nothing after the group, asks how X relates to her medications, as *"X +
+  her <group>"* does.
+- *"X vs her <group>?"* keeps the reading Decision 448 gives it, X asked safe with them.
+
+Pinned by `ClinicianWordingsTest.aDrugBesideAGroupOfHerMedicationsWithNoVerbAsksHowItRelatesToThem`.

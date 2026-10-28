@@ -1926,6 +1926,19 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/** ADR Decision 513: a drug "with" or "and" a group of her medications, no verb, asks how it relates to them. */
+	@Test
+	public void aDrugBesideAGroupOfHerMedicationsWithNoVerbAsksHowItRelatesToThem() {
+		String[][] pairs = { { "Warfarin with her antacid?", "Warfarin + her antacid?" },
+			{ "Warfarin and her antacid?", "Warfarin + her antacid?" },
+			{ "Warfarin with her painkillers?", "Warfarin + her painkillers?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+	}
+
 	/** ADR Decision 508: continuing her medications with a new drug proposes the new drug beside them. */
 	@Test
 	public void continuingHerMedicationsWithANewDrugProposesIt() {

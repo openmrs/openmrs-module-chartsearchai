@@ -1285,6 +1285,9 @@ public final class QueryScopeRouter {
 			"(?:does|do|will|would|could|can) " + HER_MEDICATION_GROUP + " interact with " + D,
 			// "Fluconazole vs her ARVs - interaction?" (ADR Decision 433)
 			D + " (?:vs|versus|and|with) " + HER_MEDICATION_GROUP + " (?:any )?(?:drug )?interactions?",
+			// and with nothing after the group, "Cipro with her antacid?" — never "vs", which Decision 448 reads as asked safe
+			// (ADR Decision 513)
+			D + " (?:and|with|plus) " + HER_MEDICATION_GROUP,
 			"(?:(?:is|are) there )?any (?:problems?|issues?|concerns?|interactions?) (?:with |in )?(?:combining|mixing) "
 					+ HER_MEDICATION_GROUP + " (?:with|and) " + D,
 			"(?:(?:is|are) there )?any (?:problems?|issues?|concerns?|interactions?) (?:with |in )?(?:combining|mixing|giving|"

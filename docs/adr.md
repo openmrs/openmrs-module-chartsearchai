@@ -23984,3 +23984,22 @@ not beside one drug of hers.
   It is left as found.
 
 Pinned by `LlmInferenceServiceModelReadQuestionContextTest.aFoodOrActivityAskedBesideHerDrugIsNotReadByTheModel`.
+
+## Decision 501: Holding her drug "while on" another is holding it while she is on the other
+
+**Status: Accepted** (October 2026) — found asking 26 further wordings of 15 patients on the 3.7.1 standalone on
+2026-10-28.
+
+### Context
+
+*"Should I hold nevirapine while on fluconazole?"* went to the model on all 15 patients. On every one it answered
+*"Nevirapine can be given"*, a clearance of the wrong drug for a question about holding it. *"Should I hold nevirapine
+while she is on fluconazole?"* is the module's (Decision 428). The shape spelled the subject before *"on"*.
+
+### The decision
+
+- *"while on"*, *"when on"*, *"if on"* and *"while taking"*, with no subject, stand where *"while she is on"* does in the
+  shape asking whether to stop or hold her drug because of another.
+- The answer is the one the spelled wording gets.
+
+Pinned by `ClinicianWordingsTest.holdingHerDrugWhileOnAnotherIsTheQuestionItSpells`.

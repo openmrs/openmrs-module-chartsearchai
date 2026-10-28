@@ -1796,8 +1796,8 @@ public final class QueryScopeRouter {
 	 *  clarithromycin?" — whether to stop or keep her drug for another (ADR Decision 252). */
 	private static final String STOP_OR_KEEP_ONE_FOR_THE_OTHER = "(?:(?:(?:do|will) (?:i|we) (?:need|have) to|should (?:i|we))"
 			+ " (?:stop|hold|pause|suspend|discontinue) " + HER_D + " (?:before|when|while|if) (?:starting|giving|adding|prescribing"
-			// "… while she is on fluconazole" (ADR Decision 428)
-			+ "|(?:i|we) (?:start|give|add|prescribe)|(?:she|he|they) (?:is|are) (?:on|taking)) " + D
+			// "… while she is on fluconazole" (ADR Decision 428), and "… while on fluconazole" (ADR Decision 501)
+			+ "|(?:i|we) (?:start|give|add|prescribe)|(?:she|he|they) (?:is|are) (?:on|taking)|on|taking) " + D
 			// "Should she stop aspirin if she takes ibuprofen?" (ADR Decision 444)
 			+ "|(?:should|must) (?:she|he|they|the patient|this patient) stop (?:taking )?" + HER_D + " (?:if|when|while|before) "
 			+ "(?:she|he|they) (?:takes|take|starts|start|is on|are on|is given|are given|gets|get) " + HER_D

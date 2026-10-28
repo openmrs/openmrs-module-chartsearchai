@@ -1926,6 +1926,19 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/** ADR Decision 501: holding her drug "while on" another is holding it while she is on the other. */
+	@Test
+	public void holdingHerDrugWhileOnAnotherIsTheQuestionItSpells() {
+		String[][] pairs = { { "Should I hold nevirapine while on warfarin?", "Should I hold nevirapine while she is on warfarin?" },
+			{ "Do I need to stop nevirapine while taking warfarin?", "Do I need to stop nevirapine while she is taking warfarin?" },
+			{ "Should I hold her nevirapine when on warfarin?", "Should I hold her nevirapine when she is on warfarin?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+	}
+
 	/** ADR Decision 499: the patient's own wish to stop her drug asks what stopping it is, as "Can I stop her X?" does. */
 	@Test
 	public void herWishToStopHerDrugIsStoppingHerDrug() {

@@ -1926,6 +1926,18 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/** ADR Decision 505: giving a drug or avoiding it, asked either way, is a harm asked of it, which no "Yes" or "No" answers. */
+	@Test
+	public void givingADrugOrAvoidingItIsAHarmAskedOfIt() {
+		String[][] pairs = { { "Warfarin: start or avoid?", "Is warfarin a risk?" }, { "Give or avoid warfarin?", "Is warfarin a risk?" },
+			{ "Warfarin - start or not?", "Can I start warfarin?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+	}
+
 	/** ADR Decision 504: a switch asked with a bare verb, "Swap X for Y?", is the switch its "Can I" wording asks. */
 	@Test
 	public void aSwitchAskedWithABareVerbIsTheSwitchItSpells() {

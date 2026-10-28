@@ -2839,7 +2839,9 @@ public final class QueryScopeRouter {
 		"unsafe",
 		// "Would fluconazole be a mistake?", "Is fluconazole a bad idea?", "Is fluconazole hazardous for her?", "Is there a
 		// downside to fluconazole?" (ADR Decision 456)
-		"mistake", "bad", "hazardous", "downside", "downsides", "unwise", "inadvisable"));
+		"mistake", "bad", "hazardous", "downside", "downsides", "unwise", "inadvisable",
+		// "Fluconazole: start or avoid?" (ADR Decision 505)
+		"avoid"));
 
 	/** Words proposing to give the drug, where an asking word opens the question. */
 	private static final Set<String> RESIDUAL_GIVE = new HashSet<String>(Arrays.asList("give", "giving", "given", "start",
@@ -3150,7 +3152,10 @@ public final class QueryScopeRouter {
 		// "Want to add fluconazole. OK?" (ADR Decision 497); and so does the verb giving it, bare: "Give fluconazole?",
 		// "Prescribe fluconazole for her?" (ADR Decision 502).
 		boolean asked = planToGiveAt(wordsWithTheDrugMarked, 0) >= 0
-				|| PLANNED_GIVING.contains(wordsWithTheDrugMarked.get(0));
+				|| PLANNED_GIVING.contains(wordsWithTheDrugMarked.get(0))
+				// and the drug with the verb giving it and nothing else: "Fluconazole - start or not?" (ADR Decision 505)
+				|| wordsWithTheDrugMarked.size() == 2 && DRUG_NAME.equals(wordsWithTheDrugMarked.get(0))
+						&& PLANNED_GIVING.contains(wordsWithTheDrugMarked.get(1));
 		// And asking the reader what they would do — "Do you recommend fluconazole?" — or thinking of it before the drug —
 		// "Thinking of fluconazole for her thrush" — proposes it (ADR Decision 503).
 		int theDrug = wordsWithTheDrugMarked.indexOf(DRUG_NAME);
@@ -3211,8 +3216,9 @@ public final class QueryScopeRouter {
 			String next = i + 1 < words.size() ? words.get(i + 1) : null;
 			if ("or".equals(word) && "not".equals(next)) {
 				i++;
-			} else if ("or".equals(word) && !read.isEmpty() && next != null && safeOrHarmful(read.get(read.size() - 1))
-					&& safeOrHarmful(next)) {
+			} else if ("or".equals(word) && !read.isEmpty() && next != null && (safeOrHarmful(read.get(read.size() - 1))
+					// and giving it or avoiding it: "Fluconazole: start or avoid?" (ADR Decision 505)
+					|| RESIDUAL_GIVE.contains(read.get(read.size() - 1))) && safeOrHarmful(next)) {
 				continue;
 			} else if ("side".equals(word) && ("effect".equals(next) || "effects".equals(next))) {
 				read.add(SIDE_EFFECTS);

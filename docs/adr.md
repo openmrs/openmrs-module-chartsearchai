@@ -24085,3 +24085,27 @@ the verb.
   read as the switch.
 
 Pinned by `ClinicianWordingsTest.aSwitchAskedWithABareVerbIsTheSwitchItSpells`.
+
+## Decision 505: Giving a drug or avoiding it, asked either way, is a harm asked of it
+
+**Status: Accepted** (October 2026) — found asking 26 further wordings of 15 patients on the 3.7.1 standalone on
+2026-10-28.
+
+### Context
+
+*"Fluconazole: start or avoid?"* went to the model. On 2 of 15 patients it answered *"Fluconazole can be started"*. On
+others it answered that the records do not address it. Decision 457 reads *"or"* between two words saying the drug is
+safe or harmful as asking both. It did not do so between a giving verb and *"avoid"*, a word no reading admitted.
+*"Fluconazole - start or not?"* names the drug and its verb with no asking word, which the one-drug reading did not
+admit either.
+
+### The decision
+
+- *"avoid"* is a harm word.
+- *"or"* between a giving verb and a word saying the drug is safe or harmful asks both, as Decision 457 reads two such
+  words. *"Start or avoid X?"* is a harm asked of the drug, answered with what the check found and no *"Yes"* or
+  *"No"*, which would read either way.
+- The drug and a present giving verb and nothing else, *"X - start?"*, propose it. *"X - start or not?"* is that
+  question asked either way.
+
+Pinned by `ClinicianWordingsTest.givingADrugOrAvoidingItIsAHarmAskedOfIt`.

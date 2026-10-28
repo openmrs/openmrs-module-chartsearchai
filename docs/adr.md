@@ -24059,3 +24059,29 @@ The one-drug reading admitted none of their words: *"reason"* and *"not"*, *"you
   says it was not weighed (Decision 487).
 
 Pinned by `ClinicianWordingsTest.aReasonNotToGiveADrugIsAHarmAndARecommendationProposesIt`.
+
+## Decision 504: A switch asked with a bare verb is the switch its "Can I" wording asks
+
+**Status: Accepted** (October 2026) — found asking 26 further wordings of 15 patients on the 3.7.1 standalone on
+2026-10-28.
+
+### Context
+
+*"Swap nevirapine for efavirenz?"* went to the model. On 5 of 15 patients it answered *"Efavirenz can be given"*. On
+one it did so while naming nevirapine's interaction with efavirenz as its caution, though the switch ends that
+nevirapine. *"Can I swap nevirapine for efavirenz?"* is the module's (Decision 219), which says which drug the
+switch replaces and checks the new one against her other medications. The switch shapes spelled the asking words before
+the verb.
+
+### The decision
+
+- *"Switch / change / swap X to/for Y?"* and *"Replace X with Y?"*, the verb bare, are the switch their *"Can I"*
+  wordings ask.
+- A switch naming only the drug switched to, *"Can I switch her to efavirenz?"*, stays the model's. With the drug it
+  replaces unnamed, the module would check the new one against that drug as well. On a patient switching off
+  nevirapine, that would withhold efavirenz because of the nevirapine it replaces.
+- This supersedes the line of `ClinicianWordingsTest.aPairJoinedByAVerbAPlanOrTheWordsOnTopOfIsThePairQuestionItSpells` that kept
+  *"Switch warfarin to nevirapine?"* with the model. That line kept the switch from being read as a pair, and it is now
+  read as the switch.
+
+Pinned by `ClinicianWordingsTest.aSwitchAskedWithABareVerbIsTheSwitchItSpells`.

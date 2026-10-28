@@ -2108,9 +2108,10 @@ public final class QueryScopeRouter {
 	 * her nevirapine with efavirenz?", "Is it safe to switch nevirapine to efavirenz?"; and "swap" (ADR Decision 253).
 	 */
 	private static final List<Pattern> SWITCH_SHAPES = shapes(
-			"(?:can|could|may|should) (?:i|we) (?:switch|change|swap) (?:" + PATIENT + " (?:from )?|" + POSSESSIVE + " |from )?" + D
-					+ " (?:to|for) " + D + "(?: now| today)?",
-			"(?:can|could|may|should) (?:i|we) replace (?:" + POSSESSIVE + " )?" + D + " (?:with|by) " + D + "(?: now| today)?",
+			// and with the verb bare: "Swap nevirapine for efavirenz?", "Replace her nevirapine with efavirenz?" (ADR Decision 504)
+			"(?:(?:can|could|may|should) (?:i|we) )?(?:switch|change|swap) (?:" + PATIENT + " (?:from )?|" + POSSESSIVE + " |from )?"
+					+ D + " (?:to|for) " + D + "(?: now| today)?",
+			"(?:(?:can|could|may|should) (?:i|we) )?replace (?:" + POSSESSIVE + " )?" + D + " (?:with|by) " + D + "(?: now| today)?",
 			"is it (?:safe|ok|okay|appropriate) to (?:switch|change|swap) (?:" + PATIENT + " (?:from )?|" + POSSESSIVE + " |from )?" + D
 					+ " (?:to|for) " + D,
 			"is it (?:safe|ok|okay|appropriate) to replace (?:" + POSSESSIVE + " )?" + D + " (?:with|by) " + D,

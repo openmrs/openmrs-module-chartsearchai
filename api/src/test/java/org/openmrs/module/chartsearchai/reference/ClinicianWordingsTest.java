@@ -1554,9 +1554,9 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
 			assertEquals(canonical, ask(pair[0]), pair[0]);
 		}
-		// A switch and a past giving stay the model's. ("Warfarin instead of nevirapine?" is the switch it spells since ADR
-		// Decision 465, aDrugInsteadOfAnotherWithNoVerbIsTheSwitchItSpells.)
-		assertNull(ask("Switch warfarin to nevirapine?"));
+		// A past giving stays the model's. ("Warfarin instead of nevirapine?" is the switch it spells since ADR Decision 465,
+		// aDrugInsteadOfAnotherWithNoVerbIsTheSwitchItSpells, and "Switch warfarin to nevirapine?" since ADR Decision 504,
+		// aSwitchAskedWithABareVerbIsTheSwitchItSpells.)
 		assertNull(ask("Was warfarin given with nevirapine?"));
 	}
 
@@ -1919,6 +1919,21 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 			{ "Should I stop nevirapine?", "Should I stop her nevirapine?" },
 			{ "Want to stop nevirapine?", "Can I stop her nevirapine?" },
 			{ "Can I stop warfarin?", "Can I stop her warfarin?" }, { "Want to stop warfarin?", "Can I stop her warfarin?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+	}
+
+	/** ADR Decision 504: a switch asked with a bare verb, "Swap X for Y?", is the switch its "Can I" wording asks. */
+	@Test
+	public void aSwitchAskedWithABareVerbIsTheSwitchItSpells() {
+		String[][] pairs = { { "Swap nevirapine for warfarin?", "Can I swap nevirapine for warfarin?" },
+			{ "Switch nevirapine to warfarin?", "Can I switch nevirapine to warfarin?" },
+			{ "Switch warfarin to nevirapine?", "Can I switch warfarin to nevirapine?" },
+			{ "Change her nevirapine to warfarin?", "Can I change her nevirapine to warfarin?" },
+			{ "Replace her nevirapine with warfarin?", "Can I replace her nevirapine with warfarin?" } };
 		for (String[] pair : pairs) {
 			String canonical = ask(pair[1]);
 			assertNotNull(canonical, "precondition: the module answers " + pair[1]);

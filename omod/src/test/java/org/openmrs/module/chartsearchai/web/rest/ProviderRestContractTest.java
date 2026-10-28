@@ -630,6 +630,36 @@ public class ProviderRestContractTest {
 	}
 
 	@Test
+	public void aCallerQueryStoreWithholdsRecordsFromCannotReadThemThroughTheHub() throws Exception {
+		ChartSearchAiRestController controller = new ChartSearchAiRestController();
+		RecordingConversationService conversations = new RecordingConversationService();
+		AtomicInteger hubCalls = new AtomicInteger();
+		HubClinicalAnswerProvider provider = new HubClinicalAnswerProvider(
+				(request, sink, cancellation) -> hubCalls.incrementAndGet()) {
+
+			@Override
+			protected String gp(String property, String defaultValue) {
+				return "http://hub.example/v1/chat/completions";
+			}
+
+			@Override
+			protected boolean queryStoreWithholdsFromCaller() {
+				return true;
+			}
+		};
+		controller.setConversationService(conversations);
+		controller.setProviderRegistry(stubRegistry(provider));
+
+		ByteArrayOutputStream out = new ByteArrayOutputStream();
+		controller.streamProviderTurn(out, patient(), "Any known drug allergies?", "hub",
+				ProviderMode.QUERY_SCOPED, "single-e4b-checked", null);
+
+		assertEquals(0, hubCalls.get());
+		assertEquals(Arrays.asList("turn_started", "turn_error"), sseTypes(out));
+		assertEquals("provider_not_permitted", ssePayload(out, "turn_error").get("problemCode").asText());
+	}
+
+	@Test
 	public void chatStreamRequiresHubProfileAndNeverCallsAnUnreadyProvider() throws Exception {
 		ChartSearchAiRestController controller = new ChartSearchAiRestController();
 		RecordingConversationService conversations = new RecordingConversationService();

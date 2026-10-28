@@ -26,6 +26,7 @@ import org.openmrs.Patient;
 import org.openmrs.module.chartsearchai.LogCapture;
 import org.apache.logging.log4j.Level;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
@@ -313,9 +314,11 @@ public class HttpHubStreamTransportTest {
 		assertEquals(Boolean.TRUE, context.get("require_product_profile"));
 		assertEquals("conversation-1", context.get("session"));
 		assertEquals("request-1", context.get("request_id"));
-		assertEquals(account.toPayload(), context.get("account_context"));
-		assertEquals(Collections.singletonList("Organizational: Nurse"),
-				((Map<?, ?>) context.get("account_context")).get("effective_roles"));
+		Map<?, ?> sent = (Map<?, ?>) context.get("account_context");
+		assertEquals(Arrays.asList("source", "assigned_roles", "session_location"), new ArrayList<>(sent.keySet()));
+		assertEquals(account.toPayload().get("assigned_roles"), sent.get("assigned_roles"));
+		assertEquals(account.toPayload().get("session_location"), sent.get("session_location"));
+		assertEquals("openmrs_session", sent.get("source"));
 	}
 
 	@Test

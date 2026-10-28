@@ -7,6 +7,7 @@
 package org.openmrs.module.chartsearchai.api.provider;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -123,6 +124,16 @@ public final class AccountContext {
 		payload.put("effective_roles", effectiveRoles);
 		payload.put("session_location", sessionLocation);
 		payload.put("locale", locale);
+		return Collections.unmodifiableMap(payload);
+	}
+
+	/**
+	 * What the Hub reads to name who is asking: the source, assigned roles and session location. The
+	 * identifiers, effective roles and locale stay in the turn's own record.
+	 */
+	public Map<String, Object> toHubPayload() {
+		Map<String, Object> payload = new LinkedHashMap<>(toPayload());
+		payload.keySet().retainAll(Arrays.asList("source", "assigned_roles", "session_location"));
 		return Collections.unmodifiableMap(payload);
 	}
 }

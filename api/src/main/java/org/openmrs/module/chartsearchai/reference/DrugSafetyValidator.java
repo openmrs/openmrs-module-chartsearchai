@@ -15012,8 +15012,10 @@ public class DrugSafetyValidator {
 	 * limit cue — "maximum", "up to", … make it a ceiling, not a prescribed dose — and (b) one of that
 	 * substance's aliases is the nearest drug name to it (no OTHER substance's alias sits strictly
 	 * closer). The frequency is read from the same clause, so a frequency stated for a different drug in
-	 * a neighbouring sentence is never applied, and only when it follows the amount with no number
-	 * between them ({@link #frequencyFollowing}).
+	 * a neighbouring sentence is never applied. The status counts it as read for the dose only when it
+	 * follows the amount with no number between them ({@link #frequencyFollows}); the warning keeps the
+	 * clause's frequency either way, so a misplaced count can leave the day unassessed but never
+	 * silences an overdose the clause states.
 	 *
 	 * <p><b>Scoped to the substance, not to the row (issue #245).</b> This took a single {@code ref} and
 	 * gated on {@code ref.matchesText}, so a substance filed as several rows was read once per row and
@@ -15096,7 +15098,8 @@ public class DrugSafetyValidator {
 				}
 				boolean amountRead = !NUMBER_BEFORE_AMOUNT.matcher(clause.substring(0, dosePos)).find();
 				boolean strength = CONCENTRATION.matcher(clause).region(dosePos, clause.length()).lookingAt();
-				out.add(new AttributedDose(perDose, frequencyFollowing(clause, m.end()), amountRead, strength));
+				out.add(new AttributedDose(perDose, frequencyPerDay(clause), frequencyFollows(clause, m.end()),
+						amountRead, strength));
 			}
 		}
 		return out;
@@ -15132,8 +15135,9 @@ public class DrugSafetyValidator {
 		return false;
 	}
 
-	/** One dose statement attributed to a drug: per-administration mg + the doses-per-day the
-	 *  clause states for it ({@code 0} = none read), whether the amount was read as stated (false
+	/** One dose statement attributed to a drug: per-administration mg + the clause's stated
+	 *  doses-per-day ({@code 0} = no frequency stated), whether that frequency was read for this dose
+	 *  (it follows the amount with no number between), whether the amount was read as stated (false
 	 *  when a number before it multiplies it), and whether it is the strength of a liquid
 	 *  ("500 mg/5 ml") rather than an amount given. */
 	private static final class AttributedDose {
@@ -15142,13 +15146,17 @@ public class DrugSafetyValidator {
 
 		final int frequencyPerDay;
 
+		final boolean frequencyRead;
+
 		final boolean amountRead;
 
 		final boolean strength;
 
-		AttributedDose(double perDoseMg, int frequencyPerDay, boolean amountRead, boolean strength) {
+		AttributedDose(double perDoseMg, int frequencyPerDay, boolean frequencyRead, boolean amountRead,
+				boolean strength) {
 			this.perDoseMg = perDoseMg;
 			this.frequencyPerDay = frequencyPerDay;
+			this.frequencyRead = frequencyRead;
 			this.amountRead = amountRead;
 			this.strength = strength;
 		}
@@ -15165,7 +15173,7 @@ public class DrugSafetyValidator {
 	}
 
 	/**
-	 * @return whether every attributed dose carries a stated frequency, so a daily total can be
+	 * @return whether every attributed dose carries a frequency read for it, so a daily total can be
 	 *         assessed: one dose stated without one leaves the day's total unknown, whatever another
 	 *         sentence states. A liquid's strength is not a dose given, so it needs none, and a clause
 	 *         stating only strengths states no daily dose.
@@ -15176,7 +15184,7 @@ public class DrugSafetyValidator {
 			if (dose.strength) {
 				continue;
 			}
-			if (dose.frequencyPerDay <= 0) {
+			if (!dose.frequencyRead) {
 				return false;
 			}
 			stated = true;
@@ -15534,17 +15542,12 @@ public class DrugSafetyValidator {
 	}
 
 	/**
-	 * @return doses-per-day implied by the frequency phrase in {@code clause}, when that phrase follows
-	 *         the amount ending at {@code amountEnd} with no number between them; otherwise 0. A phrase
-	 *         before the amount belongs to another dose ("every 8 hours and paracetamol 1000 mg"), and a
-	 *         number between them is one this reading cannot place ("1000 mg 5 times daily", "500 mg/5
-	 *         ml, four teaspoons four times daily"), so the dose is not read as given that often.
-	 *         Word-forms are word-boundary anchored, so "bd"/"od" do not match inside larger words
-	 *         such as "abdominal" or "blood".
+	 * @return the frequency phrase in {@code clause}, as {doses per day, where the phrase starts}, or
+	 *         null when none is found. An every-N-hours phrase is read first, then the word forms from
+	 *         most to fewest doses a day. Word-forms are word-boundary anchored, so "bd"/"od" do not
+	 *         match inside larger words such as "abdominal" or "blood".
 	 */
-	private static int frequencyFollowing(String clause, int amountEnd) {
-		int perDay = 0;
-		int phraseStart = -1;
+	private static int[] frequencyPhrase(String clause) {
 		Matcher hours = EVERY_N_HOURS.matcher(clause);
 		if (hours.find()) {
 			String n = hours.group(1) != null ? hours.group(1)
@@ -15552,8 +15555,7 @@ public class DrugSafetyValidator {
 			try {
 				int h = Integer.parseInt(n);
 				if (h > 0) {
-					perDay = (int) Math.round(24.0 / h);
-					phraseStart = hours.start();
+					return new int[] { (int) Math.round(24.0 / h), hours.start() };
 				}
 			}
 			catch (NumberFormatException e) {
@@ -15562,24 +15564,41 @@ public class DrugSafetyValidator {
 		}
 		Pattern[] words = { FREQ_QID, FREQ_TID, FREQ_BID, FREQ_OD };
 		int[] perDayOf = { 4, 3, 2, 1 };
-		for (int i = 0; phraseStart < 0 && i < words.length; i++) {
+		for (int i = 0; i < words.length; i++) {
 			Matcher word = words[i].matcher(clause);
 			if (word.find()) {
-				perDay = perDayOf[i];
-				phraseStart = word.start();
+				return new int[] { perDayOf[i], word.start() };
 			}
 		}
-		if (phraseStart < amountEnd) {
-			return 0;
+		return null;
+	}
+
+	/** @return doses-per-day implied by the frequency phrase in {@code window}, or 0 when none found. */
+	private static int frequencyPerDay(String window) {
+		int[] phrase = frequencyPhrase(window);
+		return phrase == null ? 0 : phrase[0];
+	}
+
+	/**
+	 * @return whether the frequency phrase in {@code clause} follows the amount ending at
+	 *         {@code amountEnd} with no number between them. A phrase before the amount belongs to
+	 *         another dose ("every 8 hours and paracetamol 1000 mg"), and a number between them is one
+	 *         this reading cannot place ("1000 mg 5 times daily", "500 mg/5 ml, four teaspoons four
+	 *         times daily"), so the dose is not read as given that often.
+	 */
+	private static boolean frequencyFollows(String clause, int amountEnd) {
+		int[] phrase = frequencyPhrase(clause);
+		if (phrase == null || phrase[1] < amountEnd) {
+			return false;
 		}
 		// A count of one ("1300 mg one tablet every 6 hours") leaves the amount as stated.
-		Matcher between = NUMBER.matcher(clause.substring(amountEnd, phraseStart));
+		Matcher between = NUMBER.matcher(clause.substring(amountEnd, phrase[1]));
 		while (between.find()) {
 			if (!between.group().equals("1") && !between.group().equals("one")) {
-				return 0;
+				return false;
 			}
 		}
-		return perDay;
+		return true;
 	}
 
 	private static boolean toggle(String property, boolean defaultValue) {

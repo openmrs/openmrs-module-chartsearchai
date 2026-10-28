@@ -1926,6 +1926,22 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/** ADR Decision 503: a reason not to give a drug is a harm asked of it; a recommendation, a use and a thought of it propose it. */
+	@Test
+	public void aReasonNotToGiveADrugIsAHarmAndARecommendationProposesIt() {
+		String[][] pairs = { { "Any reason not to give warfarin?", "Is warfarin a risk?" },
+			{ "Is there any reason not to start warfarin?", "Is warfarin a risk?" },
+			{ "Do you recommend warfarin?", "Would you give warfarin?" }, { "Can warfarin be used?", "Can I use warfarin?" },
+			{ "Thinking of warfarin for her clot", "Can I give warfarin for her clot?" }, { "Considering warfarin?", "Can I give warfarin?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+		// A reason TO give it asks what it is for, which stays the model's.
+		assertNull(ask("Any reason to give warfarin?"));
+	}
+
 	/** ADR Decision 502: a bare imperative giving a drug, or "go ahead", proposes it, and its verb is no drug's name. */
 	@Test
 	public void aBareImperativeGivingADrugProposesIt() {

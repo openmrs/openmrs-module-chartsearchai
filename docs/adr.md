@@ -24029,3 +24029,33 @@ answer cleared the drug on 2 patients. The one-drug reading took a giving verb a
   that kept *"Give her ibuprofen?"* with the model as no proposal at all.
 
 Pinned by `ClinicianWordingsTest.aBareImperativeGivingADrugProposesIt`.
+
+## Decision 503: A reason not to give a drug is a harm asked of it; a recommendation, a use and a thought of it propose it
+
+**Status: Accepted** (October 2026) — found asking 26 further wordings of 15 patients on the 3.7.1 standalone on
+2026-10-28.
+
+### Context
+
+These went to the model, which answered each *"Fluconazole can be given"* on 5 to 8 of 15 patients:
+
+- *"Any reason not to give fluconazole?"* — a question that a *"No"* answers as a clearance, and whose model answers
+  opened *"No"* on 7;
+- *"Do you recommend fluconazole?"*;
+- *"Can fluconazole be used?"*;
+- *"Thinking of fluconazole for her thrush"*.
+
+The one-drug reading admitted none of their words: *"reason"* and *"not"*, *"you"* after an asking word, *"used"*, and
+*"thinking of"* with no giving verb.
+
+### The decision
+
+- *"reason not to"* is read as a risk, so the question is a harm asked of the drug and is answered with no lead (Decision
+  454). *"a reason to give it"*, asking what it is for, is not read.
+- *"you"* after an asking word asks the reader what they would do: *"Do you recommend X?"* proposes X, as *"Would you
+  give X?"* does.
+- *"used"* is a giving verb, as *"given"* is.
+- *"thinking of"* or *"considering"* before the drug proposes it. A purpose after the drug is set aside, and the answer
+  says it was not weighed (Decision 487).
+
+Pinned by `ClinicianWordingsTest.aReasonNotToGiveADrugIsAHarmAndARecommendationProposesIt`.

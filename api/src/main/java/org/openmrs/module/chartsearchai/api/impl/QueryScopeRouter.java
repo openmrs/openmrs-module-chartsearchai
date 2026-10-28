@@ -2843,6 +2843,8 @@ public final class QueryScopeRouter {
 	/** Words proposing to give the drug, where an asking word opens the question. */
 	private static final Set<String> RESIDUAL_GIVE = new HashSet<String>(Arrays.asList("give", "giving", "given", "start",
 		"starting", "started", "prescribe", "prescribing", "prescribed", "add", "adding", "added", "administer", "use",
+		// "Can fluconazole be used?" (ADR Decision 503)
+		"used",
 		"taken", "recommend", "gave", "receive", "coadminister", "coadministered", "administered", "put", "go", "mix", "mixed",
 		"combine", "combined"));
 
@@ -3098,6 +3100,9 @@ public final class QueryScopeRouter {
 		// Read as the one way it asks only once no shape has read it as written: a shape that spells "or not" is that
 		// shape's, and a shape that "or not" removed would read is no reading of the words the question has (ADR Decision 457).
 		wordsWithTheDrugMarked = withEitherWayAsked(wordsWithTheDrugMarked);
+		// "Any reason not to give fluconazole?" asks whether something weighs against it, a harm, which "No" answers backwards
+		// (ADR Decision 503); "a reason to give it" asks what it is for, and no reading admits it.
+		wordsWithTheDrugMarked = withAReasonNotToAsked(wordsWithTheDrugMarked);
 		// The drug beside her medications and nothing else, "fluconazole + her meds", asks how they interact (ADR Decision
 		// 422): read here, of a drug the data resolved, and never as a shape, which would read "Review her medications" as one.
 		if (Pattern.compile(D + " (?:and |with |plus |vs |versus )?" + POSSESSIVE + " (?:other )?" + MEDICATIONS)
@@ -3145,6 +3150,17 @@ public final class QueryScopeRouter {
 		// "Prescribe fluconazole for her?" (ADR Decision 502).
 		boolean asked = planToGiveAt(wordsWithTheDrugMarked, 0) >= 0
 				|| PLANNED_GIVING.contains(wordsWithTheDrugMarked.get(0));
+		// And asking the reader what they would do — "Do you recommend fluconazole?" — or thinking of it before the drug —
+		// "Thinking of fluconazole for her thrush" — proposes it (ADR Decision 503).
+		int theDrug = wordsWithTheDrugMarked.indexOf(DRUG_NAME);
+		for (int i = 0; i < wordsWithTheDrugMarked.size(); i++) {
+			String word = wordsWithTheDrugMarked.get(i);
+			asked |= "you".equals(word) && i > 0 && RESIDUAL_QUESTION.contains(wordsWithTheDrugMarked.get(i - 1));
+			if (("thinking".equals(word) || "considering".equals(word)) && i < theDrug) {
+				asked = true;
+				gives = true;
+			}
+		}
 		// A drug, the patient and a word saying it is safe — "Warfarin for her - safe?" — is asked whole (ADR Decision 405).
 		boolean aQuestion = asked || wordsWithTheDrugMarked.size() <= 2 || (safe || harms) && wordsWithTheDrugMarked.size() <= 4;
 		for (String word : wordsWithTheDrugMarked) {
@@ -3176,6 +3192,17 @@ public final class QueryScopeRouter {
 	 * saying it is safe or harmful asks both, "Is fluconazole safe or unsafe for her?", which the harm word reads. "Side
 	 * effect(s)" is made one word. Any other "or", and a "not" not after "or", are left, and no reading admits them.
 	 */
+	private static List<String> withAReasonNotToAsked(List<String> words) {
+		int at = words.indexOf("reason");
+		if (at < 0 || at + 1 >= words.size() || !"not".equals(words.get(at + 1))) {
+			return words;
+		}
+		List<String> read = new ArrayList<String>(words.subList(0, at));
+		read.add("risk");
+		read.addAll(words.subList(at + 2, words.size()));
+		return read;
+	}
+
 	private static List<String> withEitherWayAsked(List<String> words) {
 		List<String> read = new ArrayList<String>(words.size());
 		for (int i = 0; i < words.size(); i++) {

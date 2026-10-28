@@ -63,7 +63,8 @@ public class BriefScreenAnswerTest extends BaseModuleContextSensitiveTest {
 		assertEquals(NOT_CHECKED, lines[3]);
 	}
 
-	/** Asked which drugs to avoid, the lead and her allergies are one line before the screen (ADR Decision 496). */
+	/** Asked which drugs to avoid, her allergies and that the check lists no other drug are one line before the screen (ADR
+	 *  Decisions 496, 509). */
 	@Test
 	public void theDemoPatientsAvoidAnswerStatesItsLeadAndHerAllergiesOnOneLine() {
 		// The question the model's reading runs "What shouldn't I prescribe for this patient?" as (ADR Decision 491).
@@ -72,8 +73,7 @@ public class BriefScreenAnswerTest extends BaseModuleContextSensitiveTest {
 		assertNotNull(answer, "the module answers");
 		String[] lines = answer.split("\n");
 		assertEquals(5, lines.length, "was: " + answer);
-		assertEquals("This check does not list drugs to avoid: it states this patient's recorded drug allergies (none is "
-				+ "recorded) and what it found among the medications this patient is already taking.", lines[0]);
+		assertEquals("No drug allergies are recorded for this patient. This check does not list other drugs to avoid.", lines[0]);
 		assertTrue(lines[1].startsWith("Nelfinavir interacts with active order Rifampin — Major. ["), "was: " + answer);
 		assertEquals(NOT_CHECKED, lines[4]);
 	}
@@ -82,13 +82,12 @@ public class BriefScreenAnswerTest extends BaseModuleContextSensitiveTest {
 	private static final String SHARED_SUBSTANCES = "Possible duplicate therapy — each in more than one of this patient's "
 			+ "active orders: Lamivudine; Stavudine; Sulfamethoxazole and Trimethoprim; Isoniazid and Rifampicin (rifampin). [";
 
-	/** What a screen of the demo patient did not check, on one line, the orders the data does not identify last (ADR
-	 *  Decisions 496, 506). */
+	/** What a screen of the demo patient did not check, on one line, the orders the data does not identify last, each name
+	 *  once (ADR Decisions 496, 506, 509). */
 	private static final String NOT_CHECKED = "Not checked: unrated interactions, anything beyond drug interactions and "
-			+ "contraindications, this patient's conditions (the drug data loaded carries no drug-condition rules), and 10 "
-			+ "active orders the drug data does not identify: Measles vaccination (2 orders); Diphtheria tetanus and "
-			+ "pertussis vaccination (2 orders); Hepatitis B vaccination (2 orders); Polio vaccination, oral (2 orders); "
-			+ "Hemophilus influenza B vaccine (2 orders).";
+			+ "contraindications, this patient's conditions (no drug-condition rules are loaded), and 10 active orders the "
+			+ "drug data does not identify: Measles vaccination; Diphtheria tetanus and pertussis vaccination; Hepatitis B "
+			+ "vaccination; Polio vaccination, oral; Hemophilus influenza B vaccine.";
 
 	/** Every finding the screen raised is cited by some line, so the chips pass publishes every one of them. */
 	@Test

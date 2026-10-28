@@ -38,9 +38,9 @@ public class ScreenBesideHerOwnConflictsTest extends BaseModuleContextSensitiveT
 
 	/** What the screen of dexamethasone and prednisone found: DDInter rates the pair Unknown, below the floor, so the screen
 	 *  counts it rather than saying no interactions were found (ADR Decision 467). */
-	private static final String DEXAMETHASONE_PREDNISONE_SCREEN = "No interactions at or above the configured severity level "
-			+ "were found among this patient's active medications. 2 substances in them were checked against each other. The "
-			+ "reference data lists one pair of them only below that level, with no severity or mechanism on file. ";
+	private static final String DEXAMETHASONE_PREDNISONE_SCREEN = "No interaction at or above the configured severity level "
+			+ "was found among the 2 substances in this patient's active medications; the data lists one pair of them only "
+			+ "below that level, with no severity or mechanism on file. Drug-class relationships were not checked. [";
 
 	@BeforeEach
 	public void answerFromFindings() {

@@ -51,10 +51,10 @@ public class DrugsToAvoidQuestionTest extends BaseModuleContextSensitiveTest {
 					"What should I avoid prescribing for her?", "Which drugs should I avoid with his current medications?")) {
 				String answer = ask(question, allergies);
 				assertNotNull(answer, question + " — the module answers");
-				// Her allergies inside the lead, one line (ADR Decision 496).
-				assertEquals("This check does not list drugs to avoid: it states this patient's recorded drug allergies ("
-						+ (allergies == null ? "none is recorded" : "aspirin")
-						+ ") and what it found among the medications this patient is already taking."
+				// Her allergies as the answer to which allergies she has states them, then that the check lists no other
+				// drug to avoid, one line (ADR Decisions 496, 509).
+				assertEquals((allergies == null ? "No drug allergies are recorded for this patient."
+						: "Recorded drug allergies: aspirin.") + " This check does not list other drugs to avoid."
 						+ "\n" + screen.replaceAll("\\[\\d+\\]", "[n]"), answer.replaceAll("\\[\\d+\\]", "[n]"), question);
 			}
 		}

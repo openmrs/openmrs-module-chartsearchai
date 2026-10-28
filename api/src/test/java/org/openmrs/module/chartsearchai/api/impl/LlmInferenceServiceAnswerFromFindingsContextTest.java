@@ -3435,14 +3435,14 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	}
 
 	/**
-	 * A screen that related nothing is answered by the module with its own screen note, word for word, citing it (ADR
-	 * Decision 162). Until then the model answered from the note and dropped its scope — on the demo (2026-10-07)
-	 * "No interactions were found among this patient's active medications [46]", beside six orders that were never
-	 * checked. The note's own words keep both of its limits: the configured severity floor, and that a relationship
-	 * resting only on a shared drug class is not part of the screen.
+	 * A screen that related nothing is answered by the module with its own screen note's facts, citing it (ADR Decision
+	 * 162). Until then the model answered from the note and dropped its scope — on the demo (2026-10-07) "No
+	 * interactions were found among this patient's active medications [46]", beside six orders that were never checked.
+	 * The answer keeps both of the note's limits: the configured severity floor, and that a relationship resting only on
+	 * a shared drug class is not part of the screen — in fewer words than the note's own since ADR Decision 509.
 	 */
 	@Test
-	public void aScreenThatRelatedNothingIsAnsweredWithTheScreenNotesOwnWords() throws Exception {
+	public void aScreenThatRelatedNothingIsAnsweredWithTheScreenNotesFacts() throws Exception {
 		executeDataSet(METFORMIN_ORDER);
 		int note = screenNoteIndex();
 
@@ -3512,15 +3512,12 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		assertFalse(answer.getAnswer().contains("one active medication order"), answer.getAnswer());
 	}
 
-	/** The screen note's words for two substances, as {@code DrugReferenceInjector} renders them after its finding
-	 *  prefix — pinned here as a literal, so a reword of the note shows up as a changed answer. */
-	/** Her aspirin and metformin, which DDInter relates by one row rated Unknown, below the floor: counted, never "No
-	 *  interactions were found" (ADR Decision 467). */
-	private static final String SCREEN_NOTE_WORDS = "No interactions at or above the configured severity level were found "
-			+ "among this patient's active medications. 2 substances in them were checked against each other. The reference "
-			+ "data lists one pair of them only below that level, with no severity or mechanism on file. This check compares "
-			+ "individual substances: relationships resting only on two drugs sharing a drug class are not part of it, so it "
-			+ "is not a statement that no relationship exists.";
+	/** The answer's words for a screen of two substances that related no pair — pinned here as a literal, so a reword
+	 *  shows up as a changed answer. Her aspirin and metformin, which DDInter relates by one row rated Unknown, below
+	 *  the floor: counted, never "No interactions were found" (ADR Decisions 467, 509). */
+	private static final String SCREEN_NOTE_WORDS = "No interaction at or above the configured severity level was found "
+			+ "among the 2 substances in this patient's active medications; the data lists one pair of them only below that "
+			+ "level, with no severity or mechanism on file. Drug-class relationships were not checked.";
 
 	/** With the property off, the screen's prompt: the note is injected, and its record number. */
 	private int screenNoteIndex() {

@@ -3956,8 +3956,9 @@ public class DrugReferenceInjector {
 				}
 				if (orders) {
 					int k = unidentified.size();
+					// Each name once: the count before them says how many orders (ADR Decision 509).
 					parts.add(k + (k == 1 ? " active order" : " active orders") + " the drug data does not identify: "
-							+ unidentifiedOrderNames(unidentified));
+							+ unidentifiedOrderNames(unidentified, false));
 				}
 				lines.set(n, "Not checked: " + String.join(", ", parts.subList(0, parts.size() - 1)) + ", and "
 						+ parts.get(parts.size() - 1) + ".");
@@ -3976,11 +3977,10 @@ public class DrugReferenceInjector {
 
 	/** Her conditions as one part of a screen's one "Not checked" line (ADR Decisions 493, 496): bracketed, so the line's
 	 *  commas stay its own. */
-	static final String CONDITIONS_UNCHECKED_PART = "this patient's conditions (the drug data loaded carries no "
-			+ "drug-condition rules)";
+	static final String CONDITIONS_UNCHECKED_PART = "this patient's conditions (no drug-condition rules are loaded)";
 
-	static final String CONDITIONS_NOT_CHECKED = "This patient's conditions were not checked against these medications: "
-			+ "the drug data loaded carries no drug-condition rules.";
+	/** Her conditions not checked, as a line of its own where no scope line takes them (ADR Decisions 467, 509). */
+	static final String CONDITIONS_NOT_CHECKED = "Not checked: " + CONDITIONS_UNCHECKED_PART + ".";
 
 	/** What a below-floor answer's bottom line does not cover, stated under it (ADR Decision 144). */
 	static final String BELOW_FLOOR_SCOPE =
@@ -5763,7 +5763,7 @@ public class DrugReferenceInjector {
 			List<Integer> findingNumbers, Map<String, Integer> orderRecordNumbers, Map<String, Integer> herOrderRecords,
 			PatientClinicalContext context, int unidentified) {
 		if (screenNoteIndex != null && onlyHerOwnOrdersSharingASubstance(findings)) {
-			String note = interactionScreenNoteWords(screened, screen) + " [" + screenNoteIndex + "]";
+			String note = screenNoteAnswerWords(screened, screen) + " [" + screenNoteIndex + "]";
 			// Several, as one line, as a screen that related pairs states them (ADR Decision 493).
 			if (findings.size() > 1) {
 				List<Integer> all = new ArrayList<Integer>(findings.size());
@@ -5876,6 +5876,11 @@ public class DrugReferenceInjector {
 	/** The names {@link #unidentifiedOrdersLine} gives the orders the drug data does not identify, each once with its
 	 *  count of orders, joined by semicolons. */
 	static String unidentifiedOrderNames(List<PatientClinicalContext.ActiveDrugOrder> orders) {
+		return unidentifiedOrderNames(orders, true);
+	}
+
+	/** As above, each name's count of orders said only where {@code counted}. */
+	static String unidentifiedOrderNames(List<PatientClinicalContext.ActiveDrugOrder> orders, boolean counted) {
 		Map<String, Integer> byName = new LinkedHashMap<String, Integer>();
 		for (PatientClinicalContext.ActiveDrugOrder order : orders) {
 			String display = order.getDisplay();
@@ -5886,7 +5891,7 @@ public class DrugReferenceInjector {
 		}
 		List<String> names = new ArrayList<String>(byName.size());
 		for (Map.Entry<String, Integer> entry : byName.entrySet()) {
-			names.add(entry.getValue() > 1 ? entry.getKey() + " (" + entry.getValue() + " orders)" : entry.getKey());
+			names.add(counted && entry.getValue() > 1 ? entry.getKey() + " (" + entry.getValue() + " orders)" : entry.getKey());
 		}
 		return String.join("; ", names);
 	}
@@ -8707,21 +8712,18 @@ public class DrugReferenceInjector {
 		return allergiesAlone ? allergyLine : drugClassStatement(namedClass) + "\n" + ordersLine + "\n" + allergyLine;
 	}
 
-	/** How the answer to which drugs to avoid in her opens (ADR Decision 324): no finding lists drugs to avoid. */
-	static final String LISTS_NO_DRUG_TO_AVOID_LEAD = "This check does not list drugs to avoid: it states this patient's"
-			+ " recorded drug allergies";
+	/** How the answer to which drugs to avoid in her says that no finding lists drugs to avoid (ADR Decisions 324, 509). */
+	static final String DOES_NOT_LIST_OTHER_DRUGS_TO_AVOID = "This check does not list other drugs to avoid.";
 
 	/**
-	 * The answer to which drugs to avoid in her, opening (ADR Decision 324): that no finding lists drugs to avoid, with her
-	 * recorded drug allergies, each as the chart spells it, or that none is recorded, inside it — one line since ADR
-	 * Decision 496, where the allergies were a line of their own: <em>"This check does not list drugs to avoid: it states
-	 * this patient's recorded drug allergies (none is recorded) and what it found among the medications this patient is
-	 * already taking."</em>
+	 * The answer to which drugs to avoid in her, opening (ADR Decision 324): her recorded drug allergies, in the words the
+	 * answer to which allergies she has states them ({@link #recordedDrugAllergiesLine}), then that the check lists no
+	 * other drug to avoid — <em>"No drug allergies are recorded for this patient. This check does not list other drugs to
+	 * avoid."</em> One line since ADR Decision 496, and these words since ADR Decision 509, which measured Decision 496's
+	 * 30-word sentence the longest line but one of the demo's answer.
 	 */
 	private static String listsNoDrugToAvoidLine(PatientClinicalContext context) {
-		Set<String> spelled = recordedDrugAllergies(context);
-		return LISTS_NO_DRUG_TO_AVOID_LEAD + " (" + (spelled.isEmpty() ? "none is recorded" : String.join("; ", spelled))
-				+ ") and what it found among the medications this patient is already taking.";
+		return recordedDrugAllergiesLine(context) + " " + DOES_NOT_LIST_OTHER_DRUGS_TO_AVOID;
 	}
 
 	/** Her recorded drug allergies, each as the chart spells it, or that none is recorded (ADR Decision 324). */
@@ -9501,6 +9503,26 @@ public class DrugReferenceInjector {
 				+ "check compares individual substances: relationships resting only on two drugs "
 				+ "sharing a drug class are not part of it, so it is not a statement that no "
 				+ "relationship exists.";
+	}
+
+	/**
+	 * The screen note's facts as the module's ANSWER states them, citing the note (ADR Decision 509): <em>"No interaction at
+	 * or above the configured severity level was found among the 3 substances in this patient's active medications; the
+	 * data lists 3 pairs of them only below that level, none with a severity or mechanism on file. Drug-class
+	 * relationships were not checked."</em> Decision 162 stated the note word for word because the model dropped its floor
+	 * and its class limit; both are kept here, in a third of its words. The finding comes first and the count with it,
+	 * as in the note, and the class limit is what keeps the answer from being read as a patient with no interactions. The
+	 * cited record keeps the note's own words.
+	 */
+	private static String screenNoteAnswerWords(int screened, PairChipExtent screen) {
+		List<PairChipExtent.BelowFloorPair> below = screen == null || screen.getBelowFloor() == null
+				? Collections.<PairChipExtent.BelowFloorPair> emptyList() : screen.getBelowFloor();
+		return "No interaction at or above the configured severity level was found among the " + screened
+				+ " substances in this patient's active medications"
+				+ (below.isEmpty() ? ""
+						: "; the data lists " + (below.size() == 1 ? "one pair" : below.size() + " pairs")
+								+ " of them only below that level, " + belowFloorRatings(below))
+				+ ". Drug-class relationships were not checked.";
 	}
 
 	/** {@link #SCREEN_NOTE_FINDING_LEAD} where the screen related pairs of her orders below the floor (ADR Decision 467). */

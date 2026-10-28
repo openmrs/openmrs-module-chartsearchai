@@ -24216,3 +24216,46 @@ admitted no *"continue"*.
 - Continuing her one drug, named, is its own question (Decision 480) and is unchanged.
 
 Pinned by `ClinicianWordingsTest.continuingHerMedicationsWithANewDrugProposesIt`.
+
+## Decision 509: A screen that related no pair, the answer to which drugs to avoid, and what a screen did not check are said in fewer words
+
+**Status: Accepted** (October 2026) — on the owner's request to clear the three long parts Decision 506 left on the
+public demo: the *"Not checked"* line (about 55 words on `dd8f98cf-1691-11df-97a5-7038c432aabf`), the 30-word opening of
+the answer to which drugs to avoid, and the 113-word answer to a screen that related no pair on
+`dd74dc61-1691-11df-97a5-7038c432aabf`.
+
+### The decision
+
+- **A screen that related no pair** is answered with the screen note's facts, not its words, still citing it:
+  *"No interaction at or above the configured severity level was found among the 3 substances in this patient's active
+  medications; the data lists 3 pairs of them only below that level, none with a severity or mechanism on file.
+  Drug-class relationships were not checked. [116]"* — `DrugReferenceInjector.screenNoteAnswerWords`. Decision 162 stated
+  the note word for word because the model, answering from it, dropped its floor and its class limit. Both are kept: the
+  floor in the opening clause, and the class limit as its own sentence, which is what keeps the answer from reading as a
+  patient with no interactions. The finding still comes before the count, as in the note. The cited record keeps the
+  note's own words, which `InteractionScreenSilenceNoteTest` pins.
+- **The answer to which drugs to avoid** opens with her drug allergies in the words the answer to which allergies she has
+  uses (`recordedDrugAllergiesLine`), then *"This check does not list other drugs to avoid."* — *"No drug allergies are
+  recorded for this patient. This check does not list other drugs to avoid."*, 17 words where Decision 496's sentence was
+  30. *"Does not list"* and not *"lists no"*: the second reads as there being none to avoid.
+- **What a screen did not check**: her conditions are *"this patient's conditions (no drug-condition rules are
+  loaded)"*, and a line of their own where no scope line takes them, *"Not checked: this patient's conditions (no
+  drug-condition rules are loaded)."*; on the one merged line each unidentified order's name is said once, without
+  *"(2 orders)"*, the count before the names saying how many orders. The names stay: a count alone would hide an order
+  such as *Marevan*, a warfarin brand, that was never screened.
+
+Measured on the demo replica on 2026-10-28, words counted by whitespace in the answer the `/search/stream` `done` event
+carries: `dd74dc61`'s *"Does he have any drug contraindications?"* 113 words to 75; `dd8f98cf`'s *"What shouldn't I prescribe
+for this patient?"* 160 to 134, and its *"does he have any major drug interactions?"* 117 to 107 — each with every chip it
+published before.
+
+### Spec change
+
+`ScreenBelowFloorPairsTest`, `ScreenBesideHerOwnConflictsTest`, `LlmInferenceServiceAnswerFromFindingsContextTest` (whose
+`.aScreenThatRelatedNothingIsAnsweredWithTheScreenNotesOwnWords` is now `.aScreenThatRelatedNothingIsAnsweredWithTheScreenNotesFacts`),
+`BriefScreenAnswerTest`, `DrugsToAvoidQuestionTest`, `HerDrugAllergiesListedTest` (which takes the allergy sentence from the
+avoid answer's first sentence) and `LlmInferenceServiceModelReadQuestionContextTest` pinned the old words and now assert
+these.
+
+Pinned by `ScreenBelowFloorPairsTest`, `BriefScreenAnswerTest.theDemoPatientsAvoidAnswerStatesItsLeadAndHerAllergiesOnOneLine`
+and `HerDrugAllergiesListedTest.herDrugAllergiesAreListedFromHerRecords`.

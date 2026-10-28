@@ -99,7 +99,7 @@ public class LlmInferenceServiceModelReadQuestionContextTest extends BaseModuleC
 		ChartAnswer answer = serviceWith(provider).search(patient, "What shouldn't I prescribe for this patient?");
 
 		assertTrue(answer.isAnsweredByTheModule(), "was: " + answer.getAnswer());
-		assertTrue(answer.getAnswer().startsWith("This check does not list drugs to avoid"), "was: " + answer.getAnswer());
+		assertTrue(answer.getAnswer().split("\n")[0].endsWith("This check does not list other drugs to avoid."), "was: " + answer.getAnswer());
 		assertTrue(answer.getAnswer().contains(" interacts with active order "), "and states the findings: "
 				+ answer.getAnswer());
 	}
@@ -111,7 +111,7 @@ public class LlmInferenceServiceModelReadQuestionContextTest extends BaseModuleC
 		ChartAnswer answer = serviceWith(provider).search(patient, "Are any of her meds a bad combination?");
 
 		assertTrue(answer.isAnsweredByTheModule(), "was: " + answer.getAnswer());
-		assertFalse(answer.getAnswer().startsWith("This check does not list drugs to avoid"), "was: " + answer.getAnswer());
+		assertFalse(answer.getAnswer().contains("This check does not list other drugs to avoid."), "was: " + answer.getAnswer());
 	}
 
 	@Test

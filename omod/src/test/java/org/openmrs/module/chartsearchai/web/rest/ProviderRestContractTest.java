@@ -204,7 +204,8 @@ public class ProviderRestContractTest {
 				ScriptedProvider provider = new ScriptedProvider(providerId, true);
 				Map<String, Object> answer = answerPayload("Answer");
 				answer.put("accountContext", Collections.singletonMap("user_uuid", "provider-spoof"));
-				AnswerEnvelope envelope = AnswerEnvelope.fromPayload(answer);
+				AnswerEnvelope envelope = AnswerEnvelope.fromPayload(answer, "bundled".equals(providerId)
+						? new ChartSearchService.ChartAnswer("Answer", Collections.emptyList()) : null);
 				provider.events = Arrays.asList(TurnEvent.of(TurnEventType.TURN_STARTED, 0, providerId),
 						TurnEvent.withAnswer(TurnEventType.ANSWER_DONE, 1, providerId, envelope),
 						TurnEvent.withAnswer(TurnEventType.TURN_DONE, 2, providerId, envelope));

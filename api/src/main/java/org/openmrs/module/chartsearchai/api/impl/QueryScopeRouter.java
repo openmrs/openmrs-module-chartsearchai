@@ -3121,7 +3121,7 @@ public final class QueryScopeRouter {
 		// A purpose closing a proposal is set aside as after a proposal shape (ADR Decision 213): "Ibuprofen ok for her
 		// headache?" is "Ibuprofen ok?", whose answer says what it is for was not weighed (ADR Decision 460).
 		List<String> proposal = withoutAPurpose(wordsWithTheDrugMarked);
-		if (proposal != null && residualReading(proposal) == Residual.PROPOSES) {
+		if (proposal != null && residuallyProposes(proposal)) {
 			return Residual.PROPOSES;
 		}
 		// Read as the one way it asks only once no shape has read it as written: a shape that spells "or not" is that
@@ -3360,6 +3360,15 @@ public final class QueryScopeRouter {
 	}
 
 	/**
+	 * Whether what is left once a closing purpose is set aside proposes the drug by the residual reading — or is the drug
+	 * and nothing else, "Advil for her headache?" (ADR Decision 515). The one test {@link #residualReading} and {@link
+	 * #statedPurpose} both ask, so the question read as a proposal is the one whose purpose the answer says it did not weigh.
+	 */
+	private static boolean residuallyProposes(List<String> proposal) {
+		return proposal.size() == 1 && DRUG_NAME.equals(proposal.get(0)) || residualReading(proposal) == Residual.PROPOSES;
+	}
+
+	/**
 	 * The purpose a proposal closes with — <em>"pain"</em>, <em>"her knee pain"</em> — where {@link #asksWhetherToGiveADrug}
 	 * admits it only once that purpose is set aside, or {@code null}. The findings do not weigh what a drug is for, so an
 	 * answer to such a proposal says so (ADR Decision 213).
@@ -3373,7 +3382,7 @@ public final class QueryScopeRouter {
 		List<String> proposal = withoutAPurpose(wordsWithTheDrugMarked);
 		// Or one the residual reading reads a proposal (ADR Decision 460).
 		if (proposal == null || !fitsAShape(proposal, PROPOSAL_SHAPES) && !fitsANegatedShape(proposal)
-				&& residualReading(proposal) != Residual.PROPOSES) {
+				&& !residuallyProposes(proposal)) {
 			return null;
 		}
 		// After "for", or the whole closing statement of what she has (ADR Decision 325).
@@ -3443,7 +3452,10 @@ public final class QueryScopeRouter {
 		// Decision 364).
 		String named = CONDITION_NAMED_BY_A_SUBSTANCE.matcher(String.join(" ", purpose)).replaceAll("condition");
 		for (String word : named.split(" ")) {
-			if (DRUG_NAME.equals(word) || NOT_A_PURPOSE.contains(word) || OTHER_FACTOR.matcher(word).find()) {
+			// Nor a word saying what is asked, which closes the question and is no part of a purpose: "Warfarin for DVT -
+			// safe?" (ADR Decision 515)
+			if (DRUG_NAME.equals(word) || NOT_A_PURPOSE.contains(word) || OTHER_FACTOR.matcher(word).find()
+					|| RESIDUAL_SAFE.contains(word) || RESIDUAL_HARMS.contains(word) || RESIDUAL_INTERACTS.contains(word)) {
 				return null;
 			}
 		}

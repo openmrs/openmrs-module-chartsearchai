@@ -1926,6 +1926,22 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/** ADR Decision 515: a drug and what it is for, and nothing else, proposes it for that. */
+	@Test
+	public void aDrugAndWhatItIsForProposesIt() {
+		String[][] pairs = { { "Warfarin for her clot?", "Can I give warfarin for her clot?" },
+			{ "Ibuprofen for her headache?", "Can I give ibuprofen for her headache?" },
+			{ "Advil for her headache?", "Can I give Advil for her headache?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+		// What it is for, asked of it, stays the model's.
+		assertNull(ask("What is warfarin for?"));
+		assertNull(ask("Is warfarin for her clot?"));
+	}
+
 	/** ADR Decision 513: a drug "with" or "and" a group of her medications, no verb, asks how it relates to them. */
 	@Test
 	public void aDrugBesideAGroupOfHerMedicationsWithNoVerbAsksHowItRelatesToThem() {

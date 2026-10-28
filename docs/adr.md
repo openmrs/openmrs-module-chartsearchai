@@ -24409,3 +24409,26 @@ whether it asks about her medications' safety (Decision 489). It read YES, and t
 - Left as found: a word asked beside her medications as a whole, *"amox with her meds?"*, is still read.
 
 Pinned by `LlmInferenceServiceModelReadQuestionContextTest.oneThingAskedOfWhereADrugWouldStandIsNotReadByTheModel`.
+
+## Decision 515: A drug and what it is for, and nothing else, proposes it for that
+
+**Status: Accepted** (October 2026) — found asking 22 further wordings of 15 patients on the 3.7.1 standalone on
+2026-10-28.
+
+### Context
+
+*"Advil for her headache?"* went to the model, which answered *"Ibuprofen can be given"* on 4 of 15 patients. *"Can I
+give Advil for her headache?"* is the module's, with *"This check did not weigh what the drug is for (her headache)"*
+after its findings (Decisions 213, 460). Once the closing purpose was set aside, only the drug was left, which no reading
+took as a proposal. Two readings ask that question, the residual one and `statedPurpose`. Each spelled it alone, so a
+change to one would leave the other reading a different question (the lesson of Decision 472).
+
+### The decision
+
+- A drug and what it is for, and nothing else, proposes the drug for that: *"Advil for her headache?"*, *"Warfarin for her
+  clot?"*. The answer says the purpose was not weighed. `residuallyProposes` is the one test both readings ask.
+- A purpose holds no word saying what is asked — safe, a harm, an interaction — which closes the question instead.
+  *"Warfarin for DVT - safe?"* keeps Decision 487's reading.
+- What it is for, asked of it — *"What is warfarin for?"*, *"Is warfarin for her clot?"* — stays the model's.
+
+Pinned by `ClinicianWordingsTest.aDrugAndWhatItIsForProposesIt`.

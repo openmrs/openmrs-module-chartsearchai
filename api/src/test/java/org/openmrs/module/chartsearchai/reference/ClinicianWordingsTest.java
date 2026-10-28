@@ -1926,6 +1926,20 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/** ADR Decision 508: continuing her medications with a new drug proposes the new drug beside them. */
+	@Test
+	public void continuingHerMedicationsWithANewDrugProposesIt() {
+		String[][] pairs = { { "Ok to continue her ARVs with warfarin?", "Can I give her warfarin?" },
+			{ "Can she continue her ARVs with warfarin?", "Can I give her warfarin?" },
+			{ "Is it ok to continue her meds with warfarin?", "Can I give her warfarin?" },
+			{ "Can I continue her medications and add warfarin?", "Can I give her warfarin?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+	}
+
 	/** ADR Decision 505: giving a drug or avoiding it, asked either way, is a harm asked of it, which no "Yes" or "No" answers. */
 	@Test
 	public void givingADrugOrAvoidingItIsAHarmAskedOfIt() {

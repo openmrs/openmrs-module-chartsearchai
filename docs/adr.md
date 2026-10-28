@@ -24195,3 +24195,24 @@ potassium"* before Decision 484. That decision's list of results her chart measu
   thinner"* is still read as a class of drug, as before.
 
 Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aVitalSignNamedAsHersCarriesNoChip`.
+
+## Decision 508: Continuing her medications with a new drug proposes the new drug beside them
+
+**Status: Accepted** (October 2026) — found asking 24 further wordings of 15 patients on the 3.7.1 standalone on
+2026-10-28.
+
+### Context
+
+*"Ok to continue her ARVs with fluconazole?"* went to the model. On 3 of 15 patients it answered *"Fluconazole can be
+given"*. The question asks whether fluconazole may be given beside the medications she continues. The module answers
+that as *"Can I give her fluconazole?"* (Decision 488 for a group of her medications by name). The one-drug reading
+admitted no *"continue"*.
+
+### The decision
+
+- *"continue"* followed by her medications as a whole (*"her ARVs"*, *"her meds"*, *"her medications"*) proposes the
+  drug the question names beside them. Examples: *"Ok to continue her ARVs with X?"*, *"Can she continue her ARVs with
+  X?"*, *"Can I continue her medications and add X?"*.
+- Continuing her one drug, named, is its own question (Decision 480) and is unchanged.
+
+Pinned by `ClinicianWordingsTest.continuingHerMedicationsWithANewDrugProposesIt`.

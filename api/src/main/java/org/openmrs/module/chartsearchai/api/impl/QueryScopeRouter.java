@@ -3111,6 +3111,20 @@ public final class QueryScopeRouter {
 		// "Any reason not to give fluconazole?" asks whether something weighs against it, a harm, which "No" answers backwards
 		// (ADR Decision 503); "a reason to give it" asks what it is for, and no reading admits it.
 		wordsWithTheDrugMarked = withAReasonNotToAsked(wordsWithTheDrugMarked);
+		// Continuing her medications as a whole with a drug proposes the drug beside them: "Ok to continue her ARVs with
+		// fluconazole?" (ADR Decision 508). Never her one drug named, whose continuing is its own question (ADR Decision 480).
+		boolean continuingHerMedications = false;
+		for (int i = 0; i + 2 < wordsWithTheDrugMarked.size(); i++) {
+			if ("continue".equals(wordsWithTheDrugMarked.get(i))
+					&& RESIDUAL_POSSESSIVES.contains(wordsWithTheDrugMarked.get(i + 1))
+					&& RESIDUAL_HER_MEDICATIONS.contains(wordsWithTheDrugMarked.get(i + 2))) {
+				List<String> read = new ArrayList<String>(wordsWithTheDrugMarked);
+				read.remove(i);
+				wordsWithTheDrugMarked = read;
+				continuingHerMedications = true;
+				break;
+			}
+		}
 		// The drug beside her medications and nothing else, "fluconazole + her meds", asks how they interact (ADR Decision
 		// 422): read here, of a drug the data resolved, and never as a shape, which would read "Review her medications" as one.
 		if (Pattern.compile(D + " (?:and |with |plus |vs |versus )?" + POSSESSIVE + " (?:other )?" + MEDICATIONS)
@@ -3148,6 +3162,7 @@ public final class QueryScopeRouter {
 				return Residual.NONE;
 			}
 		}
+		gives |= continuingHerMedications;
 		// "Can she take X?" — she takes it, given her; never "Can I take X?", the speaker's (ADR Decision 402).
 		for (int i = 1; i < wordsWithTheDrugMarked.size(); i++) {
 			gives |= ("take".equals(wordsWithTheDrugMarked.get(i)) || "have".equals(wordsWithTheDrugMarked.get(i)))
@@ -3156,7 +3171,7 @@ public final class QueryScopeRouter {
 		// The speaker's plan to give it, opening the words, proposes it as an asking word does: "Want to add fluconazole?",
 		// "Want to add fluconazole. OK?" (ADR Decision 497); and so does the verb giving it, bare: "Give fluconazole?",
 		// "Prescribe fluconazole for her?" (ADR Decision 502).
-		boolean asked = planToGiveAt(wordsWithTheDrugMarked, 0) >= 0
+		boolean asked = continuingHerMedications || planToGiveAt(wordsWithTheDrugMarked, 0) >= 0
 				|| PLANNED_GIVING.contains(wordsWithTheDrugMarked.get(0))
 				// and the drug with the verb giving it and nothing else: "Fluconazole - start or not?" (ADR Decision 505)
 				|| wordsWithTheDrugMarked.size() == 2 && DRUG_NAME.equals(wordsWithTheDrugMarked.get(0))

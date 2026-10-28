@@ -493,8 +493,14 @@ public final class QueryScopeRouter {
 		for (Pattern shape : SOMETHING_ELSE_WITH_HER_MEDICATIONS) {
 			Matcher m = shape.matcher(joined);
 			if (m.matches()) {
-				for (String word : m.group(1).split(" ")) {
-					if (NOT_SOMETHING_ELSE.contains(word)) {
+				String[] thing = m.group(1).split(" ");
+				for (int w = 0; w < thing.length; w++) {
+					// An article opening the thing names it, as in "a flu shot" (ADR Decision 518); any other screen word is the
+					// screen's.
+					if (w == 0 && thing.length > 1 && thing[w].matches("a|an|the|some")) {
+						continue;
+					}
+					if (NOT_SOMETHING_ELSE.contains(thing[w])) {
 						return false;
 					}
 				}

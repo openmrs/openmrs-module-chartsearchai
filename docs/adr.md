@@ -24500,3 +24500,24 @@ above the bottom line, or Decision 140's caution heading, and now assert these.
 
 Pinned by `BriefScreenAnswerTest`, `DuplicateTherapyQuestionTest.aQuestionWhetherSheIsOnDuplicateTherapyIsAnsweredWithTheDuplicatesTheScreenFound`
 and `LlmInferenceServiceAnswerFromFindingsContextTest.aScreensBottomLineOpensItsAnswerAndIsCarriedApart`.
+
+## Decision 518: Something else asked beside her medications with an article before it is something else still
+
+**Status: Accepted** (October 2026) — found asking 22 further wordings of 15 patients on the 3.7.1 standalone on
+2026-10-28.
+
+### Context
+
+*"Can she have a flu shot with her meds?"* was answered with the screen of her orders, every chip of it, on all 15
+patients. Decision 492 reads *"Can she have F with her meds?"* as something else asked beside her medications, and
+neither screens them nor asks the model to read the question. But the words of the thing may not be the screen's own,
+and *"a"* is one of those words. So *"a flu shot"* was no thing, and the model read the question as YES.
+
+### The decision
+
+- An article opening the thing — *"a"*, *"an"*, *"the"*, *"some"* — names it and is passed over. *"a flu shot"*, *"a
+  massage"* and *"the flu vaccine"* are things asked beside her medications.
+- Every other word of the screen's own still makes the question the screen's. *"Is the drug ok with her meds?"* is read
+  as before.
+
+Pinned by `LlmInferenceServiceModelReadQuestionContextTest.somethingElseAskedWithAnArticleBesideHerMedicationsIsNoScreen`.

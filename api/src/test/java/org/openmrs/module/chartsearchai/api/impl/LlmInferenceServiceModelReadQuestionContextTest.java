@@ -271,6 +271,28 @@ public class LlmInferenceServiceModelReadQuestionContextTest extends BaseModuleC
 		}
 	}
 
+	/**
+	 * Something else asked beside her medications with an article before it — "a flu shot" — is something else still (ADR
+	 * Decision 518): on the 3.7.1 standalone "Can she have a flu shot with her meds?" was answered with the screen of her
+	 * orders, every chip of it, on all 15 patients.
+	 */
+	@Test
+	public void somethingElseAskedWithAnArticleBesideHerMedicationsIsNoScreen() {
+		for (String question : new String[] { "Can she have a flu shot with her meds?", "Is a massage ok with her meds?",
+				"Can she have the flu vaccine with her ARVs?" }) {
+			RecordingProvider provider = new RecordingProvider("YES");
+			ChartAnswer answer = serviceWith(provider).search(patient, question);
+
+			assertEquals(0, provider.engine.readings, question + " is not read by the model");
+			assertFalse(answer.isAnsweredByTheModule(), question + " is not answered with the screen: " + answer.getAnswer());
+			assertTrue(answer.getSafetyWarnings().isEmpty(), question + " carries no chip: " + answer.getSafetyWarnings());
+		}
+		// A word of the screen's own after an article is still no something else: "the drug" is read as before.
+		RecordingProvider provider = new RecordingProvider("YES");
+		serviceWith(provider).search(patient, "Is the drug ok with her meds?");
+		assertEquals(1, provider.engine.readings, "a drug asked beside her medications is still read");
+	}
+
 	@Test
 	public void aQuestionNamingADrugIsNotReadByTheModel() {
 		RecordingProvider provider = new RecordingProvider("YES");

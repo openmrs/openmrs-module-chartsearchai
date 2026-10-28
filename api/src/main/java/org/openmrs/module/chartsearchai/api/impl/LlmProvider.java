@@ -256,6 +256,13 @@ public class LlmProvider {
 			+ "question names a category rather than a measurable quantity (\"any heart "
 			+ "problems\", \"any eye issues\"), cite nothing after a no-record verdict — do not "
 			+ "list vital signs or unrelated measurements.\n"
+			// A chart missing a type the asker cannot read opens by saying so (PatientChartSerializer
+			// withheldTypesNote), but the no-record rule above, whose own example is "any allergies?",
+			// outranked that line: asked "Any known drug allergies?" without Get Allergies, E4B answered
+			// "No drug allergies are recorded." for a patient with one on record.
+			+ "When the records open by saying a type of record is not visible to this user, never "
+			+ "answer a question about that type with a no-record verdict: say those records are not "
+			+ "visible to this user, and cite nothing for that sentence.\n"
 			// The two question shapes named here are EXAMPLES of this paragraph's scope, not its
 			// bound, and nothing else carries scope: the #348 branches near the end of the paragraph
 			// are gated on the FINDING's clause and never on the question, and the screening shape

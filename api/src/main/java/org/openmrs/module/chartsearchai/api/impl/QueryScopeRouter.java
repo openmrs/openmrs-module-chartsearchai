@@ -272,7 +272,10 @@ public final class QueryScopeRouter {
 	private static final Set<String> HER_RESULTS = new HashSet<String>(Arrays.asList("potassium", "sodium", "chloride",
 		"calcium", "magnesium", "phosphate", "glucose", "sugar", "sugars", "haemoglobin", "hemoglobin", "hb", "creatinine",
 		"urea", "cholesterol", "triglycerides", "platelets", "albumin", "bilirubin", "iron", "ferritin", "cd4", "inr",
-		"lactate", "bicarbonate"));
+		"lactate", "bicarbonate",
+		// and her vital signs and the other values her chart measures: "Is her BP safe?" (ADR Decision 507)
+		"bp", "pressure", "pulse", "temperature", "temp", "weight", "bmi", "height", "saturation", "sats", "spo2",
+		"viral", "vl", "egfr", "alt", "ast", "wbc", "labs", "vitals", "results", "count", "test", "tests"));
 
 	/** Whether {@code word}, named as hers, is a result her chart measures rather than a drug she takes (ADR Decisions 482,
 	 *  484). The one list both readings of "her X" consult. */
@@ -287,7 +290,9 @@ public final class QueryScopeRouter {
 		List<String> words = words(question);
 		for (int i = 0; i + 1 < words.size(); i++) {
 			if (!words.get(i).matches("her|his|their") || namesAMedicationGroup(words.get(i + 1))
-					|| namesHerResult(words.get(i + 1))) {
+					|| namesHerResult(words.get(i + 1))
+					// "her blood pressure", "her blood sugar" — never "her blood thinner", her medication (ADR Decision 507)
+					|| "blood".equals(words.get(i + 1)) && i + 2 < words.size() && namesHerResult(words.get(i + 2))) {
 				continue;
 			}
 			List<String> marked = new ArrayList<String>(words);

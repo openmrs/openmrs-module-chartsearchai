@@ -24174,3 +24174,24 @@ or a line's position under it, or the said-once sentences, and now assert the li
 Pinned by `BriefScreenAnswerTest.theDemoPatientsScreenOpensWithItsMajorAndSaysWhereTheRestAre`,
 `OrdersSharingASubstanceModuleAnswerContextTest.aScreenTheCapTruncatedCountsEveryPairItFoundAndSaysHowManyItDoesNotShow`
 and `LlmInferenceServiceAnswerFromFindingsContextTest.aScreenThatRaisedFindingsOpensWithTheFindingAndChoosesNoDrugToChange`.
+
+## Decision 507: A vital sign named as hers is her result, as a lab value is
+
+**Status: Accepted** (October 2026) — found asking 24 further wordings of 15 patients on the 3.7.1 standalone on
+2026-10-28.
+
+### Context
+
+*"Is her BP safe?"* was answered by the model, and carried every chip of the screen of her medications on all 15
+patients. `asksAboutADrugNamedAsHersByAnyName` read *"her BP"* as a drug of hers asked safe, as it had read *"her
+potassium"* before Decision 484. That decision's list of results her chart measures named lab values only.
+
+### The decision
+
+- Her vital signs and the other values her chart measures are results named as hers, as her lab values are. These are
+  BP, pressure, pulse, temperature, weight, BMI, height, saturation, viral load, eGFR, ALT, AST, WBC, labs, vitals, results,
+  count and tests.
+- *"Blood"* counts only before a result: *"her blood pressure"*, *"her blood sugar"*, *"her blood count"*. *"Her blood
+  thinner"* is still read as a class of drug, as before.
+
+Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aVitalSignNamedAsHersCarriesNoChip`.

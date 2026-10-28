@@ -3079,6 +3079,26 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	}
 
 	/**
+	 * A vital sign named as hers is her result too, as a lab value is (ADR Decision 507): on the 3.7.1 standalone "Is her BP
+	 * safe?" carried every chip of the screen of her medications on all 15 patients.
+	 */
+	@Test
+	public void aVitalSignNamedAsHersCarriesNoChip() throws Exception {
+		executeDataSet(WARFARIN_ORDER);
+		ChartAnswer screen = serviceWith(new RecordingProvider(), shipped()).search(patient, "Are her meds safe?");
+		assertFalse(screen.getSafetyWarnings().isEmpty(), "precondition: a screen of her medications carries its chips");
+		for (String question : new String[] { "Is her BP safe?", "Is her blood pressure ok?", "Is her pulse ok?",
+				"Is her weight ok?", "Is her temperature fine?", "Is her viral load ok?" }) {
+			ChartAnswer answer = serviceWith(new RecordingProvider(), shipped()).search(patient, question);
+			assertTrue(answer.getSafetyWarnings().isEmpty(), question + " carries no chip: " + answer.getSafetyWarnings());
+			assertFalse(answer.isAnsweredByTheModule(), question + " is not answered with the screen: " + answer.getAnswer());
+		}
+		// Her blood thinner is still read as a class of drug, never as a result her chart measures.
+		String thinner = serviceWith(new RecordingProvider(), shipped()).search(patient, "Is her blood thinner safe?").getAnswer();
+		assertTrue(thinner.contains("drug class \"blood thinner\""), "her blood thinner is read as a drug class: " + thinner);
+	}
+
+	/**
 	 * A word with no near drug name beside her drug leaves the pair asked about unchecked, so no chip about that drug's
 	 * other interactions is attached to the answer that says so (ADR Decision 479). On the 3.7.1 standalone "Can oranges be
 	 * given to a patient on nevirapine?" said no check was run for oranges and nevirapine, yet carried nevirapine's own

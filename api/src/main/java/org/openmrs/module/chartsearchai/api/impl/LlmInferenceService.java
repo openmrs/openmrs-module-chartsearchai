@@ -1231,7 +1231,9 @@ public class LlmInferenceService implements ChartSearchService {
 				// Nor a question the injector read as one of a drug's record or of how she takes it, which asks nothing of
 				// its safety: the model read "Can she eat oranges with her nevirapine?" and "Can she drive on nevirapine?"
 				// as one (ADR Decision 500).
-				|| injected.asksOnlyAboutADrugsRecord()) {
+				|| injected.asksOnlyAboutADrugsRecord()
+				// Nor one thing asked of where a drug would stand, which the model read as one: "amox ok?" (ADR Decision 514).
+				|| DrugReferenceInjector.asksOfOneThingInADrugsPlace(question)) {
 			return new SafetyReading(injected, question);
 		}
 		LlmProvider.MedicationSafetyReading reading = llmProvider.readMedicationSafetyQuestion(question);

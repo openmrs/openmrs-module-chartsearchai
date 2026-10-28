@@ -11,6 +11,7 @@ package org.openmrs.module.chartsearchai.reference;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -358,6 +359,48 @@ final class UnrecognisedDrugName {
 	static boolean namesAWordInADrugsPlace(String question) {
 		return question != null && (wordInADrugsPlace(question) != null
 				|| twoWordsInDrugsPlaces(QueryScopeRouter.words(question)) != null);
+	}
+
+	/** The words saying what NOT to give, which ask of her medications as a whole whatever else the question names: "Any
+	 *  drugs that I should not give her?" (ADR Decisions 489, 514). */
+	private static final Set<String> NEGATIONS = new HashSet<String>(Arrays.asList("not", "never", "avoid", "shouldn't",
+		"shouldnt", "cannot", "can't", "cant", "don't", "dont", "no"));
+
+	/**
+	 * Whether one word of {@code question}, read where a drug's name would stand, makes it a question of giving that one
+	 * thing or of how it relates to her medications — by the residual readings too, which {@link #wordInADrugsPlace} leaves
+	 * out because they name no unrecognised drug (ADR Decision 409). Such a question asks of that thing, never of her
+	 * medications as a whole, so the model is not asked whether it does (ADR Decision 514): "amox ok?" was read as YES and
+	 * answered with the screen of her orders. Never a question saying what not to give, nor one naming her medications as a
+	 * whole.
+	 */
+	static boolean asksOfOneThingInADrugsPlace(String question) {
+		if (question == null) {
+			return false;
+		}
+		List<String> words = QueryScopeRouter.words(question);
+		if (words.size() < 2 || !Collections.disjoint(words, NEGATIONS)) {
+			return false;
+		}
+		// Nor one naming her medications as a whole, which asks of them: "Are any of her meds a bad combination?".
+		for (int i = 0; i + 1 < words.size(); i++) {
+			if (("her".equals(words.get(i)) || POSSESSIVES.contains(words.get(i)))
+					&& QueryScopeRouter.namesAMedicationGroup(words.get(i + 1))) {
+				return false;
+			}
+		}
+		for (int i = 0; i < words.size(); i++) {
+			List<String> span = words.subList(i, i + 1);
+			if (!isAName(span) || QueryScopeRouter.namesAMedicationGroup(words.get(i))) {
+				continue;
+			}
+			List<String> marked = new ArrayList<String>(words);
+			marked.set(i, QueryScopeRouter.DRUG_NAME);
+			if (QueryScopeRouter.asksWhetherToGiveADrug(marked) || QueryScopeRouter.asksWhetherADrugInteractsWithHerMedications(marked)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	private static String wordInADrugsPlace(String question) {

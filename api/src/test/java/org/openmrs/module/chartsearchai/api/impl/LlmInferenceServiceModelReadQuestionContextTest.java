@@ -252,6 +252,24 @@ public class LlmInferenceServiceModelReadQuestionContextTest extends BaseModuleC
 		}
 	}
 
+	/**
+	 * A question asking of one thing the data does not resolve, standing where a drug would — "amox ok?" — asks of that
+	 * thing, never of her medications as a whole, so it is not read by the model (ADR Decision 514): on the 3.7.1 standalone
+	 * the model read "amox ok?" as YES, and the screen of her orders answered "No rated interaction found", of a question
+	 * about amoxicillin.
+	 */
+	@Test
+	public void oneThingAskedOfWhereADrugWouldStandIsNotReadByTheModel() {
+		for (String question : new String[] { "amox ok?", "Is amox fine?", "Diet ok?", "Klarizom safe?" }) {
+			RecordingProvider provider = new RecordingProvider("YES");
+			ChartAnswer answer = serviceWith(provider).search(patient, question);
+
+			assertEquals(0, provider.engine.readings, question + " is not read by the model");
+			assertFalse(answer.isAnsweredByTheModule(), question + " is not answered with the screen: " + answer.getAnswer());
+			assertTrue(answer.getSafetyWarnings().isEmpty(), question + " carries no chip: " + answer.getSafetyWarnings());
+		}
+	}
+
 	@Test
 	public void aQuestionNamingADrugIsNotReadByTheModel() {
 		RecordingProvider provider = new RecordingProvider("YES");

@@ -7632,6 +7632,15 @@ public class DrugReferenceInjector {
 
 	/** The substances {@code finding}'s subject rows are of. */
 	/**
+	 * Whether {@code question} asks of one thing standing where a drug's name would — "amox ok?" — and so never of her
+	 * medications as a whole (ADR Decision 514). {@code UnrecognisedDrugName.asksOfOneThingInADrugsPlace}, for the reading
+	 * {@code LlmInferenceService} does not ask the model for.
+	 */
+	public static boolean asksOfOneThingInADrugsPlace(String question) {
+		return UnrecognisedDrugName.asksOfOneThingInADrugsPlace(question);
+	}
+
+	/**
 	 * Whether {@code finding} is about none of {@code substances} — neither its subject nor any partner it was decided against
 	 * is one of them — where it states either (ADR Decision 387). A finding stating neither is not known to be unrelated, so
 	 * it is never said to be. The one test of whether a finding answers a question naming those substances, for the answer

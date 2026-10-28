@@ -24382,3 +24382,30 @@ drug beside a group (Decision 433) needed *"interactions"* after the group.
 - *"X vs her <group>?"* keeps the reading Decision 448 gives it, X asked safe with them.
 
 Pinned by `ClinicianWordingsTest.aDrugBesideAGroupOfHerMedicationsWithNoVerbAsksHowItRelatesToThem`.
+
+## Decision 514: One thing asked of where a drug would stand is not read by the model as a medication check
+
+**Status: Accepted** (October 2026) — found asking 22 further wordings of 15 patients on the 3.7.1 standalone on
+2026-10-28.
+
+### Context
+
+*"amox ok?"* was answered, on all 15 patients, with the screen of her orders, opening *"No rated interaction found"*.
+That is an answer about her current medications, readable as amoxicillin being fine, to a question about amoxicillin.
+The data names no *"amox"*. At four letters it is offered no name it begins (Decision 490). The bare *"X ok?"* form is
+read only by the residual reading, which Decision 409 keeps out of the search for unrecognised drugs. So no word was
+said to stand in a drug's place, and no unchecked statement stood. The question named no drug, so the model was asked
+whether it asks about her medications' safety (Decision 489). It read YES, and the screen answered.
+
+### The decision
+
+- Where one word, read in a drug's place, makes the question one of giving that thing or of how it relates to her
+  medications — by the residual readings too — the question asks of that one thing. The model is not asked to read it,
+  no screen runs, and the question takes the chart answer.
+- Never a question saying what not to give, *"Any drugs that I should not give her?"*. Never one naming her medications
+  as a whole, *"Are any of her meds a bad combination?"*. Both ask of her medications and are still read (Decisions
+  489, 491).
+- No unchecked statement is added for such a word: *"Diet ok?"* would carry one.
+- Left as found: a word asked beside her medications as a whole, *"amox with her meds?"*, is still read.
+
+Pinned by `LlmInferenceServiceModelReadQuestionContextTest.oneThingAskedOfWhereADrugWouldStandIsNotReadByTheModel`.

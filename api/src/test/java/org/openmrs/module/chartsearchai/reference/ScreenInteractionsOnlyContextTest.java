@@ -53,7 +53,7 @@ public class ScreenInteractionsOnlyContextTest extends BaseModuleContextSensitiv
 		String answer = answer(INTERACTIONS_ONLY);
 
 		assertEquals("Also in the safety warnings beside this answer: 5 interactions, each a caution (5 Moderate). [7] [9] "
-				+ "[8]", answer.split("\n")[1], "its five interactions, and no contraindication: " + answer);
+				+ "[8]", answer.split("\n")[2], "its five interactions, and no contraindication: " + answer);
 		assertFalse(answer.contains("allergy"), "no contraindication line: " + answer);
 		assertTrue(answer.endsWith("\n" + DrugReferenceInjector.BELOW_FLOOR_SCOPE),
 			"and the scope says the answer covers interactions: " + answer);
@@ -73,7 +73,9 @@ public class ScreenInteractionsOnlyContextTest extends BaseModuleContextSensitiv
 		// What is true of every contraindication line is said once, in the count (ADR Decision 191).
 		// No count opens a screen's answer (ADR Decision 506): her allergy, a reason to change a medication, is its first
 		// line, and says for itself that the drug is one she already takes.
-		assertTrue(answer.matches("The patient has a recorded allergy to Ibuprofen\\. This finding is about a medication "
+		assertTrue(answer.matches("No Major interaction found\\. To review: 1 contraindication, 1 possible duplicate "
+				+ "therapy, 5 cautions\\. See details for what was not checked\\.\n"
+				+ "The patient has a recorded allergy to Ibuprofen\\. This finding is about a medication "
 				+ "this patient is already taking\\. \\[\\d+\\]\n(?s).*"), "was: " + answer);
 		for (SafetyWarning chip : contraindications(SAFETY)) {
 			assertFalse(chip.isAboutAnotherOfHerMedications(), "what was asked: " + chip.getDetail());

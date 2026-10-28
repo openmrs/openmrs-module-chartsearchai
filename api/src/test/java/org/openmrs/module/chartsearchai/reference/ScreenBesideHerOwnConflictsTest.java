@@ -42,6 +42,10 @@ public class ScreenBesideHerOwnConflictsTest extends BaseModuleContextSensitiveT
 			+ "was found among the 2 substances in this patient's active medications; the data lists one pair of them only "
 			+ "below that level, with no severity or mechanism on file. Drug-class relationships were not checked. [";
 
+	/** The bottom line over that screen (ADR Decision 512): his two conflicts with his own orders, counted. */
+	private static final String BOTTOM_LINE = "No rated interaction found. To review: 2 contraindications. See details for "
+			+ "what was not checked.";
+
 	@BeforeEach
 	public void answerFromFindings() {
 		Context.getAdministrationService().setGlobalProperty(
@@ -57,14 +61,15 @@ public class ScreenBesideHerOwnConflictsTest extends BaseModuleContextSensitiveT
 		assertNotNull(answer, "the module answers");
 		String[] lines = answer.split("\n");
 		// No count introduces them (ADR Decision 506): each line says for itself that its drug is one he already takes.
-		assertEquals(4, lines.length, "was: " + answer);
-		assertEquals(true, lines[0].startsWith(DEXAMETHASONE_PREDNISONE_SCREEN),
+		assertEquals(5, lines.length, "was: " + answer);
+		assertEquals(BOTTOM_LINE, lines[0], "the bottom line (ADR Decision 512): " + answer);
+		assertEquals(true, lines[1].startsWith(DEXAMETHASONE_PREDNISONE_SCREEN),
 			"was: " + answer);
-		assertEquals(true, lines[1].startsWith("The patient has a recorded allergy to Dexamethasone. This finding is about a medication this patient is already taking. ["),
+		assertEquals(true, lines[2].startsWith("The patient has a recorded allergy to Dexamethasone. This finding is about a medication this patient is already taking. ["),
 			"was: " + answer);
-		assertEquals(true, lines[2].startsWith("Prednisone is in the same ATC class (H02AB) as the patient's allergy to "
-				+ "Dexamethasone — possible cross-reactivity.") && lines[2].contains(" This finding is about a medication this patient is already taking. ["), "was: " + answer);
-		assertEquals(DrugReferenceInjector.SCREEN_SCOPE, lines[3], "was: " + answer);
+		assertEquals(true, lines[3].startsWith("Prednisone is in the same ATC class (H02AB) as the patient's allergy to "
+				+ "Dexamethasone — possible cross-reactivity.") && lines[3].contains(" This finding is about a medication this patient is already taking. ["), "was: " + answer);
+		assertEquals(DrugReferenceInjector.SCREEN_SCOPE, lines[4], "was: " + answer);
 	}
 
 	/** A screen asked in words of no medication cue — "his treatment" — states his own conflicts as any screen does (ADR
@@ -97,9 +102,10 @@ public class ScreenBesideHerOwnConflictsTest extends BaseModuleContextSensitiveT
 			assertNotNull(answer, question + " — the module answers");
 			String[] lines = answer.split("\n");
 			assertEquals(DrugReferenceInjector.CHOOSES_NO_DRUG_LEAD, lines[0], question + " — was: " + answer);
-			assertEquals(true, lines[1].startsWith(DEXAMETHASONE_PREDNISONE_SCREEN),
+			assertEquals(BOTTOM_LINE, lines[1], question + " — was: " + answer);
+			assertEquals(true, lines[2].startsWith(DEXAMETHASONE_PREDNISONE_SCREEN),
 				question + " — was: " + answer);
-			assertEquals(true, lines[2].startsWith("The patient has a recorded allergy to Dexamethasone. This finding is about a medication this patient is already taking. ["),
+			assertEquals(true, lines[3].startsWith("The patient has a recorded allergy to Dexamethasone. This finding is about a medication this patient is already taking. ["),
 				question + " — was: " + answer);
 		}
 	}
@@ -118,10 +124,10 @@ public class ScreenBesideHerOwnConflictsTest extends BaseModuleContextSensitiveT
 				DrugReferenceTestSupport.activeOrder("order-pred", "Prednisone", "Prednisone"));
 			assertNotNull(answer, question + " — the module answers");
 			String[] lines = answer.split("\n");
-			assertEquals(true, lines[0].startsWith(DEXAMETHASONE_PREDNISONE_SCREEN),
+			assertEquals(true, lines[1].startsWith(DEXAMETHASONE_PREDNISONE_SCREEN),
 				question + " — was: " + answer);
-			assertEquals(DrugReferenceInjector.BEYOND_INTERACTIONS_LEAD, lines[1], question + " — was: " + answer);
-			assertEquals(true, lines[2].startsWith("The patient has a recorded allergy to Dexamethasone."),
+			assertEquals(DrugReferenceInjector.BEYOND_INTERACTIONS_LEAD, lines[2], question + " — was: " + answer);
+			assertEquals(true, lines[3].startsWith("The patient has a recorded allergy to Dexamethasone."),
 				question + " — was: " + answer);
 		}
 		String one = screen("Any interactions with his current medications?", "clarithromycin",

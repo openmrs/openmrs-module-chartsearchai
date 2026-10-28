@@ -55,12 +55,14 @@ public class BriefScreenAnswerTest extends BaseModuleContextSensitiveTest {
 
 		assertNotNull(answer, "the module answers");
 		String[] lines = answer.split("\n");
-		assertEquals(4, lines.length, "was: " + answer);
-		assertTrue(lines[0].startsWith("Nelfinavir interacts with active order Rifampin — Major. ["), "was: " + answer);
-		assertTrue(lines[1].startsWith(SHARED_SUBSTANCES), "was: " + answer);
-		assertTrue(lines[2].startsWith("Also in the safety warnings beside this answer: 12 interactions, each a caution (8 "
+		assertEquals(5, lines.length, "was: " + answer);
+		assertEquals(BOTTOM_LINE, lines[0], "was: " + answer);
+		assertEquals(BOTTOM_LINE, DrugReferenceInjector.summaryOf(answer), "the lines a client shows, the rest collapsed");
+		assertTrue(lines[1].startsWith("Nelfinavir interacts with active order Rifampin — Major. ["), "was: " + answer);
+		assertTrue(lines[2].startsWith(SHARED_SUBSTANCES), "was: " + answer);
+		assertTrue(lines[3].startsWith("Also in the safety warnings beside this answer: 12 interactions, each a caution (8 "
 				+ "Moderate, 4 Minor). ["), "was: " + answer);
-		assertEquals(NOT_CHECKED, lines[3]);
+		assertEquals(NOT_CHECKED, lines[4]);
 	}
 
 	/** Asked which drugs to avoid, her allergies and that the check lists no other drug are one line before the screen (ADR
@@ -72,11 +74,20 @@ public class BriefScreenAnswerTest extends BaseModuleContextSensitiveTest {
 
 		assertNotNull(answer, "the module answers");
 		String[] lines = answer.split("\n");
-		assertEquals(5, lines.length, "was: " + answer);
-		assertEquals("No drug allergies are recorded for this patient. This check does not list other drugs to avoid.", lines[0]);
-		assertTrue(lines[1].startsWith("Nelfinavir interacts with active order Rifampin — Major. ["), "was: " + answer);
-		assertEquals(NOT_CHECKED, lines[4]);
+		assertEquals(6, lines.length, "was: " + answer);
+		String lead = "No drug allergies are recorded for this patient. This check does not list other drugs to avoid.";
+		assertEquals(lead, lines[0]);
+		assertEquals(BOTTOM_LINE, lines[1], "was: " + answer);
+		assertEquals(lead + "\n" + BOTTOM_LINE, DrugReferenceInjector.summaryOf(answer),
+			"the lead stays in view above the bottom line");
+		assertTrue(lines[2].startsWith("Nelfinavir interacts with active order Rifampin — Major. ["), "was: " + answer);
+		assertEquals(NOT_CHECKED, lines[5]);
 	}
+
+	/** The bottom line a screen's answer opens with (ADR Decision 512): what is rated a reason to withhold, named, and the
+	 *  rest counted. */
+	private static final String BOTTOM_LINE = "1 Major interaction: Nelfinavir with Rifampin. Also to review: 4 possible "
+			+ "duplicate therapies, 12 cautions. See details for what was not checked.";
 
 	/** Her orders sharing a substance, a reason to change one of them, named on one line (ADR Decisions 493, 506). */
 	private static final String SHARED_SUBSTANCES = "Possible duplicate therapy — each in more than one of this patient's "

@@ -86,9 +86,10 @@ public class ScreenBelowFloorPairsTest extends BaseModuleContextSensitiveTest {
 
 		assertNotNull(answer, "the module answers");
 		assertFalse(answer.contains("No interactions were found"), "the data relates three pairs of his: " + answer);
-		// The screen note's facts in fewer words, the record keeping its own (ADR Decision 509).
-		assertTrue(answer.startsWith("No interaction at or above the configured severity level was found among the 3 substances in this patient's "
-				+ "active medications; the data lists 3 pairs of them only below that level, none with a severity or "
+		// The screen note's facts in fewer words, the record keeping its own (ADR Decision 509), under the bottom line
+		// (ADR Decision 512).
+		assertTrue(answer.split("\n")[1].startsWith("No interaction at or above the configured severity level was found "
+				+ "among the 3 substances in this patient's active medications; the data lists 3 pairs of them only below that level, none with a severity or "
 				+ "mechanism on file. Drug-class relationships were not checked."),
 			"was: " + answer);
 	}
@@ -110,9 +111,14 @@ public class ScreenBelowFloorPairsTest extends BaseModuleContextSensitiveTest {
 
 		assertNotNull(answer, "the module answers");
 		String[] lines = answer.split("\n");
-		assertEquals(3, lines.length, "was: " + answer);
-		assertTrue(lines[0].matches(java.util.regex.Pattern.quote("No interaction at or above the configured severity level was found among the 3 substances in this patient's "
-				+ "active medications; the data lists 3 pairs of them only below that level, none with a severity or "
+		assertEquals(4, lines.length, "was: " + answer);
+		// The bottom line first, the rest a client may collapse (ADR Decision 512).
+		assertEquals("No rated interaction found. To review: 3 possible duplicate therapies. See details for what was not "
+				+ "checked.", lines[0], "was: " + answer);
+		assertEquals(lines[0], DrugReferenceInjector.summaryOf(answer));
+		lines = java.util.Arrays.copyOfRange(lines, 1, lines.length);
+		assertTrue(lines[0].matches(java.util.regex.Pattern.quote("No interaction at or above the configured severity level "
+				+ "was found among the 3 substances in this patient's active medications; the data lists 3 pairs of them only below that level, none with a severity or "
 				+ "mechanism on file. Drug-class relationships were not checked.") + " \\[\\d+\\]"),
 			"was: " + answer);
 		// Her three drugs each in several orders, one line since ADR Decision 493.
@@ -126,7 +132,9 @@ public class ScreenBelowFloorPairsTest extends BaseModuleContextSensitiveTest {
 		String answer = screen(INTERACTIONS, "Lamivudine", "Tenofovir disoproxil");
 
 		assertNotNull(answer, "the module answers");
-		assertTrue(answer.startsWith("No interaction at or above the configured severity level was found among the 2 "
+		assertEquals("No rated interaction found. See details for what was not checked.", answer.split("\n")[0],
+			"the bottom line: " + answer);
+		assertTrue(answer.split("\n")[1].startsWith("No interaction at or above the configured severity level was found among the 2 "
 				+ "substances in this patient's active medications. Drug-class relationships were not checked. ["),
 			"was: " + answer);
 	}

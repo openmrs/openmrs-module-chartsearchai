@@ -1141,7 +1141,8 @@ public class DrugReferenceInjector {
 					interactionsOnly ? BELOW_FLOOR_SCOPE : SCREEN_SCOPE,
 					questionDrugs.isEmpty() ? duplicateTherapyLines(orderEntries, context,
 							orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers)
-							: Collections.<String> emptyList(), combinationAskedAbout(question, questionDrugs, context));
+							: Collections.<String> emptyList(), combinationAskedAbout(question, questionDrugs, context),
+					questionDrugs.isEmpty());
 			// The question named it as hers, and she is not on it — admitted here only so (ADR Decision 260), or named it so in a
 			// shape admitted anyway, "Does her ibuprofen interact with her other medications?" (ADR Decision 292); or asked
 			// whether she is on it, and she is not (ADR Decision 287).
@@ -5407,6 +5408,16 @@ public class DrugReferenceInjector {
 	private static String composeFromFindings(List<SafetyWarning> findings, List<Integer> numbers,
 			Map<String, Integer> orderRecordNumbers, Map<String, Integer> herOrderRecords, boolean proposal,
 			PairChipExtent pairs, Lead lead, String screenScope, List<String> groupLines, String askedLabel) {
+		return composeFromFindings(findings, numbers, orderRecordNumbers, herOrderRecords, proposal, pairs, lead, screenScope,
+				groupLines, askedLabel, false);
+	}
+
+	/** As above; a screen's answer opens with its bottom line ({@link #screenSummary}) where {@code summarize} — a screen of
+	 *  her medications, and not the conflicts a screen that related no pair states under its own (ADR Decision 512). */
+	private static String composeFromFindings(List<SafetyWarning> findings, List<Integer> numbers,
+			Map<String, Integer> orderRecordNumbers, Map<String, Integer> herOrderRecords, boolean proposal,
+			PairChipExtent pairs, Lead lead, String screenScope, List<String> groupLines, String askedLabel,
+			boolean summarize) {
 		final String[] clauses = new String[findings.size()];
 		List<Integer> order = new ArrayList<Integer>(findings.size());
 		for (int i = 0; i < findings.size(); i++) {
@@ -5524,8 +5535,128 @@ public class DrugReferenceInjector {
 			// and it closes with what it does not cover (ADR Decisions 171, 493, 506).
 			lines = briefScreenLines(findings, numbers, clauses, lines, lineFindings, groupLines, pairs);
 			lines.add(screenScope);
+			if (summarize) {
+				lines.add(0, screenSummary(findings, groupLines.size(), null));
+			}
 		}
 		return String.join("\n", lines);
+	}
+
+	/**
+	 * A screen's bottom line, the first line of its answer (ADR Decision 512): what it found rated a reason to withhold,
+	 * named, then the rest counted, then that the details say what was not checked — <em>"1 Major interaction: Nelfinavir
+	 * with Rifampin. Also to review: 4 possible duplicate therapies, 9 cautions. See details for what was not
+	 * checked."</em> A clinician asking a short question reads it for direction, and a client shows it with the rest of
+	 * the answer collapsed under it ({@link #summaryOf}). Named by the RATING, {@link
+	 * DrugSafetyValidator#ratedAReasonToWithhold}, the module's own rule and never a judgement of this line's: an
+	 * interaction the data rates Major, each by its drug and the orders it names; everything else counted by kind. With
+	 * none so rated it says so — {@code opener} where a screen that related no pair has its own words for that. Never
+	 * a clearance: it says what was FOUND, and its last sentence points at what was not checked.
+	 *
+	 * @param drugGroups how many drug-group lines ({@link #duplicateTherapyLines}) the answer states, each a possible
+	 *            duplicate therapy
+	 * @param opener what to say where nothing is rated a reason to withhold, or {@code null} for "No Major interaction
+	 *            found."
+	 */
+	static String screenSummary(List<SafetyWarning> findings, int drugGroups, String opener) {
+		Map<String, List<String>> rated = new LinkedHashMap<String, List<String>>();
+		Map<String, Integer> ratedPairs = new LinkedHashMap<String, Integer>();
+		int contraindications = 0;
+		int unrated = 0;
+		int duplicates = drugGroups;
+		int cautions = 0;
+		for (SafetyWarning finding : findings) {
+			int pairs = Math.max(1, finding.namedPartners().size());
+			String clause = moduleClause(finding);
+			if (finding.statesOrdersSharingASubstance()) {
+				duplicates++;
+			} else if (SafetyWarning.TYPE_CONTRAINDICATION.equals(finding.getType())) {
+				contraindications++;
+			} else if (SafetyWarning.TYPE_INTERACTION.equals(finding.getType())
+					&& DrugSafetyValidator.ratedAReasonToWithhold(finding.getSeverity())) {
+				String rating = finding.getSeverity().trim();
+				List<String> labels = rated.get(rating);
+				if (labels == null) {
+					labels = new ArrayList<String>();
+					rated.put(rating, labels);
+					ratedPairs.put(rating, 0);
+				}
+				String label = finding.getDrug() + (finding.namedPartners().isEmpty() ? ""
+						: " with " + joinedAsAList(new ArrayList<String>(finding.namedPartners())));
+				if (!labels.contains(label)) {
+					labels.add(label);
+				}
+				ratedPairs.put(rating, ratedPairs.get(rating) + pairs);
+			} else if (STRENGTH_CAUTION.equals(clause) || STRENGTH_CAUTION_CURRENT_MEDICATION.equals(clause)) {
+				cautions += pairs;
+			} else {
+				unrated += pairs;
+			}
+		}
+		StringBuilder summary = new StringBuilder();
+		for (Map.Entry<String, List<String>> rating : rated.entrySet()) {
+			int k = ratedPairs.get(rating.getKey());
+			summary.append(summary.length() == 0 ? "" : " ").append(k).append(' ').append(rating.getKey())
+					.append(k == 1 ? " interaction: " : " interactions: ").append(String.join("; ", rating.getValue()))
+					.append('.');
+		}
+		if (rated.isEmpty()) {
+			summary.append(opener != null ? opener : "No Major interaction found.");
+		}
+		List<String> toReview = new ArrayList<String>();
+		if (contraindications > 0) {
+			toReview.add(contraindications + (contraindications == 1 ? " contraindication" : " contraindications"));
+		}
+		if (unrated > 0) {
+			toReview.add(unrated + (unrated == 1 ? " unrated interaction" : " unrated interactions"));
+		}
+		if (duplicates > 0) {
+			toReview.add(duplicates + (duplicates == 1 ? " possible duplicate therapy" : " possible duplicate therapies"));
+		}
+		if (cautions > 0) {
+			toReview.add(cautions + (cautions == 1 ? " caution" : " cautions"));
+		}
+		if (!toReview.isEmpty()) {
+			summary.append(rated.isEmpty() ? " To review: " : " Also to review: ").append(String.join(", ", toReview))
+					.append('.');
+		}
+		return summary.append(' ').append(SUMMARY_TAIL).toString();
+	}
+
+	/** How {@link #screenSummary} ends: the details under it say what the check did not cover. */
+	static final String SUMMARY_TAIL = "See details for what was not checked.";
+
+	/** What a screen that related no pair says in its bottom line (ADR Decision 512): "No rated interaction found." where
+	 *  the data rates none of the pairs it lists below the floor — or lists none — else that none clears the floor. */
+	private static String noPairOpener(PairChipExtent screen) {
+		List<PairChipExtent.BelowFloorPair> below = screen == null || screen.getBelowFloor() == null
+				? Collections.<PairChipExtent.BelowFloorPair> emptyList() : screen.getBelowFloor();
+		for (PairChipExtent.BelowFloorPair pair : below) {
+			String severity = pair.getSeverity() == null ? "" : pair.getSeverity().trim();
+			if (!severity.isEmpty() && !"unknown".equalsIgnoreCase(severity)) {
+				return "No interaction at or above the configured severity level found.";
+			}
+		}
+		return "No rated interaction found.";
+	}
+
+	/**
+	 * The lines of a module answer a client shows, with the rest collapsed under them (ADR Decision 512): every line up to
+	 * and including its bottom line ({@link #screenSummary}) — a lead a question takes stays in view above it — or {@code
+	 * null} where the answer opens with no bottom line. The composer that writes that line is the one place that knows
+	 * its words.
+	 */
+	public static String summaryOf(String composed) {
+		if (composed == null) {
+			return null;
+		}
+		String[] lines = composed.split("\n", -1);
+		for (int n = 0; n < lines.length; n++) {
+			if (lines[n].endsWith(SUMMARY_TAIL)) {
+				return String.join("\n", Arrays.asList(lines).subList(0, n + 1));
+			}
+		}
+		return null;
 	}
 
 	/**
@@ -5742,11 +5873,15 @@ public class DrugReferenceInjector {
 		}
 		String opening = noPairOpening(screenNoteIndex, screened, screen, rest, restNumbers, orderRecordNumbers, herOrderRecords,
 				context, unidentified);
+		// Opened by the screen note, the answer opens with its bottom line above it (ADR Decision 512); the one-line
+		// openings — no order, one order, none identified — are their own bottom line.
+		String summary = opening != null && screenNoteIndex != null && onlyHerOwnOrdersSharingASubstance(rest)
+				? screenSummary(findings, 0, noPairOpener(screen)) + "\n" : "";
 		if (opening == null || contraindications.isEmpty()) {
-			return opening;
+			return opening == null ? null : summary + opening;
 		}
 		if (!statesHerOwnConflicts(question)) {
-			StringBuilder apart = new StringBuilder(opening).append("\n").append(BEYOND_INTERACTIONS_LEAD);
+			StringBuilder apart = new StringBuilder(summary).append(opening).append("\n").append(BEYOND_INTERACTIONS_LEAD);
 			for (int i = 0; i < contraindications.size(); i++) {
 				apart.append("\n").append(findingLine(contraindications.get(i), contraindicationNumbers.get(i),
 						orderRecordNumbers, herOrderRecords, false));
@@ -5755,7 +5890,7 @@ public class DrugReferenceInjector {
 		}
 		String stated = composeFromFindings(contraindications, contraindicationNumbers, orderRecordNumbers, herOrderRecords,
 				false, null, Lead.of(question, Collections.<DrugReference> emptyList()), SCREEN_SCOPE);
-		return stated == null ? null : opening + "\n" + stated;
+		return stated == null ? null : summary + opening + "\n" + stated;
 	}
 
 	/** {@link #composeFromAScreenThatRelatedNothing}'s answer to what the screen found, her own conflicts set apart. */

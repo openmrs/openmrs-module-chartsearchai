@@ -97,7 +97,7 @@ public class SubstanceInSeveralOrdersPairTest extends BaseModuleContextSensitive
 		String answer = chart.getModuleAnswer();
 
 		assertNotNull(answer, "the module answers");
-		assertTrue(answer.startsWith("Nevirapine interacts with active order Rifampin — Major. ["), "was: " + answer);
+		assertTrue(answer.split("\n")[1].startsWith("Nevirapine interacts with active order Rifampin — Major. ["), "was: " + answer);
 		// The finding, as its chip and injected record state it, the partner named as the substance; a Minor, so the
 		// answer counts it among its cautions and cites its record (ADR Decisions 493, 506).
 		Matcher finding = Pattern.compile("\\[(\\d+)\\] " + Pattern.quote(DrugReferenceInjector.FINDING_PREFIX)

@@ -2472,9 +2472,9 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 
 		assertEquals(0, provider.calls);
 		String[] lines = answer.getAnswer().split("\n");
-		assertTrue(lines[0].startsWith(firstSentence(findings.get(0))) && lines[0].contains(" [" + findings.get(0).index
-				+ "]"), "first, the unrated pair the arm raised first: " + answer.getAnswer());
-		assertTrue(lines[1].startsWith(firstSentence(findings.get(1))) && lines[1].contains(" [" + findings.get(1).index
+		assertTrue(lines[1].startsWith(firstSentence(findings.get(0))) && lines[1].contains(" [" + findings.get(0).index
+				+ "]"), "under the bottom line, the unrated pair the arm raised first: " + answer.getAnswer());
+		assertTrue(lines[2].startsWith(firstSentence(findings.get(1))) && lines[2].contains(" [" + findings.get(1).index
 				+ "]"), "then the Major one: " + answer.getAnswer());
 	}
 
@@ -2782,8 +2782,8 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 
 		assertEquals(0, provider.calls, "the module answers: " + answer.getAnswer());
 		String[] lines = answer.getAnswer().split("\\n");
-		assertTrue(lines[0].startsWith(firstSentence(findings.get(0))),
-				"first, the pair it related, as a screen does: " + answer.getAnswer());
+		assertTrue(lines[1].startsWith(firstSentence(findings.get(0))),
+				"under the bottom line, the pair it related, as a screen does: " + answer.getAnswer());
 		// One line saying what the screen did not check, the order last (ADR Decisions 493, 496).
 		assertEquals("Not checked: unrated interactions, anything beyond drug interactions, and 1 active order the drug data "
 				+ "does not identify: Marevan.", lines[lines.length - 1]);
@@ -2804,13 +2804,15 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 
 		assertEquals(0, provider.calls, "the module answers: " + answer.getAnswer());
 		String[] lines = answer.getAnswer().split("\n");
-		assertEquals(3, lines.length, "two findings and the scope: " + answer.getAnswer());
-		assertTrue(lines[0].startsWith(WARFARIN_SCREEN_OPENING),
-				"the interaction's brief line — its first sentence, then its markers: " + lines[0]);
-		assertTrue(lines[1].startsWith("The patient has a recorded allergy to Acetylsalicylic acid (aspirin). This finding is "
-				+ "about a medication this patient is already taking. ["), "then the allergy: " + lines[1]);
+		assertEquals(4, lines.length, "the bottom line, two findings and the scope: " + answer.getAnswer());
+		assertEquals("1 Major interaction: Acetylsalicylic acid (aspirin) with Warfarin. Also to review: 1 contraindication. "
+				+ "See details for what was not checked.", lines[0]);
+		assertTrue(lines[1].startsWith(WARFARIN_SCREEN_OPENING),
+				"the interaction's brief line — its first sentence, then its markers: " + lines[1]);
+		assertTrue(lines[2].startsWith("The patient has a recorded allergy to Acetylsalicylic acid (aspirin). This finding is "
+				+ "about a medication this patient is already taking. ["), "then the allergy: " + lines[2]);
 		assertEquals("Interactions the data does not rate, and anything beyond drug interactions and contraindications, "
-				+ "are not covered.", lines[2]);
+				+ "are not covered.", lines[3]);
 		for (org.openmrs.module.chartsearchai.reference.SafetyWarning chip : answer.getSafetyWarnings()) {
 			boolean interaction = org.openmrs.module.chartsearchai.reference.SafetyWarning.TYPE_INTERACTION.equals(
 					chip.getType());
@@ -2821,12 +2823,17 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		}
 	}
 
-	/** How a screen of her warfarin and aspirin orders opens: its Major, whole (ADR Decision 506). */
+	/** The bottom line a screen of her warfarin and aspirin orders opens with (ADR Decision 512). */
+	private static final String WARFARIN_BOTTOM_LINE = "1 Major interaction: Acetylsalicylic acid (aspirin) with Warfarin. "
+			+ "See details for what was not checked.";
+
+	/** How the findings of a screen of her warfarin and aspirin orders open, under its bottom line: its Major, whole (ADR
+	 *  Decisions 506, 512). */
 	private static final String WARFARIN_SCREEN_OPENING = "Acetylsalicylic acid (aspirin) interacts with active order "
 			+ "Warfarin — Major. [";
 
 	@Test
-	public void aScreenThatRaisedFindingsOpensWithTheFindingAndChoosesNoDrugToChange() throws Exception {
+	public void aScreenThatRaisedFindingsOpensWithItsBottomLineAndChoosesNoDrugToChange() throws Exception {
 		executeDataSet(WARFARIN_ORDER);
 		List<Finding> findings = findingsInThePromptFor(SCREEN);
 		assertFalse(findings.isEmpty(), "precondition: her warfarin and aspirin orders interact Major");
@@ -2836,11 +2843,39 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 
 		assertEquals(0, provider.calls);
 		String[] lines = answer.getAnswer().split("\n");
-		assertTrue(lines[0].startsWith(firstSentence(findings.get(0))),
-				"a screen opens with the finding, which names the medication and what it relates it to — never a lead "
-						+ "choosing which of the two to change (ADR Decisions 171, 506): " + answer.getAnswer());
+		assertEquals(WARFARIN_BOTTOM_LINE, lines[0], "a screen opens with its bottom line, naming the medications the "
+				+ "finding relates and choosing neither to change (ADR Decisions 171, 512): " + answer.getAnswer());
+		assertTrue(lines[1].startsWith(firstSentence(findings.get(0))),
+				"then the finding, which names the medication and what it relates it to (ADR Decision 506): "
+						+ answer.getAnswer());
 		assertStatesEveryFindingBriefly(answer, findings);
 		assertTrue(answer.isAnsweredByTheModule());
+	}
+
+	/**
+	 * A screen's answer opens with its bottom line — what is rated a reason to withhold, named, and the rest counted — and
+	 * the answer carries the lines a client shows apart, so it can collapse the rest under them (ADR Decision 512). A
+	 * proposal's answer carries none.
+	 */
+	@Test
+	public void aScreensBottomLineOpensItsAnswerAndIsCarriedApart() throws Exception {
+		executeDataSet(WARFARIN_ORDER);
+
+		ChartAnswer answer = serviceWith(new RecordingProvider()).search(patient, SCREEN);
+		assertEquals("1 Major interaction: Acetylsalicylic acid (aspirin) with Warfarin. See details for what was not "
+				+ "checked.", answer.getAnswerSummary(), "was: " + answer.getAnswer());
+		assertTrue(answer.getAnswer().startsWith(answer.getAnswerSummary() + "\n"), "was: " + answer.getAnswer());
+
+		List<ChartAnswer> early = new ArrayList<ChartAnswer>();
+		ChartAnswer streamed = serviceWith(new RecordingProvider()).searchStreaming(patient, SCREEN, t -> { }, r -> { },
+			c -> { }, early::add);
+		assertEquals(answer.getAnswerSummary(), streamed.getAnswerSummary());
+		assertEquals(1, early.size());
+		assertEquals(answer.getAnswerSummary(), early.get(0).getAnswerSummary(), "the early done carries it too");
+
+		ChartAnswer proposal = serviceWith(new RecordingProvider()).search(patient, PROPOSAL);
+		assertTrue(proposal.isAnsweredByTheModule(), "precondition: " + proposal.getAnswer());
+		assertNull(proposal.getAnswerSummary(), "was: " + proposal.getAnswer());
 	}
 
 	/**
@@ -2879,8 +2914,8 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 			ChartAnswer answer = serviceWith(provider).search(patient, question);
 
 			assertEquals(0, provider.calls, question + " — the module answers: " + answer.getAnswer());
-			assertTrue(answer.getAnswer().startsWith(WARFARIN_SCREEN_OPENING),
-					question + " — the screen's Major leads: " + answer.getAnswer());
+			assertTrue(answer.getAnswer().startsWith(WARFARIN_BOTTOM_LINE + "\n" + WARFARIN_SCREEN_OPENING),
+					question + " — the screen's bottom line, then its Major: " + answer.getAnswer());
 		}
 	}
 
@@ -2898,8 +2933,8 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 			ChartAnswer answer = serviceWith(provider).search(patient, question);
 
 			assertEquals(0, provider.calls, question + " — the module answers: " + answer.getAnswer());
-			assertTrue(answer.getAnswer().startsWith(WARFARIN_SCREEN_OPENING),
-					question + " — the screen's Major leads: " + answer.getAnswer());
+			assertTrue(answer.getAnswer().startsWith(WARFARIN_BOTTOM_LINE + "\n" + WARFARIN_SCREEN_OPENING),
+					question + " — the screen's bottom line, then its Major: " + answer.getAnswer());
 		}
 	}
 
@@ -2931,8 +2966,8 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 			RecordingProvider provider = new RecordingProvider();
 			ChartAnswer answer = serviceWith(provider).search(patient, question);
 			assertEquals(0, provider.calls, question + " — the module answers: " + answer.getAnswer());
-			assertTrue(answer.getAnswer().startsWith(WARFARIN_SCREEN_OPENING),
-					question + " — the screen's Major leads: " + answer.getAnswer());
+			assertTrue(answer.getAnswer().startsWith(WARFARIN_BOTTOM_LINE + "\n" + WARFARIN_SCREEN_OPENING),
+					question + " — the screen's bottom line, then its Major: " + answer.getAnswer());
 		}
 	}
 
@@ -2950,8 +2985,8 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 			RecordingProvider provider = new RecordingProvider();
 			ChartAnswer answer = serviceWith(provider).search(patient, question);
 			assertEquals(0, provider.calls, question + " — the module answers: " + answer.getAnswer());
-			assertTrue(answer.getAnswer().startsWith(WARFARIN_SCREEN_OPENING),
-					question + " — the screen's Major leads: " + answer.getAnswer());
+			assertTrue(answer.getAnswer().startsWith(WARFARIN_BOTTOM_LINE + "\n" + WARFARIN_SCREEN_OPENING),
+					question + " — the screen's bottom line, then its Major: " + answer.getAnswer());
 		}
 	}
 
@@ -3283,9 +3318,9 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 			RecordingProvider provider = new RecordingProvider();
 			ChartAnswer answer = serviceWith(provider).search(patient, question);
 			assertEquals(0, provider.calls, question);
-			assertTrue(answer.getAnswer().split("\n")[0].startsWith(
+			assertTrue(answer.getAnswer().split("\n")[1].startsWith(
 					"Acetylsalicylic acid (aspirin) interacts with active order"),
-					"the interaction leads, not the allergy finding: " + answer.getAnswer());
+					"under the bottom line, the interaction leads, not the allergy finding: " + answer.getAnswer());
 		}
 	}
 
@@ -3305,7 +3340,7 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 
 			assertEquals(0, provider.calls, question + " — the module answers: " + answer.getAnswer());
 			assertTrue(answer.isAnsweredByTheModule(), question);
-			assertTrue(answer.getAnswer().split("\n")[0].startsWith("Acetylsalicylic acid (aspirin) interacts with active order"),
+			assertTrue(answer.getAnswer().split("\n")[1].startsWith("Acetylsalicylic acid (aspirin) interacts with active order"),
 					question + " — was: " + answer.getAnswer());
 		}
 		RecordingProvider provider = new RecordingProvider();
@@ -3331,7 +3366,7 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 
 			assertEquals(0, provider.calls, question + " — the module answers: " + answer.getAnswer());
 			assertTrue(answer.isAnsweredByTheModule(), question);
-			assertTrue(answer.getAnswer().split("\n")[0].startsWith("Acetylsalicylic acid (aspirin) interacts with active order"),
+			assertTrue(answer.getAnswer().split("\n")[1].startsWith("Acetylsalicylic acid (aspirin) interacts with active order"),
 					question + " — was: " + answer.getAnswer());
 		}
 		RecordingProvider provider = new RecordingProvider();
@@ -3365,7 +3400,8 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 			assertTrue(answer.isAnsweredByTheModule(), question);
 			String[] lines = answer.getAnswer().split("\n");
 			assertEquals(lead, lines[0], question + " — was: " + answer.getAnswer());
-			assertTrue(lines[1].startsWith("Acetylsalicylic acid (aspirin) interacts with active order"),
+			assertEquals(WARFARIN_BOTTOM_LINE, lines[1], question + " — the bottom line under the lead: " + answer.getAnswer());
+			assertTrue(lines[2].startsWith("Acetylsalicylic acid (aspirin) interacts with active order"),
 					question + " — was: " + answer.getAnswer());
 			assertFalse(answer.getSafetyWarnings().isEmpty(), question + " — the screen's chips are published");
 		}
@@ -3404,7 +3440,8 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 			String[] lines = answer.getAnswer().split("\n");
 			assertEquals("This check does not say what to monitor: it states what it found among the medications this "
 					+ "patient is already taking.", lines[0], question + " — was: " + answer.getAnswer());
-			assertTrue(lines[1].startsWith("Acetylsalicylic acid (aspirin) interacts with active order"),
+			assertEquals(WARFARIN_BOTTOM_LINE, lines[1], question + " — the bottom line under the lead: " + answer.getAnswer());
+			assertTrue(lines[2].startsWith("Acetylsalicylic acid (aspirin) interacts with active order"),
 					question + " — was: " + answer.getAnswer());
 		}
 		RecordingProvider provider = new RecordingProvider();
@@ -3429,7 +3466,8 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 			String[] lines = answer.getAnswer().split("\n");
 			assertEquals("This check does not rate a medication's risk: it states what it found among the medications this "
 					+ "patient is already taking.", lines[0], question + " — was: " + answer.getAnswer());
-			assertTrue(lines[1].startsWith("Acetylsalicylic acid (aspirin) interacts with active order"),
+			assertEquals(WARFARIN_BOTTOM_LINE, lines[1], question + " — the bottom line under the lead: " + answer.getAnswer());
+			assertTrue(lines[2].startsWith("Acetylsalicylic acid (aspirin) interacts with active order"),
 					question + " — was: " + answer.getAnswer());
 		}
 	}
@@ -3451,7 +3489,7 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 
 		assertEquals(0, provider.calls, "the module answers: " + answer.getAnswer());
 		assertTrue(answer.isAnsweredByTheModule());
-		assertEquals(SCREEN_NOTE_WORDS + " [" + note + "]", answer.getAnswer());
+		assertEquals(NO_PAIR_BOTTOM_LINE + "\n" + SCREEN_NOTE_WORDS + " [" + note + "]", answer.getAnswer());
 	}
 
 	/** The same beside an order the data cannot identify: the note's words, then the order named as not screened
@@ -3466,7 +3504,7 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		ChartAnswer answer = serviceWith(provider).search(patient, SCREEN);
 
 		assertEquals(0, provider.calls, "the module answers: " + answer.getAnswer());
-		assertEquals(SCREEN_NOTE_WORDS + " [" + note + "]\n"
+		assertEquals(NO_PAIR_BOTTOM_LINE + "\n" + SCREEN_NOTE_WORDS + " [" + note + "]\n"
 				+ "Not checked: 1 active order the drug data does not identify — Marevan.", answer.getAnswer());
 	}
 
@@ -3515,6 +3553,9 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	/** The answer's words for a screen of two substances that related no pair — pinned here as a literal, so a reword
 	 *  shows up as a changed answer. Her aspirin and metformin, which DDInter relates by one row rated Unknown, below
 	 *  the floor: counted, never "No interactions were found" (ADR Decisions 467, 509). */
+	/** The bottom line over that screen (ADR Decision 512): the one pair below the floor is rated Unknown. */
+	private static final String NO_PAIR_BOTTOM_LINE = "No rated interaction found. See details for what was not checked.";
+
 	private static final String SCREEN_NOTE_WORDS = "No interaction at or above the configured severity level was found "
 			+ "among the 2 substances in this patient's active medications; the data lists one pair of them only below that "
 			+ "level, with no severity or mechanism on file. Drug-class relationships were not checked.";
@@ -3588,9 +3629,11 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		ChartAnswer answer = serviceWith(provider).search(patient, SCREEN);
 		assertEquals(0, provider.calls, "the module answers: " + answer.getAnswer());
 		String[] lines = answer.getAnswer().split("\n");
-		assertTrue(lines[0].startsWith(SCREEN_NOTE_WORDS), answer.getAnswer());
-		assertEquals("Found as well, beyond interactions:", lines[1], answer.getAnswer());
-		assertTrue(lines.length == 3 && lines[2].matches("The patient has a recorded allergy to Acetylsalicylic acid \\(aspirin\\)\\. "
+		assertEquals("No rated interaction found. To review: 1 contraindication. See details for what was not checked.",
+				lines[0], "the bottom line counts her own conflict (ADR Decision 512): " + answer.getAnswer());
+		assertTrue(lines[1].startsWith(SCREEN_NOTE_WORDS), answer.getAnswer());
+		assertEquals("Found as well, beyond interactions:", lines[2], answer.getAnswer());
+		assertTrue(lines.length == 4 && lines[3].matches("The patient has a recorded allergy to Acetylsalicylic acid \\(aspirin\\)\\. "
 				+ "This finding is about a medication this patient is already taking\\. \\[\\d+\\]"), answer.getAnswer());
 	}
 

@@ -1033,6 +1033,9 @@ public interface ChartSearchService {
 		/** @see #isAnsweredByTheModule() */
 		private final boolean answeredByTheModule;
 
+		/** @see #getAnswerSummary() */
+		private final String answerSummary;
+
 		/** @see #getInteractionClaimPairs() */
 		private final InteractionClaimPairs interactionClaimPairs;
 
@@ -1102,7 +1105,8 @@ public interface ChartSearchService {
 				String unresolvedDrugClass, List<Integer> unfaithfullyRenderedCitations) {
 			this(answer, references, inputTokens, outputTokens, cachedTokens, safetyWarnings, searchMode,
 					referenceSlice, pairChipExtent, unresolvedDrugClass, unfaithfullyRenderedCitations,
-					null, null, null, null, null, null, null, null, null, false, null, null, null, null, null, null, null, false);
+					null, null, null, null, null, null, null, null, null, false, null, null, null, null, null, null, null, false,
+					null);
 		}
 
 		/**
@@ -1145,7 +1149,9 @@ public interface ChartSearchService {
 				DrugReferenceLoad.Coverage doseCeilingCoverage,
 				List<String> unsupportedEndedOrderClaims,
 				List<Integer> unstatedSignificanceQualifiers,
-				List<Integer> findingsStatedByTheModule, boolean asksWhetherSheHasTakenADrug) {
+				List<Integer> findingsStatedByTheModule, boolean asksWhetherSheHasTakenADrug,
+				String answerSummary) {
+			this.answerSummary = answerSummary;
 			this.asksWhetherSheHasTakenADrug = asksWhetherSheHasTakenADrug;
 			// Null survives as null, the rule every list above shares (ADR Decision 147).
 			this.findingsStatedByTheModule = findingsStatedByTheModule == null ? null
@@ -1612,6 +1618,21 @@ public interface ChartSearchService {
 		 */
 		public boolean isAnsweredByTheModule() {
 			return answeredByTheModule;
+		}
+
+		/**
+		 * The lines a module-composed answer opens with that a client shows, with the rest of {@link #getAnswer()}
+		 * collapsed under them — ADR Decision 512. A screen of her medications opens with its bottom line: what is rated a
+		 * reason to withhold, named, the rest counted, and that the details say what was not checked; any lead a question
+		 * takes (that the check lists no drug to avoid, chooses none, rates no risk) stays above it, in view. Always the
+		 * answer's own first lines, never other words: {@link #getAnswer()} is still the whole answer, for a client that
+		 * shows it all. Decided by {@code DrugReferenceInjector.summaryOf}, the composer that writes those lines.
+		 *
+		 * @return those lines, newline-joined, or {@code null} where the answer opens with no bottom line — every answer a
+		 *         model wrote, and every module answer but a screen's
+		 */
+		public String getAnswerSummary() {
+			return answerSummary;
 		}
 
 		/**

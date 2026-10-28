@@ -24312,3 +24312,54 @@ activity, the meal she takes them with, or how she tolerates them.
   - Side effects of her medications, and a symptom attributed to them, ask of their effects.
 
 Pinned by `LlmInferenceServiceModelReadQuestionContextTest.anActivityOrAMealBesideHerMedicationsIsNoScreen`.
+
+## Decision 512: A screen's answer opens with a bottom line a client shows with the rest collapsed
+
+**Status: Accepted** (October 2026) — on the owner's report that the answer to *"What shouldn't I prescribe for this
+patient?"* on the public demo's patient `dd74dc61-1691-11df-97a5-7038c432aabf` (4 lines, 92 words after Decision 509) was
+still too much for a clinician who wants a sense of direction, and that its details should collapse the way the safety
+checks do.
+
+### Context
+
+Decisions 493, 496, 506 and 509 each cut words from a screen's answer and kept its order: what the check did, its
+findings, then its scope. The clinician's direction — is there anything to act on, and what — sat on the second or third
+line. The client already collapses the safety box to one summary line with a toggle.
+
+### The decision
+
+- **A screen's answer opens with a bottom line**, `DrugReferenceInjector.screenSummary`, the same for every wording of a
+  screen, the question not read: what the data rates a reason to withhold (`DrugSafetyValidator.ratedAReasonToWithhold`,
+  the module's own rule), each interaction named by its drug and the orders it names; everything else counted by kind —
+  contraindications, unrated interactions, possible duplicate therapies (her orders sharing a substance and Decision
+  197's drug groups), cautions; then *"See details for what was not checked."* — *"1 Major interaction: Nelfinavir with
+  Rifampin. Also to review: 4 possible duplicate therapies, 9 cautions. See details for what was not checked."* With none
+  rated so, it says *"No Major interaction found."*; a screen that related no pair says *"No rated interaction found."*
+  where the data rates none of the pairs below the floor, else that none clears it. It says what was FOUND and never a
+  clearance, and its last sentence keeps the caveats one step away rather than out of reach. The one-line openings of
+  Decisions 162 and 178 — no order, one order, none identified — are their own bottom line and take none.
+- **The response carries the lines a client shows** as `answerSummary` (`ChartAnswer.getAnswerSummary()`), decided by
+  `DrugReferenceInjector.summaryOf`: every line up to and including the bottom line, so a lead its question takes —
+  that the check lists no other drug to avoid, chooses none, rates no risk — stays in view above it. Always the answer's
+  own first lines, and `answer` stays whole: a client that shows everything needs nothing new. Written once,
+  beside `answeredByTheModule`, on every surface (`ChartSearchAiAnswerSummaryTest`).
+- **ChartAnswer's widest constructor takes it**, as `ArchitectureGuardTest.everyAnswerThisModuleBuildsCarriesTheConditionRuleCoverage`
+  requires there be exactly one widest; every model-written answer passes `null`.
+- **The client** (`openmrs-esm-chartsearchai`) shows `answerSummary` with *"Show details"* collapsing the rest, where the
+  answer still opens with exactly those lines, and the whole answer otherwise.
+
+The demo patient `dd74dc61`'s *"What shouldn't I prescribe for this patient?"* shows: *"No drug allergies are recorded for
+this patient. This check does not list other drugs to avoid. / No rated interaction found. To review: 3 possible duplicate
+therapies. See details for what was not checked."*
+
+### Spec change
+
+`LlmInferenceServiceAnswerFromFindingsContextTest` (whose `.aScreenThatRaisedFindingsOpensWithTheFindingAndChoosesNoDrugToChange`
+is now `.aScreenThatRaisedFindingsOpensWithItsBottomLineAndChoosesNoDrugToChange`), `ScreenSharedMechanismContextTest`,
+`BriefScreenAnswerTest`, `ScreenBelowFloorPairsTest`, `ScreenBesideHerOwnConflictsTest`, `ScreenInteractionsOnlyContextTest`,
+`OrdersSharingASubstanceModuleAnswerContextTest`, `NsaidCrossReactivityGroupTest` and `SubstanceInSeveralOrdersPairTest`
+pinned the screen's first line and now find the findings under the bottom line. Fifteen omod wire tests built the widest constructor and pass `null` for the new argument.
+
+Pinned by `BriefScreenAnswerTest.theDemoPatientsScreenOpensWithItsMajorAndSaysWhereTheRestAre`,
+`ScreenBelowFloorPairsTest`, `LlmInferenceServiceAnswerFromFindingsContextTest.aScreensBottomLineOpensItsAnswerAndIsCarriedApart`
+and `ChartSearchAiAnswerSummaryTest`.

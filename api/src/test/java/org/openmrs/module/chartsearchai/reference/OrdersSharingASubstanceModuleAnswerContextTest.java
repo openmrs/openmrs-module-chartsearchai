@@ -89,12 +89,15 @@ public class OrdersSharingASubstanceModuleAnswerContextTest extends BaseModuleCo
 		String answer = chart.getModuleAnswer();
 		assertNotNull(answer, "a pair was related, so the module answers: " + chart.getText());
 		List<String> lines = Arrays.asList(answer.split("\n"));
-		assertEquals(4, lines.size(), "three findings and the scope (ADR Decisions 171, 506), was: " + answer);
-		assertTrue(lines.get(0).startsWith("Pyrazinamide interacts with active order Rifampicin (rifampin) — Major."),
-			"the Major leads: " + answer);
-		assertTrue(lines.get(1).startsWith("Rifampicin (rifampin) is in active orders Isoniazid / pyrazinamide /"
+		assertEquals(5, lines.size(), "the bottom line, three findings and the scope (ADR Decisions 171, 506, 512), was: "
+				+ answer);
+		assertEquals("1 Major interaction: Pyrazinamide with Rifampicin (rifampin). Also to review: 1 possible duplicate "
+				+ "therapy, 1 caution. See details for what was not checked.", lines.get(0), "was: " + answer);
+		assertTrue(lines.get(1).startsWith("Pyrazinamide interacts with active order Rifampicin (rifampin) — Major."),
+			"the Major leads the findings: " + answer);
+		assertTrue(lines.get(2).startsWith("Rifampicin (rifampin) is in active orders Isoniazid / pyrazinamide /"
 				+ " rifampin and Rifampicin 150mg — possible duplicate therapy."), "then this finding: " + answer);
-		assertTrue(lines.get(2).startsWith(DrugReferenceInjector.ALSO_IN_THE_WARNINGS + "1 interaction, a caution (1 Minor). ["),
+		assertTrue(lines.get(3).startsWith(DrugReferenceInjector.ALSO_IN_THE_WARNINGS + "1 interaction, a caution (1 Minor). ["),
 			"then the caution, counted (ADR Decisions 493, 506): " + answer);
 	}
 
@@ -111,8 +114,8 @@ public class OrdersSharingASubstanceModuleAnswerContextTest extends BaseModuleCo
 		String answer = chart.getModuleAnswer();
 		assertNotNull(answer, "a pair was related, so the module answers: " + chart.getText());
 		List<String> lines = Arrays.asList(answer.split("\n"));
-		assertTrue(lines.get(0).startsWith("Pyrazinamide interacts with active order Rifampicin (rifampin) — Major."),
-			"the Major is the pair listed: " + answer);
+		assertTrue(lines.get(1).startsWith("Pyrazinamide interacts with active order Rifampicin (rifampin) — Major."),
+			"under the bottom line, the Major is the pair listed: " + answer);
 		// No count opens a screen's answer (ADR Decision 506), so a line says how many the cap left out.
 		assertEquals("1 more interaction, rated no higher, is not shown.", lines.get(lines.size() - 2),
 			"the answer says how many the cap left out: " + answer);

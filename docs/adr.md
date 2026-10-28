@@ -24109,3 +24109,68 @@ admit either.
   question asked either way.
 
 Pinned by `ClinicianWordingsTest.givingADrugOrAvoidingItIsAHarmAskedOfIt`.
+
+## Decision 506: A screen's answer opens with its reasons to change a medication, and says its cautions are in the safety warnings
+
+**Status: Accepted** (October 2026) — on the owner's question whether the answer to *"What shouldn't I prescribe for this
+patient?"* on the public demo's patient `dd8f98cf-1691-11df-97a5-7038c432aabf` (6 lines, 186 words after Decision 496) was
+still too much for a clinician seeing many patients, and on *"does he have any major drug interactions?"* returning the
+same screen, 143 words, its one Major the second line.
+
+### Context
+
+Decision 171's count opened every screen's answer — *"13 interactions among this patient's active medications (3 more, rated
+no higher, are not shown), and 4 substances carried by more than one of this patient's orders:"* — and Decision 493 counted
+the cautions again on their own line. The count is a tally of the lines under it, and the safety warnings beside the answer
+state every finding in full, rated.
+
+Two ways of answering a question asked about one severity were measured and declined:
+
+- **Reading the severity out of the question.** A word list (*major*, *serious*, *severe*) is the shape Decisions 489 and
+  491 replaced. The model's reading was measured on 2026-10-28 against Gemma 4 E2B on CPU by a scratch probe posting a
+  draft prompt to `llama-server` — no prompt of it shipped — one structured call per question, over 33 labelled questions. A one-field severity reading scored 31/33. Both misses read a Major-only question as asking
+  about every severity, which gives the full answer, and none of the 20 questions naming no severity was narrowed. A
+  reading of which KIND of finding was asked scored 31/33 too, but its misses narrowed: *"Are his current meds safe
+  together?"* was read as interactions only, and, read in one call with the severity, *"Does he have any drug
+  contraindications?"* as allergies only. A screen answered today with no model call, in 1.3 s on the demo, would pay a
+  model call for one word.
+- **Filtering the answer to the severity asked.** Leaving the lower-rated findings out of the answer would hide warnings,
+  which the module does not do.
+
+### The decision
+
+A screen's answer, in `DrugReferenceInjector.briefScreenLines`, is the same for every wording of a screen:
+
+- **No count opens it.** It opens with its reasons to change a medication, stated whole as before: a rated reason to
+  withhold, an unrated rule, a contraindication. *"Any major interactions?"* is answered by its first line without the
+  question being read.
+- Then Decision 197's drug-group lines, then her orders sharing a substance — which the module ranks as a reason to change
+  one of them, `STRENGTH_CHANGE_CURRENT_MEDICATION` — named, several on Decision 493's one line.
+- Then the cautions, as one line saying where they are: *"Also in the safety warnings beside this answer: 9 interactions,
+  each a caution (8 Moderate, 1 Minor). [121] …"*, citing each, so the chips pass publishes every one. *"Also"* only after
+  another line; one caution line with nothing before it is stated whole, being no longer than its count.
+- Where `chartsearchai.drugSafety.maxPairChips` withheld pairs, *"3 more interactions, rated no higher, are not shown."*,
+  which the count's bracket used to say.
+- Decision 191's said-once contraindication sentences are said on each line again (*"This finding is about a medication
+  this patient is already taking."*), the count that said them once being gone.
+- Decision 496's one *"Not checked:"* line says *"unrated interactions"* for *"interactions the data does not rate"*. The
+  orders the drug data does not identify stay named: a count would hide an order such as *Marevan*, a warfarin brand, that
+  was never screened.
+
+On the demo patient the answer to *"Does he have any drug contraindications?"* is 4 lines, its Major the first.
+
+What this does not do: list the Moderate pairs for *"any moderate interactions?"*, which counts them and leaves them to the
+chips; and shorten Decision 162's screen note, which answers a screen that related no pair.
+
+### Spec change
+
+`BriefScreenAnswerTest`, `LlmInferenceServiceAnswerFromFindingsContextTest`, `OrdersSharingASubstanceModuleAnswerContextTest`,
+`ScreenSharedMechanismContextTest`, `ScreenInteractionsOnlyContextTest`, `ScreenBesideHerOwnConflictsTest`,
+`NsaidCrossReactivityGroupTest`, `MedicationGroupsScreenContextTest` and `SubstanceInSeveralOrdersPairTest` pinned the count,
+or a line's position under it, or the said-once sentences, and now assert the lines above. Decision 496's
+`BriefScreenAnswerTest.theDemoPatientsScreenStatesItsMajorWholeAndCountsTheRest` is now
+`.theDemoPatientsScreenOpensWithItsMajorAndSaysWhereTheRestAre`.
+
+Pinned by `BriefScreenAnswerTest.theDemoPatientsScreenOpensWithItsMajorAndSaysWhereTheRestAre`,
+`OrdersSharingASubstanceModuleAnswerContextTest.aScreenTheCapTruncatedCountsEveryPairItFoundAndSaysHowManyItDoesNotShow`
+and `LlmInferenceServiceAnswerFromFindingsContextTest.aScreenThatRaisedFindingsOpensWithTheFindingAndChoosesNoDrugToChange`.

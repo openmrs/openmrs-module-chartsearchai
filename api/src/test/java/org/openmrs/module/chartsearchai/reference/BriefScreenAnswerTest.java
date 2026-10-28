@@ -49,22 +49,18 @@ public class BriefScreenAnswerTest extends BaseModuleContextSensitiveTest {
 	}
 
 	@Test
-	public void theDemoPatientsScreenStatesItsMajorWholeAndCountsTheRest() {
+	public void theDemoPatientsScreenOpensWithItsMajorAndSaysWhereTheRestAre() {
 		PatientChart chart = demoPatientsScreen();
 		String answer = chart.getModuleAnswer();
 
 		assertNotNull(answer, "the module answers");
 		String[] lines = answer.split("\n");
-		assertEquals(5, lines.length, "was: " + answer);
-		assertEquals("13 interactions among this patient's active medications, and 4 substances carried by more than one of "
-				+ "this patient's orders:", lines[0]);
-		assertTrue(lines[1].startsWith("Nelfinavir interacts with active order Rifampin — Major. ["), "was: " + answer);
-		assertTrue(lines[2].startsWith("Possible duplicate therapy — each in more than one of this patient's active orders: "
-				+ "Lamivudine; Stavudine; Sulfamethoxazole and Trimethoprim; Isoniazid and Rifampicin (rifampin). ["),
-			"was: " + answer);
-		assertTrue(lines[3].startsWith("12 more interactions, each a caution (8 Moderate, 4 Minor), are listed in full in the "
-				+ "safety warnings beside this answer. ["), "was: " + answer);
-		assertEquals(NOT_CHECKED, lines[4]);
+		assertEquals(4, lines.length, "was: " + answer);
+		assertTrue(lines[0].startsWith("Nelfinavir interacts with active order Rifampin — Major. ["), "was: " + answer);
+		assertTrue(lines[1].startsWith(SHARED_SUBSTANCES), "was: " + answer);
+		assertTrue(lines[2].startsWith("Also in the safety warnings beside this answer: 12 interactions, each a caution (8 "
+				+ "Moderate, 4 Minor). ["), "was: " + answer);
+		assertEquals(NOT_CHECKED, lines[3]);
 	}
 
 	/** Asked which drugs to avoid, the lead and her allergies are one line before the screen (ADR Decision 496). */
@@ -75,21 +71,24 @@ public class BriefScreenAnswerTest extends BaseModuleContextSensitiveTest {
 
 		assertNotNull(answer, "the module answers");
 		String[] lines = answer.split("\n");
-		assertEquals(6, lines.length, "was: " + answer);
+		assertEquals(5, lines.length, "was: " + answer);
 		assertEquals("This check does not list drugs to avoid: it states this patient's recorded drug allergies (none is "
 				+ "recorded) and what it found among the medications this patient is already taking.", lines[0]);
-		assertTrue(lines[1].startsWith("13 interactions among this patient's active medications"), "was: " + answer);
-		assertTrue(lines[2].startsWith("Nelfinavir interacts with active order Rifampin — Major. ["), "was: " + answer);
-		assertEquals(NOT_CHECKED, lines[5]);
+		assertTrue(lines[1].startsWith("Nelfinavir interacts with active order Rifampin — Major. ["), "was: " + answer);
+		assertEquals(NOT_CHECKED, lines[4]);
 	}
 
+	/** Her orders sharing a substance, a reason to change one of them, named on one line (ADR Decisions 493, 506). */
+	private static final String SHARED_SUBSTANCES = "Possible duplicate therapy — each in more than one of this patient's "
+			+ "active orders: Lamivudine; Stavudine; Sulfamethoxazole and Trimethoprim; Isoniazid and Rifampicin (rifampin). [";
+
 	/** What a screen of the demo patient did not check, on one line, the orders the data does not identify last (ADR
-	 *  Decision 496). */
-	private static final String NOT_CHECKED = "Not checked: interactions the data does not rate, anything beyond drug "
-			+ "interactions and contraindications, this patient's conditions (the drug data loaded carries no drug-condition "
-			+ "rules), and 10 active orders the drug data does not identify: Measles vaccination (2 orders); Diphtheria "
-			+ "tetanus and pertussis vaccination (2 orders); Hepatitis B vaccination (2 orders); Polio vaccination, oral (2 "
-			+ "orders); Hemophilus influenza B vaccine (2 orders).";
+	 *  Decisions 496, 506). */
+	private static final String NOT_CHECKED = "Not checked: unrated interactions, anything beyond drug interactions and "
+			+ "contraindications, this patient's conditions (the drug data loaded carries no drug-condition rules), and 10 "
+			+ "active orders the drug data does not identify: Measles vaccination (2 orders); Diphtheria tetanus and "
+			+ "pertussis vaccination (2 orders); Hepatitis B vaccination (2 orders); Polio vaccination, oral (2 orders); "
+			+ "Hemophilus influenza B vaccine (2 orders).";
 
 	/** Every finding the screen raised is cited by some line, so the chips pass publishes every one of them. */
 	@Test

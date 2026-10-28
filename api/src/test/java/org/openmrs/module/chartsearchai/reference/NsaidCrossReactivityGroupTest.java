@@ -60,9 +60,9 @@ public class NsaidCrossReactivityGroupTest extends BaseModuleContextSensitiveTes
 					"Does she have any drug interactions?").getModuleAnswer();
 
 		// Each order it names is cited, so a clinician can open it (ADR Decision 198).
-		assertTrue(answer != null && answer.split("\n")[1].matches("Ibuprofen, Diclofenac and Celecoxib are in one drug "
+		assertTrue(answer != null && answer.split("\n")[0].matches("Ibuprofen, Diclofenac and Celecoxib are in one drug "
 				+ "group \\(NSAID\\) — possible duplicate therapy\\. \\[\\d+\\] \\[\\d+\\] \\[\\d+\\]"),
-			"under the count, once, citing her three orders: " + answer);
+			"first, once, citing her three orders: " + answer);
 	}
 
 	private static PatientClinicalContext context(List<PatientClinicalContext.ActiveDrugOrder> orders,

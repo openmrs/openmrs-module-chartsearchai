@@ -58,14 +58,16 @@ public class OrdersSharingASubstanceModuleAnswerContextTest extends BaseModuleCo
 		String answer = chart.getModuleAnswer();
 		assertNotNull(answer, "a pair was related, so the module answers: " + chart.getText());
 		List<String> lines = Arrays.asList(answer.split("\n"));
-		// Both cautions are counted on one line, and her two shared substances stated on one, before it (ADR Decision 493).
+		// Both cautions are counted on one line, and her two shared substances stated on one, before it (ADR Decisions 493,
+		// 506).
 		int shared = -1;
 		int cautions = -1;
 		for (int i = 0; i < lines.size(); i++) {
 			if (lines.get(i).startsWith(DrugReferenceInjector.SHARED_SUBSTANCES_LEAD)) {
 				shared = i;
 			}
-			if (lines.get(i).startsWith("2 more interactions, each a caution (1 Moderate, 1 Minor)")) {
+			if (lines.get(i).startsWith(DrugReferenceInjector.ALSO_IN_THE_WARNINGS
+					+ "2 interactions, each a caution (1 Moderate, 1 Minor).")) {
 				cautions = i;
 			}
 		}
@@ -87,15 +89,13 @@ public class OrdersSharingASubstanceModuleAnswerContextTest extends BaseModuleCo
 		String answer = chart.getModuleAnswer();
 		assertNotNull(answer, "a pair was related, so the module answers: " + chart.getText());
 		List<String> lines = Arrays.asList(answer.split("\n"));
-		assertEquals(5, lines.size(), "the count, three findings and the scope (ADR Decision 171), was: " + answer);
-		assertEquals("2 interactions among this patient's active medications, and 1 substance carried by more than one "
-				+ "of this patient's orders:", lines.get(0), "the shared substance is counted on its own, being no pair");
-		assertTrue(lines.get(1).startsWith("Pyrazinamide interacts with active order Rifampicin (rifampin) — Major."),
+		assertEquals(4, lines.size(), "three findings and the scope (ADR Decisions 171, 506), was: " + answer);
+		assertTrue(lines.get(0).startsWith("Pyrazinamide interacts with active order Rifampicin (rifampin) — Major."),
 			"the Major leads: " + answer);
-		assertTrue(lines.get(2).startsWith("Rifampicin (rifampin) is in active orders Isoniazid / pyrazinamide /"
+		assertTrue(lines.get(1).startsWith("Rifampicin (rifampin) is in active orders Isoniazid / pyrazinamide /"
 				+ " rifampin and Rifampicin 150mg — possible duplicate therapy."), "then this finding: " + answer);
-		assertTrue(lines.get(3).startsWith("1 more interaction, a caution (1 Minor), is listed in full in the safety warnings "
-				+ "beside this answer. ["), "then the caution, counted (ADR Decision 493): " + answer);
+		assertTrue(lines.get(2).startsWith(DrugReferenceInjector.ALSO_IN_THE_WARNINGS + "1 interaction, a caution (1 Minor). ["),
+			"then the caution, counted (ADR Decisions 493, 506): " + answer);
 	}
 
 	@Test
@@ -111,12 +111,11 @@ public class OrdersSharingASubstanceModuleAnswerContextTest extends BaseModuleCo
 		String answer = chart.getModuleAnswer();
 		assertNotNull(answer, "a pair was related, so the module answers: " + chart.getText());
 		List<String> lines = Arrays.asList(answer.split("\n"));
-		// The answer lists only the Major, so the lead no longer says how many are listed (ADR Decision 493).
-		assertEquals("2 interactions among this patient's active medications (1 more, rated no higher, is not shown), and "
-				+ "1 substance carried by more than one of this patient's orders:", lines.get(0),
-			"the lead counts what the screen FOUND, and says how many the cap left out: " + answer);
-		assertTrue(lines.get(1).startsWith("Pyrazinamide interacts with active order Rifampicin (rifampin) — Major."),
+		assertTrue(lines.get(0).startsWith("Pyrazinamide interacts with active order Rifampicin (rifampin) — Major."),
 			"the Major is the pair listed: " + answer);
+		// No count opens a screen's answer (ADR Decision 506), so a line says how many the cap left out.
+		assertEquals("1 more interaction, rated no higher, is not shown.", lines.get(lines.size() - 2),
+			"the answer says how many the cap left out: " + answer);
 		assertTrue(!answer.contains(" — Minor."), "the withheld Minor is not listed: " + answer);
 	}
 

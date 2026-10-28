@@ -11,6 +11,7 @@ package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -47,14 +48,13 @@ public class ScreenSharedMechanismContextTest extends BaseModuleContextSensitive
 	public void aDrugRelatedToSeveralOfHerOrdersByOneMechanismIsOneLineNamingThemAll() throws IOException {
 		String answer = screen().getModuleAnswer();
 
-		// Five pairs, every one a Moderate caution: since ADR Decision 493 a screen counts its cautions on one line citing
-		// every finding, the grid (ADR Decision 191) still counting both NSAIDs against both corticosteroids as four pairs
-		// and citing both its findings. The question asks only about interactions, so the scope says the answer covers
-		// those (ADR Decision 190). Her two NSAIDs are said once as one drug group under the count (ADR Decision 197).
-		assertEquals("5 interactions among this patient's active medications:\n"
-				+ "Ibuprofen and Celecoxib are in one drug group (NSAID) — possible duplicate therapy. [2] [3]\n"
-				+ "5 interactions, each a caution (5 Moderate), are listed in full in the safety warnings beside this "
-				+ "answer. [6] [8] [7]\n"
+		// Five pairs, every one a Moderate caution: since ADR Decision 506 a screen says on one line, citing every
+		// finding, that its cautions are in the safety warnings, the grid (ADR Decision 191) still counting both NSAIDs
+		// against both corticosteroids as four pairs and citing both its findings. The question asks only about
+		// interactions, so the scope says the answer covers those (ADR Decision 190). Her two NSAIDs are said once as one
+		// drug group (ADR Decision 197).
+		assertEquals("Ibuprofen and Celecoxib are in one drug group (NSAID) — possible duplicate therapy. [2] [3]\n"
+				+ "Also in the safety warnings beside this answer: 5 interactions, each a caution (5 Moderate). [6] [8] [7]\n"
 				+ DrugReferenceInjector.BELOW_FLOOR_SCOPE, answer);
 	}
 
@@ -62,13 +62,12 @@ public class ScreenSharedMechanismContextTest extends BaseModuleContextSensitive
 	public void pairsOfOneMechanismThatAreNotAGridKeepALinePerDrug() throws IOException {
 		// Ibuprofen against both corticosteroids and celecoxib against prednisone alone: no two drugs each against
 		// the same orders, so a line naming them together would claim a pair the data does not relate (ADR Decision 191).
-		// Every one a Moderate caution, counted on one line since ADR Decision 493: four pairs, each finding cited.
+		// Every one a Moderate caution, counted on one line since ADR Decision 493: four pairs, each finding cited (ADR
+		// Decision 506).
 		String answer = screen("chartsearchai-test/ddi-screen-shared-mechanism-not-a-grid.json").getModuleAnswer();
 
-		assertEquals("4 interactions among this patient's active medications:\n"
-				+ "Ibuprofen and Celecoxib are in one drug group (NSAID) — possible duplicate therapy. [2] [3]\n"
-				+ "4 interactions, each a caution (4 Moderate), are listed in full in the safety warnings beside this "
-				+ "answer. [6] [7] [8]\n"
+		assertEquals("Ibuprofen and Celecoxib are in one drug group (NSAID) — possible duplicate therapy. [2] [3]\n"
+				+ "Also in the safety warnings beside this answer: 4 interactions, each a caution (4 Moderate). [6] [7] [8]\n"
 				+ DrugReferenceInjector.BELOW_FLOOR_SCOPE, answer);
 	}
 
@@ -79,8 +78,9 @@ public class ScreenSharedMechanismContextTest extends BaseModuleContextSensitive
 		String answer = screen().getModuleAnswer();
 
 		assertNotNull(answer, "the module answers the screen");
-		assertEquals("5 interactions among this patient's active medications:", answer.split("\n")[0],
-			"five pairs on three lines fit a cap of three, so nothing is withheld: " + answer);
+		assertEquals("Also in the safety warnings beside this answer: 5 interactions, each a caution (5 Moderate). [6] [8] "
+				+ "[7]", answer.split("\n")[1], "five pairs on three lines fit a cap of three: " + answer);
+		assertTrue(!answer.contains(" not shown."), "so nothing is withheld: " + answer);
 	}
 
 	private static PatientChart screen() throws IOException {

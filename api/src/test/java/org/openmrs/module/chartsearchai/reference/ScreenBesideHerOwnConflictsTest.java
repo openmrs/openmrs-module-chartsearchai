@@ -56,15 +56,15 @@ public class ScreenBesideHerOwnConflictsTest extends BaseModuleContextSensitiveT
 
 		assertNotNull(answer, "the module answers");
 		String[] lines = answer.split("\n");
-		assertEquals(5, lines.length, "was: " + answer);
+		// No count introduces them (ADR Decision 506): each line says for itself that its drug is one he already takes.
+		assertEquals(4, lines.length, "was: " + answer);
 		assertEquals(true, lines[0].startsWith(DEXAMETHASONE_PREDNISONE_SCREEN),
 			"was: " + answer);
-		assertEquals("2 contraindications about medications this patient is already taking, none with a severity rated:",
-			lines[1], "was: " + answer);
-		assertEquals(true, lines[2].startsWith("The patient has a recorded allergy to Dexamethasone."), "was: " + answer);
-		assertEquals(true, lines[3].startsWith("Prednisone is in the same ATC class (H02AB) as the patient's allergy to "
-				+ "Dexamethasone — possible cross-reactivity."), "was: " + answer);
-		assertEquals(DrugReferenceInjector.SCREEN_SCOPE, lines[4], "was: " + answer);
+		assertEquals(true, lines[1].startsWith("The patient has a recorded allergy to Dexamethasone. This finding is about a medication this patient is already taking. ["),
+			"was: " + answer);
+		assertEquals(true, lines[2].startsWith("Prednisone is in the same ATC class (H02AB) as the patient's allergy to "
+				+ "Dexamethasone — possible cross-reactivity.") && lines[2].contains(" This finding is about a medication this patient is already taking. ["), "was: " + answer);
+		assertEquals(DrugReferenceInjector.SCREEN_SCOPE, lines[3], "was: " + answer);
 	}
 
 	/** A screen asked in words of no medication cue — "his treatment" — states his own conflicts as any screen does (ADR
@@ -99,9 +99,7 @@ public class ScreenBesideHerOwnConflictsTest extends BaseModuleContextSensitiveT
 			assertEquals(DrugReferenceInjector.CHOOSES_NO_DRUG_LEAD, lines[0], question + " — was: " + answer);
 			assertEquals(true, lines[1].startsWith(DEXAMETHASONE_PREDNISONE_SCREEN),
 				question + " — was: " + answer);
-			assertEquals("2 contraindications about medications this patient is already taking, none with a severity rated:",
-				lines[2], question + " — was: " + answer);
-			assertEquals(true, lines[3].startsWith("The patient has a recorded allergy to Dexamethasone."),
+			assertEquals(true, lines[2].startsWith("The patient has a recorded allergy to Dexamethasone. This finding is about a medication this patient is already taking. ["),
 				question + " — was: " + answer);
 		}
 	}
@@ -155,9 +153,8 @@ public class ScreenBesideHerOwnConflictsTest extends BaseModuleContextSensitiveT
 		String[] lines = answer.split("\n");
 		assertEquals("This patient has one active medication order, Clarithromycin 500mg, so there is no other active "
 				+ "medication to check it against.", lines[0], "was: " + answer);
-		assertEquals("1 contraindication about a medication this patient is already taking, with no severity rated:", lines[1],
+		assertEquals(true, lines[1].startsWith("The patient has a recorded allergy to Clarithromycin. This finding is about a medication this patient is already taking. ["),
 			"was: " + answer);
-		assertEquals(true, lines[2].startsWith("The patient has a recorded allergy to Clarithromycin."), "was: " + answer);
 		assertEquals(DrugReferenceInjector.SCREEN_SCOPE, lines[lines.length - 1], "was: " + answer);
 	}
 

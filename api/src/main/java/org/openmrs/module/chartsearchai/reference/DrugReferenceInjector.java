@@ -3948,7 +3948,8 @@ public class DrugReferenceInjector {
 					: BELOW_FLOOR_SCOPE.equals(lines.get(n)) ? "anything beyond drug interactions" : null;
 			if (scope != null) {
 				List<String> parts = new ArrayList<String>();
-				parts.add("interactions the data does not rate");
+				// In fewer words than SCREEN_SCOPE's (ADR Decision 506).
+				parts.add("unrated interactions");
 				parts.add(scope);
 				if (conditionsUnchecked) {
 					parts.add(CONDITIONS_UNCHECKED_PART);
@@ -5374,9 +5375,10 @@ public class DrugReferenceInjector {
 	 * issue #553): that sentence already says the order is hers, and the referent would say she is taking
 	 * a drug she has not started.
 	 *
-	 * <p><b>A screen's lead counts, and chooses nothing.</b> A lead saying which of two medications to change would
-	 * state a choice no finding makes, which issue #469 measured the model adding in three cells; a screen's answer
-	 * opens with how many of each kind of finding follow ({@link #screenLead}) and closes with {@code screenScope} —
+	 * <p><b>A screen's answer chooses nothing.</b> A lead saying which of two medications to change would state a choice
+	 * no finding makes, which issue #469 measured the model adding in three cells; a screen's answer opens with its
+	 * reasons to change a medication, says where the rest is ({@link #briefScreenLines}, ADR Decision 506) and closes
+	 * with {@code screenScope} —
 	 * {@link #SCREEN_SCOPE}, or {@link #BELOW_FLOOR_SCOPE} where the question asks only about interactions and its
 	 * contraindications are not stated (ADR Decisions 171, 190).
 	 *
@@ -5439,9 +5441,6 @@ public class DrugReferenceInjector {
 		boolean cautions = proposal && !STRENGTH_WITHHOLD.equals(clauses[leadIndex]);
 		List<String> lines = new ArrayList<String>(order.size());
 		Map<SafetyWarning, String> substances = interactingSubstancesOfSharedOrders(findings);
-		// On a screen, what is true of every contraindication line — about a medication she already takes, with no
-		// severity rated — is said once, in the count, and not on each line (ADR Decision 191).
-		boolean saidOnce = !proposal && contraindicationsAllCurrentAndUnrated(findings);
 		Map<Integer, List<Integer>> grids = proposal ? Collections.<Integer, List<Integer>> emptyMap()
 				: interactionGrids(findings, order, substances);
 		Set<Integer> merged = new HashSet<Integer>();
@@ -5458,9 +5457,11 @@ public class DrugReferenceInjector {
 			}
 			List<Integer> grid = grids.get(i);
 			lineFindings.add(grid != null ? grid : Collections.singletonList(i));
+			// A screen's answer opens with no count (ADR Decision 506), so each contraindication line says for itself that
+			// it is about a medication she already takes, with no severity rated, where Decision 191 said both once in it.
 			lines.add(grid != null ? gridLine(findings, numbers, grid, herOrderRecords)
 					: findingLine(findings.get(i), numbers.get(i), orderRecordNumbers, herOrderRecords, true,
-							substances.get(findings.get(i)), saidOnce));
+							substances.get(findings.get(i))));
 			if (grid == null && findings.get(i).statesOrdersSharingASubstance()) {
 				herOwnSharing.add(lines.get(lines.size() - 1));
 			}
@@ -5518,32 +5519,36 @@ public class DrugReferenceInjector {
 			// drug proposed (ADR Decision 160).
 			lines.add(0, cautionLead(notHerOwnOrdersSharingASubstance(findings).size(), leadDrug));
 		} else if (!proposal) {
-			// A screen opens with what it found, counted, and closes with what it does not cover (ADR Decision 171). Only
-			// its reasons to change a medication are stated whole; her orders sharing a substance are one line and its
-			// cautions a count, each citing its findings so their chips are published in full beside it (ADR Decision 493).
-			lines = briefScreenLines(findings, numbers, clauses, lines, lineFindings);
-			lines.add(0, screenLead(findings, pairs, saidOnce));
-			lines.addAll(1, groupLines);
+			// A screen opens with its reasons to change a medication, stated whole; the rest of what it found is one line
+			// saying it is in the safety warnings beside the answer, citing each finding so its chip is published in full;
+			// and it closes with what it does not cover (ADR Decisions 171, 493, 506).
+			lines = briefScreenLines(findings, numbers, clauses, lines, lineFindings, groupLines, pairs);
 			lines.add(screenScope);
 		}
 		return String.join("\n", lines);
 	}
 
 	/**
-	 * A screen's finding lines as its answer states them (ADR Decision 493): a line stating a reason to change one of her
-	 * medications — a rated reason to withhold, an unrated rule, a contraindication — whole, as before; her orders
-	 * sharing a substance, where there are several, as ONE line naming each substance ({@link #sharedSubstancesLine});
-	 * and every caution as ONE count by rating ({@link #cautionsLine}). The answer is read by a clinician who asked a
-	 * short question, and the chips beside it state every finding in full: measured on the public demo, a screen's
-	 * answer ran to 16 lines and 305 words, its one Major the fourth of them. Each condensed line cites every finding it
-	 * stands for, so the chips pass, which reads the answer's markers, publishes them all, and none is marked stated.
+	 * A screen's finding lines as its answer states them (ADR Decisions 493, 506): a line stating a reason to change one of
+	 * her medications — a rated reason to withhold, an unrated rule, a contraindication — whole, first; then {@code
+	 * groupLines}; then her orders sharing a substance, which the module ranks as a reason to change one of them too,
+	 * where there are several as ONE line naming each substance ({@link #sharedSubstancesLine}); then every caution as ONE
+	 * line saying they are in the safety warnings beside the answer ({@link #inTheWarningsLine}); then, where {@code
+	 * chartsearchai.drugSafety.maxPairChips} withheld pairs, how many ({@link #notShownLine}). The answer is read by a
+	 * clinician who asked a short question, and the chips beside it state every finding in full: an answer that names
+	 * its reasons to change a medication and counts the rest by rating answers any wording of a screen — "any major
+	 * interactions?", "anything I shouldn't prescribe?" — without reading which one was asked. Where nothing comes before
+	 * them and there is one caution line, it is stated whole instead, being no longer than its count. The count cites
+	 * every finding it stands for, so the chips pass, which reads the answer's markers, publishes them all, and none is
+	 * marked stated.
 	 */
 	private static List<String> briefScreenLines(List<SafetyWarning> findings, List<Integer> numbers, String[] clauses,
-			List<String> lines, List<List<Integer>> lineFindings) {
+			List<String> lines, List<List<Integer>> lineFindings, List<String> groupLines, PairChipExtent pairs) {
 		List<String> whole = new ArrayList<String>();
 		List<Integer> sharing = new ArrayList<Integer>();
 		List<String> sharingLines = new ArrayList<String>();
 		List<Integer> cautions = new ArrayList<Integer>();
+		List<String> cautionLines = new ArrayList<String>();
 		for (int n = 0; n < lines.size(); n++) {
 			List<Integer> stated = lineFindings.get(n);
 			boolean caution = true;
@@ -5556,18 +5561,26 @@ public class DrugReferenceInjector {
 				sharingLines.add(lines.get(n));
 			} else if (caution) {
 				cautions.addAll(stated);
+				cautionLines.add(lines.get(n));
 			} else {
 				whole.add(lines.get(n));
 			}
 		}
 		List<String> brief = new ArrayList<String>(whole);
+		brief.addAll(groupLines);
 		if (sharing.size() == 1) {
 			brief.addAll(sharingLines);
 		} else if (!sharing.isEmpty()) {
 			brief.add(sharedSubstancesLine(findings, numbers, sharing));
 		}
-		if (!cautions.isEmpty()) {
-			brief.add(cautionsLine(findings, numbers, cautions, !brief.isEmpty()));
+		if (brief.isEmpty() && cautionLines.size() == 1) {
+			brief.addAll(cautionLines);
+		} else if (!cautions.isEmpty()) {
+			brief.add(inTheWarningsLine(findings, numbers, cautions, !brief.isEmpty()));
+		}
+		int withheld = pairs == null ? 0 : Math.max(0, pairs.getFound() - pairs.getReported());
+		if (withheld > 0) {
+			brief.add(notShownLine(withheld));
 		}
 		return brief;
 	}
@@ -5590,12 +5603,13 @@ public class DrugReferenceInjector {
 			+ "active orders: ";
 
 	/**
-	 * A screen's cautions as one count by rating (ADR Decision 493): <em>"9 more interactions, each a caution (8 Moderate,
-	 * 1 Minor), are listed in full in the safety warnings beside this answer. [121] [122] …"</em> — "more" only after a
-	 * line stated whole. Counted as the screen's lead counts, a pair per order a line names; rated by each finding's own
-	 * severity, an unrated caution as having none rated.
+	 * A screen's cautions as one line saying where they are (ADR Decision 506): <em>"Also in the safety warnings beside this
+	 * answer: 9 interactions, each a caution (8 Moderate, 1 Minor). [121] …"</em> — "Also" only after another line.
+	 * Counted as the screen counts pairs, a pair per order a line names; rated by each finding's own severity, an
+	 * unrated caution as having none rated.
 	 */
-	static String cautionsLine(List<SafetyWarning> findings, List<Integer> numbers, List<Integer> cautions, boolean more) {
+	static String inTheWarningsLine(List<SafetyWarning> findings, List<Integer> numbers, List<Integer> cautions,
+			boolean also) {
 		Map<String, Integer> byRating = new LinkedHashMap<String, Integer>();
 		for (String rating : new String[] { "Major", "Moderate", "Minor" }) {
 			byRating.put(rating, 0);
@@ -5625,17 +5639,32 @@ public class DrugReferenceInjector {
 			}
 		}
 		String noun = allInteractions ? (count == 1 ? "interaction" : "interactions") : (count == 1 ? "finding" : "findings");
-		return count + (more ? " more " : " ") + noun + (count == 1 ? ", a caution (" : ", each a caution (")
-				+ String.join(", ", ratings) + "), " + (count == 1 ? "is" : "are") + CAUTIONS_LINE_TAIL + markers;
+		return (also ? ALSO_IN_THE_WARNINGS : IN_THE_WARNINGS) + count + " " + noun
+				+ (count == 1 ? ", a caution (" : ", each a caution (") + String.join(", ", ratings) + ")." + markers;
 	}
 
-	/** {@link #cautionsLine}'s words after its count, up to its markers. */
-	static final String CAUTIONS_LINE_TAIL = " listed in full in the safety warnings beside this answer.";
+	/** How {@link #inTheWarningsLine} opens where no line comes before it. */
+	static final String IN_THE_WARNINGS = "In the safety warnings beside this answer: ";
+
+	/** How {@link #inTheWarningsLine} opens after another line. */
+	static final String ALSO_IN_THE_WARNINGS = "Also in the safety warnings beside this answer: ";
+
+	/**
+	 * How many interactions a screen found and does not show (ADR Decision 506): <em>"3 more interactions, rated no
+	 * higher, are not shown."</em> — where {@code chartsearchai.drugSafety.maxPairChips} withheld pairs, the extent
+	 * having found more than it reported. Saying nothing told a clinician the patient had fewer interactions than the
+	 * module had found. The screening arm ranks before it caps, so what it withholds is rated no higher than what it
+	 * lists.
+	 */
+	static String notShownLine(int withheld) {
+		return withheld + (withheld == 1 ? " more interaction, rated no higher, is"
+				: " more interactions, rated no higher, are") + " not shown.";
+	}
 
 	/**
 	 * {@code composed}, a module answer, without the lines that count or list findings rather than state them — {@link
-	 * #cautionsLine} and {@link #sharedSubstancesLine} (ADR Decision 493). Those lines cite every finding they stand for,
-	 * so the chips pass publishes each, but name none of the orders a finding covers, by design: the chips beside the
+	 * #inTheWarningsLine} and {@link #sharedSubstancesLine} (ADR Decisions 493, 506). Those lines cite every finding they
+	 * stand for, so the chips pass publishes each, but name none of the orders a finding covers, by design: the chips beside the
 	 * answer do. So the check naming every order a CITED finding covers that the answer leaves unnamed (ADR Decision
 	 * 100) reads the answer without them, and does not name, under the last line, the orders of findings the answer
 	 * only counted. The composer that writes them is the one place that knows their words.
@@ -5646,7 +5675,8 @@ public class DrugReferenceInjector {
 		}
 		List<String> kept = new ArrayList<String>();
 		for (String line : composed.split("\n", -1)) {
-			if (!line.startsWith(SHARED_SUBSTANCES_LEAD) && !line.contains(CAUTIONS_LINE_TAIL + " [")) {
+			if (!line.startsWith(SHARED_SUBSTANCES_LEAD) && !line.startsWith(IN_THE_WARNINGS)
+					&& !line.startsWith(ALSO_IN_THE_WARNINGS)) {
 				kept.add(line);
 			}
 		}
@@ -5659,62 +5689,6 @@ public class DrugReferenceInjector {
 	 *  190). */
 	static final String SCREEN_SCOPE = "Interactions the data does not rate, and anything beyond drug interactions and "
 			+ "contraindications, are not covered.";
-
-	/**
-	 * How a screen's composed answer opens (ADR Decision 171): <em>"3 interactions among this patient's active
-	 * medications, and 2 contraindications:"</em> — counts of what follows, by the finding's type, and never which of
-	 * two medications to change, a choice no finding makes (issue #469). Her orders sharing a substance (issue #477)
-	 * is counted on its own, being no interaction between two drugs.
-	 *
-	 * <p><b>The interactions are counted as the screen FOUND them, not as the lines that follow</b>: where
-	 * {@code chartsearchai.drugSafety.maxPairChips} withheld pairs ({@code pairs} found more than it reported), the
-	 * count is every pair found and says how many are not shown — <em>"13 interactions among this patient's active
-	 * medications (the 10 most severe are listed; 3 more are not shown)"</em>. Counting the lines alone told a
-	 * clinician the patient had 10 interactions when the module had found 13. The screening arm ranks before it caps,
-	 * so what it withholds is rated no higher than what it lists.
-	 */
-	private static String screenLead(List<SafetyWarning> findings, PairChipExtent pairs, boolean saidOnce) {
-		int interactions = 0;
-		int contraindications = 0;
-		int sharing = 0;
-		for (SafetyWarning finding : findings) {
-			if (finding.statesOrdersSharingASubstance()) {
-				sharing++;
-			} else if (SafetyWarning.TYPE_INTERACTION.equals(finding.getType())) {
-				// A pair per order it names: a mechanism collapsed onto one line names every order it relates the drug
-				// to (ADR Decision 190), and the lead counts pairs, as the extent beside it does.
-				interactions += Math.max(1, finding.namedPartners().size());
-			} else {
-				contraindications++;
-			}
-		}
-		List<String> counts = new ArrayList<String>();
-		int withheld = pairs == null ? 0 : Math.max(0, pairs.getFound() - pairs.getReported());
-		if (interactions > 0) {
-			int found = interactions + withheld;
-			counts.add(found + (found == 1 ? " interaction" : " interactions")
-					+ " among this patient's active medications"
-					// Not "the 10 most severe are listed": the answer states its cautions as a count (ADR Decision 493).
-					+ (withheld == 0 ? ""
-							: " (" + withheld + " more, rated no higher, " + (withheld == 1 ? "is" : "are")
-									+ " not shown)"));
-		}
-		// Beside another count, "unrated" qualifies its own noun: a trailing ", none with a severity rated" read as about the
-		// rated interactions before it too (ADR Decision 279).
-		boolean several = (interactions > 0 ? 1 : 0) + (contraindications > 0 ? 1 : 0) + (sharing > 0 ? 1 : 0) > 1;
-		if (contraindications > 0) {
-			counts.add(contraindications + (saidOnce && several ? " unrated" : "")
-					+ (contraindications == 1 ? " contraindication" : " contraindications")
-					+ (!saidOnce ? ""
-							: contraindications == 1 ? " about " + CURRENT_MEDICATION + (several ? "" : ", with no severity rated")
-									: " about medications this patient is already taking"
-											+ (several ? "" : ", none with a severity rated")));
-		}
-		if (sharing > 0) {
-			counts.add(sharing + (sharing == 1 ? " substance" : " substances") + " carried by more than one of this patient's orders");
-		}
-		return String.join(", and ", counts) + ":";
-	}
 
 	/** Her orders were read and she has exactly ONE active order, of at most one substance the data screened — an order
 	 *  carrying several substances (a combination) screened those against each other, and is the screen note's, never

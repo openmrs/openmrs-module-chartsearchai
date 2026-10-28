@@ -46,7 +46,7 @@ public class MedicationGroupsScreenContextTest extends BaseModuleContextSensitiv
 			String answer = ask(question).getModuleAnswer();
 
 			assertNotNull(answer, "the module answers " + question);
-			assertTrue(answer.matches("(?s).*\\nNevirapine interacts with active order [^\\n]*[Rr]ifamp[^\\n]* — Major\\..*"),
+			assertTrue(answer.matches("(?s)(.*\\n)?Nevirapine interacts with active order [^\\n]*[Rr]ifamp[^\\n]* — Major\\..*"),
 				question + " states the pair between the two groups: " + answer);
 		}
 	}

@@ -1926,6 +1926,18 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/** ADR Decision 516: a dose written with no unit, "400 tds", is set aside as "400mg tds" is. */
+	@Test
+	public void aDoseWrittenWithNoUnitIsSetAsideAsOneWithAUnitIs() {
+		String[][] pairs = { { "Ibuprofen 400 tds with her ARVs?", "Ibuprofen 400mg tds with her ARVs?" },
+			{ "Warfarin 5 od - ok?", "Warfarin 5mg od - ok?" }, { "Warfarin 2.5 daily ok?", "Warfarin 2.5mg daily ok?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+	}
+
 	/** ADR Decision 515: a drug and what it is for, and nothing else, proposes it for that. */
 	@Test
 	public void aDrugAndWhatItIsForProposesIt() {

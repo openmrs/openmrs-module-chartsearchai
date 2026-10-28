@@ -24432,3 +24432,24 @@ change to one would leave the other reading a different question (the lesson of 
 - What it is for, asked of it — *"What is warfarin for?"*, *"Is warfarin for her clot?"* — stays the model's.
 
 Pinned by `ClinicianWordingsTest.aDrugAndWhatItIsForProposesIt`.
+
+## Decision 516: A dose written with no unit is set aside as one with a unit is
+
+**Status: Accepted** (October 2026) — found asking 22 further wordings of 15 patients on the 3.7.1 standalone on
+2026-10-28.
+
+### Context
+
+*"Ibuprofen 400 tds with her ARVs?"* went to the model, which answered *"Ibuprofen can be given"* on 2 of 15 patients.
+*"Ibuprofen 400mg tds with her ARVs?"* is the module's: the dose is set aside, and the answer says it was not checked
+(Decisions 269, 422). The dose after the drug was read only with its unit, or as how often alone. A prescriber's note
+drops the unit as often as not.
+
+### The decision
+
+- An amount with no unit before how often — *"400 tds"*, *"5 od"*, *"2.5 daily"* — is a dose stated after the drug,
+  set aside as *"400mg tds"* is.
+- A number with neither a unit nor how often stays as written. *"Warfarin 5?"* states nothing the shapes can tell from
+  a count.
+
+Pinned by `ClinicianWordingsTest.aDoseWrittenWithNoUnitIsSetAsideAsOneWithAUnitIs`.

@@ -2425,7 +2425,9 @@ public final class QueryScopeRouter {
 
 	private static final Pattern DOSE_AFTER_THE_DRUG = Pattern.compile("(" + D + ") (?:" + AMOUNT + "(?: " + FREQUENCY + ")?|"
 			// how often alone, "fluconazole once a week" (ADR Decision 428)
-			+ FREQUENCY + ")(?= |$)");
+			+ FREQUENCY
+			// and an amount with no unit before how often, "ibuprofen 400 tds", "warfarin 2.5 daily" (ADR Decision 516)
+			+ "|(?:\\d+ )*\\d+ " + FREQUENCY + ")(?= |$)");
 
 	/** "her nevirapine dose", "the dose of her nevirapine" — HER dose named without an amount (ADR Decision 485). Only of a
 	 *  drug named as hers: "Nevirapine dose with warfarin?" asks of a dose beside the other drug, which its own shape reads. */

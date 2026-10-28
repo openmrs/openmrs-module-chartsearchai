@@ -1209,6 +1209,12 @@ in the runtime property `chartsearchai.hub.apikey`, never in a global property.
 `HubProfileService` relays profile metadata from `/v1/models` on the same configured
 Hub, and only while `hub` is listed in `chartsearchai.providers.enabled`.
 
+The Hub reads the chart as its own QueryStore account, so it cannot leave out the
+record types QueryStore withholds from the asking user (a role with `AI Query Patient
+Data` but not, say, `Get Allergies`). Until the Hub can be told what to omit, a turn
+from such a user ends in `provider_not_permitted` without calling the Hub, as does
+one where QueryStore cannot say what it withholds.
+
 This adapter is an integration building block. Provider selection, conversation
 storage and REST endpoint wiring are separate contributions; configuring it alone
 does not route the existing search endpoint through the Hub.

@@ -224,6 +224,9 @@ public class HttpHubStreamTransportTest {
 			@Override protected String gp(String key, String fallback) {
 				return "http://127.0.0.1:" + server.getAddress().getPort() + "/stream";
 			}
+			@Override protected boolean queryStoreWithholdsFromCaller() {
+				return false;
+			}
 		};
 	}
 

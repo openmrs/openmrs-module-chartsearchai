@@ -291,6 +291,11 @@ public class HubClinicalAnswerProviderTest {
 	}
 
 	private static HubClinicalAnswerProvider provider(ScriptedHubTransport transport, String endpoint) {
+		return provider(transport, endpoint, false);
+	}
+
+	private static HubClinicalAnswerProvider provider(ScriptedHubTransport transport, String endpoint,
+			boolean withholdsFromCaller) {
 		return new HubClinicalAnswerProvider(transport) {
 
 			@Override
@@ -299,6 +304,11 @@ public class HubClinicalAnswerProviderTest {
 					return endpoint;
 				}
 				return defaultValue;
+			}
+
+			@Override
+			protected boolean queryStoreWithholdsFromCaller() {
+				return withholdsFromCaller;
 			}
 		};
 	}
@@ -424,6 +434,20 @@ public class HubClinicalAnswerProviderTest {
 		assertEquals(0, transport.calls.get());
 		assertEquals(TurnEventType.TURN_ERROR, result.getTerminalState());
 		assertEquals("profile_required", result.getProblemCode());
+	}
+
+	@Test
+	public void aCallerQueryStoreWithholdsRecordsFromIsRefusedWithoutCallingTheHub() throws Exception {
+		ScriptedHubTransport transport = new ScriptedHubTransport();
+		HubClinicalAnswerProvider provider = provider(transport, "http://hub.example/v1/chat/completions", true);
+		CollectingSink sink = new CollectingSink();
+		TurnResult result = provider
+				.execute(request("product-profile-a"), sink, CancellationSignal.NONE)
+				.toCompletableFuture().get();
+
+		assertEquals(0, transport.calls.get());
+		assertEquals(TurnEventType.TURN_ERROR, result.getTerminalState());
+		assertEquals("provider_not_permitted", result.getProblemCode());
 	}
 
 	@Test

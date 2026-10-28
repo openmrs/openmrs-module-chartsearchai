@@ -22,8 +22,10 @@ import java.util.concurrent.atomic.AtomicReference;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import org.openmrs.api.APIException;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+import org.openmrs.module.querystore.api.QueryStoreService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -55,6 +57,8 @@ public class HubClinicalAnswerProvider implements ClinicalAnswerProvider {
 
 	public static final String PROBLEM_PROVIDER_FAILURE = "provider_failure";
 
+	public static final String PROBLEM_PROVIDER_NOT_PERMITTED = "provider_not_permitted";
+
 	private static final Logger log = LoggerFactory.getLogger(HubClinicalAnswerProvider.class);
 
 	private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -69,6 +73,19 @@ public class HubClinicalAnswerProvider implements ClinicalAnswerProvider {
 	/** Global-property read seam, overridable in tests. */
 	protected String gp(String property, String defaultValue) {
 		return Context.getAdministrationService().getGlobalProperty(property, defaultValue);
+	}
+
+	/**
+	 * Whether QueryStore withholds any record type from the asking user; a seam, overridable in tests.
+	 * When QueryStore cannot say, it is taken to withhold one.
+	 */
+	protected boolean queryStoreWithholdsFromCaller() {
+		try {
+			return !Context.getService(QueryStoreService.class).getTypesWithheldFromCaller().isEmpty();
+		}
+		catch (APIException | LinkageError | UnsupportedOperationException e) {
+			return true;
+		}
 	}
 
 	@Override
@@ -116,6 +133,11 @@ public class HubClinicalAnswerProvider implements ClinicalAnswerProvider {
 		String profileId = request.getProfileId();
 		if (profileId == null || profileId.trim().isEmpty()) {
 			return failed(events, sequence, request.getMode(), PROBLEM_PROFILE_REQUIRED);
+		}
+		// The Hub reads the chart as its own QueryStore account, so it cannot leave out what this
+		// caller may not read; until it can be told what to omit, such a caller cannot use it.
+		if (queryStoreWithholdsFromCaller()) {
+			return failed(events, sequence, request.getMode(), PROBLEM_PROVIDER_NOT_PERMITTED);
 		}
 
 		HubCallRequest call = new HubCallRequest(endpoint, profileId.trim(),

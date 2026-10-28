@@ -95,6 +95,11 @@ public class TemporalGateRelayConformanceTest {
 				}
 				return defaultValue;
 			}
+
+			@Override
+			protected boolean queryStoreWithholdsFromCaller() {
+				return false;
+			}
 		};
 	}
 

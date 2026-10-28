@@ -24280,3 +24280,35 @@ her medicines?"*, but not her diet or a routine she continues beside them.
 - Her diet beside one drug of hers named is Decision 500's, a question of how she takes that drug.
 
 Pinned by `LlmInferenceServiceModelReadQuestionContextTest.continuingHerDietOrARoutineBesideHerMedicationsIsNoScreen`.
+
+## Decision 511: An activity, a meal or her tolerance asked beside her medications is no screen of them
+
+**Status: Accepted** (October 2026) — found asking 22 questions about her medications that ask nothing of their safety
+together, of 15 patients on the 3.7.1 standalone on 2026-10-28.
+
+### Context
+
+Each of these was answered with the screen of her orders, every chip of it, on all 15 patients:
+
+- *"Can she exercise while on her meds?"*
+- *"Can she drive on her meds?"*
+- *"Can she take her meds with food?"*
+- *"Can she fast with her meds?"*
+- *"Is she tolerating her meds?"*
+
+No wording rule read them, so the model was asked whether they ask about her medications' safety (Decision 489), and it
+read them as YES. Decisions 492 and 510 exempted food, drink and her diet asked beside her medications, but not an
+activity, the meal she takes them with, or how she tolerates them.
+
+### The decision
+
+- These shapes are no question of her medications' safety together: no screen runs, the model is not asked to read them,
+  and no chip is attached.
+  - An activity — exercise, driving, work, fasting, travel, sleep — asked of her while on her medications as a whole.
+  - Her medications taken with or without a meal.
+  - Whether she is tolerating or coping with them.
+- These questions are left as found:
+  - Pregnancy and breastfeeding on her medications keep the safety material Decision 399 gives them.
+  - Side effects of her medications, and a symptom attributed to them, ask of their effects.
+
+Pinned by `LlmInferenceServiceModelReadQuestionContextTest.anActivityOrAMealBesideHerMedicationsIsNoScreen`.

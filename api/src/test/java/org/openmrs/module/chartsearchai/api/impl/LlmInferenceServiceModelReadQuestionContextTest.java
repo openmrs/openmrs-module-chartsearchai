@@ -232,6 +232,26 @@ public class LlmInferenceServiceModelReadQuestionContextTest extends BaseModuleC
 		}
 	}
 
+	/**
+	 * An activity, a meal or her tolerance asked beside her medications as a whole asks nothing of their safety together
+	 * (ADR Decision 511): on the 3.7.1 standalone "Can she exercise while on her meds?", "Can she drive on her meds?", "Can
+	 * she take her meds with food?", "Can she fast with her meds?" and "Is she tolerating her meds?" were each answered with
+	 * the screen of her orders, every chip of it, on all 15 patients.
+	 */
+	@Test
+	public void anActivityOrAMealBesideHerMedicationsIsNoScreen() {
+		for (String question : new String[] { "Can she exercise while on her meds?", "Can she drive on her meds?",
+				"Can she take her meds with food?", "Can she fast with her meds?", "Is she tolerating her meds?",
+				"Can she work while taking her medications?", "Should she take her pills after meals?" }) {
+			RecordingProvider provider = new RecordingProvider("YES");
+			ChartAnswer answer = serviceWith(provider).search(patient, question);
+
+			assertEquals(0, provider.engine.readings, question + " is not read by the model");
+			assertFalse(answer.isAnsweredByTheModule(), question + " is not answered with the screen: " + answer.getAnswer());
+			assertTrue(answer.getSafetyWarnings().isEmpty(), question + " carries no chip: " + answer.getSafetyWarnings());
+		}
+	}
+
 	@Test
 	public void aQuestionNamingADrugIsNotReadByTheModel() {
 		RecordingProvider provider = new RecordingProvider("YES");

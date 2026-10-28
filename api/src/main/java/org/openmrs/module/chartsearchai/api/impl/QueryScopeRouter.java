@@ -454,6 +454,17 @@ public final class QueryScopeRouter {
 					+ "|eating|exercise|exercises|exercising|routine|fasting|workouts?) (?:with|while on|while taking|alongside) "
 					+ HER_MEDICATIONS_AS_A_WHOLE);
 
+	/** An activity, a meal or her tolerance asked beside her medications as a whole — "Can she exercise while on her meds?",
+	 *  "Can she take her meds with food?", "Is she tolerating her meds?" — no question of their safety together (ADR
+	 *  Decision 511). */
+	private static final List<Pattern> AN_ACTIVITY_BESIDE_HER_MEDICATIONS = shapes(
+			"(?:can|could|may|should) (?:she|he|they|the patient|this patient) (?:exercise|drive|work|fast|travel|swim|run|walk"
+					+ "|sleep|study|work out|play sports|go to work|go to school) (?:while on|on|with|while taking|alongside) "
+					+ HER_MEDICATIONS_AS_A_WHOLE,
+			"(?:can|could|may|should) (?:she|he|they|the patient|this patient) take " + HER_MEDICATIONS_AS_A_WHOLE + " (?:with|without"
+					+ "|after|before) (?:food|meals?|milk|water|breakfast|lunch|dinner|supper|an empty stomach)",
+			"(?:is|are) (?:she|he|they|the patient|this patient) (?:tolerating|coping with|managing) " + HER_MEDICATIONS_AS_A_WHOLE);
+
 	/** The words the thing of {@link #SOMETHING_ELSE_WITH_HER_MEDICATIONS} may not be: the screen's own (ADR Decision 473). */
 	private static final Set<String> NOT_SOMETHING_ELSE = new HashSet<String>(Arrays.asList("any", "are", "is", "there",
 		"drug", "drugs", "do", "does", "did", "check", "screen", "review", "what", "which", "her", "his", "their", "the", "she",
@@ -476,7 +487,7 @@ public final class QueryScopeRouter {
 			return false;
 		}
 		String joined = String.join(" ", words(question));
-		if (fitsAShape(words(question), HER_DIET)) {
+		if (fitsAShape(words(question), HER_DIET) || fitsAShape(words(question), AN_ACTIVITY_BESIDE_HER_MEDICATIONS)) {
 			return true;
 		}
 		for (Pattern shape : SOMETHING_ELSE_WITH_HER_MEDICATIONS) {

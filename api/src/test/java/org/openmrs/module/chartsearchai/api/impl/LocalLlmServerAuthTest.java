@@ -300,6 +300,26 @@ public class LocalLlmServerAuthTest {
 	}
 
 	/**
+	 * The refusal branch through the probe's seam: a connect that times out establishes no refusal, so
+	 * the start is refused, whatever the kernel does with a full accept queue.
+	 */
+	@Test
+	public void aProbeThatTimesOutFailsTheStart() {
+		APIException thrown = assertThrows(APIException.class,
+				() -> LocalLlmEngine.requireLoopbackPortFree(8080, (address, timeoutMs) -> {
+					throw new java.net.SocketTimeoutException("connect timed out");
+				}),
+				"a probe that neither connects nor is refused has established nothing, so the start "
+				+ "must be refused — reading it as a free port is how this check fails OPEN");
+		assertTrue(thrown.getMessage().contains("Could not establish"),
+				"and say that is what happened, rather than claiming a listener was found: "
+				+ thrown.getMessage());
+	}
+
+	/** How long a connect gets to show the accept queue still admits one before the queue counts as full. */
+	private static final int SATURATION_CONFIRM_MS = 3000;
+
+	/**
 	 * The refusal branch, which nothing pinned: reverting it to the fail-open form that read every
 	 * {@code IOException} as "nothing listening" left the FULL suite green, and that form is what a
 	 * review round measured shipping twice. A listener whose accept queue is full answers neither
@@ -324,26 +344,6 @@ public class LocalLlmServerAuthTest {
 	 * instead of dropping, the queue cannot be shown full and the test is skipped, not failed: the
 	 * branch itself is pinned without the kernel by {@link #aProbeThatTimesOutFailsTheStart}.
 	 */
-	/**
-	 * The refusal branch through the probe's seam: a connect that times out establishes no refusal, so
-	 * the start is refused, whatever the kernel does with a full accept queue.
-	 */
-	@Test
-	public void aProbeThatTimesOutFailsTheStart() {
-		APIException thrown = assertThrows(APIException.class,
-				() -> LocalLlmEngine.requireLoopbackPortFree(8080, (address, timeoutMs) -> {
-					throw new java.net.SocketTimeoutException("connect timed out");
-				}),
-				"a probe that neither connects nor is refused has established nothing, so the start "
-				+ "must be refused — reading it as a free port is how this check fails OPEN");
-		assertTrue(thrown.getMessage().contains("Could not establish"),
-				"and say that is what happened, rather than claiming a listener was found: "
-				+ thrown.getMessage());
-	}
-
-	/** How long a connect gets to show the accept queue still admits one before the queue counts as full. */
-	private static final int SATURATION_CONFIRM_MS = 3000;
-
 	@Test
 	public void aPortHeldByAListenerThatAcceptsNothingFailsTheStart() throws IOException {
 		InetAddress loopback = InetAddress.getByName(LlamaServerEndpoint.LOOPBACK_HOST);

@@ -375,7 +375,10 @@ public final class QueryScopeRouter {
 		// "+" joins two names as "plus" does (ADR Decision 424): "rifampicin + efavirenz".
 		// "w/" is "with" and "w/o" "without", as a clinician abbreviates them (ADR Decision 431): "fluconazole w/ nevirapine ok?"
 		// "x 14 days" is "for 14 days", as a prescription writes a duration (ADR Decision 470).
+		// and its shorthand, "x14d", "x 2 wk" (ADR Decision 523).
 		String[] parts = text.toLowerCase(Locale.ROOT).replace("+", " plus ")
+				.replaceAll("(?<![\\p{L}\\p{N}])x\\s*(\\d+)\\s*(?:d|dys?)(?![\\p{L}])", " for $1 days ")
+				.replaceAll("(?<![\\p{L}\\p{N}])x\\s*(\\d+)\\s*(?:wk|wks)(?![\\p{L}])", " for $1 weeks ")
 				.replaceAll("(?<![\\p{L}\\p{N}])x\\s*(?=\\d+\\s*(?:days?|weeks?|months?)(?![\\p{L}]))", " for ")
 				.replaceAll("(?<![\\p{L}\\p{N}])w/o(?![\\p{L}\\p{N}])", " without ")
 				.replaceAll("(?<![\\p{L}\\p{N}])w/", " with ").split(Pattern.quote(DRUG_NAME), -1);
@@ -3334,7 +3337,9 @@ public final class QueryScopeRouter {
 	 *  ciprofloxacin?" (ADR Decision 419). */
 	private static final Pattern LEADING_STATEMENT = Pattern.compile("(?i)^\\s*((?:(?:she|he|they|the patient|this patient|patient"
 			// and a note's "Pt allergic to sulfa." (ADR Decision 522)
-			+ "|pt)\\s+(?:is|are|was|has|have|had|takes|gets|needs|need|allergic)|(?:her|his|their)\\s+[\\p{L} ]{1,30}?\\s+(?:is|are)|i\\s+(?:need|want|have)"
+			+ "|pt)\\s+(?:is|are|was|has|have|had|takes|gets|needs|need|allergic)"
+			// and one opening with her age and sex, "45F with a clot." (ADR Decision 523)
+			+ "|\\d{1,3}\\s?(?:yo|y/o|yrs?|y)?\\s?(?:f|m|female|male)|(?:her|his|their)\\s+[\\p{L} ]{1,30}?\\s+(?:is|are)|i\\s+(?:need|want|have)"
 			+ "\\s+to\\s+treat\\s+(?:her|his|their))\\b[^.?!,;]{1,60}?)(?:\\s*[.,;:]|\\s+[-\u2013\u2014])\\s+((?:can|could|may|should|is|are|would|will|"
 			+ "what|which|does|do|any|before"
 			// and a plan after it, "Pt allergic to sulfa. Plan cotrimoxazole. Safe?" (ADR Decision 522)

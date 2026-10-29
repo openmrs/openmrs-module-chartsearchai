@@ -1926,6 +1926,19 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/** ADR Decision 523: a duration written "x14d" and a note opening with her age and sex are read as their spelled forms. */
+	@Test
+	public void aShorthandDurationAndAnAgeAndSexOpeningAreReadAsSpelled() {
+		String spelled = ask("Plan warfarin 5mg od for 14 days. Any interactions?");
+		assertNotNull(spelled, "precondition: the module answers it");
+		assertEquals(spelled, ask("Plan warfarin 5mg od x14d. Any interactions?"));
+		assertEquals(spelled, ask("Plan warfarin 5mg od x 14 d. Any interactions?"));
+		String plan = ask("Plan warfarin. Any interactions?");
+		assertNotNull(plan, "precondition: the module answers it");
+		assertEquals(plan + "\n" + DrugReferenceInjector.STATEMENT_NOT_WEIGHED_OPENING + "45F with a clot).",
+			ask("45F with a clot. Plan warfarin. Any interactions?"));
+	}
+
 	/** ADR Decision 522: a note stating an allergy, then a plan, is the plan with the statement said not weighed. */
 	@Test
 	public void aNoteStatingAnAllergyThenAPlanIsThePlanWithTheStatementSaidNotWeighed() {

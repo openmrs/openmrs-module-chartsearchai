@@ -24650,3 +24650,26 @@ the check weighs only her chart, not what the question states about her. The not
 - A supposed allergy is still not weighed against the drug (Decision 410). The answer says so.
 
 Pinned by `ClinicianWordingsTest.aNoteStatingAnAllergyThenAPlanIsThePlanWithTheStatementSaidNotWeighed`.
+
+## Decision 523: A duration written "x14d" and a note opening with her age and sex are read as their spelled forms
+
+**Status: Accepted** (October 2026) — found asking 15 note-style wordings of 15 patients on the 3.7.1 standalone on
+2026-10-29.
+
+### Context
+
+*"45F on ART presenting with oral thrush. Plan fluconazole 200mg od x14d. Any interactions?"* went to the model. On 5
+of 15 patients it answered *"Fluconazole can be given"*. Two parts of that note were read by no rule:
+
+- *"x14d"*: Decision 470 reads *"x 14 days"* as *"for 14 days"*, but not the shorthand.
+- An opening of her age and sex, *"45F …"*: Decision 419 reads a statement about her opening the question only when it
+  starts with *"She / The patient is …"*.
+
+### The decision
+
+- *"x14d"*, *"x 14 d"*, *"x 2 wk"* are read as *"for 14 days"* and *"for 2 weeks"*. The duration is set aside, as
+  Decision 470 sets aside its spelled form.
+- A statement opening with her age and sex — *"45F …"*, *"32 yo M …"* — is a statement about her, as *"She is …"* is.
+  It is set aside, and the answer says it was not weighed.
+
+Pinned by `ClinicianWordingsTest.aShorthandDurationAndAnAgeAndSexOpeningAreReadAsSpelled`.

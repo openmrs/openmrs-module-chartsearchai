@@ -103,7 +103,19 @@ final class UnrecognisedDrugName {
 		String word = wordInADrugsPlace(question);
 		if (word == null) {
 			// Or two words in a two-drug question's drug places, neither recognised (ADR Decision 382).
-			return twoIn(question, entries);
+			UnrecognisedDrugName two = twoIn(question, entries);
+			if (two != null) {
+				return two;
+			}
+			// Or the word the residual reading alone puts in a drug's place — "fluconazol ok?" — where the data finds a near
+			// name for it; never one it finds none for, which "Diet ok?" would carry an unchecked statement for (ADR Decision
+			// 526).
+			String residual = oneThingInADrugsPlace(question);
+			if (residual == null || toEatOrDrink(question, residual)) {
+				return null;
+			}
+			List<String> near = suggestionsFor(residual, entries);
+			return near.isEmpty() ? null : new UnrecognisedDrugName(asWritten(residual, question), near);
 		}
 		// "Is her potassium ok?" asks of her result, which her chart answers (ADR Decision 482).
 		if (aResultNamedAsHers(QueryScopeRouter.words(question), word)) {
@@ -377,18 +389,23 @@ final class UnrecognisedDrugName {
 	 * whole.
 	 */
 	static boolean asksOfOneThingInADrugsPlace(String question) {
+		return oneThingInADrugsPlace(question) != null;
+	}
+
+	/** The word {@link #asksOfOneThingInADrugsPlace} reads in a drug's place, or {@code null} (ADR Decisions 514, 526). */
+	private static String oneThingInADrugsPlace(String question) {
 		if (question == null) {
-			return false;
+			return null;
 		}
 		List<String> words = QueryScopeRouter.words(question);
 		if (words.size() < 2 || !Collections.disjoint(words, NEGATIONS)) {
-			return false;
+			return null;
 		}
 		// Nor one naming her medications as a whole, which asks of them: "Are any of her meds a bad combination?".
 		for (int i = 0; i + 1 < words.size(); i++) {
 			if (("her".equals(words.get(i)) || POSSESSIVES.contains(words.get(i)))
 					&& QueryScopeRouter.namesAMedicationGroup(words.get(i + 1))) {
-				return false;
+				return null;
 			}
 		}
 		for (int i = 0; i < words.size(); i++) {
@@ -399,10 +416,10 @@ final class UnrecognisedDrugName {
 			List<String> marked = new ArrayList<String>(words);
 			marked.set(i, QueryScopeRouter.DRUG_NAME);
 			if (QueryScopeRouter.asksWhetherToGiveADrug(marked) || QueryScopeRouter.asksWhetherADrugInteractsWithHerMedications(marked)) {
-				return true;
+				return words.get(i);
 			}
 		}
-		return false;
+		return null;
 	}
 
 	private static String wordInADrugsPlace(String question) {

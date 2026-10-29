@@ -1926,6 +1926,18 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/** ADR Decision 526: a misspelt drug asked "ok?" with nothing else is offered the names near it, as in a spelled question. */
+	@Test
+	public void aMisspeltDrugAskedOkAloneIsOfferedTheNamesNearIt() {
+		for (String question : new String[] { "fluconazol ok?", "flucanazole ok?", "Is fluconazol fine?" }) {
+			String answer = ask(question);
+			assertTrue(answer != null && answer.contains("Did you mean Fluconazole?"), question + " was: " + answer);
+		}
+		// A word no medicine is near stays the chart's: "Diet ok?", "Labs ok?".
+		assertNull(ask("Diet ok?"));
+		assertNull(ask("Labs ok?"));
+	}
+
 	/** ADR Decision 524: two drugs joined by "or" and nothing else ask of each, as "Can I give her X or Y?" does. */
 	@Test
 	public void twoDrugsJoinedByOrWithNoVerbAskOfEach() {

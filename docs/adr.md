@@ -24715,3 +24715,26 @@ susceptibility result, which her chart may record. The interaction findings answ
   carried none before this decision and carry none after.
 
 Pinned by `LlmInferenceServiceModelReadQuestionContextTest.drugResistanceIsNoScreenOfHerMedications`.
+
+## Decision 526: A misspelt drug asked "ok?" with nothing else is offered the names near it, as in a spelled question
+
+**Status: Accepted** (October 2026) — found asking 16 misspelt, capitalised and unpunctuated wordings of 15 patients
+on the 3.7.1 standalone on 2026-10-29.
+
+### Context
+
+*"can i give her fluconazol"* was answered by the module: *"No interaction check was run: "fluconazol" is not a drug
+name the interaction data recognises. Did you mean Fluconazole?"* (Decision 183). *"fluconazol ok?"* and *"flucanazole
+ok?"* went to the model, which answered *"The records do not address fluconazol"*. The bare *"X ok?"* form is read only
+by the residual reading, which the search for an unrecognised drug leaves out (Decision 409). A word no medicine is near
+in that place, *"Diet ok?"*, would otherwise carry the unchecked statement after a question about her diet.
+
+### The decision
+
+- Where no shape puts a word in a drug's place, the word the residual reading puts there (Decision 514) is offered the
+  names the data finds near it, as a spelled question's is. *"fluconazol ok?"* is answered *"Did you mean
+  Fluconazole?"*.
+- Only where the data finds a near name. A word it finds none for — *"Diet ok?"*, *"Labs ok?"* — takes the chart
+  answer with no statement, as before.
+
+Pinned by `ClinicianWordingsTest.aMisspeltDrugAskedOkAloneIsOfferedTheNamesNearIt`.

@@ -1926,6 +1926,21 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/** ADR Decision 521: red flags or a no-go asked of a drug, and how serious its interaction is, are what was found about it. */
+	@Test
+	public void redFlagsANoGoAndHowSeriousItsInteractionIsAreWhatWasFoundAboutIt() {
+		String[][] pairs = { { "Warfarin - red flags?", "Warfarin - any concerns?" }, { "Warfarin - any warnings?", "Warfarin - any concerns?" },
+			{ "Is warfarin a no-go?", "Warfarin - any concerns?" },
+			{ "How serious is the warfarin interaction?", "Tell me about warfarin" },
+			{ "Explain the warfarin interaction", "Tell me about warfarin" },
+			{ "How does warfarin interact with her meds?", "Tell me about warfarin" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+	}
+
 	/** ADR Decision 516: a dose written with no unit, "400 tds", is set aside as "400mg tds" is. */
 	@Test
 	public void aDoseWrittenWithNoUnitIsSetAsideAsOneWithAUnitIs() {

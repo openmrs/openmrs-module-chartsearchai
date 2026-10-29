@@ -695,7 +695,11 @@ public final class QueryScopeRouter {
 					+ " (?:other )?" + MEDICATIONS,
 			// "Fluconazole for her thrush - any issues?", answered by the model "Fluconazole can be given, with one caution" (ADR
 			// Decision 441)
-			D + "(?: for \\p{L}+(?: \\p{L}+){0,2})? (?:(?:are there )?any )?(?:issues|concerns|problems|risks)",
+			D + "(?: for \\p{L}+(?: \\p{L}+){0,2})? (?:(?:are there )?any )?(?:issues|concerns|problems|risks"
+					// and "red flags", "warnings" (ADR Decision 521)
+					+ "|(?:red )?flags|warnings)",
+			// "Is fluconazole a no-go?" (ADR Decision 521)
+			"(?:is )?" + D + " (?:a )?no go(?: (?:for|in) " + PATIENT + ")?",
 			// and "Fluconazole in this patient - concerns?" (ADR Decision 445)
 			D + " (?:in|for) " + PATIENT + " (?:(?:are there )?any )?(?:issues|concerns|problems|risks|thoughts)",
 			// "Is fluconazole bad for her?", "Is it bad to give fluconazole?", "Any reason to worry about fluconazole?" (ADR
@@ -933,6 +937,11 @@ public final class QueryScopeRouter {
 			"why is (?:" + POSSESSIVE + " )?" + D + " (?:flagged|highlighted|marked|showing a warning|a warning)",
 			// "Tell me about fluconazole" — what it does among her medications, with no "Yes" or "No" (ADR Decision 413)
 			"(?:please )?tell me about " + D,
+			// and how serious its interaction is, or how it interacts: "How serious is the fluconazole interaction?", "Explain the
+			// fluconazole interaction", "How does fluconazole interact with her meds?" (ADR Decision 521)
+			"how (?:serious|severe|bad|dangerous|significant|important) (?:is|are) (?:the |this |that )?" + D + " interactions?",
+			"(?:please )?explain (?:the |this |that )?" + D + " interactions?",
+			"how (?:does|do|will|would) " + D + " interact with " + POSSESSIVE + " (?:other |current )?" + MEDICATIONS,
 			// "Does rifampicin require dose adjustment with her meds?" (ADR Decision 422)
 			"(?:does|will|would|could|might) " + D + " (?:require|need|mean) (?:a |any )?(?:dose|dosage) (?:adjustments?|changes?) "
 					+ "(?:with|of|for|to|in) (?:any of )?" + POSSESSIVE + " (?:other )?" + MEDICATIONS,

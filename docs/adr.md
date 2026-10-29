@@ -24594,3 +24594,31 @@ one the question supposes. Every clause Decision 410 reads names the allergy aft
   router can tell from a word, and stays the model's.
 
 Pinned by `SupposedAllergyTest.anAllergySupposedBeforeTheProposalIsTheSameQuestion`.
+
+## Decision 521: Red flags or a no-go asked of a drug, and how serious its interaction is, are what was found about it
+
+**Status: Accepted** (October 2026) — found asking 20 harm and explanation wordings of 15 patients on the 3.7.1
+standalone on 2026-10-29.
+
+### Context
+
+These went to the model:
+
+- *"Fluconazole - red flags?"* carried no chips. *"red flags"*, in a drug's place, was reported a drug name the data
+  does not recognise, and Decision 479 withholds every chip beside such a word. The model answered *"Fluconazole can be
+  given"* on 4 of 15 patients.
+- *"Is fluconazole a no-go?"* also carried no chips.
+- *"How serious is the fluconazole interaction?"*, *"Explain the fluconazole interaction"* and *"How does fluconazole
+  interact with her meds?"* were answered with the model's proposal template, *"The drug can be given, with one
+  caution"*, on 3 to 5 of them.
+
+### The decision
+
+- *"red flags"*, *"flags"* and *"warnings"* asked of a drug are its issues, as Decision 441 reads *"X - any concerns?"*.
+  *"Is X a no-go?"* is the same question. These words are never an unrecognised drug's name.
+- How serious a drug's interaction is, an explanation of it, and how it interacts with her medications are what was
+  found about it, as Decision 413 answers *"Tell me about X"*: each finding with its rating, and no *"Yes"* or *"No"*.
+- *"Is the X interaction major?"* is left as found. It asks yes or no of one rating, which the findings answer only
+  pair by pair.
+
+Pinned by `ClinicianWordingsTest.redFlagsANoGoAndHowSeriousItsInteractionIsAreWhatWasFoundAboutIt`.

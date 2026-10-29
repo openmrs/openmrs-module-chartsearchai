@@ -56,7 +56,9 @@ final class UnrecognisedDrugName {
 		"she", "all", "too", "now", "two", "pain", "help", "food", "water", "fluids", "oxygen", "blood",
 		// the verbs giving or stopping a drug, which "Give fluconazole?" put in a bare pair's first place (ADR Decision 502)
 		"give", "start", "prescribe", "administer", "add", "use", "go", "ahead", "stop", "hold", "continue", "switch",
-		"swap"));
+		"swap",
+		// and what a question asks of a drug: "Fluconazole - red flags?" (ADR Decision 521)
+		"red", "flag", "flags", "warning", "warnings"));
 
 	private static final int MAX_SUGGESTIONS = 4;
 

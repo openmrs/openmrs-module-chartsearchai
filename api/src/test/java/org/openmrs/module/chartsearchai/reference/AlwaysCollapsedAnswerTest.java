@@ -40,10 +40,12 @@ public class AlwaysCollapsedAnswerTest extends BaseModuleContextSensitiveTest {
 	}
 
 	/**
-	 * On the demo, "Is it safe to start her on clarithromycin?" is answered with its one caution, and the finding under
-	 * it says nothing of what the check did not cover — Decision 146 left the drug's rows below the floor out of a caution
-	 * answer, as telling a clinician nothing they could use. So the flag says the details state no limits, and a client
-	 * labels them "Show details" rather than promising limits that are not there.
+	 * "Is it safe to start her on clarithromycin?" is answered with its one caution, and where the data says nothing of
+	 * drug-condition rules, the finding under it says nothing of what the check did not cover — Decision 146 left the
+	 * drug's rows below the floor out of a caution answer, as telling a clinician nothing they could use. So the flag says
+	 * the details state no limits, and a client labels them "Show details" rather than promising limits that are not
+	 * there. Where the data loaded carries no drug-condition rule, as the demo's does, the answer says her conditions were
+	 * not checked and the flag says so (ADR Decision 533; {@code ProposalSaysHerConditionsWereNotCheckedTest}).
 	 */
 	@Test
 	public void aProposalsCautionIsOneSentenceAndItsDetailsPromiseNoLimits() {

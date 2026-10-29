@@ -1732,9 +1732,13 @@ public class DrugReferenceInjector {
 		}
 		// A screen asked about more than interactions — "Does he have any drug contraindications?" — where the data carries no
 		// drug-condition rule weighed none of her conditions, and says so (ADR Decision 467).
-		boolean conditionsUnchecked = moduleAnswer != null && questionDrugs.isEmpty()
-				&& QueryScopeRouter.asksOnlyToScreenHerMedications(question)
-				&& !QueryScopeRouter.asksOnlyAboutInteractions(question)
+		// And a drug proposed, likewise: "Is it safe to start her on clarithromycin?" asks more than whether it interacts (ADR
+		// Decision 533).
+		boolean conditionsUnchecked = moduleAnswer != null
+				&& (questionDrugs.isEmpty() && QueryScopeRouter.asksOnlyToScreenHerMedications(question)
+						&& !QueryScopeRouter.asksOnlyAboutInteractions(question)
+						|| proposesADrugNotHers(question, questionDrugs, screenedSubstances))
+				&& drugSafetyValidator != null
 				&& drugSafetyValidator.conditionRuleCoverage() == DrugReferenceLoad.Coverage.ABSENT;
 		if (moduleAnswer != null) {
 			moduleAnswer = withWhatWasNotChecked(moduleAnswer, conditionsUnchecked, unidentifiedOnAScreen);

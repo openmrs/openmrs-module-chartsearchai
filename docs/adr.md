@@ -24927,3 +24927,26 @@ sentence then said so, and contradicted itself.
 
 Pinned by `ScreenBelowFloorPairsTest.aScreenSaysOnlyItsRatedPairsAreBelowTheFloor` and
 `ScreenBelowFloorPairsTest.theAnswerSaysTheDataListsHisPairsBelowTheFloorRatherThanThatNoneWereFound`.
+
+## Decision 533: A drug proposed says her conditions were not checked where no drug-condition rule is loaded
+
+**Status: Accepted** (October 2026) — found reviewing the public demo's answer for patient dd74dc61 on 2026-10-30.
+
+### Context
+
+*"Is it safe to start her on clarithromycin?"* was answered *"1 interaction caution for Clarithromycin — Moderate, with
+Nevirapine."* and the finding under it, and nothing else. The response reported `conditionRuleCoverage` absent: the
+shipped data carries no drug-condition rule, so none of his conditions was weighed against clarithromycin. A question
+whether a drug is safe to start asks more than whether it interacts, and the screen of her medications already says
+*"Not checked: this patient's conditions (no drug-condition rules are loaded)."* for such a question (Decision 467); the
+proposal said nothing, and its details read *"Show details"*, promising no limits.
+
+### The decision
+
+- A drug proposed (`proposesADrugNotHers`) is answered with the same line where the data loaded carries no drug-condition
+  rule. It is under the bottom line, so the sentence in view is unchanged, and its details now state a limit.
+- A question only whether the drug interacts with her medications is not given it.
+- The drug's pairs the data lists only without a rating are still left out of a caution answer: Decision 146 measured
+  them as a line a clinician can do nothing with, and nothing here is new evidence against it.
+
+Pinned by `ProposalSaysHerConditionsWereNotCheckedTest`.

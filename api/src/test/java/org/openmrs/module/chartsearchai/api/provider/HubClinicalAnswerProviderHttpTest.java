@@ -139,4 +139,23 @@ public class HubClinicalAnswerProviderHttpTest extends BaseModuleContextSensitiv
 		assertFalse(result.getAnswer().getPayload().containsKey("inDepth"));
 		assertNull(result.getProblemCode());
 	}
+
+	@Test
+	public void aCallerQueryStoreWithholdsAllergiesFromIsRefusedWithoutCallingTheHub() throws Exception {
+		server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+		server.createContext("/v1/chat/completions", exchange -> {
+			receivedRequest.set(MAPPER.readTree(exchange.getRequestBody()));
+			exchange.sendResponseHeaders(500, -1);
+		});
+		server.start();
+		Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_HUB_ENDPOINT_URL,
+				"http://127.0.0.1:" + server.getAddress().getPort() + "/v1/chat/completions");
+		TurnRequest request = new TurnRequest(Context.getPatientService().getPatient(7), "Any allergies?",
+				"conversation-1", "request-1", ProviderMode.QUERY_SCOPED, "product-profile-a", Collections.emptyList());
+		TurnResult result = org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport.refusingPrivilege(
+				org.openmrs.util.PrivilegeConstants.GET_ALLERGIES,
+				() -> provider.execute(request, event -> {}, CancellationSignal.NONE).toCompletableFuture().join());
+		assertEquals("provider_not_permitted", result.getProblemCode());
+		assertNull(receivedRequest.get());
+	}
 }

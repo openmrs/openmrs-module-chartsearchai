@@ -24759,3 +24759,37 @@ on the question's text, *"gve her fluconazole"* was taken as *"her fluconazole"*
 - The list is closed. A misspelling it does not hold is read as before.
 
 Pinned by `ClinicianWordingsTest.aGivingVerbMisspeltIsTheVerb`.
+
+## Decision 528: A list the model writes is shown as its own heading and its count
+
+**Status: Accepted** (October 2026) — on the owner's direction that the extra information always collapse, extended
+from Decision 519's answers the module writes to those the model writes.
+
+### Measured and declined: a sentence the model writes to sum up its answer
+
+On 2026-10-29, 24 prompts were captured from the demo replica — six model-answered questions (medications, latest CD4,
+recent vital signs, conditions, last visit, allergies) over four demo patients — by pointing its engine at a loopback
+capture server, and replayed on the demo's model (Gemma 4 E2B, CPU only, the local engine's request fields) with and
+without a `one_sentence_summary` field after `citations`, capped at 160 characters by the grammar. At least five of the
+24 summaries contradicted or misstated their own answer — a systolic pressure of 120 mmHg over an answer saying 80, a
+last visit of 2006-11-21 over an answer saying 2006-07-03 — two were the model's reasoning, five were cut off by the cap,
+it added a median 3.8 s on CPU, and the answer itself came out byte-identical in only 12 of 24, though a field placed
+after it was expected to leave it alone (not isolated: possibly cache non-determinism between the arms). A sentence a
+clinician reads first must not say what the answer under it does not.
+
+### The decision
+
+Of an answer the model wrote, `ModelAnswerList.summaryOf` shows a LIST — two or more items under a heading — as the
+model's own heading and how many items it lists: *"The patient is on the following medications — 9 listed."* The items
+are counted where they sit on lines of their own (numbered, bulleted, or a label and its value — *"Pulse: 80
+beats/min"*, never the module's own *"Not checked:"* line), numbered 1, 2, 3 on the heading's line, or comma-separated
+in one sentence under a heading of four or more words, three or more of them, so a label's value is not read as a
+list. Every word in view is the model's heading or a count of what the answer lists, so nothing in view can contradict
+it; the whole answer is collapsed under it, and `answerDetailsStateLimits` is `false`. Any other model answer has none and is shown
+whole.
+
+Over the 24 replayed answers — `summaryOf` run on each through a throwaway test, the probe since deleted — it collapses
+9 lists of 2 to 14 items and leaves 15 shown whole: 13 of 4 to 9 words, and two of 19 and 23, each a few short
+"label: value." sentences on one line.
+
+Pinned by `ModelAnswerListCollapseContextTest`, over the replay's own answers.

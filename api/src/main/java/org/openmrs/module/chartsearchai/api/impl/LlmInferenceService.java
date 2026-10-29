@@ -389,7 +389,9 @@ public class LlmInferenceService implements ChartSearchService {
 					findingPartnerCoverage, false, interactionClaimPairs, cautionLedOverWithholding,
 					unfoundedFindingSeverities, doseCeilingCoverage, unsupportedEndedOrderClaims,
 					unstatedSignificanceQualifiers, OwnOrderFindingStatement.statedFindings(response.getAnswer(), cited, chart.getMappings(),
-							chart.getProposalOwnOrderFindingLines()), !chart.getHistoryQuestionDrugRows().isEmpty(), null, false);
+							chart.getProposalOwnOrderFindingLines()), !chart.getHistoryQuestionDrugRows().isEmpty(),
+					// A list the model wrote is shown as its own heading and its count (ADR Decision 528).
+					ModelAnswerList.summaryOf(response.getAnswer()), false);
 			outcome = "ok";
 			return answer;
 		}
@@ -844,7 +846,8 @@ public class LlmInferenceService implements ChartSearchService {
 					chartRead.stated(), conditionRuleCoverage, orderStopDates, null, false, null,
 					cautionLedOverWithholding, null, doseCeilingCoverage, unsupportedEndedOrderClaims, null,
 					OwnOrderFindingStatement.statedFindings(response.getAnswer(), cited, chart.getMappings(),
-							chart.getProposalOwnOrderFindingLines()), !chart.getHistoryQuestionDrugRows().isEmpty(), null, false));
+							chart.getProposalOwnOrderFindingLines()), !chart.getHistoryQuestionDrugRows().isEmpty(),
+					ModelAnswerList.summaryOf(response.getAnswer()), false));
 
 			// After the user-visible handoff, before grounding: the exact comparisons over what the
 			// answer did with the records it cites — the class-code defects a set-membership
@@ -1003,7 +1006,9 @@ public class LlmInferenceService implements ChartSearchService {
 					findingPartnerCoverage, false, interactionClaimPairs, cautionLedOverWithholding,
 					unfoundedFindingSeverities, doseCeilingCoverage, unsupportedEndedOrderClaims,
 					unstatedSignificanceQualifiers, OwnOrderFindingStatement.statedFindings(response.getAnswer(), cited, chart.getMappings(),
-							chart.getProposalOwnOrderFindingLines()), !chart.getHistoryQuestionDrugRows().isEmpty(), null, false);
+							chart.getProposalOwnOrderFindingLines()), !chart.getHistoryQuestionDrugRows().isEmpty(),
+					// A list the model wrote is shown as its own heading and its count (ADR Decision 528).
+					ModelAnswerList.summaryOf(response.getAnswer()), false);
 			outcome = "ok";
 			return answer;
 		}

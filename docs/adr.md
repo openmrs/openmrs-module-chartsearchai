@@ -24841,3 +24841,37 @@ drugs that raised nothing, 40 words, both "no finding" statements kept.
 pinned Decision 519's first line whole and now asserts it in short.
 
 Pinned by `AlwaysCollapsedAnswerTest`.
+
+## Decision 530: A duplicate-therapy question naming a drug class is answered about that class
+
+**Status: Accepted** (October 2026) — found by Decision 529's audit and fixed on the owner's go-ahead.
+
+### Context
+
+Decision 232's answer to whether her medications duplicate one another states every duplicate the screen found, of
+any class. Asked *"Is he on any duplicate NSAIDs?"*, the demo's patient on lamivudine, nevirapine and stavudine — three
+orders each, no NSAID — was shown *"Yes — 3 possible duplicate therapies: Lamivudine; Nevirapine; Stavudine."*. Once
+Decision 517 made that the one sentence in view, a clinician read a "Yes" to a question about NSAIDs that the NSAIDs do
+not earn.
+
+### The decision
+
+Where the question names a class that is a drug group this module carries (Decision 298) or an ATC group (Decision 368),
+`DrugReferenceInjector.composeDuplicateTherapyInClass` answers about it:
+
+- Duplicates in the class: Decision 232's answer over them alone — each group line among her orders in the class, and
+  each substance-sharing finding naming one of them.
+- None in it, some outside it: her orders in the class — none, one, or each, never under a "Yes" — then *"Outside that
+  drug group, N possible duplicate therapies: …"* and the lines under it. That first sentence is the one in view.
+- An order the data does not identify might be in the class, so there "none" is said of the orders it identifies, and
+  the others are counted, and named under it: *"None of this patient's active medication orders that the drug data
+  identifies is in the drug group this module carries as NSAID; 9 others are not identified."*. Two of the six replica
+  patients carry such orders — vaccines and infant formula — and kept the other classes' "Yes" until this was added;
+  naming them in the sentence made it 60 words.
+- None anywhere: Decision 294's answer, unchanged, since it already covers the class.
+
+The class is resolved once, before the duplicate branch, and Decision 298's answer reads the same resolution. A class
+neither group nor ATC group names is answered as before.
+
+Pinned by `DuplicateTherapyQuestionTest.aDuplicateQuestionNamingAClassIsAnsweredAboutThatClass`; that class's existing
+cases, which ask about NSAIDs of patients with no duplicate or with NSAID duplicates, pass unchanged.

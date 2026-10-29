@@ -1407,20 +1407,39 @@ public class DrugReferenceInjector {
 			moduleAnswer = composeProposedBesideHerOwnUnrated(question, questionDrugs, screenedSubstances, findings,
 					pairExtent, mappings, orderEntries, matched, context, reading.states(), unidentified.size());
 		}
+		// The class a question names, where it is a drug group this module carries (ADR Decision 298) or an ATC group (ADR
+		// Decision 368), and how a sentence names it.
+		CrossReactivityGroup askedGroup = namedClass == null ? null
+				: DrugClassTerms.groupNamedBy(namedClass, drugReferenceService.getCrossReactivityGroups());
+		String askedAtcGroup = namedClass == null ? null : DrugClassTerms.atcGroupOf(namedClass);
+		Predicate<Set<String>> askedClass = askedGroup != null ? askedGroup::containsAnyCodeForDuplicateTherapy
+				: askedAtcGroup != null ? codes -> DrugClassMembersStatement.filedUnder(codes, askedAtcGroup) : null;
+		String carried = askedGroup != null ? " in the drug group this module carries as " + askedGroup.getName()
+				: askedAtcGroup != null ? " in the " + DrugClassMembersStatement.groupPhrase(askedAtcGroup)
+						+ (DrugClassMembersStatement.namesSeveralGroups(askedAtcGroup) ? "" : " (" + namedClass + ")")
+				: null;
 		// A question whether her medications duplicate one another: what the screen found, each a line, and what the check
-		// does not cover (ADR Decision 232); found none, what it compared, and never "No" (ADR Decision 294).
+		// does not cover (ADR Decision 232); found none, what it compared, and never "No" (ADR Decision 294). Naming a class,
+		// about that class (ADR Decision 530).
 		if (moduleAnswer == null && context != null && questionDrugs.isEmpty()
 				&& ChartSearchAiUtils.getBooleanGlobalProperty(
 						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
 						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS)
 				&& context.chartReadForSafety() && QueryScopeRouter.asksAboutDuplicateTherapy(question)) {
-			moduleAnswer = composeDuplicateTherapy(findings, findingNumbers, orderRecordNumbers,
-					orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers,
-					duplicateTherapyLines(orderEntries, context,
-							orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers),
-					context, screenedSubstances.size(), unidentified.size());
-			// Duplicates found open with the sentence naming them (ADR Decision 517).
-			summary = moduleAnswer != null && moduleAnswer.startsWith(DUPLICATES_FOUND_OPENING)
+			Map<String, Integer> herOrderRecords = orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context)
+					: orderRecordNumbers;
+			moduleAnswer = askedClass == null ? null
+					: composeDuplicateTherapyInClass(askedClass, carried, askedGroup != null ? "drug group" : "class",
+							findings, findingNumbers, orderRecordNumbers, herOrderRecords, orderEntries, context);
+			boolean aboutTheClass = moduleAnswer != null;
+			if (moduleAnswer == null) {
+				moduleAnswer = composeDuplicateTherapy(findings, findingNumbers, orderRecordNumbers, herOrderRecords,
+						duplicateTherapyLines(orderEntries, context, herOrderRecords), context, screenedSubstances.size(),
+						unidentified.size());
+			}
+			// Duplicates found open with the sentence naming them (ADR Decision 517), as an answer about a class does with
+			// its own (ADR Decision 530).
+			summary = moduleAnswer != null && (aboutTheClass || moduleAnswer.startsWith(DUPLICATES_FOUND_OPENING))
 					? moduleAnswer.split("\n", -1)[0] : null;
 		}
 		// Two drugs asked about together that the interaction data relates in no way, at any rating: that, and which she takes
@@ -1437,23 +1456,16 @@ public class DrugReferenceInjector {
 							: orderRecordNumbers(findingRecords != null ? findingRecords : new DrugOrderRecords(mappings), context),
 					mappings, orderEntries, context);
 		}
-		// Whether she is on any drug of a group this module carries: her orders in it (ADR Decision 298).
-		CrossReactivityGroup askedGroup = namedClass == null ? null
-				: DrugClassTerms.groupNamedBy(namedClass, drugReferenceService.getCrossReactivityGroups());
-		// Or of a class an ATC group IS, by that group (ADR Decision 368).
-		String askedAtcGroup = namedClass == null ? null : DrugClassTerms.atcGroupOf(namedClass);
-		if (moduleAnswer == null && (askedGroup != null || askedAtcGroup != null) && questionDrugs.isEmpty()
+		// Whether she is on any drug of a group this module carries: her orders in it (ADR Decision 298), or of a class an ATC
+		// group IS, by that group (ADR Decision 368).
+		if (moduleAnswer == null && askedClass != null && questionDrugs.isEmpty()
 				&& QueryScopeRouter.asksWhetherSheIsOnADrugClass(question)
 				&& ChartSearchAiUtils.getBooleanGlobalProperty(
 						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
 						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS)) {
 			// One name per ORDER, so two orders of one drug count as two (ADR Decision 379).
-			List<String> inIt = eachOrderFiledUnder(askedGroup != null ? askedGroup::containsAnyCodeForDuplicateTherapy
-					: codes -> DrugClassMembersStatement.filedUnder(codes, askedAtcGroup), orderEntries, context);
+			List<String> inIt = eachOrderFiledUnder(askedClass, orderEntries, context);
 			if (inIt != null) {
-				String carried = askedGroup != null ? " in the drug group this module carries as " + askedGroup.getName()
-						: " in the " + DrugClassMembersStatement.groupPhrase(askedAtcGroup)
-								+ (DrugClassMembersStatement.namesSeveralGroups(askedAtcGroup) ? "" : " (" + namedClass + ")");
 				// Whether she is on MORE than one: "Yes —" only for two or more; one is stated, and neither "Yes" nor "No"
 				// (ADR Decision 379).
 				boolean moreThanOne = QueryScopeRouter.asksWhetherSheIsOnMoreThanOneOfADrugClass(question);
@@ -8178,11 +8190,33 @@ public class DrugReferenceInjector {
 	 *  are counted as two (ADR Decision 379). */
 	private List<String> eachOrderFiledUnder(Predicate<Set<String>> inClass, List<DrugReference> orderEntries,
 			PatientClinicalContext context) {
+		List<PatientClinicalContext.ActiveDrugOrder> orders = activeOrdersFiledUnder(inClass, orderEntries, context);
+		if (orders == null || orders.isEmpty() && !DrugSafetyValidator.unresolvedActiveOrders(drugReferenceService, context,
+			orderEntries == null ? Collections.<DrugReference> emptyList() : orderEntries).isEmpty()) {
+			return null;
+		}
+		List<String> filed = new ArrayList<String>();
+		for (PatientClinicalContext.ActiveDrugOrder order : orders) {
+			String display = order.getDisplay() == null ? "" : order.getDisplay().trim();
+			String name = DrugSafetyValidator.displayNamesADrug(order) ? display
+					: ("an order recorded only by its codes " + display).trim();
+			if (!order.hasStarted()) {
+				name += " (" + PatientChartSerializer.scheduledToStart(order.getScheduledStart()) + ")";
+			}
+			filed.add(name);
+		}
+		return filed;
+	}
+
+	/** Her active orders in the class {@code inClass} answers, by their own codes or their substance's, or {@code null}
+	 *  where her orders were not all read. An order the data does not identify is in none. */
+	private List<PatientClinicalContext.ActiveDrugOrder> activeOrdersFiledUnder(Predicate<Set<String>> inClass,
+			List<DrugReference> orderEntries, PatientClinicalContext context) {
 		if (context == null || !context.chartReadForSafety()) {
 			return null;
 		}
 		List<DrugReference> entries = orderEntries == null ? Collections.<DrugReference> emptyList() : orderEntries;
-		List<String> filed = new ArrayList<String>();
+		List<PatientClinicalContext.ActiveDrugOrder> filed = new ArrayList<PatientClinicalContext.ActiveDrugOrder>();
 		for (PatientClinicalContext.ActiveDrugOrder order : context.getActiveDrugOrders()) {
 			Set<String> ownCodes = new LinkedHashSet<String>();
 			for (String code : order.getAtcCodes()) {
@@ -8200,19 +8234,9 @@ public class DrugReferenceInjector {
 				inIt = coded && DrugSafetyValidator.ordersOfSubstance(drugReferenceService, entry, entries, context)
 						.contains(order);
 			}
-			if (!inIt) {
-				continue;
+			if (inIt) {
+				filed.add(order);
 			}
-			String display = order.getDisplay() == null ? "" : order.getDisplay().trim();
-			String name = DrugSafetyValidator.displayNamesADrug(order) ? display
-					: ("an order recorded only by its codes " + display).trim();
-			if (!order.hasStarted()) {
-				name += " (" + PatientChartSerializer.scheduledToStart(order.getScheduledStart()) + ")";
-			}
-			filed.add(name);
-		}
-		if (filed.isEmpty() && !DrugSafetyValidator.unresolvedActiveOrders(drugReferenceService, context, entries).isEmpty()) {
-			return null;
 		}
 		return filed;
 	}
@@ -8569,6 +8593,87 @@ public class DrugReferenceInjector {
 		return duplicatesFound(findings, groupLines) + "\n" + String.join("\n", lines)
 				+ "\nThis check compares the substances in her orders and the drug groups this module carries ("
 				+ joinedAsAList(groupNames) + "); other drug classes are not covered.";
+	}
+
+	/**
+	 * The answer to a duplicate-therapy question naming a drug class (ADR Decision 530), or {@code null} where the answer
+	 * naming none answers it: her orders were not all read, or no duplicate was found in the class or outside it.
+	 * Duplicates in the class are that answer over them alone. With none in it and some outside it, her orders in the
+	 * class — none, one, or each, never under a "Yes" — and then the others, apart, under that sentence. "None" is said of
+	 * the orders the data identifies, counting the others, which might be in it, and naming them under it.
+	 *
+	 * @param carried how a sentence names the class, after "is": <em>" in the drug group this module carries as NSAID"</em>
+	 * @param kind what the class is, after "Outside that": <em>"drug group"</em> or <em>"class"</em>
+	 */
+	private String composeDuplicateTherapyInClass(Predicate<Set<String>> inClass, String carried, String kind,
+			List<SafetyWarning> findings, List<Integer> numbers, Map<String, Integer> orderRecordNumbers,
+			Map<String, Integer> herOrderRecords, List<DrugReference> orderEntries, PatientClinicalContext context) {
+		List<PatientClinicalContext.ActiveDrugOrder> inIt = activeOrdersFiledUnder(inClass, orderEntries, context);
+		if (inIt == null) {
+			return null;
+		}
+		Set<String> displays = new HashSet<String>();
+		for (PatientClinicalContext.ActiveDrugOrder order : inIt) {
+			if (order.getDisplay() != null) {
+				displays.add(order.getDisplay().trim());
+			}
+		}
+		List<SafetyWarning> inFindings = new ArrayList<SafetyWarning>();
+		List<Integer> inNumbers = new ArrayList<Integer>();
+		boolean anyShared = false;
+		for (int i = 0; i < findings.size(); i++) {
+			SafetyWarning finding = findings.get(i);
+			if (!finding.statesOrdersSharingASubstance()) {
+				continue;
+			}
+			anyShared = true;
+			for (String order : finding.namedPartners()) {
+				if (order != null && displays.contains(order.trim())) {
+					inFindings.add(finding);
+					inNumbers.add(numbers.get(i));
+					break;
+				}
+			}
+		}
+		List<DrugReference> classEntries = new ArrayList<DrugReference>();
+		for (DrugReference entry : orderEntries == null ? Collections.<DrugReference> emptyList() : orderEntries) {
+			if (inClass.test(entry.normalizedAtcCodes())) {
+				classEntries.add(entry);
+			}
+		}
+		List<String> inLines = duplicateTherapyLines(classEntries, context, herOrderRecords);
+		if (!inLines.isEmpty() || !inFindings.isEmpty()) {
+			return composeDuplicateTherapy(inFindings, inNumbers, orderRecordNumbers, herOrderRecords, inLines, context, 0,
+				0);
+		}
+		List<String> outLines = duplicateTherapyLines(orderEntries, context, herOrderRecords);
+		if (outLines.isEmpty() && !anyShared) {
+			return null;
+		}
+		String named = inIt.isEmpty() ? null
+				: DrugSafetyValidator.joinPartners(collapsedByName(eachOrderFiledUnder(inClass, orderEntries, context)));
+		List<String> unidentified = new ArrayList<String>();
+		for (PatientClinicalContext.ActiveDrugOrder order : inIt.isEmpty() ? DrugSafetyValidator.unresolvedActiveOrders(
+			drugReferenceService, context, orderEntries == null ? Collections.<DrugReference> emptyList() : orderEntries)
+				: Collections.<PatientClinicalContext.ActiveDrugOrder> emptyList()) {
+			String display = order.getDisplay() == null ? "" : order.getDisplay().trim();
+			unidentified.add(DrugSafetyValidator.displayNamesADrug(order) ? display
+					: ("an order recorded only by its codes " + display).trim());
+		}
+		// An order the data does not identify might be in the class, so "none" is said of the ones it identifies — they are
+		// counted, and named under it.
+		String classLine = inIt.isEmpty() && !unidentified.isEmpty()
+				? "None of this patient's active medication orders that the drug data identifies is" + carried + "; "
+						+ (unidentified.size() == 1 ? "1 other is" : unidentified.size() + " others are") + " not identified.\n"
+						+ "Not identified by the drug data: " + DrugSafetyValidator.joinPartners(collapsedByName(unidentified))
+						+ "."
+				: inIt.isEmpty() ? "None of this patient's active medication orders is" + carried + "."
+				: inIt.size() == 1 ? "One of this patient's active medication orders is" + carried + ": " + named + "."
+				: inIt.size() + " of this patient's active medication orders are" + carried + ": " + named
+						+ "; this check found no duplicate therapy among them.";
+		String outside = composeDuplicateTherapy(findings, numbers, orderRecordNumbers, herOrderRecords, outLines, context, 0,
+			0);
+		return classLine + "\nOutside that " + kind + ", " + outside.substring(DUPLICATES_FOUND_OPENING.length());
 	}
 
 	/**

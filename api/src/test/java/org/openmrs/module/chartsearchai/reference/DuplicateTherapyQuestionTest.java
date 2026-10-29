@@ -12,6 +12,7 @@ package org.openmrs.module.chartsearchai.reference;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -76,6 +77,61 @@ public class DuplicateTherapyQuestionTest extends BaseModuleContextSensitiveTest
 			DrugReferenceTestSupport.activeOrder("order-spironolactone", "Spironolactone", "Spironolactone")))
 				.getModuleAnswer());
 	}
+
+	/**
+	 * A duplicate question naming a drug class is answered about that class (ADR Decision 530). On the demo, a patient on
+	 * lamivudine, nevirapine and stavudine, three orders each and no NSAID, asked "Is he on any duplicate NSAIDs?", was
+	 * shown "Yes — 3 possible duplicate therapies: Lamivudine; Nevirapine; Stavudine.": the duplicates of every class,
+	 * under a "Yes" the question's own class does not earn. Those of other classes are still stated, apart, under it.
+	 */
+	@Test
+	public void aDuplicateQuestionNamingAClassIsAnsweredAboutThatClass() throws IOException {
+		String question = "Is he on any duplicate NSAIDs?";
+		PatientChart none = askShipped(question, Arrays.asList(LAMIVUDINE_150, LAMIVUDINE_300,
+			DrugReferenceTestSupport.activeOrder("order-nevirapine", "Nevirapine 200mg", "Nevirapine")));
+		String noneLine = "None of this patient's active medication orders is in the drug group this module carries as"
+				+ " NSAID.";
+		assertEquals(noneLine, none.getModuleAnswerSummary());
+		assertTrue(none.getModuleAnswer().startsWith(noneLine + "\nOutside that drug group, 1 possible duplicate therapy:"
+				+ " Lamivudine.\n"), none.getModuleAnswer());
+		assertFalse(none.getModuleAnswer().contains("Yes"), none.getModuleAnswer());
+
+		PatientChart one = askShipped(question, Arrays.asList(IBUPROFEN, LAMIVUDINE_150, LAMIVUDINE_300));
+		String oneLine = "One of this patient's active medication orders is in the drug group this module carries as NSAID:"
+				+ " Ibuprofen 400mg.";
+		assertEquals(oneLine, one.getModuleAnswerSummary());
+		assertTrue(one.getModuleAnswer().startsWith(oneLine + "\nOutside that drug group, 1 possible duplicate therapy:"
+				+ " Lamivudine.\n"), one.getModuleAnswer());
+
+		// An order the data does not identify might be in the class, so "none" is said of the ones it identifies, and the
+		// other named — as on two of the demo's patients, still shown the "Yes" of other classes until it was.
+		PatientChart unidentified = askShipped(question, Arrays.asList(LAMIVUDINE_150, LAMIVUDINE_300,
+			DrugReferenceTestSupport.activeOrder("order-unknown", "Zqxvort 10mg")));
+		// Counted in view and named under it: on the replica, nine vaccine and formula orders made a 60-word sentence.
+		String unidentifiedLine = "None of this patient's active medication orders that the drug data identifies is in the"
+				+ " drug group this module carries as NSAID; 1 other is not identified.";
+		assertEquals(unidentifiedLine, unidentified.getModuleAnswerSummary());
+		assertTrue(unidentified.getModuleAnswer().startsWith(unidentifiedLine + "\nNot identified by the drug data:"
+				+ " Zqxvort 10mg.\nOutside that drug group, 1 possible duplicate therapy: Lamivudine.\n"),
+			unidentified.getModuleAnswer());
+
+		// Duplicates in the class and outside it: the class's alone, as a question naming no class states them.
+		PatientChart both = askShipped(question, Arrays.asList(IBUPROFEN, DICLOFENAC, LAMIVUDINE_150, LAMIVUDINE_300));
+		assertEquals("Yes — 1 possible duplicate therapy: Ibuprofen and Diclofenac (NSAID).", both.getModuleAnswerSummary());
+		assertFalse(both.getModuleAnswer().contains("Lamivudine"), both.getModuleAnswer());
+	}
+
+	private static final PatientClinicalContext.ActiveDrugOrder IBUPROFEN = DrugReferenceTestSupport.activeOrder(
+		"order-ibuprofen", "Ibuprofen 400mg", "Ibuprofen");
+
+	private static final PatientClinicalContext.ActiveDrugOrder DICLOFENAC = DrugReferenceTestSupport.activeOrder(
+		"order-diclofenac", "Diclofenac 50mg", "Diclofenac");
+
+	private static final PatientClinicalContext.ActiveDrugOrder LAMIVUDINE_150 = DrugReferenceTestSupport.activeOrder(
+		"order-lamivudine-150", "Lamivudine 150mg", "Lamivudine");
+
+	private static final PatientClinicalContext.ActiveDrugOrder LAMIVUDINE_300 = DrugReferenceTestSupport.activeOrder(
+		"order-lamivudine-300", "Lamivudine 300mg", "Lamivudine");
 
 	@Test
 	public void aDuplicateThatIsNotAboutHerMedicationsScreensNothing() throws IOException {

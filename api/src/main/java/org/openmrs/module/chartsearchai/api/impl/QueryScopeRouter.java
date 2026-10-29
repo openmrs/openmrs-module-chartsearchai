@@ -1181,7 +1181,9 @@ public final class QueryScopeRouter {
 					+ D + " or " + D + "(?: (?:to|for) " + PATIENT + ")?(?: now| today)?",
 			"(?:can|could|may|should) (?:she|he|they|the patient|this patient) (?:safely )?(?:take|have|use) " + D + " or " + D
 					+ "(?: now| today)?",
-			"(?:is|would) " + D + " or " + D + " (?:be )?(?:safe|ok|okay|appropriate|suitable)(?: (?:for|in) " + PATIENT + ")?");
+			"(?:is|would) " + D + " or " + D + " (?:be )?(?:safe|ok|okay|appropriate|suitable)(?: (?:for|in) " + PATIENT + ")?",
+			// and with no verb, "Ibuprofen or paracetamol?", "Ibuprofen or paracetamol for her?" (ADR Decision 524)
+			D + " or " + D + "(?: (?:for|in) " + PATIENT + ")?(?: (?:safe|ok|okay))?");
 
 	/** "Is diclofenac safer than ibuprofen with her aspirin?", "Is diclofenac or ibuprofen better with her aspirin?" — the
 	 *  choice of two drugs made beside a third, hers, named last (ADR Decision 442). */

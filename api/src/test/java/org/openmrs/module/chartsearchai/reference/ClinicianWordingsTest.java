@@ -1926,6 +1926,20 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/** ADR Decision 524: two drugs joined by "or" and nothing else ask of each, as "Can I give her X or Y?" does. */
+	@Test
+	public void twoDrugsJoinedByOrWithNoVerbAskOfEach() {
+		String[][] pairs = { { "Ibuprofen or paracetamol?", "Can I give her ibuprofen or paracetamol?" },
+			{ "Ibuprofen or paracetamol ok?", "Is ibuprofen or paracetamol ok?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+		// "for her" asks which of the two, the choice no finding makes (ADR Decision 393), which the module answers too.
+		assertNotNull(ask("Ibuprofen or paracetamol for her?"));
+	}
+
 	/** ADR Decision 523: a duration written "x14d" and a note opening with her age and sex are read as their spelled forms. */
 	@Test
 	public void aShorthandDurationAndAnAgeAndSexOpeningAreReadAsSpelled() {

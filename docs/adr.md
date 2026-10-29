@@ -24673,3 +24673,24 @@ of 15 patients it answered *"Fluconazole can be given"*. Two parts of that note 
   It is set aside, and the answer says it was not weighed.
 
 Pinned by `ClinicianWordingsTest.aShorthandDurationAndAnAgeAndSexOpeningAreReadAsSpelled`.
+
+## Decision 524: Two drugs joined by "or", with no verb, ask of each, as "Can I give her X or Y?" does
+
+**Status: Accepted** (October 2026) — found asking 15 note-style wordings of 15 patients on the 3.7.1 standalone on
+2026-10-29.
+
+### Context
+
+*"Needs pain relief - ibuprofen or paracetamol?"* went to the model, which answered *"Ibuprofen can be given"* on 4 of
+15 patients. *"Can I give her ibuprofen or paracetamol?"* is the module's (Decision 393): each checked on its own, neither chosen. The either shapes all spelled a
+verb.
+
+### The decision
+
+- *"X or Y?"* and *"X or Y ok?"*, with no verb, are the either question, each drug checked on its own.
+- *"X or Y for her?"* keeps the reading it had, the choice no finding makes (Decision 393), which the module also
+  answers.
+- The note's opening *"Needs pain relief - "* names no subject and is left as found. It is no statement about her that
+  Decision 419 reads.
+
+Pinned by `ClinicianWordingsTest.twoDrugsJoinedByOrWithNoVerbAskOfEach`.

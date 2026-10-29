@@ -295,6 +295,24 @@ public class LlmInferenceServiceModelReadQuestionContextTest extends BaseModuleC
 		assertEquals(1, provider.engine.readings, "a drug asked beside her medications is still read");
 	}
 
+	/**
+	 * Drug resistance asks of the infection's response to treatment, nothing of her medications' safety together (ADR
+	 * Decision 525): on the 3.7.1 standalone "Any drug resistance?" and "Is her HIV drug resistant?" were answered with the
+	 * screen of her orders, every chip of it, on all 15 patients.
+	 */
+	@Test
+	public void drugResistanceIsNoScreenOfHerMedications() {
+		for (String question : new String[] { "Any drug resistance?", "Is her HIV drug resistant?", "Any resistance to her ARVs?",
+				"Is her TB drug-sensitive?", "Any drug susceptibility results?" }) {
+			RecordingProvider provider = new RecordingProvider("YES");
+			ChartAnswer answer = serviceWith(provider).search(patient, question);
+
+			assertEquals(0, provider.engine.readings, question + " is not read by the model");
+			assertFalse(answer.isAnsweredByTheModule(), question + " is not answered with the screen: " + answer.getAnswer());
+			assertTrue(answer.getSafetyWarnings().isEmpty(), question + " carries no chip: " + answer.getSafetyWarnings());
+		}
+	}
+
 	@Test
 	public void aQuestionNamingADrugIsNotReadByTheModel() {
 		RecordingProvider provider = new RecordingProvider("YES");

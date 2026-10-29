@@ -24694,3 +24694,24 @@ verb.
   Decision 419 reads.
 
 Pinned by `ClinicianWordingsTest.twoDrugsJoinedByOrWithNoVerbAskOfEach`.
+
+## Decision 525: Drug resistance is no screen of her medications
+
+**Status: Accepted** (October 2026) — found asking 17 questions that use the word "drug" of something other than her
+medications' safety, of 15 patients on the 3.7.1 standalone on 2026-10-29.
+
+### Context
+
+*"Any drug resistance?"* and *"Is her HIV drug resistant?"* were answered with the screen of her orders, every chip of
+it, on all 15 patients. No wording rule read them, so the model was asked whether they ask about her medications'
+safety (Decision 489). It read them as YES. Drug resistance asks how her infection responds to treatment: a genotype, a
+susceptibility result, which her chart may record. The interaction findings answer none of it.
+
+### The decision
+
+- A question of resistance, sensitivity, susceptibility, a genotype or mutations is not read by the model as a medication
+  check. No screen runs, no chip is attached, and the chart answer answers it.
+- *"Any drug reactions in the past?"* still carries her allergies' chips. Drug use, drug history and adherence questions
+  carried none before this decision and carry none after.
+
+Pinned by `LlmInferenceServiceModelReadQuestionContextTest.drugResistanceIsNoScreenOfHerMedications`.

@@ -468,6 +468,20 @@ public final class QueryScopeRouter {
 					+ "|after|before) (?:food|meals?|milk|water|breakfast|lunch|dinner|supper|an empty stomach)",
 			"(?:is|are) (?:she|he|they|the patient|this patient) (?:tolerating|coping with|managing) " + HER_MEDICATIONS_AS_A_WHOLE);
 
+	/** The words of an infection's response to treatment: "Any drug resistance?", "Is her TB drug-sensitive?" (ADR Decision
+	 *  525). */
+	private static final Set<String> RESISTANCE = new HashSet<String>(Arrays.asList("resistance", "resistant", "sensitive",
+		"sensitivity", "susceptibility", "susceptible", "genotype", "genotyping", "mutation", "mutations"));
+
+	/**
+	 * Whether {@code question} asks of drug resistance — how her infection responds to treatment — which asks nothing of her
+	 * medications' safety together (ADR Decision 525). The model read "Any drug resistance?" as a question of their safety,
+	 * and the screen of her orders answered it.
+	 */
+	public static boolean asksOfDrugResistance(String question) {
+		return question != null && !Collections.disjoint(words(question), RESISTANCE);
+	}
+
 	/** The words the thing of {@link #SOMETHING_ELSE_WITH_HER_MEDICATIONS} may not be: the screen's own (ADR Decision 473). */
 	private static final Set<String> NOT_SOMETHING_ELSE = new HashSet<String>(Arrays.asList("any", "are", "is", "there",
 		"drug", "drugs", "do", "does", "did", "check", "screen", "review", "what", "which", "her", "his", "their", "the", "she",

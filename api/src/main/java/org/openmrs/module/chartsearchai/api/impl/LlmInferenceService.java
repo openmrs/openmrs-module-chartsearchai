@@ -1231,7 +1231,9 @@ public class LlmInferenceService implements ChartSearchService {
 				// as one (ADR Decision 500).
 				|| injected.asksOnlyAboutADrugsRecord()
 				// Nor one thing asked of where a drug would stand, which the model read as one: "amox ok?" (ADR Decision 514).
-				|| DrugReferenceInjector.asksOfOneThingInADrugsPlace(question)) {
+				|| DrugReferenceInjector.asksOfOneThingInADrugsPlace(question)
+				// Nor drug resistance, how her infection responds to treatment: "Any drug resistance?" (ADR Decision 525).
+				|| QueryScopeRouter.asksOfDrugResistance(question)) {
 			return new SafetyReading(injected, question);
 		}
 		LlmProvider.MedicationSafetyReading reading = llmProvider.readMedicationSafetyQuestion(question);

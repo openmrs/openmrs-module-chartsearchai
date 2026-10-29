@@ -1926,6 +1926,19 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/** ADR Decision 527: a giving verb misspelt as clinicians type it is the verb. */
+	@Test
+	public void aGivingVerbMisspeltIsTheVerb() {
+		String[][] pairs = { { "is it ok to giv warfarin", "is it ok to give warfarin" }, { "Can i gve her warfarin?", "Can I give her warfarin?" },
+			{ "Can I giev her warfarin?", "Can I give her warfarin?" }, { "Can I prescibe warfarin?", "Can I prescribe warfarin?" },
+			{ "Can I perscribe warfarin?", "Can I prescribe warfarin?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+	}
+
 	/** ADR Decision 526: a misspelt drug asked "ok?" with nothing else is offered the names near it, as in a spelled question. */
 	@Test
 	public void aMisspeltDrugAskedOkAloneIsOfferedTheNamesNearIt() {

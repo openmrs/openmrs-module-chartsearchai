@@ -24738,3 +24738,24 @@ in that place, *"Diet ok?"*, would otherwise carry the unchecked statement after
   answer with no statement, as before.
 
 Pinned by `ClinicianWordingsTest.aMisspeltDrugAskedOkAloneIsOfferedTheNamesNearIt`.
+
+## Decision 527: A giving verb misspelt as clinicians type it is the verb
+
+**Status: Accepted** (October 2026) — found asking 16 misspelt, capitalised and unpunctuated wordings of 15 patients
+on the 3.7.1 standalone on 2026-10-29.
+
+### Context
+
+*"is it ok to giv fluconazole"* and *"Can i gve her fluconazole?"* went to the model, which answered *"Fluconazole can
+be given"* on 6 and 7 of 15 patients. Every shape spells its verb. A misspelt *"giv"* made the words no proposal. Read
+on the question's text, *"gve her fluconazole"* was taken as *"her fluconazole"*, a drug named as hers.
+
+### The decision
+
+- The giving verbs as clinicians misspell them — *giv, gve, giev, gvie, gie, giive* for *give*; *prescibe, perscribe,
+  precribe, prescrbe, presribe, prescirbe* for *prescribe* — are those verbs. This holds in the router's words and in the
+  question text the injector reads, which is spelled once where the injection starts, so no reading sees the
+  misspelling.
+- The list is closed. A misspelling it does not hold is read as before.
+
+Pinned by `ClinicianWordingsTest.aGivingVerbMisspeltIsTheVerb`.

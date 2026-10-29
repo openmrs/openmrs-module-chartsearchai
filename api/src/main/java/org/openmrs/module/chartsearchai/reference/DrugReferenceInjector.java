@@ -618,6 +618,8 @@ public class DrugReferenceInjector {
 	 */
 	PatientChart injectRecords(PatientChart chart, PatientClinicalContext rawContext, String question,
 			Supplier<PatientClinicalContext> orderHistory) {
+		// A giving verb misspelt is the verb, for every reading of the question's text below (ADR Decision 527).
+		question = QueryScopeRouter.withMisspeltVerbsSpelled(question);
 		// The same resolution DrugSafetyValidator.validate applies, for the same reason
 		// (issue #136): orderedInteractionNotes decides which interactions to promote through
 		// PatientClinicalContext.hasActiveDrug, so a context without the reference names here would

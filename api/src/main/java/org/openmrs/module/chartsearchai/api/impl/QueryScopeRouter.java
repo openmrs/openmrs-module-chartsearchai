@@ -13,9 +13,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -367,6 +369,30 @@ public final class QueryScopeRouter {
 	 * The words of {@code text}, lower-cased, in order — the ONE tokenizer both question grammars
 	 * below read. {@link #DRUG_NAME} is kept as a word. Issue #469.
 	 */
+	/** The giving verbs as clinicians misspell them, and the verb each is (ADR Decision 527). */
+	private static final Map<String, String> MISSPELT_VERBS = new HashMap<String, String>();
+	static {
+		for (String give : new String[] { "giv", "gve", "giev", "gvie", "gie", "giive" }) {
+			MISSPELT_VERBS.put(give, "give");
+		}
+		for (String prescribe : new String[] { "prescibe", "perscribe", "precribe", "prescrbe", "presribe", "prescirbe" }) {
+			MISSPELT_VERBS.put(prescribe, "prescribe");
+		}
+	}
+
+	/** {@code question} with each giving verb misspelt as clinicians type it spelled (ADR Decision 527), for the readings that
+	 *  read its text rather than its {@link #words}: "Can i gve her warfarin?" is "Can i give her warfarin?". */
+	public static String withMisspeltVerbsSpelled(String question) {
+		if (question == null) {
+			return null;
+		}
+		String spelled = question;
+		for (Map.Entry<String, String> verb : MISSPELT_VERBS.entrySet()) {
+			spelled = spelled.replaceAll("(?i)(?<![\\p{L}\\p{N}])" + verb.getKey() + "(?![\\p{L}\\p{N}])", verb.getValue());
+		}
+		return spelled;
+	}
+
 	public static List<String> words(String text) {
 		List<String> words = new ArrayList<String>();
 		if (text == null) {
@@ -389,6 +415,9 @@ public final class QueryScopeRouter {
 			Matcher matcher = WORD.matcher(parts[p]);
 			while (matcher.find()) {
 				String word = matcher.group().replace('\u2019', '\'');
+				// A giving verb misspelt as clinicians type it is the verb: "giv", "gve", "prescibe" (ADR Decision 527).
+				// (Null while the class's own shapes are built, which spell no misspelling.)
+				word = MISSPELT_VERBS != null && MISSPELT_VERBS.containsKey(word) ? MISSPELT_VERBS.get(word) : word;
 				// "What's" is "what is", which the shapes spell (ADR Decision 423).
 				if ("what's".equals(word)) {
 					words.add("what");

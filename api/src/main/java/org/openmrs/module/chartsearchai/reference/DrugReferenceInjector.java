@@ -10026,8 +10026,7 @@ public class DrugReferenceInjector {
 				// of them (ADR Decision 467): the lead keeps its negative polarity, scoped to the floor, and the pairs are
 				// counted, never named — the note names no drug.
 				: SCREEN_NOTE_BELOW_FLOOR_LEAD + screened + " substances in them were checked against each other. The "
-						+ "reference data lists " + (below.size() == 1 ? "one pair" : below.size() + " pairs")
-						+ " of them only below that level, " + belowFloorRatings(below) + ". ";
+						+ "reference data lists " + belowFloorPairs(below) + ". ";
 		return checked + "This "
 				+ "check compares individual substances: relationships resting only on two drugs "
 				+ "sharing a drug class are not part of it, so it is not a statement that no "
@@ -10037,7 +10036,7 @@ public class DrugReferenceInjector {
 	/**
 	 * The screen note's facts as the module's ANSWER states them, citing the note (ADR Decision 509): <em>"No interaction at
 	 * or above the configured severity level was found among the 3 substances in this patient's active medications; the
-	 * data lists 3 pairs of them only below that level, none with a severity or mechanism on file. Drug-class
+	 * data lists 3 pairs of them with no severity or mechanism on file. Drug-class
 	 * relationships were not checked."</em> Decision 162 stated the note word for word because the model dropped its floor
 	 * and its class limit; both are kept here, in a third of its words. The finding comes first and the count with it,
 	 * as in the note, and the class limit is what keeps the answer from being read as a patient with no interactions. The
@@ -10049,8 +10048,7 @@ public class DrugReferenceInjector {
 		return "No interaction at or above the configured severity level was found among the " + screened
 				+ " substances in this patient's active medications"
 				+ (below.isEmpty() ? ""
-						: "; the data lists " + (below.size() == 1 ? "one pair" : below.size() + " pairs")
-								+ " of them only below that level, " + belowFloorRatings(below))
+						: "; the data lists " + belowFloorPairs(below))
 				+ ". Drug-class relationships were not checked.";
 	}
 
@@ -10059,27 +10057,38 @@ public class DrugReferenceInjector {
 			"No interactions at or above the configured severity level were found among this patient's active medications. ";
 
 	/**
-	 * What the data rates the screen's below-floor pairs, in the words a below-floor answer uses for a drug's (ADR Decision
-	 * 144): "none with a severity or mechanism on file" where every pair is rated Unknown, the mechanism said only where
-	 * the data says of every one that none is on file; otherwise the ratings, "rated Minor and Unknown".
+	 * The screen's below-floor pairs, counted, in the words a below-floor answer uses for a drug's (ADR Decision 144): only
+	 * a pair the data RATES is "below that level" — one rated Unknown has no rating to be below it, and "3 pairs of them
+	 * only below that level, none with a severity" told the demo's clinician the data rated them lower (ADR Decision 532).
+	 * So "3 pairs of them with no severity or mechanism on file" where none is rated, "2 pairs of them only below that
+	 * level, rated Minor" where all are, and both counted where the data does each; the mechanism is said only where the
+	 * data says of every unrated pair that none is on file.
 	 */
-	private static String belowFloorRatings(List<PairChipExtent.BelowFloorPair> below) {
+	private static String belowFloorPairs(List<PairChipExtent.BelowFloorPair> below) {
 		Set<String> ratings = new LinkedHashSet<String>();
-		boolean allUnknown = true;
+		int unrated = 0;
 		boolean noMechanism = true;
 		for (PairChipExtent.BelowFloorPair pair : below) {
 			String severity = pair.getSeverity() == null ? "" : pair.getSeverity().trim();
-			allUnknown &= "unknown".equalsIgnoreCase(severity);
-			noMechanism &= Boolean.FALSE.equals(pair.mechanismOnFile());
-			if (!severity.isEmpty()) {
+			if (severity.isEmpty() || "unknown".equalsIgnoreCase(severity)) {
+				unrated++;
+				noMechanism &= Boolean.FALSE.equals(pair.mechanismOnFile());
+			} else {
 				ratings.add(severity);
 			}
 		}
-		if (!allUnknown) {
-			return "rated " + joinedAsAList(new ArrayList<String>(ratings));
+		int rated = below.size() - unrated;
+		String ratedWords = "only below that level, rated " + joinedAsAList(new ArrayList<String>(ratings));
+		String unratedWords = "with no severity" + (noMechanism ? " or mechanism" : "") + " on file";
+		String counted = below.size() == 1 ? "one pair of them" : below.size() + " pairs of them";
+		if (unrated == 0) {
+			return counted + " " + ratedWords;
 		}
-		return (below.size() == 1 ? "with no severity" : "none with a severity") + (noMechanism ? " or mechanism" : "")
-				+ " on file";
+		if (rated == 0) {
+			return counted + " " + unratedWords;
+		}
+		return counted + ": " + (rated == 1 ? "one" : String.valueOf(rated)) + " " + ratedWords + ", and "
+				+ (unrated == 1 ? "one" : String.valueOf(unrated)) + " " + unratedWords;
 	}
 
 	/**

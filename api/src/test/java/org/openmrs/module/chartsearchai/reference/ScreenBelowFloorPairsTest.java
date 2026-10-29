@@ -89,7 +89,7 @@ public class ScreenBelowFloorPairsTest extends BaseModuleContextSensitiveTest {
 		// The screen note's facts in fewer words, the record keeping its own (ADR Decision 509), under the bottom line
 		// (ADR Decision 512).
 		assertTrue(answer.split("\n")[1].startsWith("No interaction at or above the configured severity level was found "
-				+ "among the 3 substances in this patient's active medications; the data lists 3 pairs of them only below that level, none with a severity or "
+				+ "among the 3 substances in this patient's active medications; the data lists 3 pairs of them with no severity or "
 				+ "mechanism on file. Drug-class relationships were not checked."),
 			"was: " + answer);
 	}
@@ -116,7 +116,7 @@ public class ScreenBelowFloorPairsTest extends BaseModuleContextSensitiveTest {
 		assertEquals("No rated interactions; 3 possible duplicate therapies.", lines[0], "was: " + answer);
 		lines = java.util.Arrays.copyOfRange(lines, 1, lines.length);
 		assertTrue(lines[0].matches(java.util.regex.Pattern.quote("No interaction at or above the configured severity level "
-				+ "was found among the 3 substances in this patient's active medications; the data lists 3 pairs of them only below that level, none with a severity or "
+				+ "was found among the 3 substances in this patient's active medications; the data lists 3 pairs of them with no severity or "
 				+ "mechanism on file. Drug-class relationships were not checked.") + " \\[\\d+\\]"),
 			"was: " + answer);
 		// Her three drugs each in several orders, one line since ADR Decision 493.
@@ -134,6 +134,24 @@ public class ScreenBelowFloorPairsTest extends BaseModuleContextSensitiveTest {
 			"the bottom line: " + answer);
 		assertTrue(answer.split("\n")[1].startsWith("No interaction at or above the configured severity level was found among the 2 "
 				+ "substances in this patient's active medications. Drug-class relationships were not checked. ["),
+			"was: " + answer);
+	}
+
+	/** Only a rated pair is below the floor; a pair the data rates Unknown has no rating to be below it (ADR Decision 532).
+	 *  DDInter rates abacavir with isoniazid Minor and abacavir with amoxicillin Unknown, and relates amoxicillin to
+	 *  isoniazid not at all. */
+	@Test
+	public void aScreenSaysOnlyItsRatedPairsAreBelowTheFloor() {
+		Context.getAdministrationService().setGlobalProperty(
+			ChartSearchAiConstants.GP_DRUG_SAFETY_MIN_INTERACTION_SEVERITY, "moderate");
+
+		String answer = screen(INTERACTIONS, "Abacavir", "Amoxicillin", "Isoniazid");
+
+		assertNotNull(answer, "the module answers");
+		assertTrue(answer.split("\n")[1].startsWith("No interaction at or above the configured severity level was found "
+				+ "among the 3 substances in this patient's active medications; the data lists 2 pairs of them: one only "
+				+ "below that level, rated Minor, and one with no severity or mechanism on file. Drug-class relationships "
+				+ "were not checked. ["),
 			"was: " + answer);
 	}
 

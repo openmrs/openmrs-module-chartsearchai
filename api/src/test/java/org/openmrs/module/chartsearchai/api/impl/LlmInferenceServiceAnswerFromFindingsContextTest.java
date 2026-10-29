@@ -3572,8 +3572,8 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	private static final String NO_PAIR_BOTTOM_LINE = "No rated interactions.";
 
 	private static final String SCREEN_NOTE_WORDS = "No interaction at or above the configured severity level was found "
-			+ "among the 2 substances in this patient's active medications; the data lists one pair of them only below that "
-			+ "level, with no severity or mechanism on file. Drug-class relationships were not checked.";
+			+ "among the 2 substances in this patient's active medications; the data lists one pair of them with no "
+			+ "severity or mechanism on file. Drug-class relationships were not checked.";
 
 	/** With the property off, the screen's prompt: the note is injected, and its record number. */
 	private int screenNoteIndex() {

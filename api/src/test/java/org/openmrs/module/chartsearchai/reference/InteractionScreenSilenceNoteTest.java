@@ -131,7 +131,7 @@ public class InteractionScreenSilenceNoteTest {
 		// the lead's needle below is one. The fixture's one rule is rated Unknown, below the floor, so the note counts that
 		// pair rather than saying the data relates nothing (ADR Decision 467).
 		assertTrue(note.contains("2 substances in them were checked against each other. The reference data lists one pair "
-				+ "of them only below that level, with no severity or mechanism on file."),
+				+ "of them with no severity or mechanism on file."),
 				"it says how many SUBSTANCES were checked against each other: " + note);
 		assertFalse(note.toLowerCase().contains("prednisolone"),
 				"and it names no drug — it is citable evidence with nothing to navigate to: " + note);

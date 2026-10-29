@@ -24902,3 +24902,28 @@ verbs nor *"shall"*.
 - *"X indicated?"* asks what it is for, and stays the model's.
 
 Pinned by `ClinicianWordingsTest.anOrderWrittenAsAnOrderEntryNoteProposesTheDrug`.
+
+## Decision 532: Only a pair the data rates is below the severity floor
+
+**Status: Accepted** (October 2026) — found reviewing the public demo's answer for patient dd74dc61 on 2026-10-29.
+
+### Context
+
+*"Does he have any known drug to drug interactions?"* was answered, under its bottom line, *"No interaction at or above
+the configured severity level was found among the 3 substances in this patient's active medications; the data lists 3
+pairs of them only below that level, none with a severity or mechanism on file."* The three pairs are lamivudine,
+nevirapine and stavudine, each rated Unknown in the shipped DDInter data. The module ranks Unknown beneath Minor, so the
+words followed its ordering, but the data rates none of them lower than the floor: it rates them not at all. The same
+sentence then said so, and contradicted itself.
+
+### The decision
+
+- The screen's note and its answer call a pair *"below that level"* only where the data rates it: *"2 pairs of them only
+  below that level, rated Minor"*.
+- A pair rated Unknown is stated as unrated: *"3 pairs of them with no severity or mechanism on file"*.
+- Where the data does both, each is counted: *"2 pairs of them: one only below that level, rated Minor, and one with no
+  severity or mechanism on file"*.
+- The answers about one drug already said it this way (Decision 144); only the screen did not.
+
+Pinned by `ScreenBelowFloorPairsTest.aScreenSaysOnlyItsRatedPairsAreBelowTheFloor` and
+`ScreenBelowFloorPairsTest.theAnswerSaysTheDataListsHisPairsBelowTheFloorRatherThanThatNoneWereFound`.

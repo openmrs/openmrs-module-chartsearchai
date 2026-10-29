@@ -45,6 +45,12 @@ public class LlmProviderTest {
 	}
 
 	@Test
+	public void defaultSystemPrompt_shouldNotGiveANoRecordVerdictOnAWithheldType() {
+		assertTrue(LlmProvider.DEFAULT_SYSTEM_PROMPT.contains("never answer a question about that type with a "
+				+ "no-record verdict"));
+	}
+
+	@Test
 	public void defaultSystemPrompt_shouldConstrainToQuestionAsked() {
 		assertTrue(LlmProvider.DEFAULT_SYSTEM_PROMPT.contains("ONLY the specific query"));
 	}

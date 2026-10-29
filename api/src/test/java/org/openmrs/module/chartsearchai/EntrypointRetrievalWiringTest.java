@@ -981,6 +981,34 @@ public class EntrypointRetrievalWiringTest {
 	}
 
 	/**
+	 * Chart search refuses to answer until QueryStore has completed a bootstrap, and QueryStore ships
+	 * {@code querystore.bootstrap.autostart=false}. So a start whose embedder verifies turns the sweep
+	 * on, from that shipped default and from no row at all, rather than leaving every answer refused
+	 * on an install that never ran the demo seed. Once a bootstrap has completed, QueryStore's
+	 * autostart is an incremental top-up from each type's cursor, not a reindex.
+	 */
+	@Test
+	public void aVerifiedEmbedderTurnsTheSweepOnFromQueryStoresShippedDefault() throws Exception {
+		given(AUTOSTART_GP, "false");
+		Files.write(onnx, RECORDED_BYTES);
+		Files.write(vocab, RECORDED_BYTES);
+
+		Run run = run(verified());
+
+		assertEquals("true", gp(AUTOSTART_GP), "a start that verified left the bootstrap off\n" + run);
+	}
+
+	@Test
+	public void aVerifiedEmbedderTurnsTheSweepOnWhereNoRowExistsYet() throws Exception {
+		Files.write(onnx, RECORDED_BYTES);
+		Files.write(vocab, RECORDED_BYTES);
+
+		Run run = run(verified());
+
+		assertEquals("true", gp(AUTOSTART_GP), "a start that verified left the bootstrap off\n" + run);
+	}
+
+	/**
 	 * An operator's own path survives a start that verifies. {@code gp_set_if_blank} is what extends
 	 * that courtesy, and turning the sweep off must not have grown into overwriting what it finds.
 	 */

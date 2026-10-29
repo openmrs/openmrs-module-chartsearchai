@@ -38,9 +38,16 @@ public class ChartSearchServiceRouterTest {
 
 		int cacheTtlMinutes;
 
+		String user = "user-1";
+
 		@Override
 		protected String gp(String property, String defaultValue) {
 			return gps.containsKey(property) ? gps.get(property) : defaultValue;
+		}
+
+		@Override
+		protected String askingUser() {
+			return user;
 		}
 
 		@Override
@@ -241,6 +248,24 @@ public class ChartSearchServiceRouterTest {
 		router.search(patient("p2"), "qA");
 		assertEquals(5, delegate.searchCalls,
 				"invalidatePatient(p1) must evict both p1 entries (2 recomputes) and leave p2 cached (0)");
+	}
+
+	/** QueryStore withholds by caller, so a colleague's cached answer may rest on records the asker cannot read. */
+	@Test
+	public void aRepeatedQuestionFromAnotherUserIsNotServedTheFirstUsersAnswer() {
+		CountingDelegate delegate = new CountingDelegate();
+		StubRouter router = new StubRouter();
+		router.cacheTtlMinutes = 60;
+		router.setLlmService(delegate);
+
+		router.search(patient("p1"), "qA");
+		router.user = "user-2";
+		router.search(patient("p1"), "qA");
+		assertEquals(2, delegate.searchCalls, "the second user's question must miss the first user's entry");
+
+		router.invalidatePatient("p1");
+		router.search(patient("p1"), "qA");
+		assertEquals(3, delegate.searchCalls, "invalidatePatient must still evict every user's entry for p1");
 	}
 
 	@Test

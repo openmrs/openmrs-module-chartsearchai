@@ -146,6 +146,15 @@ jobs:
   # `clean install` below covers both source roots. So `build` above being green is evidence only
   # that this module works against the last PUBLISHED snapshot; this job asks about querystore HEAD.
   #
+  # A pull request that needs QueryStore API which has not merged yet names it on a line of its
+  # description, `Depends-On: openmrs/openmrs-module-querystore#<number>` (the top of a QueryStore
+  # stack, whose head carries every layer below it), and this job then builds that pull request's
+  # current head instead of main; once it merges, main again. The required `build` stays red until
+  # the API is published, which is the true merge state. .github/scripts/querystore-dependency.mjs
+  # reads the line and says why it accepts or refuses one. Editing a description does not rerun
+  # checks, so rerun this job after adding the line: the script reads the description from the API
+  # when it runs, because a re-run replays the original event and its description.
+  #
   # Deliberately NOT in the required set, and deliberately WITHOUT continue-on-error. Those are two
   # halves of one decision: the job has to be able to go red, because a job that cannot fail is not
   # a signal — and its red X must not block an unrelated chartsearchai PR, because an upstream
@@ -157,13 +166,16 @@ jobs:
   # a pin defers incompatibilities into one big-bang bump and still never tells you WHEN upstream
   # broke you, which is the actual defect here.
   build-against-querystore-head:
-    name: build against querystore HEAD (not a required check)
+    # Check upstream compatibility on pull requests, main pushes and the daily schedule.
+    name: build against querystore main or Depends-On PR (not a required check)
     runs-on: ubuntu-latest
     # Least privilege, declared here and not on the neighbouring jobs because the exposure is this
     # job's own: it builds a SECOND repository's source, so it runs Maven plugins this repository
-    # does not gate. Checking out two public repos needs nothing but read.
+    # does not gate. Checking out two public repos and reading this pull request's description
+    # need nothing but read.
     permissions:
       contents: read
+      pull-requests: read
     steps:
       # persist-credentials: false on both, for the same reason as the permissions block above —
       # querystore HEAD's unreviewed Maven plugins run in this job, and there is no need to leave a
@@ -174,10 +186,27 @@ jobs:
           path: chartsearchai
           persist-credentials: false
 
-      - name: Check out querystore at HEAD
+      # The resolver's own predicates first, so a wrong one fails here rather than quietly building
+      # main. Both run on the runner's preinstalled Node; the script uses only its built-ins.
+      - name: Self-test the Depends-On resolver
+        run: node chartsearchai/.github/scripts/querystore-dependency.test.mjs
+
+      - name: Pick querystore main or the Depends-On pull request
+        id: querystore
+        # The script reads the description itself, so its text never reaches a command line. The
+        # number is empty outside pull requests: main.
+        env:
+          PR_REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node chartsearchai/.github/scripts/querystore-dependency.mjs
+
+      - name: Check out that querystore source
         uses: actions/checkout@v4
         with:
           repository: openmrs/openmrs-module-querystore
+          # Empty for main, else refs/pull/<number>/head.
+          ref: ${{ steps.querystore.outputs.ref }}
           path: querystore
           persist-credentials: false
 
@@ -203,9 +232,9 @@ jobs:
 
       - name: Report the querystore commit under test
         # The first thing a triager needs when this is the only red job: WHICH upstream commit.
-        run: git -C querystore log -1 --format='querystore HEAD = %H %ci %s'
+        run: git -C querystore log -1 --format='querystore under test = %H %ci %s'
 
-      - name: Install querystore HEAD into the local Maven repository
+      - name: Install that querystore source into the local Maven repository
         # -DskipTests deliberately: the question is whether chartsearchai still builds against
         # querystore's current API, not whether querystore's own suite passes — that is querystore
         # CI's job, and running it here would paint this job red for failures that say nothing

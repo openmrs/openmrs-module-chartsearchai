@@ -45,6 +45,8 @@ import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.util.DateFormatUtil;
 import org.openmrs.module.chartsearchai.api.ChartSearchService;
 import org.openmrs.module.chartsearchai.api.ChartTooLargeException;
+import org.openmrs.module.chartsearchai.api.InsufficientContextException;
+import org.openmrs.module.chartsearchai.api.IncompleteChartException;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.ActiveOrderClaims;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.FindingCitationExtent;
@@ -137,6 +139,11 @@ public class ChartSearchAiRestController {
 	 * event in the UI.
 	 */
 	private static final String SSE_KEEP_ALIVE_COMMENT = ": keep-alive\n\n";
+
+	/** Shown when QueryStore could not return a complete chart. Indexing that is not running never
+	 *  finishes on its own, so the remedy is an administrator's: a completed QueryStore bootstrap. */
+	private static final String INCOMPLETE_CHART_MESSAGE = "This patient's chart could not be read completely, "
+			+ "so the answer was withheld. Ask your administrator to check that QueryStore indexing has completed.";
 
 	/**
 	 * How often {@link #streamAnswer} writes {@link #SSE_KEEP_ALIVE_COMMENT} until the answer is
@@ -262,6 +269,14 @@ public class ChartSearchAiRestController {
 			chartAnswer = chartSearchService.search(patient, question);
 			responseTimeMs = System.currentTimeMillis() - startTime;
 		}
+		catch (InsufficientContextException e) {
+			log.warn("Mandatory clinical evidence exceeded the LLM input budget for patient [id={}]: {}",
+					patient.getPatientId(), e.getMessage());
+			return new ResponseEntity<Object>(
+					errorResponse("This patient's required clinical evidence exceeds the LLM's input budget. Contact your "
+							+ "administrator to increase the LLM context size."),
+					HttpStatus.UNPROCESSABLE_ENTITY);
+		}
 		catch (ChartTooLargeException e) {
 			log.warn("Chart too large for LLM context for patient [id={}]: {}",
 					patient.getPatientId(), e.getMessage());
@@ -269,6 +284,10 @@ public class ChartSearchAiRestController {
 					errorResponse("This patient's chart is too large to process. "
 							+ "Contact your administrator to increase the LLM context size."),
 					HttpStatus.PAYLOAD_TOO_LARGE);
+		}
+		catch (IncompleteChartException e) {
+			log.warn("Incomplete chart read for patient [id={}]: {}", patient.getPatientId(), e.getMessage());
+			return new ResponseEntity<Object>(errorResponse(INCOMPLETE_CHART_MESSAGE), HttpStatus.SERVICE_UNAVAILABLE);
 		}
 		catch (IllegalStateException e) {
 			log.error("Chart search configuration error", e);
@@ -831,6 +850,18 @@ public class ChartSearchAiRestController {
 				writeSseEventOrThrow(out, "grounded", new ObjectMapper().writeValueAsString(groundedData));
 			}
 		}
+		catch (InsufficientContextException e) {
+			log.warn("Mandatory clinical evidence exceeded the LLM input budget during streaming for "
+					+ "patient [id={}]: {}", patient.getPatientId(), e.getMessage());
+			try {
+				writeSseEvent(out, "error",
+						"This patient's required clinical evidence exceeds the LLM's input budget. Contact your administrator "
+								+ "to increase the LLM context size.");
+			}
+			catch (IOException ioe) {
+				log.debug("Could not send insufficient-context error event, client likely disconnected");
+			}
+		}
 		catch (ChartTooLargeException e) {
 			log.warn("Chart too large for LLM context during streaming for patient [id={}]: {}",
 					patient.getPatientId(), e.getMessage());
@@ -841,6 +872,16 @@ public class ChartSearchAiRestController {
 			}
 			catch (IOException ioe) {
 				log.debug("Could not send too-large error event, client likely disconnected");
+			}
+		}
+		catch (IncompleteChartException e) {
+			log.warn("Incomplete chart read during streaming for patient [id={}]: {}",
+					patient.getPatientId(), e.getMessage());
+			try {
+				writeSseEvent(out, "error", INCOMPLETE_CHART_MESSAGE);
+			}
+			catch (IOException ioe) {
+				log.debug("Could not send incomplete-chart error event, client likely disconnected");
 			}
 		}
 		catch (IllegalStateException e) {

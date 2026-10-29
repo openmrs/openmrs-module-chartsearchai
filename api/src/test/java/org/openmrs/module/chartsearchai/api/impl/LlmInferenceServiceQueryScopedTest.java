@@ -16,6 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Set;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -164,6 +165,21 @@ public class LlmInferenceServiceQueryScopedTest {
 		assertEquals(1, strategy.buildFocusedChartCalls,
 				"fullChart mode keeps the progressive-reasoning preview exactly as today");
 		assertEquals(2, provider.searchStreamingCalls, "preview pass + committed full-chart pass");
+	}
+
+	/** The focused chart reads searchByPatient, which QueryStore filters by caller as it does the full chart. */
+	@Test
+	public void searchStreaming_thePreviewChartSaysWhatWasWithheldFromTheUser() {
+		service.queryScoped = false;
+		service.progressiveEnabled = true;
+		strategy.withheldTypes = Collections.singleton("allergy");
+
+		service.searchStreaming(patient(), "any allergies?",
+				token -> { }, reasoning -> { }, citations -> { }, ungrounded -> { });
+
+		assertEquals(2, provider.prompts.size(), "preview pass + committed full-chart pass");
+		assertTrue(provider.prompts.get(0).startsWith(PatientChart.withheldTypesNote(strategy.withheldTypes)),
+				provider.prompts.get(0));
 	}
 
 	@Test
@@ -348,6 +364,9 @@ public class LlmInferenceServiceQueryScopedTest {
 		 *  every test written before #178 sees exactly the behaviour it was written against. */
 		boolean returnPreFilteredChart = false;
 
+		/** The record types the built chart says QueryStore withheld from the asking user. */
+		Set<String> withheldTypes = Collections.emptySet();
+
 		/** What the STRATEGY's own chartMode gate reports. Overridden (rather than left falling
 		 *  through to the real GP reader, whose fail-safe default is queryScoped) so a case can put
 		 *  the gate and the built chart in deliberate disagreement and have the disagreement be the
@@ -366,6 +385,7 @@ public class LlmInferenceServiceQueryScopedTest {
 			if (returnPreFilteredChart) {
 				chart.markPreFiltered();
 			}
+			chart.markWithheldTypes(withheldTypes);
 			return chart;
 		}
 
@@ -404,12 +424,16 @@ public class LlmInferenceServiceQueryScopedTest {
 		/** KV-cache scope passed to each committed LLM pass, in order. */
 		final List<String> scopes = new java.util.ArrayList<String>();
 
+		/** The numbered records each pass, preview included, was handed, in order. */
+		final List<String> prompts = new java.util.ArrayList<String>();
+
 		@Override
 		public LlmResponse searchStreaming(String numberedRecords, List<Integer> focusIndices,
 				String question, Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
 				String cacheScope, String cacheSeedRecords, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords,
 				List<AlreadyOrderedDrug> drugsAlreadyOrdered) {
 			searchStreamingCalls++;
+			prompts.add(numberedRecords);
 			// The preview pass discards its answer; only non-preview calls record the scope so the
 			// scoped-mode assertion sees exactly the committed pass's KV contract.
 			if (searchStreamingCalls == 1 && buildFocusedWasPreview()) {

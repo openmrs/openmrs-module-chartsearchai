@@ -23,6 +23,7 @@ import org.openmrs.module.DaemonToken;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.api.ChartSearchService;
+import org.openmrs.module.chartsearchai.api.IncompleteChartException;
 import org.openmrs.util.OpenmrsUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -165,8 +166,12 @@ public class PrewarmBootstrapService {
 		long throttleMs = getThrottleMs();
 		int maxPinned = getMaxPinnedEntries();
 
+		// Set where QueryStore reports a chart it has not finished indexing; a stop like cancelRequested,
+		// but this run's own, so it does not carry over to the next start.
+		boolean notYetIndexed = false;
 		List<Long> batch;
-		while (!cancelRequested && !(batch = enumeratePatientIdsAfter(cursor, ENUMERATION_BATCH)).isEmpty()) {
+		while (!cancelRequested && !notYetIndexed
+				&& !(batch = enumeratePatientIdsAfter(cursor, ENUMERATION_BATCH)).isEmpty()) {
 			for (Long id : batch) {
 				if (cancelRequested) {
 					break;
@@ -194,6 +199,23 @@ public class PrewarmBootstrapService {
 					}
 					done++;
 				}
+				catch (IncompleteChartException e) {
+					if (e.getReason() == IncompleteChartException.Reason.CHART_TRUNCATED) {
+						// This one chart exceeds the read store's retrieval cap: a failed patient like any
+						// other, not a reason to stop, or one such chart would block every later patient
+						// on every start.
+						failed++;
+						log.warn("Prewarm failed for patient [id={}]: {}", id, e.getMessage());
+					} else {
+						// Not a failed patient: QueryStore has not finished indexing (its bootstrap, or a
+						// restart's top-up). Moving the cursor on would carry the sweep to the end having
+						// pinned nothing, so it stops here and a later start resumes at this patient.
+						log.warn("Prewarm sweep stopping at patient [id={}]: QueryStore has not finished indexing; "
+								+ "start the prewarm again once its bootstrap completes", id);
+						notYetIndexed = true;
+						break;
+					}
+				}
 				catch (Exception e) {
 					failed++;
 					log.warn("Prewarm failed for patient [id={}]: {}", id, e.getMessage());
@@ -204,7 +226,8 @@ public class PrewarmBootstrapService {
 				sleep(throttleMs);
 			}
 		}
-		progress = progress.finished(cancelRequested ? STATUS_STOPPED : STATUS_COMPLETED, total, done, failed);
+		progress = progress.finished(cancelRequested || notYetIndexed ? STATUS_STOPPED : STATUS_COMPLETED, total, done,
+				failed);
 		persistProgress(progress);
 		log.warn("Prewarm sweep {}: done={} failed={} cursor={}",
 				progress.status, done, failed, cursor);

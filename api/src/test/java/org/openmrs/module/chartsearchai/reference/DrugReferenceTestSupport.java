@@ -2248,16 +2248,17 @@ public final class DrugReferenceTestSupport {
 	 * {@code api.impl} that drives the real {@code LlmInferenceService} without an OpenMRS runtime, where
 	 * the real {@code validate} would read the patient through {@code Context}, and that still needs the
 	 * validator's OTHER questions answered over the dataset the chart was injected from (issue #555:
-	 * whether the prose names a finding's partner). The overload production calls is the one stubbed.
+	 * whether the prose names a finding's partner). It stubs {@code validateWithStatus}, the entry point
+	 * production calls, and reports the chips as a check that ran.
 	 */
 	public static DrugSafetyValidator validatorRaising(DrugReferenceService service,
 			final List<SafetyWarning> chips) {
 		DrugSafetyValidator validator = new DrugSafetyValidator() {
 
 			@Override
-			public List<SafetyWarning> validate(String answer, String question, Patient patient,
+			public DrugSafetyValidator.SafetyCheckResult validateWithStatus(String answer, String question, Patient patient,
 					List<RecordMapping> mappings, PairChipExtent.Sink pairExtentSink) {
-				return chips;
+				return new DrugSafetyValidator.SafetyCheckResult(DrugSafetyValidator.STATUS_CHECKED, chips);
 			}
 		};
 		validator.setDrugReferenceService(service);

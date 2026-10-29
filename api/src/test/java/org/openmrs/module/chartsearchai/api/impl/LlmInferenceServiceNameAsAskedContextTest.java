@@ -124,9 +124,8 @@ public class LlmInferenceServiceNameAsAskedContextTest extends BaseModuleContext
 		service.setDrugSafetyValidator(new DrugSafetyValidator() {
 
 			@Override
-			public List<SafetyWarning> validate(String answer, String question, Patient patient, List<RecordMapping> mappings,
-					PairChipExtent.Sink pairExtentSink) {
-				return Collections.emptyList();
+			public DrugSafetyValidator.SafetyCheckResult validateWithStatus(String answer, String question, Patient patient, List<RecordMapping> mappings, PairChipExtent.Sink pairExtentSink) {
+				return new DrugSafetyValidator.SafetyCheckResult(DrugSafetyValidator.STATUS_CHECKED, Collections.<SafetyWarning>emptyList());
 			}
 		});
 		return service;

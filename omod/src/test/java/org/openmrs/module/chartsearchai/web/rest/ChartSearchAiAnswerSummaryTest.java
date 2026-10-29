@@ -26,6 +26,7 @@ import org.junit.jupiter.api.Test;
 import org.openmrs.Patient;
 import org.openmrs.User;
 import org.openmrs.module.chartsearchai.api.ChartSearchService;
+import org.openmrs.module.chartsearchai.reference.DrugSafetyValidator;
 import org.openmrs.module.chartsearchai.reference.SafetyWarning;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -81,7 +82,8 @@ public class ChartSearchAiAnswerSummaryTest {
 		return new ChartSearchService.ChartAnswer(COMPOSED,
 				Collections.<ChartSearchService.RecordReference> emptyList(), 0, 0, 0,
 				Collections.<SafetyWarning> emptyList(), null, null, null, null, null, null, null, null,
-				null, null, null, null, null, null, true, null, null, null, null, null, null, null, false, summary, limits);
+				null, null, null, null, null, null, true, null, null, null, null, null, null,
+				DrugSafetyValidator.STATUS_UNAVAILABLE, Collections.emptyList(), null, false, summary, limits, null);
 	}
 
 	@SuppressWarnings("unchecked")

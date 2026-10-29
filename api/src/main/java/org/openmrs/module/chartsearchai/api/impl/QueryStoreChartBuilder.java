@@ -310,6 +310,16 @@ class QueryStoreChartBuilder {
 	 * Scoped and full-chart paths both withhold the answer when that signal is true.
 	 */
 	PatientChart buildScoped(Patient patient, String question) {
+		return buildScoped(patient, question, 0);
+	}
+
+	/**
+	 * As {@link #buildScoped(Patient, String)}, with {@code reservedTokens} of the model input
+	 * budget kept free for what is appended after this slice is built: the module's reference
+	 * records, which ADR Decision 57 leaves uncapped. Only the optional tiers give way to the
+	 * reservation; see {@code LlmInferenceService.assembleChart}, which measures it.
+	 */
+	PatientChart buildScoped(Patient patient, String question, int reservedTokens) {
 		long buildStart = System.currentTimeMillis();
 		if (patient == null || patient.getUuid() == null) {
 			log.info("[timing] querystoreScopedBuild patient={} types=unresolved chartDocs=0 simHits=0 slice=0 rpcMs=0 serializeMs=0 totalMs={} outcome=skipped",
@@ -374,7 +384,7 @@ class QueryStoreChartBuilder {
 		}
 		OrderCurrency orderCurrency = readOrderCurrency(patient, unbudgetedDocs);
 		List<ContextSliceRecord> budgeted = applyContextBudget(patient, question, slice.getRecords(), orderCurrency,
-				slice.getWithheldTypes());
+				slice.getWithheldTypes(), reservedTokens);
 
 		List<QueryDocument> sliceDocs = new ArrayList<QueryDocument>(budgeted.size());
 		int simHits = 0;
@@ -427,20 +437,17 @@ class QueryStoreChartBuilder {
 	 * Returns {@code records} unchanged when no {@link TokenCounter} is configured or
 	 * available (e.g. a remote engine with no assumed tokenizer route) — this feature can only
 	 * ever tighten behavior, never introduce a new failure mode where none existed.
-	 *
-	 * <p>The count covers this slice, the system prompt and the question. The reference records
-	 * {@code DrugReferenceInjector} appends after the slice is built are not in it, so on its own this
-	 * budget does not guarantee the composed prompt fits; the bundled provider's assembly measures the
-	 * injected prompt and rebuilds the slice with that room reserved.
+	 * {@code reservedTokens} comes off the budget for reference records appended after this slice.
 	 */
 	private List<ContextSliceRecord> applyContextBudget(Patient patient, String question,
-			List<ContextSliceRecord> records, OrderCurrency orderCurrency, Set<String> withheldTypes) {
+			List<ContextSliceRecord> records, OrderCurrency orderCurrency, Set<String> withheldTypes,
+			int reservedTokens) {
 		TokenCounter counter = tokenCounter;
 		if (counter == null || !counter.isAvailable()) {
 			return records;
 		}
 		try {
-			return budgetedRecords(counter, patient, question, records, orderCurrency, withheldTypes);
+			return budgetedRecords(counter, patient, question, records, orderCurrency, withheldTypes, reservedTokens);
 		}
 		catch (InsufficientContextException e) {
 			throw e;
@@ -456,8 +463,9 @@ class QueryStoreChartBuilder {
 
 	/** {@link #applyContextBudget} once a counter is available; a failed count propagates to it. */
 	private List<ContextSliceRecord> budgetedRecords(TokenCounter counter, Patient patient, String question,
-			List<ContextSliceRecord> records, OrderCurrency orderCurrency, Set<String> withheldTypes) {
-		int budget = counter.inputBudget();
+			List<ContextSliceRecord> records, OrderCurrency orderCurrency, Set<String> withheldTypes,
+			int reservedTokens) {
+		int budget = counter.inputBudget() - reservedTokens;
 
 		if (counter.countPrompt(renderedTextOf(patient, records, orderCurrency, withheldTypes),
 				Collections.<Integer>emptyList(), question, false, Collections.emptyList()) <= budget) {
@@ -480,7 +488,9 @@ class QueryStoreChartBuilder {
 			throw new InsufficientContextException(
 					"Required mandatory, exact, typed-complete, or panel evidence (" + protectedTokens
 							+ " tokens) exceeds the "
-							+ budget + "-token model input budget for patient " + patient.getUuid() + ".",
+							+ budget + "-token model input budget"
+							+ (reservedTokens > 0 ? " left after " + reservedTokens + " tokens of reference records" : "")
+							+ " for patient " + patient.getUuid() + ".",
 					protectedIds);
 		}
 

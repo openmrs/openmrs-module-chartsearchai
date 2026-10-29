@@ -19,8 +19,10 @@ import org.openmrs.Patient;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceLoad;
+import org.openmrs.module.chartsearchai.reference.DrugSafetyValidator;
 import org.openmrs.module.chartsearchai.reference.PairChipExtent;
 import org.openmrs.module.chartsearchai.reference.SafetyWarning;
+import org.openmrs.module.chartsearchai.api.provider.CancellationSignal;
 
 /**
  * Answers natural language questions about a patient's chart using an LLM.
@@ -167,6 +169,15 @@ public interface ChartSearchService {
 			Consumer<ChartAnswer> ungroundedAnswerConsumer, Consumer<String> preliminaryReasoningConsumer) {
 		return searchStreaming(patient, question, tokenConsumer, reasoningConsumer, citationsConsumer,
 				ungroundedAnswerConsumer);
+	}
+
+	/** Cancellation-aware form used by the provider-neutral turn lifecycle. */
+	default ChartAnswer searchStreaming(Patient patient, String question, Consumer<String> tokenConsumer,
+			Consumer<String> reasoningConsumer, Consumer<List<RecordReference>> citationsConsumer,
+			Consumer<ChartAnswer> ungroundedAnswerConsumer, Consumer<String> preliminaryReasoningConsumer,
+			CancellationSignal cancellation) {
+		return searchStreaming(patient, question, tokenConsumer, reasoningConsumer, citationsConsumer,
+				ungroundedAnswerConsumer, preliminaryReasoningConsumer);
 	}
 
 	/**
@@ -1001,6 +1012,13 @@ public interface ChartSearchService {
 
 		private final List<SafetyWarning> safetyWarnings;
 
+		private final String safetyStatus;
+
+		/** @see #getWithheldTypes() */
+		private final java.util.Set<String> withheldTypes;
+
+		private final List<String> safetyIssues;
+
 		private final String searchMode;
 
 		private final ChartSearchAiUtils.ReferenceSlice referenceSlice;
@@ -1108,8 +1126,8 @@ public interface ChartSearchService {
 				String unresolvedDrugClass, List<Integer> unfaithfullyRenderedCitations) {
 			this(answer, references, inputTokens, outputTokens, cachedTokens, safetyWarnings, searchMode,
 					referenceSlice, pairChipExtent, unresolvedDrugClass, unfaithfullyRenderedCitations,
-					null, null, null, null, null, null, null, null, null, false, null, null, null, null, null, null, null, false,
-					null, false);
+					null, null, null, null, null, null, null, null, null, false, null, null, null, null, null, null,
+					DrugSafetyValidator.STATUS_UNAVAILABLE, java.util.Collections.emptyList(), null, false, null, false, null);
 		}
 
 		/**
@@ -1151,9 +1169,14 @@ public interface ChartSearchService {
 				List<UnfoundedFindingSeverity> unfoundedFindingSeverities,
 				DrugReferenceLoad.Coverage doseCeilingCoverage,
 				List<String> unsupportedEndedOrderClaims,
-				List<Integer> unstatedSignificanceQualifiers,
+				List<Integer> unstatedSignificanceQualifiers, String safetyStatus, List<String> safetyIssues,
 				List<Integer> findingsStatedByTheModule, boolean asksWhetherSheHasTakenADrug,
-				String answerSummary, boolean answerDetailsStateLimits) {
+				String answerSummary, boolean answerDetailsStateLimits, java.util.Set<String> withheldTypes) {
+			// Null survives as null, the rule every list above shares: no chart behind the answer to say.
+			this.withheldTypes = withheldTypes == null ? null
+					: java.util.Collections.unmodifiableSet(new java.util.TreeSet<String>(withheldTypes));
+			this.safetyStatus = safetyStatus;
+			this.safetyIssues = java.util.Collections.unmodifiableList(new java.util.ArrayList<>(safetyIssues));
 			this.answerSummary = answerSummary;
 			this.answerDetailsStateLimits = answerSummary != null && answerDetailsStateLimits;
 			this.asksWhetherSheHasTakenADrug = asksWhetherSheHasTakenADrug;
@@ -1291,6 +1314,39 @@ public interface ChartSearchService {
 		 */
 		public List<SafetyWarning> getSafetyWarnings() {
 			return safetyWarnings;
+		}
+
+		/**
+		 * The core record types QueryStore left out of the chart behind this answer because the asking
+		 * user holds no read privilege for them, sorted; the model was told the same (ADR Decision 91's
+		 * rule: a chart the module could not read is not a chart that records nothing). Empty is a
+		 * chart that withheld nothing; null is an answer with no chart behind it to say.
+		 */
+		public java.util.Set<String> getWithheldTypes() {
+			return withheldTypes;
+		}
+
+		/**
+		 * Whether the check completed within its resolved reference scope, ran with incomplete
+		 * mapping, exposure or rules, or could not run. Empty warnings alone establish none of these.
+		 */
+		public String getSafetyStatus() {
+			return safetyStatus;
+		}
+
+		/**
+		 * Provider-neutral safety envelope retained for clients that consume the dual-provider
+		 * contract: the execution status and its limitation codes. Package provenance and coverage
+		 * fields are absent because this implementation cannot establish them. The findings are not
+		 * in it: they are {@link #getSafetyWarnings()}, and the REST layer adds their wire form to this
+		 * envelope together with the interaction-pair extent that must travel with any chip list.
+		 */
+		public java.util.Map<String, Object> getSafetyCheck() {
+			java.util.Map<String, Object> safetyCheck = new java.util.LinkedHashMap<String, Object>();
+			safetyCheck.put("schema_version", "drug_safety.v1");
+			safetyCheck.put("status", safetyStatus);
+			safetyCheck.put("issues", new java.util.ArrayList<String>(safetyIssues));
+			return java.util.Collections.unmodifiableMap(safetyCheck);
 		}
 
 		/**

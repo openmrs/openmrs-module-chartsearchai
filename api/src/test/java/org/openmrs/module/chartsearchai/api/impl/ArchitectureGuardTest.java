@@ -1039,7 +1039,7 @@ public class ArchitectureGuardTest {
 						+ "\t\t\tint timeoutSeconds, final ReferenceRecords referenceRecords)",
 				"public synchronized InferenceResult inferStreaming(String systemPrompt, String userMessage,\n"
 						+ "\t\t\tint timeoutSeconds, Consumer<String> tokenConsumer, String cacheScope, "
-						+ "String cacheSeed,\n\t\t\tfinal ReferenceRecords referenceRecords)")) {
+						+ "String cacheSeed,\n\t\t\tfinal ReferenceRecords referenceRecords, CancellationSignal cancellation)")) {
 			String body = methodBodyWithoutLiterals(source, signature);
 			assertTrue(body != null && !body.isEmpty(),
 					"could not slice the body of " + signature + " out of LocalLlmEngine.java — if its"
@@ -1313,8 +1313,10 @@ public class ArchitectureGuardTest {
 				"precondition: no production source tree under " + SRC_ROOT + ", so this rule "
 						+ "would scan nothing and report no violations — it fails instead");
 
+		// Closing a body unread reads nothing, so `response.body().close()` passes (#620); chartsearchai#627
+		// proposes enforcing the ceiling structurally instead of by this text match.
 		Pattern unbounded = Pattern.compile("(?<!readBoundedBody\\()(?<!readTruncatedErrorBody\\()"
-				+ "(?<!parseStreamingResponse\\()response\\.body\\(\\)");
+				+ "(?<!parseStreamingResponse\\()response\\.body\\(\\)(?!\\.close\\(\\);)");
 		List<String> violations = new ArrayList<>();
 		List<String> scanned = new ArrayList<>();
 		java.util.Map<String, String> dense = new java.util.LinkedHashMap<>();

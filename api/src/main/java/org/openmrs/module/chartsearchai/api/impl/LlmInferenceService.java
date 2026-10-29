@@ -953,8 +953,13 @@ public class LlmInferenceService implements ChartSearchService {
 
 			requireActiveTurn(cancellation);
 			long groundStart = System.currentTimeMillis();
-			List<RecordReference> references = groundReferences(response.getAnswer(), cited,
-					chart.getMappings());
+			// Entailment calls the model too, so a cancel interrupts it as it does the answer call; a check the
+			// interrupt ends degrades to its Tier-1 verdict, and the check below then stops the turn.
+			String groundedAnswer = response.getAnswer();
+			List<RecordReference> groundedCitations = cited;
+			List<RecordReference> references = LlmProvider.interruptible(cancellation,
+					() -> groundReferences(groundedAnswer, groundedCitations, chart.getMappings()));
+			requireActiveTurn(cancellation);
 			groundMs = System.currentTimeMillis() - groundStart;
 
 			// A per-call sink, never a field: the validator is a Spring singleton, so a field would be

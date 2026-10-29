@@ -579,22 +579,29 @@ public class LlmProvider {
 		if (cancellation.isCancelled()) {
 			throw new CancellationException("Turn cancelled before model inference");
 		}
-		// Only model work may interrupt this thread. Chart retrieval can flush shared Lucene
-		// writers, so binding at the provider-turn boundary can permanently close an index.
+		LlmEngine.InferenceResult result = interruptible(cancellation,
+				() -> getActiveEngine().inferStreaming(systemPrompt, userMessage, timeoutSeconds,
+						tee, cacheScope, cacheSeed, referenceRecords, cancellation));
+
+		return extractResponse(result.getText(), result.getInputTokens(), result.getOutputTokens(),
+				result.getCachedTokens());
+	}
+
+	/**
+	 * Runs model work so that a cancel interrupts this thread while it waits on the model: the answer call, and
+	 * the grounding pass's entailment checks after it. Only model work may interrupt this thread. Chart retrieval
+	 * can flush shared Lucene writers, so binding at the provider-turn boundary can permanently close an index.
+	 */
+	static <T> T interruptible(CancellationSignal cancellation, java.util.function.Supplier<T> modelWork) {
 		InferenceInterrupt interruptInference = new InferenceInterrupt();
 		cancellation.bindCloseable(interruptInference);
-		LlmEngine.InferenceResult result;
 		try {
-			result = getActiveEngine().inferStreaming(systemPrompt, userMessage, timeoutSeconds,
-					tee, cacheScope, cacheSeed, referenceRecords, cancellation);
+			return modelWork.get();
 		}
 		finally {
 			cancellation.unbindCloseable(interruptInference);
 			interruptInference.finished();
 		}
-
-		return extractResponse(result.getText(), result.getInputTokens(), result.getOutputTokens(),
-				result.getCachedTokens());
 	}
 
 	/**

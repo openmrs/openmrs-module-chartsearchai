@@ -302,6 +302,80 @@ public class LlmInferenceServiceModuleBudgetContextTest extends BaseModuleContex
 		assertModelCancellation(true, true, "5");
 	}
 
+	/**
+	 * Grounding's entailment check calls the model after the answer, so a cancel while that request stalls must
+	 * release the request as the answer call's cancel does, not wait out the peer.
+	 */
+	@Test
+	public void cancellingAStalledEntailmentCheckReleasesTheRequest() throws Exception {
+		TurnCancellation cancellation = new TurnCancellation();
+		AtomicBoolean reachedEntailment = new AtomicBoolean();
+		CountDownLatch release = new CountDownLatch(1);
+		HttpServer server = HttpServer.create(new InetSocketAddress(LlamaServerEndpoint.LOOPBACK_HOST, 0), 0);
+		server.setExecutor(java.util.concurrent.Executors.newCachedThreadPool());
+		server.createContext("/v1/chat/completions", exchange -> {
+			try {
+				String request = new String(exchange.getRequestBody().readAllBytes(),
+						java.nio.charset.StandardCharsets.UTF_8);
+				byte[] body;
+				if (request.contains("fact-checker")) {
+					reachedEntailment.set(true);
+					cancellation.cancel();
+					release.await(10, TimeUnit.SECONDS);
+					return;
+				}
+				if (request.contains("\"stream\":true")) {
+					exchange.getResponseHeaders().add("Content-Type", "text/event-stream");
+					body = ("data: {\"choices\":[{\"delta\":{\"content\":"
+							+ "\"{\\\"answer\\\":\\\"Her warfarin order is recorded [1].\\\",\\\"citations\\\":[1]}\"}}]}\n\n"
+							+ "data: [DONE]\n\n").getBytes(java.nio.charset.StandardCharsets.UTF_8);
+				}
+				else {
+					exchange.getResponseHeaders().add("Content-Type", "application/json");
+					body = "{\"choices\":[{\"message\":{\"content\":\"OTHER\"}}]}"
+							.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+				}
+				exchange.sendResponseHeaders(200, body.length);
+				exchange.getResponseBody().write(body);
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+			} finally {
+				exchange.close();
+			}
+		});
+		server.start();
+		try {
+			Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS, "false");
+			Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_GROUNDING_ENABLED, "true");
+			Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_GROUNDING_ENTAILMENT_ENABLED, "true");
+			Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_LLM_ENGINE, "remote");
+			Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_LLM_REMOTE_MODEL_NAME, "test-model");
+			Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_LLM_REMOTE_ENDPOINT_URL,
+					"http://" + server.getAddress().getHostString() + ":" + server.getAddress().getPort() + "/v1/chat/completions");
+			LlmInferenceService service = service(null);
+			LlmProvider llm = new LlmProvider();
+			ReflectionTestUtils.setField(llm, "remoteEngine", new RemoteLlmEngine());
+			service.setLlmProvider(llm);
+			CitationGroundingVerifier verifier = new CitationGroundingVerifier();
+			verifier.setLlmProvider(llm);
+			service.setCitationGroundingVerifier(verifier);
+			long start = System.nanoTime();
+			TurnResult result = new BundledClinicalAnswerProvider(service).execute(
+					new TurnRequest(Context.getPatientService().getPatient(7), "What anticoagulant is she on?",
+							"conversation", "request", null), event -> { }, cancellation).toCompletableFuture().join();
+			assertTrue(reachedEntailment.get(), "exercise the real entailment request after the answer");
+			assertTrue(TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start) < 6000,
+					"cancellation must return before the stalled peer is released");
+			// Cancelled after its answer was shown, the turn keeps that answer as its outcome.
+			assertEquals(org.openmrs.module.chartsearchai.api.provider.TurnEventType.TURN_DONE, result.getTerminalState());
+			assertEquals("Her warfarin order is recorded [1].", result.getAnswer().getText());
+			assertFalse(Thread.currentThread().isInterrupted(), "do not leak cancellation into request cleanup");
+		} finally {
+			release.countDown();
+			server.stop(0);
+		}
+	}
+
 	private void assertModelCancellation(boolean sendHeaders) throws Exception {
 		assertModelCancellation(sendHeaders, false, null);
 	}

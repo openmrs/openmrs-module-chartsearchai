@@ -1050,15 +1050,7 @@ server-side interpretation enabled. Full-chart reads use `getPatientChartRead`.
 Both paths reject truncated results and incomplete source projections with an
 incomplete-chart response (HTTP 503 on blocking search). Required evidence exceeding
 the input budget returns HTTP 422 and recommends increasing the context size;
-streaming search emits the corresponding error message. These APIs
-require the QueryStore stack openmrs/openmrs-module-querystore
-[#95](https://github.com/openmrs/openmrs-module-querystore/pull/95) to
-[#98](https://github.com/openmrs/openmrs-module-querystore/pull/98). Until they are merged
-and published, build against that QueryStore source installed locally (`mvn install` in
-its checkout). The required build compiles against the published `querystore-api` and
-fails until then; the pull request names QueryStore #98 on a `Depends-On:` line, so the
-QueryStore compatibility check builds against it instead (see
-`.github/workflows/build.yml`).
+streaming search emits the corresponding error message.
 
 To verify counting against a real local engine, prepare a separate application-data
 directory containing `model.gguf` and a compatible `chartsearchai/bin/llama-server`

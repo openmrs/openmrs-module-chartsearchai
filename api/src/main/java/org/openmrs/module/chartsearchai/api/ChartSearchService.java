@@ -1036,6 +1036,9 @@ public interface ChartSearchService {
 		/** @see #getAnswerSummary() */
 		private final String answerSummary;
 
+		/** @see #answerDetailsStateLimits() */
+		private final boolean answerDetailsStateLimits;
+
 		/** @see #getInteractionClaimPairs() */
 		private final InteractionClaimPairs interactionClaimPairs;
 
@@ -1106,7 +1109,7 @@ public interface ChartSearchService {
 			this(answer, references, inputTokens, outputTokens, cachedTokens, safetyWarnings, searchMode,
 					referenceSlice, pairChipExtent, unresolvedDrugClass, unfaithfullyRenderedCitations,
 					null, null, null, null, null, null, null, null, null, false, null, null, null, null, null, null, null, false,
-					null);
+					null, false);
 		}
 
 		/**
@@ -1150,8 +1153,9 @@ public interface ChartSearchService {
 				List<String> unsupportedEndedOrderClaims,
 				List<Integer> unstatedSignificanceQualifiers,
 				List<Integer> findingsStatedByTheModule, boolean asksWhetherSheHasTakenADrug,
-				String answerSummary) {
+				String answerSummary, boolean answerDetailsStateLimits) {
 			this.answerSummary = answerSummary;
+			this.answerDetailsStateLimits = answerSummary != null && answerDetailsStateLimits;
 			this.asksWhetherSheHasTakenADrug = asksWhetherSheHasTakenADrug;
 			// Null survives as null, the rule every list above shares (ADR Decision 147).
 			this.findingsStatedByTheModule = findingsStatedByTheModule == null ? null
@@ -1626,7 +1630,9 @@ public interface ChartSearchService {
 		 * rated a reason to withhold named and the rest counted, any lead its question takes folded into it; a proposal
 		 * with its "No" or its cautions; a question whether her medications duplicate one another with the duplicates;
 		 * and an answer of one sentence and lines saying only what it did not check with that sentence. Always the
-		 * answer's own first line: {@link #getAnswer()} is still the whole answer, for a client that shows it all. Recorded
+		 * answer's own first line, or — for an answer with no bottom line of its own — a sentence apart from its words counting
+		 * what it cites, under which a client collapses the whole answer (ADR Decision 519): {@link #getAnswer()} is still
+		 * the whole answer, for a client that shows it all. Recorded
 		 * by {@code DrugReferenceInjector}, the composer that writes it ({@code PatientChart.getModuleAnswerSummary()}).
 		 *
 		 * @return that sentence, or {@code null} where the answer opens with none — every answer a model wrote, and every
@@ -1634,6 +1640,16 @@ public interface ChartSearchService {
 		 */
 		public String getAnswerSummary() {
 			return answerSummary;
+		}
+
+		/**
+		 * Whether what a client collapses under {@link #getAnswerSummary()} includes a line saying what the check did not
+		 * cover — ADR Decision 519 — so the client can label it details and limits rather than details alone, and never
+		 * promise a limit that is not there. {@code false} wherever there is no summary. Recorded by {@code
+		 * DrugReferenceInjector}, the composer that writes those lines.
+		 */
+		public boolean answerDetailsStateLimits() {
+			return answerDetailsStateLimits;
 		}
 
 		/**

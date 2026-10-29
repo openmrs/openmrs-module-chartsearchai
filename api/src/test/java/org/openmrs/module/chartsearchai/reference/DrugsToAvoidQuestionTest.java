@@ -51,18 +51,12 @@ public class DrugsToAvoidQuestionTest extends BaseModuleContextSensitiveTest {
 					"What should I avoid prescribing for her?", "Which drugs should I avoid with his current medications?")) {
 				String answer = ask(question, allergies);
 				assertNotNull(answer, question + " — the module answers");
-				// One sentence in view: her allergies, the screen's bottom line, and that the check lists no other drug to
-				// avoid; under it her allergies as the answer to which allergies she has states them, and the screen's
-				// findings (ADR Decisions 496, 509, 517).
-				String[] screenLines = screen.split("\n", 2);
-				assertEquals("1 Major interaction — Simvastatin with Amlodipine.", screenLines[0], "precondition: " + screen);
-				assertEquals((allergies == null ? "No drug allergies are recorded for this patient; "
-						: "Drug allergies recorded (aspirin); ")
-						+ "1 Major interaction — Simvastatin with Amlodipine (this check does not list other drugs to avoid).\n"
-						+ (allergies == null ? "No drug allergies are recorded for this patient."
-								: "Recorded drug allergies: aspirin.") + " This check does not list other drugs to avoid."
-						+ "\n" + screenLines[1].replaceAll("\\[\\d+\\]", "[n]"), answer.replaceAll("\\[\\d+\\]", "[n]"),
-					question);
+				// Her allergies as the answer to which allergies she has states them, then that the check lists no other
+				// drug to avoid, then the screen (ADR Decisions 496, 509); the one sentence a client shows of it is apart
+				// from these words (ADR Decision 519).
+				assertEquals((allergies == null ? "No drug allergies are recorded for this patient."
+						: "Recorded drug allergies: aspirin.") + " This check does not list other drugs to avoid."
+						+ "\n" + screen.replaceAll("\\[\\d+\\]", "[n]"), answer.replaceAll("\\[\\d+\\]", "[n]"), question);
 			}
 		}
 	}

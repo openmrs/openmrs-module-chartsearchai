@@ -24521,3 +24521,49 @@ and *"a"* is one of those words. So *"a flu shot"* was no thing, and the model r
   as before.
 
 Pinned by `LlmInferenceServiceModelReadQuestionContextTest.somethingElseAskedWithAnArticleBesideHerMedicationsIsNoScreen`.
+
+## Decision 519: Every answer the module writes collapses under one sentence, and says whether its details state limits
+
+**Status: Accepted** (October 2026) — on the owner's question whether *"Show details and what was not checked"* was a
+correct label, and their direction that the extra information always collapse, for clinicians who see many patients.
+Of the 36 module-written answers to 48 questions over six patients of the demo replica, two — *"Can I give him
+ibuprofen?"* for `dd9be5fb` and `dda17bc4` — collapsed a finding and nothing about what was not checked, and on the public
+demo `dd74dc61`'s *"Is it safe to start her on clarithromycin?"* did the same: the label promised a limit that was not
+there.
+
+### What was considered and declined
+
+- **A "Not checked" line on every answer reporting the interaction check**, written in one place from the check's extent —
+  *"Not checked: interactions the data does not rate (2 pairs, with Lamivudine and Stavudine), and anything beyond drug
+  interactions."* Decision 146 took exactly that statement of a drug's rows below the floor out of a caution answer, as
+  telling a clinician nothing they could use, and nothing new contradicts it. Measured, it also reached answers it said
+  nothing for — *"… so there is no order of it to stop."*, *"This patient has no active medication orders …"* — and moved
+  121 pinned answers.
+- **Showing whole an answer whose details state no limits.** The owner's direction is that the details always collapse.
+
+### The decision
+
+- **Every module answer of more than one line has one sentence a client shows**, `PatientChart.getModuleAnswerSummary()`:
+  Decision 517's where it has one, a lead folded into it; for any other answer citing findings, one counting them as a
+  screen counts, `DrugReferenceInjector.countedSummary` — *"2 contraindications."*, the drug first where every finding is
+  about one and the sentence does not name it — so no finding is out of view uncounted; citing none, its first line, or
+  a heading and the line after it.
+- **The answer's words are the composer's.** A folded lead or a counted sentence is the module's own sentence apart from
+  them, and a client collapses the whole answer under it; where the answer opens with it, the rest. One rule for every
+  lead, so two wordings of one question read alike — Decision 517 had rewritten the answer's first line for some leads
+  and not others, which `ClinicianWordingsTest` measured as two wordings answered differently.
+- **Whether the details state limits is published**, `ChartAnswer.answerDetailsStateLimits()` (`answerDetailsStateLimits`),
+  decided where the answer is composed by `DrugReferenceInjector.saysWhatWasNotChecked` over what a client collapses: a
+  line saying something was not checked or covered, or a lead stating what the check does not weigh. The client labels
+  the toggle *"Show details and limits"* where it is `true` and *"Show details"* where it is not, so the label is never
+  false.
+
+### Spec change
+
+`ChartAnswer`'s widest constructor takes the flag — fifteen omod wire tests pass `false` for it, and
+`ChartSearchAiAnswerSummaryTest` asserts it on every surface. `BriefScreenAnswerTest`, `DrugsToAvoidQuestionTest`,
+`ScreenBesideHerOwnConflictsTest`, `LlmInferenceServiceAnswerFromFindingsContextTest` and
+`LlmInferenceServiceModelReadQuestionContextTest` pinned Decision 517's rewritten first line and now find the composer's
+lead there, the folded sentence on the summary.
+
+Pinned by `AlwaysCollapsedAnswerTest` and `ChartSearchAiAnswerSummaryTest.theSearchResponseStatesWhetherTheDetailsStateLimits`.

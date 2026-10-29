@@ -73,7 +73,7 @@ public class ChartSearchAiAsksWhetherSheHasTakenADrugTest {
 		return new ChartSearchService.ChartAnswer(COMPOSED,
 				Collections.<ChartSearchService.RecordReference> emptyList(), 0, 0, 0,
 				Collections.<SafetyWarning> emptyList(), null, null, null, null, null, null, null, null,
-				null, null, null, null, null, null, false, null, null, null, null, null, null, null, history, null);
+				null, null, null, null, null, null, false, null, null, null, null, null, null, null, history, null, false);
 	}
 
 	@SuppressWarnings("unchecked")

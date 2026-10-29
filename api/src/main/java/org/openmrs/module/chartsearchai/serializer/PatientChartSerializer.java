@@ -716,6 +716,24 @@ public class PatientChartSerializer {
 			return moduleAnswerSummary;
 		}
 
+		/** @see #moduleAnswerDetailsStateLimits() */
+		private boolean moduleAnswerDetailsStateLimits;
+
+		/** Records whether what is under the composed answer's first sentence says what the check did not cover — ADR
+		 *  Decision 519, and {@code DrugReferenceInjector} is the only production caller. */
+		public void markModuleAnswerDetailsStateLimits(boolean statesLimits) {
+			this.moduleAnswerDetailsStateLimits = statesLimits;
+		}
+
+		/**
+		 * Whether the lines under {@link #getModuleAnswerSummary()} include one saying what the check did not cover — ADR
+		 * Decision 519 — so a client may label what it collapses as details and limits rather than details alone.
+		 * {@code false} where there is no summary.
+		 */
+		public boolean moduleAnswerDetailsStateLimits() {
+			return moduleAnswerDetailsStateLimits;
+		}
+
 		/** Records the drugs the question lists that her chart holds no active order for — issue #515, and
 		 *  {@code DrugReferenceInjector} is the only caller. */
 		public void markListedDrugsWithNoActiveOrder(List<String> names) {

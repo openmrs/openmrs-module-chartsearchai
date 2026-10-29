@@ -58,9 +58,12 @@ public class ChartSearchAiAnswerSummaryTest {
 
 	private String summary;
 
+	private boolean limits;
+
 	@BeforeEach
 	public void setUp() {
 		summary = SUMMARY;
+		limits = true;
 		controller = new ChartSearchAiRestController();
 		controller.setAuditLogService(new StubAuditLogService());
 		controller.setChartSearchService(new ComposedAnswerStubService());
@@ -78,7 +81,7 @@ public class ChartSearchAiAnswerSummaryTest {
 		return new ChartSearchService.ChartAnswer(COMPOSED,
 				Collections.<ChartSearchService.RecordReference> emptyList(), 0, 0, 0,
 				Collections.<SafetyWarning> emptyList(), null, null, null, null, null, null, null, null,
-				null, null, null, null, null, null, true, null, null, null, null, null, null, null, false, summary);
+				null, null, null, null, null, null, true, null, null, null, null, null, null, null, false, summary, limits);
 	}
 
 	@SuppressWarnings("unchecked")
@@ -100,6 +103,17 @@ public class ChartSearchAiAnswerSummaryTest {
 		assertNull(none.get("answerSummary"));
 	}
 
+	/** ADR Decision 519: whether what is collapsed under it says what was not checked, on every answer, both values. */
+	@Test
+	public void theSearchResponseStatesWhetherTheDetailsStateLimits() {
+		assertEquals(Boolean.TRUE, searchPayload().get("answerDetailsStateLimits"));
+		limits = false;
+		assertEquals(Boolean.FALSE, searchPayload().get("answerDetailsStateLimits"));
+		summary = null;
+		limits = true;
+		assertEquals(Boolean.FALSE, searchPayload().get("answerDetailsStateLimits"), "never without a summary");
+	}
+
 	@Test
 	public void theEarlyDoneAndTheGroundedEventStateItToo() throws Exception {
 		controller.streamAnswer(out, RestControllerContext.patient(), QUESTION, new User(3), true);
@@ -107,6 +121,8 @@ public class ChartSearchAiAnswerSummaryTest {
 		assertEquals(SUMMARY, done.get("answerSummary").asText(),
 				"the early done is what a streaming user sees, and the answer is whole by then");
 		assertEquals(SUMMARY, SseEvents.dataOfType(out, "grounded", MAPPER).get("answerSummary").asText());
+		assertTrue(done.get("answerDetailsStateLimits").asBoolean());
+		assertTrue(SseEvents.dataOfType(out, "grounded", MAPPER).get("answerDetailsStateLimits").asBoolean());
 	}
 
 	@Test
@@ -122,6 +138,8 @@ public class ChartSearchAiAnswerSummaryTest {
 
 	@Test
 	public void theKeyIsWrittenInExactlyOnePlace() throws Exception {
+		assertEquals(1, ChartSearchAiStreamingTest.occurrences(ChartSearchAiStreamingTest.controllerSource(),
+				"\"answerDetailsStateLimits\""), "answerDetailsStateLimits must be written in exactly one place");
 		int keys = ChartSearchAiStreamingTest.occurrences(ChartSearchAiStreamingTest.controllerSource(),
 				"\"answerSummary\"");
 		assertEquals(1, keys, "answerSummary must be written in exactly one place, beside answeredByTheModule. Found "

@@ -76,14 +76,14 @@ public class BriefScreenAnswerTest extends BaseModuleContextSensitiveTest {
 		assertNotNull(answer, "the module answers");
 		String[] lines = answer.split("\n");
 		assertEquals(6, lines.length, "was: " + answer);
-		// One sentence in view: her allergies, the bottom line, and the lead's limit; the lead whole under it (ADR Decision
-		// 514).
-		String visible = "No drug allergies are recorded for this patient; 1 Major interaction — Nelfinavir with Rifampin — "
-				+ "plus 4 possible duplicate therapies and 12 cautions (this check does not list other drugs to avoid).";
-		assertEquals(visible, lines[0], "was: " + answer);
-		assertEquals(visible, chart.getModuleAnswerSummary());
+		// One sentence a client shows: her allergies, the bottom line, and the lead's limit; the answer's words the
+		// composer's, the lead above the bottom line (ADR Decisions 517, 519).
+		assertEquals("No drug allergies are recorded for this patient; 1 Major interaction — Nelfinavir with Rifampin — "
+				+ "plus 4 possible duplicate therapies and 12 cautions (this check does not list other drugs to avoid).",
+			chart.getModuleAnswerSummary());
 		assertEquals("No drug allergies are recorded for this patient. This check does not list other drugs to avoid.",
-			lines[1]);
+			lines[0]);
+		assertEquals(BOTTOM_LINE, lines[1], "was: " + answer);
 		assertTrue(lines[2].startsWith("Nelfinavir interacts with active order Rifampin — Major. ["), "was: " + answer);
 		assertEquals(NOT_CHECKED, lines[5]);
 	}

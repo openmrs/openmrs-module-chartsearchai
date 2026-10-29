@@ -1150,8 +1150,8 @@ public class DrugReferenceInjector {
 				String first = moduleAnswer.split("\n", -1)[0];
 				if (questionDrugs.isEmpty()) {
 					summary = first.equals(screenSummary(stated, groupLines.size(), null)) ? first : null;
-				} else if ((first.startsWith(WITHHOLD_LEAD_OPENING) || CAUTION_SUMMARY.matcher(first).matches())
-						&& moduleAnswer.contains("\n")) {
+				} else if ((first.startsWith(WITHHOLD_LEAD_OPENING) || first.startsWith(NEUTRAL_WITHHOLD_LEAD_OPENING)
+						|| CAUTION_SUMMARY.matcher(first).matches()) && moduleAnswer.contains("\n")) {
 					summary = first;
 				}
 			}
@@ -1725,20 +1725,37 @@ public class DrugReferenceInjector {
 		if (moduleAnswer != null) {
 			moduleAnswer = withWhatWasNotChecked(moduleAnswer, conditionsUnchecked, unidentifiedOnAScreen);
 		}
-		// An answer of one sentence and lines saying only what it did not check opens with that sentence (ADR Decision 517).
+		// Every answer of more than one line opens with one sentence a client shows, the rest collapsed under it (ADR
+		// Decision 519). With no bottom line of its own: one counting the findings it cites, so none under it is out of
+		// view uncounted; citing none, its first line, or its heading and the line after it.
 		if (moduleAnswer != null && summary == null && moduleAnswer.contains("\n")) {
 			String[] lines = moduleAnswer.split("\n", -1);
-			boolean onlyLimits = !lines[0].startsWith(THIS_CHECK_DOES_NOT) && !lines[0].endsWith(":");
-			for (int n = 1; n < lines.length && onlyLimits; n++) {
-				onlyLimits = saysOnlyWhatWasNotChecked(lines[n]);
+			List<SafetyWarning> cited = new ArrayList<SafetyWarning>();
+			Set<Integer> markers = ChartSearchAiUtils.citedIndexes(moduleAnswer);
+			for (int i = 0; i < findings.size(); i++) {
+				if (markers.contains(findingNumbers.get(i))) {
+					cited.add(findings.get(i));
+				}
 			}
-			summary = onlyLimits ? lines[0] : null;
+			if (!cited.isEmpty()) {
+				// Apart from the answer's words, which a client collapses whole under it.
+				summary = countedSummary(cited);
+			} else {
+				summary = lines[0].endsWith(":") && lines.length > 2 ? lines[0] + "\n" + lines[1] : lines[0];
+			}
 		}
 		if (moduleAnswer != null) {
 			injected.markModuleAnswer(moduleAnswer);
-			// Only while the answer still opens with it: every statement after the bottom line was recorded appends.
-			if (summary != null && moduleAnswer.startsWith(summary + "\n")) {
+			if (summary != null) {
 				injected.markModuleAnswerSummary(summary);
+				// What a client collapses under it: the rest where the answer opens with it, else the whole answer.
+				String details = moduleAnswer.startsWith(summary + "\n") ? moduleAnswer.substring(summary.length() + 1)
+						: moduleAnswer;
+				boolean statesLimits = false;
+				for (String line : details.split("\n", -1)) {
+					statesLimits |= saysWhatWasNotChecked(line);
+				}
+				injected.markModuleAnswerDetailsStateLimits(statesLimits);
 			}
 		}
 		// And, for the same reason, the drugs the question lists that her chart holds no active order for
@@ -5598,8 +5615,8 @@ public class DrugReferenceInjector {
 	 *
 	 * @param drugGroups how many drug-group lines ({@link #duplicateTherapyLines}) the answer states, each a possible
 	 *            duplicate therapy
-	 * @param opener what to say where nothing is rated a reason to withhold, without its full stop, or {@code null} for
-	 *            "No Major interactions"
+	 * @param opener what to say where nothing is rated a reason to withhold, without its full stop, {@code null} for
+	 *            "No Major interactions", or the empty string for the counts alone
 	 */
 	static String screenSummary(List<SafetyWarning> findings, int drugGroups, String opener) {
 		Map<String, List<String>> rated = new LinkedHashMap<String, List<String>>();
@@ -5655,7 +5672,10 @@ public class DrugReferenceInjector {
 			summary.append(summary.length() == 0 ? "" : "; ").append(k).append(' ').append(rating.getKey())
 					.append(k == 1 ? " interaction — " : " interactions — ").append(String.join("; ", rating.getValue()));
 		}
-		if (rated.isEmpty()) {
+		if (rated.isEmpty() && opener != null && opener.isEmpty()) {
+			String counted = joinedAsAList(rest);
+			summary.append(counted.isEmpty() ? counted : Character.toUpperCase(counted.charAt(0)) + counted.substring(1));
+		} else if (rated.isEmpty()) {
 			summary.append(opener != null ? opener : "No Major interactions");
 			if (!rest.isEmpty()) {
 				summary.append("; ").append(joinedAsAList(rest));
@@ -5722,10 +5742,11 @@ public class DrugReferenceInjector {
 	private static final Pattern CAUTION_SUMMARY = Pattern.compile("\\d+ interaction cautions? for .+ — .+\\.");
 
 	/**
-	 * {@code answer} opening with its bottom line {@code summary}, any leads above it folded into that one sentence (ADR
-	 * Decision 517): each lead's limit — <em>"this check does not choose a medication to give this patient, and states none
+	 * The one sentence a client shows of {@code answer}, its bottom line {@code summary} with any leads above it folded in
+	 * (ADR Decisions 517, 519): any statement it makes first before it, and each lead's limit — <em>"this check does not choose a medication to give this patient, and states none
 	 * as safe"</em> — as a bracket at its end, and the recorded allergies of the answer to which drugs to avoid before it;
-	 * the leads whole under it. {@code null} where a line above it is no such lead, so the answer is shown whole.
+	 * the answer's own words unchanged, which a client collapses whole under it. {@code null} where a line above it is a
+	 * heading, which no sentence can carry.
 	 *
 	 * @return the answer and its bottom line, or {@code null}
 	 */
@@ -5751,6 +5772,10 @@ public class DrugReferenceInjector {
 				} else if (sentence.startsWith(RECORDED_DRUG_ALLERGIES)) {
 					before.add("Drug allergies recorded (" + sentence.substring(RECORDED_DRUG_ALLERGIES.length(),
 							sentence.length() - 1) + ")");
+				} else if (sentence.endsWith(".")) {
+					// Any other statement the answer makes first — "Celecoxib is not one of this patient's active
+					// medications." — stays in view, before the bottom line (ADR Decision 519).
+					before.add(sentence.substring(0, sentence.length() - 1));
 				} else {
 					return null;
 				}
@@ -5758,14 +5783,12 @@ public class DrugReferenceInjector {
 		}
 		String body = summary.substring(0, summary.length() - 1);
 		if (!before.isEmpty()) {
-			body = String.join("; ", before) + "; " + (body.startsWith("No ") ? "n" + body.substring(1) : body);
+			body = String.join("; ", before) + "; " + (body.startsWith("No ") || body.startsWith("This ")
+					? Character.toLowerCase(body.charAt(0)) + body.substring(1) : body);
 		}
-		String folded = body + (limits.isEmpty() ? "" : " (" + String.join("; ", limits) + ")") + ".";
-		List<String> kept = new ArrayList<String>();
-		kept.add(folded);
-		kept.addAll(lines.subList(0, at));
-		kept.addAll(lines.subList(at + 1, lines.size()));
-		return new String[] { String.join("\n", kept), folded };
+		// Apart from the answer's words, which stay the composer's, a client collapsing them whole under it (ADR Decision
+		// 518): one rule for every lead, so two wordings of one question read alike.
+		return new String[] { answer, body + (limits.isEmpty() ? "" : " (" + String.join("; ", limits) + ")") + "." };
 	}
 
 	/** How every lead stating what the check does not do opens. */
@@ -5777,11 +5800,39 @@ public class DrugReferenceInjector {
 	/** {@link #recordedDrugAllergiesLine}'s words before the allergies it names. */
 	private static final String RECORDED_DRUG_ALLERGIES = "Recorded drug allergies: ";
 
-	/** Whether {@code line} says only what an answer did not check or cover, so a client may collapse it under the
-	 *  answer's first line (ADR Decision 517). */
-	private static boolean saysOnlyWhatWasNotChecked(String line) {
-		return line.startsWith("Not checked: ") || line.equals(SCREEN_SCOPE) || line.equals(BELOW_FLOOR_SCOPE)
-				|| line.equals(CONDITIONS_NOT_CHECKED);
+	/** Whether {@code line} says what an answer did not check or cover (ADR Decisions 517, 519): its "Not checked" line, a
+	 *  scope line, a sentence saying something was not checked, or a lead or statement of what the check does not weigh. */
+	static boolean saysWhatWasNotChecked(String line) {
+		String lower = line.toLowerCase(Locale.ROOT);
+		return lower.contains("not checked") || lower.contains("not covered") || line.startsWith(THIS_CHECK_DOES_NOT)
+				|| line.startsWith("This check did not ");
+	}
+
+	/**
+	 * The one sentence a client shows of an answer with no bottom line of its own, the whole answer collapsed under it
+	 * (ADR Decision 519), counting what it cites as {@link #screenSummary} does, so no finding under it is out of view
+	 * uncounted: <em>"Lamivudine: 1 contraindication."</em> — the drug first where every finding is about one and the
+	 * sentence does not already name it; the interactions' rating said where any is an interaction. Kept apart from the
+	 * answer's words, which it does not change.
+	 */
+	static String countedSummary(List<SafetyWarning> cited) {
+		Set<String> drugs = new LinkedHashSet<String>();
+		boolean interactions = false;
+		for (SafetyWarning finding : cited) {
+			drugs.add(finding.getDrug());
+			interactions |= SafetyWarning.TYPE_INTERACTION.equals(finding.getType())
+					&& !finding.statesOrdersSharingASubstance();
+		}
+		String body = screenSummary(cited, 0, interactions ? null : "");
+		if (drugs.size() != 1) {
+			return body;
+		}
+		String drug = drugs.iterator().next();
+		if (body.contains(drug)) {
+			return body;
+		}
+		return drug + ": " + (Character.isDigit(body.charAt(0)) ? body
+				: Character.toLowerCase(body.charAt(0)) + body.substring(1));
 	}
 
 	/**

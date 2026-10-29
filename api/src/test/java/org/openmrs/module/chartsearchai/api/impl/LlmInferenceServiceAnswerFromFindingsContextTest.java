@@ -3405,11 +3405,12 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 			assertEquals(0, provider.calls, question + " — the module answers: " + answer.getAnswer());
 			assertTrue(answer.isAnsweredByTheModule(), question);
 			String[] lines = answer.getAnswer().split("\n");
-			// One sentence in view, the lead's limit folded into it, and the lead whole under it (ADR Decision 517).
+			// One sentence a client shows, the lead's limit folded into it; the answer's words the composer's, the lead
+			// above the bottom line (ADR Decisions 517, 519).
 			assertEquals("1 Major interaction — Acetylsalicylic acid (aspirin) with Warfarin (this check does not choose a medication to give this patient, and states "
-					+ "none as safe).", lines[0], question + " — was: " + answer.getAnswer());
-			assertEquals(lines[0], answer.getAnswerSummary(), question);
-			assertEquals(lead, lines[1], question + " — was: " + answer.getAnswer());
+					+ "none as safe).", answer.getAnswerSummary(), question + " — was: " + answer.getAnswer());
+			assertEquals(lead, lines[0], question + " — was: " + answer.getAnswer());
+			assertEquals(WARFARIN_BOTTOM_LINE, lines[1], question + " — was: " + answer.getAnswer());
 			assertTrue(lines[2].startsWith("Acetylsalicylic acid (aspirin) interacts with active order"),
 					question + " — was: " + answer.getAnswer());
 			assertFalse(answer.getSafetyWarnings().isEmpty(), question + " — the screen's chips are published");
@@ -3418,8 +3419,7 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		ChartAnswer answer = serviceWith(provider).search(patient, "What can I give her for pain?");
 		assertEquals(0, provider.calls, "the module answers: " + answer.getAnswer());
 		String[] lines = answer.getAnswer().split("\n");
-		assertEquals(lead, lines[1], "under the one sentence its limit is folded into (ADR Decision 517): "
-				+ answer.getAnswer());
+		assertEquals(lead, lines[0], "the answer's own words (ADR Decision 519): " + answer.getAnswer());
 		assertEquals("This check did not weigh what the drug is for (pain).", lines[lines.length - 1], answer.getAnswer());
 
 		for (String question : new String[] { "Which diet is best for her?", "Which treatment option is best for her?",
@@ -3448,10 +3448,12 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 
 			assertEquals(0, provider.calls, question + " — the module answers: " + answer.getAnswer());
 			String[] lines = answer.getAnswer().split("\n");
-			assertEquals("1 Major interaction — Acetylsalicylic acid (aspirin) with Warfarin (this check does not say what to monitor).", lines[0],
-					question + " — the lead's limit folded into the bottom line (ADR Decision 517): " + answer.getAnswer());
+			assertEquals("1 Major interaction — Acetylsalicylic acid (aspirin) with Warfarin (this check does not say what to monitor).", answer.getAnswerSummary(),
+					question + " — the lead's limit folded into the sentence a client shows (ADR Decisions 517, 519): "
+							+ answer.getAnswer());
 			assertEquals("This check does not say what to monitor: it states what it found among the medications this "
-					+ "patient is already taking.", lines[1], question + " — was: " + answer.getAnswer());
+					+ "patient is already taking.", lines[0], question + " — was: " + answer.getAnswer());
+			assertEquals(WARFARIN_BOTTOM_LINE, lines[1], question + " — was: " + answer.getAnswer());
 			assertTrue(lines[2].startsWith("Acetylsalicylic acid (aspirin) interacts with active order"),
 					question + " — was: " + answer.getAnswer());
 		}
@@ -3475,10 +3477,12 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 
 			assertEquals(0, provider.calls, question + " — the module answers: " + answer.getAnswer());
 			String[] lines = answer.getAnswer().split("\n");
-			assertEquals("1 Major interaction — Acetylsalicylic acid (aspirin) with Warfarin (this check does not rate a medication's risk).", lines[0],
-					question + " — the lead's limit folded into the bottom line (ADR Decision 517): " + answer.getAnswer());
+			assertEquals("1 Major interaction — Acetylsalicylic acid (aspirin) with Warfarin (this check does not rate a medication's risk).", answer.getAnswerSummary(),
+					question + " — the lead's limit folded into the sentence a client shows (ADR Decisions 517, 519): "
+							+ answer.getAnswer());
 			assertEquals("This check does not rate a medication's risk: it states what it found among the medications this "
-					+ "patient is already taking.", lines[1], question + " — was: " + answer.getAnswer());
+					+ "patient is already taking.", lines[0], question + " — was: " + answer.getAnswer());
+			assertEquals(WARFARIN_BOTTOM_LINE, lines[1], question + " — was: " + answer.getAnswer());
 			assertTrue(lines[2].startsWith("Acetylsalicylic acid (aspirin) interacts with active order"),
 					question + " — was: " + answer.getAnswer());
 		}

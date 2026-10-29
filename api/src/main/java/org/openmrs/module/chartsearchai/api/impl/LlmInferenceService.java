@@ -389,7 +389,7 @@ public class LlmInferenceService implements ChartSearchService {
 					findingPartnerCoverage, false, interactionClaimPairs, cautionLedOverWithholding,
 					unfoundedFindingSeverities, doseCeilingCoverage, unsupportedEndedOrderClaims,
 					unstatedSignificanceQualifiers, OwnOrderFindingStatement.statedFindings(response.getAnswer(), cited, chart.getMappings(),
-							chart.getProposalOwnOrderFindingLines()), !chart.getHistoryQuestionDrugRows().isEmpty(), null);
+							chart.getProposalOwnOrderFindingLines()), !chart.getHistoryQuestionDrugRows().isEmpty(), null, false);
 			outcome = "ok";
 			return answer;
 		}
@@ -844,7 +844,7 @@ public class LlmInferenceService implements ChartSearchService {
 					chartRead.stated(), conditionRuleCoverage, orderStopDates, null, false, null,
 					cautionLedOverWithholding, null, doseCeilingCoverage, unsupportedEndedOrderClaims, null,
 					OwnOrderFindingStatement.statedFindings(response.getAnswer(), cited, chart.getMappings(),
-							chart.getProposalOwnOrderFindingLines()), !chart.getHistoryQuestionDrugRows().isEmpty(), null));
+							chart.getProposalOwnOrderFindingLines()), !chart.getHistoryQuestionDrugRows().isEmpty(), null, false));
 
 			// After the user-visible handoff, before grounding: the exact comparisons over what the
 			// answer did with the records it cites — the class-code defects a set-membership
@@ -1003,7 +1003,7 @@ public class LlmInferenceService implements ChartSearchService {
 					findingPartnerCoverage, false, interactionClaimPairs, cautionLedOverWithholding,
 					unfoundedFindingSeverities, doseCeilingCoverage, unsupportedEndedOrderClaims,
 					unstatedSignificanceQualifiers, OwnOrderFindingStatement.statedFindings(response.getAnswer(), cited, chart.getMappings(),
-							chart.getProposalOwnOrderFindingLines()), !chart.getHistoryQuestionDrugRows().isEmpty(), null);
+							chart.getProposalOwnOrderFindingLines()), !chart.getHistoryQuestionDrugRows().isEmpty(), null, false);
 			outcome = "ok";
 			return answer;
 		}
@@ -1097,12 +1097,10 @@ public class LlmInferenceService implements ChartSearchService {
 		List<RecordReference> references = extractCitedReferences(answer, null, mappings);
 		List<ChartSearchService.OrderStopDate> orderStopDates =
 				ChartSearchAiUtils.orderStopDates(answer, references, mappings);
-		// The sentence a client shows, the rest collapsed under it (ADR Decisions 512, 517): what the composer opened with,
-		// and only while the answer still opens with it — every statement above appends.
+		// The sentence a client shows, the rest collapsed under it (ADR Decisions 512, 517, 519): the composer's — its
+		// answer's own first line, or a sentence apart from its words under which a client collapses the whole answer.
 		String summary = chart.getModuleAnswerSummary();
-		if (summary != null && !answer.startsWith(summary + "\n")) {
-			summary = null;
-		}
+		boolean detailsStateLimits = summary != null && chart.moduleAnswerDetailsStateLimits();
 		log.info("Answered from the module's own drug-safety check, no model call (issue #469) "
 				+ "patient={} findings={}", patient == null ? null : patient.getPatientId(),
 				ChartSearchAiUtils.safetyFindingMappings(mappings).size());
@@ -1111,11 +1109,11 @@ public class LlmInferenceService implements ChartSearchService {
 		ungroundedAnswerConsumer.accept(new ChartAnswer(answer, references, 0, 0, 0,
 				Collections.<SafetyWarning> emptyList(), searchMode, referenceSlice, null,
 				unresolvedDrugClass, null, null, null, null, null, null, chartReadForSafety,
-				conditionRuleCoverage, orderStopDates, null, true, null, null, null, doseCeilingCoverage, null, null, null, !chart.getHistoryQuestionDrugRows().isEmpty(), summary));
+				conditionRuleCoverage, orderStopDates, null, true, null, null, null, doseCeilingCoverage, null, null, null, !chart.getHistoryQuestionDrugRows().isEmpty(), summary, detailsStateLimits));
 		return new ChartAnswer(answer, references, 0, 0, 0, safetyWarnings, searchMode, referenceSlice,
 				pairExtent.stated(), unresolvedDrugClass, null, null, null, null, null, null,
 				chartReadForSafety, conditionRuleCoverage, orderStopDates, null, true, null, null, null,
-				doseCeilingCoverage, null, null, null, !chart.getHistoryQuestionDrugRows().isEmpty(), summary);
+				doseCeilingCoverage, null, null, null, !chart.getHistoryQuestionDrugRows().isEmpty(), summary, detailsStateLimits);
 	}
 
 	/**

@@ -58,7 +58,9 @@ final class UnrecognisedDrugName {
 		"give", "start", "prescribe", "administer", "add", "use", "go", "ahead", "stop", "hold", "continue", "switch",
 		"swap",
 		// and what a question asks of a drug: "Fluconazole - red flags?" (ADR Decision 521)
-		"red", "flag", "flags", "warning", "warnings"));
+		"red", "flag", "flags", "warning", "warnings",
+		// and an order-entry note's words: "Order fluconazole?", "Add fluconazole to her list?" (ADR Decision 531)
+		"order", "rx", "list", "proceed", "indicated", "objection", "right", "shall", "put"));
 
 	private static final int MAX_SUGGESTIONS = 4;
 

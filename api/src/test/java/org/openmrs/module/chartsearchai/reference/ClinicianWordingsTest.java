@@ -1926,6 +1926,25 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/** ADR Decision 531: an order written as an order-entry note — order, Rx, put her on, proceed, shall — proposes the drug. */
+	@Test
+	public void anOrderWrittenAsAnOrderEntryNoteProposesTheDrug() {
+		String[][] pairs = { { "Order warfarin?", "Can I give warfarin?" }, { "Ok to order warfarin?", "Can I give warfarin?" },
+			{ "Rx warfarin?", "Can I give warfarin?" }, { "Put her on warfarin?", "Can I give her warfarin?" },
+			{ "Put her on warfarin - ok?", "Can I give her warfarin?" }, { "Shall I start warfarin?", "Can I start warfarin?" },
+			{ "Shall we give warfarin?", "Can I give warfarin?" }, { "Proceed with warfarin?", "Can I give warfarin?" },
+			{ "Warfarin - proceed?", "Can I give warfarin?" }, { "Go with warfarin?", "Can I give warfarin?" },
+			{ "Add warfarin to her list?", "Can I add warfarin?" }, { "Any objection to warfarin?", "Is warfarin a risk?" },
+			{ "Warfarin is fine right?", "Warfarin ok?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+		// Whether it is indicated asks what it is for, which stays the model's.
+		assertNull(ask("Warfarin indicated?"));
+	}
+
 	/** ADR Decision 527: a giving verb misspelt as clinicians type it is the verb. */
 	@Test
 	public void aGivingVerbMisspeltIsTheVerb() {

@@ -24875,3 +24875,30 @@ neither group nor ATC group names is answered as before.
 
 Pinned by `DuplicateTherapyQuestionTest.aDuplicateQuestionNamingAClassIsAnsweredAboutThatClass`; that class's existing
 cases, which ask about NSAIDs of patients with no duplicate or with NSAID duplicates, pass unchanged.
+
+## Decision 531: An order written as an order-entry note proposes the drug
+
+**Status: Accepted** (October 2026) — found asking 17 order-entry wordings of 15 patients on the 3.7.1 standalone on
+2026-10-29.
+
+### Context
+
+*"Order fluconazole?"*, *"Rx fluconazole?"*, *"Put her on fluconazole?"*, *"Shall I start fluconazole?"*, *"Proceed with
+fluconazole?"*, *"Go with fluconazole?"*, *"Any objection to fluconazole?"* and *"Fluconazole is fine right?"* went to
+the model. It answered *"Fluconazole can be given"* on up to 8 of 15 patients. Some carried no chips at all: *"order"*,
+*"list"* or *"proceed"*, read in a drug's place, was reported a drug name the data does not recognise, and Decision 479
+withholds every chip beside such a word. None of their words is a shape's, and the residual reading held neither the
+verbs nor *"shall"*.
+
+### The decision
+
+- These are giving verbs when they open the question, as *"give"* is (Decision 502): *"order"*, *"Rx"*, *"put her on"*,
+  *"proceed"* and *"go with"*. *"order"* and *"proceed"* also give the drug elsewhere in the question: *"Ok to order
+  X?"*, *"X - proceed?"*.
+- *"shall"* asks, as *"should"* does.
+- *"any objection to X"* is a harm asked of X, answered with no lead.
+- *"her list"* and a tag *"right?"* are filler.
+- None of these words is ever an unrecognised drug's name.
+- *"X indicated?"* asks what it is for, and stays the model's.
+
+Pinned by `ClinicianWordingsTest.anOrderWrittenAsAnOrderEntryNoteProposesTheDrug`.

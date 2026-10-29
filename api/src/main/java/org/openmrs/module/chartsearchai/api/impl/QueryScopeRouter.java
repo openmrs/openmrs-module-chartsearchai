@@ -2305,7 +2305,10 @@ public final class QueryScopeRouter {
 
 	/** The verbs a plan gives the drug with (ADR Decision 497). */
 	private static final Set<String> PLANNED_GIVING = new HashSet<String>(Arrays.asList("give", "start", "prescribe", "add",
-		"administer", "use"));
+		"administer", "use",
+		// and an order-entry note's verbs: "Order fluconazole?", "Rx fluconazole?", "Put her on fluconazole?", "Proceed with
+		// fluconazole?", "Go with fluconazole?" (ADR Decision 531)
+		"order", "rx", "put", "proceed", "go"));
 
 	/**
 	 * Where {@code words} state, from {@code from}, the speaker's plan to give a drug — "want to add", "I want to start",
@@ -2903,7 +2906,9 @@ public final class QueryScopeRouter {
 		// "Pt on nevirapine. Starting warfarin." (ADR Decision 469)
 		"pt",
 		// "Rx fluconazole 200mg od - any interactions?", a prescription's mark (ADR Decision 470)
-		"rx"));
+		"rx",
+		// "Add fluconazole to her list?", "Fluconazole is fine right?", "Shall I start fluconazole?" (ADR Decision 531)
+		"list", "right", "shall"));
 
 	/** Words saying the question is about the drug's interactions. */
 	private static final Set<String> RESIDUAL_INTERACTS = new HashSet<String>(Arrays.asList("interact", "interacts",
@@ -2930,19 +2935,25 @@ public final class QueryScopeRouter {
 		// downside to fluconazole?" (ADR Decision 456)
 		"mistake", "bad", "hazardous", "downside", "downsides", "unwise", "inadvisable",
 		// "Fluconazole: start or avoid?" (ADR Decision 505)
-		"avoid"));
+		"avoid",
+		// "Any objection to fluconazole?" (ADR Decision 531)
+		"objection", "objections"));
 
 	/** Words proposing to give the drug, where an asking word opens the question. */
 	private static final Set<String> RESIDUAL_GIVE = new HashSet<String>(Arrays.asList("give", "giving", "given", "start",
 		"starting", "started", "prescribe", "prescribing", "prescribed", "add", "adding", "added", "administer", "use",
 		// "Can fluconazole be used?" (ADR Decision 503)
 		"used",
+		// "Ok to order fluconazole?", "Fluconazole - proceed?" (ADR Decision 531)
+		"order", "ordering", "proceed",
 		"taken", "recommend", "gave", "receive", "coadminister", "coadministered", "administered", "put", "go", "mix", "mixed",
 		"combine", "combined"));
 
 	/** The asking words a proposal may open with. */
 	private static final Set<String> RESIDUAL_ASKING = new HashSet<String>(Arrays.asList("can", "could", "may", "should",
-		"would"));
+		"would",
+		// "Shall I start fluconazole?" (ADR Decision 531)
+		"shall"));
 
 	/** Whether one of the one-drug shapes, any of them, reads {@code words}. */
 	private static boolean fitsAOneDrugShape(List<String> words) {
@@ -3126,7 +3137,7 @@ public final class QueryScopeRouter {
 		"client"));
 
 	/** The words that make the residual words a question. */
-	private static final Set<String> RESIDUAL_QUESTION = new HashSet<String>(Arrays.asList("can", "could", "may", "should",
+	private static final Set<String> RESIDUAL_QUESTION = new HashSet<String>(Arrays.asList("shall", "can", "could", "may", "should",
 		"would", "will", "is", "are", "does", "do", "any", "am"));
 
 	/**
@@ -3261,6 +3272,8 @@ public final class QueryScopeRouter {
 		// The speaker's plan to give it, opening the words, proposes it as an asking word does: "Want to add fluconazole?",
 		// "Want to add fluconazole. OK?" (ADR Decision 497); and so does the verb giving it, bare: "Give fluconazole?",
 		// "Prescribe fluconazole for her?" (ADR Decision 502).
+		// An opening giving verb gives it too, though a filler word such as "rx" is no giving word elsewhere (ADR Decision 531).
+		gives |= PLANNED_GIVING.contains(wordsWithTheDrugMarked.get(0));
 		boolean asked = continuingHerMedications || planToGiveAt(wordsWithTheDrugMarked, 0) >= 0
 				|| PLANNED_GIVING.contains(wordsWithTheDrugMarked.get(0))
 				// and the drug with the verb giving it and nothing else: "Fluconazole - start or not?" (ADR Decision 505)

@@ -178,28 +178,14 @@ public class ChipSubjectOneResolutionTest {
 	 */
 	private static final String LOOKUP_DECLARATION = "private static final class SubstanceSubjects {";
 
-	/**
-	 * The one arity of {@code validate} that builds the pass's shared state; the others delegate to
-	 * it. It spans ALL THREE lines of the declaration, and {@link #uniqueOffsetOf} hard-fails on a
-	 * needle matching more than once. The first line alone matches every arity above that opens
-	 * identically, so what it buys is the NAME — the tail alone names no METHOD, and nothing about it
-	 * would say the body it lands on is {@code validate}'s. <b>The third line is what makes this
-	 * unique, and only since issue #280</b>: before it the two-line prefix already was, by one
-	 * character — the five-argument seam above wraps identically and ends that line with {@code )}
-	 * where this one ends with a comma — and the third line bought loudness alone. The six-argument
-	 * delegate #280 added wraps its first two lines exactly as this declaration does, so a needle
-	 * stopping at line two now matches twice and fails loudly.
-	 * Do not read the first line as guarding against "a sibling with the same tail": measured, a
-	 * sibling alone makes TWO matches and fails loudly, because {@code validate}'s own declaration
-	 * still carries the tail. The shape that gets through a tail-only needle is a sibling together
-	 * with a rename or a re-wrap of {@code validate}'s own parameters. It still ends at the body's own
-	 * opening brace, which is what {@link #bodyOf} looks for.
+	/** All four declaration lines identify the implementation that builds the pass's shared state.
+	 * The fourth distinguishes it from its delegate. A non-unique needle fails the source scan.
 	 */
 	private static final String VALIDATE =
 			"validate(String answer, String question, PatientClinicalContext rawContext,\n"
 					+ "\t\t\tList<RecordMapping> mappings, List<DrugReference> resolvedOrderEntries,\n"
 					+ "\t\t\tPairChipExtent.Sink pairExtentSink, SubjectMatterScope scope,\n"
-					+ "\t\t\tListedDrugsWithNoActiveOrder.Sink listedSink) {";
+					+ "\t\t\tListedDrugsWithNoActiveOrder.Sink listedSink, SafetyCoverage coverage) {";
 
 	@Test
 	public void onlyTheSharedLookupAndThePartnerRungResolveASubjectDirectly() throws IOException {

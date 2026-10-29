@@ -145,6 +145,17 @@ public class DrugSafetyValidatorTest {
 		assertStatedDailyDose("Ibuprofen 1300 mg as needed for pain.", "~1300 mg/day");
 	}
 
+	/** Each states 6 g of paracetamol a day: a frequency the status cannot place still counts for the warning. */
+	@Test
+	public void aFrequencyTheStatusCannotPlaceStillCountsForTheWarning() {
+		for (String answer : new String[] { "Paracetamol 1000 mg (2 tablets) every 4 hours.",
+				"Paracetamol 1000 mg IV over 15 minutes every 4 hours.",
+				"Paracetamol every 4 hours, 1000 mg each dose." }) {
+			assertTrue(detailContains(validator().validate(answer, ctx(40, null, null, null)),
+					SafetyWarning.TYPE_OVERDOSE, "paracetamol", "~6000 mg/day"), answer);
+		}
+	}
+
 	@Test
 	public void overdoseNotAttributedToADrugNamedInANeighbouringClause() {
 		// A paracetamol dose in the next clause must not be charged to ibuprofen, which

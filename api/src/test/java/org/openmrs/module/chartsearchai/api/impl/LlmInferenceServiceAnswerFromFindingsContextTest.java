@@ -785,9 +785,8 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		assertEquals("The interaction data gives no rated reason to withhold Clarithromycin: it lists Clarithromycin against one of this "
 				+ "patient's orders, with no severity or mechanism on file. [" + reference + "]\n"
 				+ "Interactions the data does not rate, and anything beyond drug interactions, are not covered.", answer.getAnswer());
-		// Every line under the first says only what was not checked, so a client shows the first and collapses them (ADR
-		// Decision 517).
-		assertEquals(answer.getAnswer().split("\n")[0], answer.getAnswerSummary());
+		// The sentence in view is its first sentence in short, cut where the colon opens its detail (ADR Decision 529).
+		assertEquals("The interaction data gives no rated reason to withhold Clarithromycin.", answer.getAnswerSummary());
 		assertCitesNoOrderOfHers(answer);
 	}
 

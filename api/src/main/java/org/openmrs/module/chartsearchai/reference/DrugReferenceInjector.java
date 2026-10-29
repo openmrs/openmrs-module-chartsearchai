@@ -1727,11 +1727,11 @@ public class DrugReferenceInjector {
 		if (moduleAnswer != null) {
 			moduleAnswer = withWhatWasNotChecked(moduleAnswer, conditionsUnchecked, unidentifiedOnAScreen);
 		}
-		// Every answer of more than one line opens with one sentence a client shows, the rest collapsed under it (ADR
-		// Decision 519). With no bottom line of its own: one counting the findings it cites, so none under it is out of
-		// view uncounted; citing none, its first line, or its heading and the line after it.
+		// Every answer of more than one line has one sentence a client shows, the rest collapsed under it (ADR Decisions
+		// 519, 529). With no bottom line of its own: what the answer states before its findings, in short, then a count of
+		// the findings it cites, so none under it is out of view uncounted — apart from its words, which a client
+		// collapses whole under it.
 		if (moduleAnswer != null && summary == null && moduleAnswer.contains("\n")) {
-			String[] lines = moduleAnswer.split("\n", -1);
 			List<SafetyWarning> cited = new ArrayList<SafetyWarning>();
 			Set<Integer> markers = ChartSearchAiUtils.citedIndexes(moduleAnswer);
 			for (int i = 0; i < findings.size(); i++) {
@@ -1739,12 +1739,7 @@ public class DrugReferenceInjector {
 					cited.add(findings.get(i));
 				}
 			}
-			if (!cited.isEmpty()) {
-				// Apart from the answer's words, which a client collapses whole under it.
-				summary = countedSummary(cited);
-			} else {
-				summary = lines[0].endsWith(":") && lines.length > 2 ? lines[0] + "\n" + lines[1] : lines[0];
-			}
+			summary = statedThenCounted(moduleAnswer, new HashSet<Integer>(findingNumbers), cited);
 		}
 		if (moduleAnswer != null) {
 			injected.markModuleAnswer(moduleAnswer);
@@ -5808,6 +5803,83 @@ public class DrugReferenceInjector {
 		String lower = line.toLowerCase(Locale.ROOT);
 		return lower.contains("not checked") || lower.contains("not covered") || line.startsWith(THIS_CHECK_DOES_NOT)
 				|| line.startsWith("This check did not ");
+	}
+
+	/**
+	 * The one sentence a client shows of an answer with no bottom line of its own (ADR Decision 529): where it cites
+	 * findings, what its first line states, unless that line cites one, then {@link #countedSummary} of them; where it
+	 * cites none, every statement it makes — each in short. <em>"Nevirapine is one of this patient's active medications; the
+	 * interaction data gives no rated reason to change it; no Major interactions; 1 unrated interaction."</em> A heading,
+	 * a sentence that ends in a colon, and a line saying what was not checked state nothing here. "In short" is the
+	 * answer's own words, cut where a colon opens the detail, without its markers or a bracketed aside: so the
+	 * direction a question asked for — that he takes the drug, that a switch is to one he already takes, that nothing was
+	 * found — is in view, and nothing in view is not in the answer. Sentences split on {@code
+	 * ChartSearchAiUtils.SENTENCE_BOUNDARY}, the module's one rule for where a sentence ends.
+	 */
+	static String statedThenCounted(String answer, Set<Integer> findingNumbers, List<SafetyWarning> cited) {
+		List<String> said = new ArrayList<String>();
+		boolean first = true;
+		for (String line : answer.split("\n", -1)) {
+			Set<Integer> markers = ChartSearchAiUtils.citedIndexes(line);
+			markers.retainAll(findingNumbers);
+			// Citing findings, its first line's statement and the count of them: what follows the first line restates
+			// what the count says, and kept whole it doubled the sentence.
+			if (!cited.isEmpty() && (!markers.isEmpty() || !first)) {
+				break;
+			}
+			first = false;
+			if (line.trim().isEmpty() || line.trim().endsWith(":") || saysWhatWasNotChecked(line)) {
+				continue;
+			}
+			for (String sentence : ChartSearchAiUtils.SENTENCE_BOUNDARY.split(line.trim())) {
+				String said1 = inShort(sentence);
+				if (!said1.isEmpty()) {
+					said.add(said1);
+				}
+			}
+		}
+		if (said.isEmpty()) {
+			return cited.isEmpty() ? null : countedSummary(cited);
+		}
+		if (!cited.isEmpty()) {
+			// The statements name the drug, so the count does not lead with it again.
+			said.add(screenSummary(cited, 0, countsInteractions(cited) ? null : "")
+					.replaceAll("\\.$", ""));
+		}
+		StringBuilder sentence = new StringBuilder(said.get(0));
+		for (String part : said.subList(1, said.size())) {
+			sentence.append("; ").append(part.matches("(?:The|No|This|These|Neither|None|A|An) .*")
+					? Character.toLowerCase(part.charAt(0)) + part.substring(1) : part);
+		}
+		return sentence.append('.').toString();
+	}
+
+	/** A sentence of an answer in short (ADR Decision 529): cut where a colon opens its detail, without its markers or a
+	 *  bracketed aside, and without its full stop; empty where it ends in a colon, which opens something it does not say. */
+	private static String inShort(String sentence) {
+		String s = sentence.trim();
+		if (s.endsWith(":")) {
+			return "";
+		}
+		int colon = s.indexOf(": ");
+		if (colon > 0) {
+			s = s.substring(0, colon);
+		}
+		s = s.replaceAll("\\s*\\[\\d+\\]", "").replaceAll("\\s*\\([^()]*\\)", "").trim();
+		while (s.endsWith(".") || s.endsWith(";") || s.endsWith(",")) {
+			s = s.substring(0, s.length() - 1).trim();
+		}
+		return s;
+	}
+
+	/** Whether any of {@code cited} is an interaction, so a count of them says what is rated a reason to withhold. */
+	private static boolean countsInteractions(List<SafetyWarning> cited) {
+		for (SafetyWarning finding : cited) {
+			if (SafetyWarning.TYPE_INTERACTION.equals(finding.getType()) && !finding.statesOrdersSharingASubstance()) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**

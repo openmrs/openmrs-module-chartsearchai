@@ -24793,3 +24793,51 @@ Over the 24 replayed answers — `summaryOf` run on each through a throwaway tes
 "label: value." sentences on one line.
 
 Pinned by `ModelAnswerListCollapseContextTest`, over the replay's own answers.
+
+## Decision 529: An answer with no bottom line of its own shows what it states, in short, before it counts
+
+**Status: Accepted** (October 2026) — on the owner's go-ahead to audit the sentence a client shows for the question types
+Decisions 517–528 had not been measured over: 15 wordings over six demo patients of the replica (90 questions —
+allergies to her medications, switch, stop, continue, "is he on", two drugs together, a pair, what a drug interacts with,
+whether a drug is safe, a new drug, history, duplicate classes).
+
+### Context
+
+Decision 519 gave an answer with no bottom line of its own a sentence counting the findings it cites, or, citing none,
+its first line. The count dropped the answer's own direction: *"Is he on nevirapine?"* showed *"Nevirapine: no Major
+interactions; 1 unrated interaction."*, which does not say he takes it; a switch to a drug he already takes showed only
+*"Nevirapine is not one of this patient's active medications, so this switch replaces no order of it."*, the line saying
+efavirenz was already his under the toggle; two drugs that raised nothing showed only that neither was his; and *"Is
+nevirapine safe for him?"* showed a 40-word first line.
+
+### The decision
+
+`DrugReferenceInjector.statedThenCounted`: the sentence in view is what the answer states, in short, then the count of the
+findings it cites. Where it cites findings, its FIRST line's statement — unless that line cites one — and the count;
+kept whole, every statement before the findings doubled the sentence (*"Does his nevirapine interact with rifampicin?"*
+grew from 7 to 35 words, its *"Yes —"* stranded after a semicolon). Where it cites none, every statement it makes. A
+heading, a sentence ending in a colon and a line saying what was not checked state nothing here. "In short" is the
+answer's own words cut where a colon opens the detail, without markers or a bracketed aside; sentences split on
+`ChartSearchAiUtils.SENTENCE_BOUNDARY`.
+
+On the replica: *"Nevirapine is one of this patient's active medications; the interaction data gives no rated reason to
+change it; no Major interactions; 1 unrated interaction."*; *"Nevirapine is not one of this patient's active
+medications, so this switch replaces no order of it; Efavirenz is already one of this patient's active medications."*;
+*"Nevirapine is one of this patient's active medications; 1 Major interaction — Rifampicin (rifampin) with
+Nevirapine."*; *"The interaction data gives no rated reason to withhold Amoxicillin."* (from 28 words). The longest is two
+drugs that raised nothing, 40 words, both "no finding" statements kept.
+
+### Found by the audit and left for their own decisions
+
+- *"Is he on any duplicate NSAIDs?"* answers *"Yes — 3 possible duplicate therapies: Lamivudine; Nevirapine; Stavudine."* for a
+  patient on no NSAID: the duplicate-therapy answer reports every duplicate, not the class the question names. Older
+  than this change; the sentence in view now carries its *"Yes"*.
+- The replica answers *"Can I give him cotrimoxazole?"* with *"No interaction check was run"* while the public demo and the
+  shipped knowledge base resolve it; a replica-environment difference, not reproduced in production code.
+
+### Spec change
+
+`LlmInferenceServiceAnswerFromFindingsContextTest.aProposalRelatedToHerOrdersOnlyBelowTheFloorIsAnsweredWithThoseRows`
+pinned Decision 519's first line whole and now asserts it in short.
+
+Pinned by `AlwaysCollapsedAnswerTest`.

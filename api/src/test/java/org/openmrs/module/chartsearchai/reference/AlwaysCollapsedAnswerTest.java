@@ -92,6 +92,58 @@ public class AlwaysCollapsedAnswerTest extends BaseModuleContextSensitiveTest {
 		assertFalse(chart.moduleAnswerDetailsStateLimits(), "nothing under it says what was not checked: " + answer);
 	}
 
+	/**
+	 * The sentence in view keeps what the answer says first — that he takes the drug — and counts what it cites (ADR
+	 * Decision 529): on the replica "Is he on nevirapine?" showed only "Nevirapine: no Major interactions; 1 unrated
+	 * interaction.", which does not say he is on it.
+	 */
+	@Test
+	public void whetherHeIsOnADrugIsSaidInTheSentenceInView() {
+		PatientChart chart = ask("Is he on nevirapine?", null, demoOrders());
+		String summary = chart.getModuleAnswerSummary();
+
+		assertNotNull(summary, "was: " + chart.getModuleAnswer());
+		assertTrue(summary.startsWith("Nevirapine is one of this patient's active medications; "), "was: " + summary);
+		assertTrue(summary.endsWith("1 unrated interaction."), "and counts what it cites: " + summary);
+		assertFalse(summary.contains("[") || summary.contains("("), "no markers or asides in view: " + summary);
+	}
+
+	/** A switch to a drug he already takes says so in view; on the replica it showed only that the drug switched from
+	 *  is not his. */
+	@Test
+	public void aSwitchToADrugHeAlreadyTakesSaysSoInView() {
+		List<PatientClinicalContext.ActiveDrugOrder> orders = new ArrayList<PatientClinicalContext.ActiveDrugOrder>();
+		orders.add(DrugReferenceTestSupport.activeOrder("order-efv", "Efavirenz", "Efavirenz"));
+		orders.add(DrugReferenceTestSupport.activeOrder("order-3tc", "Lamivudine", "Lamivudine"));
+		PatientChart chart = ask("Can I switch his nevirapine to efavirenz?", null, orders);
+		String summary = chart.getModuleAnswerSummary();
+
+		assertNotNull(summary, "was: " + chart.getModuleAnswer());
+		assertTrue(summary.contains("Efavirenz is already one of this patient's active medications"), "was: " + summary);
+	}
+
+	/** Two drugs asked about together that raise nothing say so in view, not only that neither is his. */
+	@Test
+	public void twoDrugsThatRaiseNothingSayItInView() {
+		PatientChart chart = ask("Can I give him ibuprofen and omeprazole?", null, demoOrders());
+		String summary = chart.getModuleAnswerSummary();
+
+		assertNotNull(summary, "was: " + chart.getModuleAnswer());
+		assertTrue(summary.contains("the interaction check raised no finding about Ibuprofen"), "was: " + summary);
+		assertTrue(summary.contains("the interaction check raised no finding about Omeprazole"), "was: " + summary);
+	}
+
+	/** Where it cites findings, the sentence in view is its first line's statement and the count, and nothing it counts
+	 *  is said twice: "Does his nevirapine interact with rifampicin?" grew to 35 words when every statement before
+	 *  the finding was kept. */
+	@Test
+	public void aPairQuestionIsItsFirstStatementAndItsCount() {
+		PatientChart chart = ask("Does his nevirapine interact with rifampicin?", null, demoOrders());
+
+		assertEquals("Nevirapine is one of this patient's active medications; 1 Major interaction — Rifampicin (rifampin) with "
+				+ "Nevirapine.", chart.getModuleAnswerSummary(), "was: " + chart.getModuleAnswer());
+	}
+
 	private static List<PatientClinicalContext.ActiveDrugOrder> demoOrders() {
 		List<PatientClinicalContext.ActiveDrugOrder> orders = new ArrayList<PatientClinicalContext.ActiveDrugOrder>();
 		for (int n = 1; n <= 3; n++) {

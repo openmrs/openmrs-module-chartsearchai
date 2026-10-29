@@ -3349,7 +3349,24 @@ public final class QueryScopeRouter {
 				+ "(.+?)\\s+allergy[?.!\\s]*$"),
 		Pattern.compile("(?i)^(.+?)\\s+(?:to|for|in)\\s+(?:someone|somebody|anyone|a patient|a person|patients|people)\\s+"
 				+ "(?:who\\s+(?:is|are)\\s+|that\\s+(?:is|are)\\s+)?allergic\\s+to\\s+(.+?)[?.!\\s]*$"),
-		Pattern.compile("(?i)^(.+?)\\s+(?:to|for|in)\\s+(?:a|an)\\s+(.+?)[-\\s]allergic\\s+(?:patient|person|woman|man)[?.!\\s]*$"));
+		Pattern.compile("(?i)^(.+?)\\s+(?:to|for|in)\\s+(?:a|an)\\s+(.+?)[-\\s]allergic\\s+(?:patient|person|woman|man)[?.!\\s]*$"),
+		// "Is ceftriaxone ok with a penicillin allergy?" — never "with her penicillin allergy", which may be one her chart
+		// records and the answer weighs (ADR Decision 520)
+		Pattern.compile("(?i)^(.+?)\\s+(?:with|despite|given)\\s+(?:a|an)\\s+(.+?)\\s+allergy[?.!\\s]*$"));
+
+	/** The words that name no allergen before "allergy": "Drug allergy: …", "Any allergy?" (ADR Decision 520). */
+	private static final Set<String> NOT_AN_ALLERGEN = new HashSet<String>(Arrays.asList("drug", "drugs", "food", "foods",
+		"any", "known", "her", "his", "their", "no", "severe", "the", "a", "an", "medication", "medicine", "documented",
+		"recorded", "previous", "new"));
+
+	/** The words making what follows an allergy supposed first a proposal (ADR Decision 520). */
+	private static final Set<String> PROPOSING_WORDS = new HashSet<String>(Arrays.asList("ok", "okay", "safe", "fine",
+		"alright", "give", "start", "prescribe", "use", "add", "can", "could", "may", "should", "appropriate", "suitable"));
+
+	/** The allergy supposed first and the proposal after it — "Penicillin allergy - amoxicillin ok?", "Sulfa allergy and
+	 *  cotrimoxazole ok?" — the allergen the first group, the proposal the second (ADR Decision 520). */
+	private static final List<Pattern> ALLERGY_FIRST_CLAUSES = Arrays.asList(
+		Pattern.compile("(?i)^(\\p{L}+(?:[\\s-]\\p{L}+)?)\\s+allergy\\s*(?:[-,:;]+\\s*|\\s(?:and|but|so|with)\\s+)(.+?)[?.!\\s]*$"));
 
 	/** The allergy {@code question} supposes beside its proposal and the proposal without it, or {@code null} (ADR Decision
 	 *  410). Never her own: "if she is allergic" asks of an allergy her chart may not record, and the answer says it weighs
@@ -3362,6 +3379,14 @@ public final class QueryScopeRouter {
 			Matcher m = clause.matcher(question.trim());
 			if (m.matches()) {
 				return new SupposedAllergy(m.group(1).trim() + "?", m.group(2).trim());
+			}
+		}
+		for (Pattern clause : ALLERGY_FIRST_CLAUSES) {
+			Matcher m = clause.matcher(question.trim());
+			// Only an allergen named, and a proposal after it: "Drug allergy: what does she have?" asks of her allergies.
+			if (m.matches() && Collections.disjoint(words(m.group(1)), NOT_AN_ALLERGEN)
+					&& !Collections.disjoint(words(m.group(2)), PROPOSING_WORDS)) {
+				return new SupposedAllergy(m.group(2).trim() + "?", m.group(1).trim());
 			}
 		}
 		return null;

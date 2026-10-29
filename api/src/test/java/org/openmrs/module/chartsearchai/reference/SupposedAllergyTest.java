@@ -41,6 +41,24 @@ public class SupposedAllergyTest extends BaseModuleContextSensitiveTest {
 			ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS, "true");
 	}
 
+	/**
+	 * The allergy supposed first, the proposal after it — "Penicillin allergy - amoxicillin ok?" — is the same question
+	 * (ADR Decision 520): on the 3.7.1 standalone the model answered it "Amoxicillin can be given".
+	 */
+	@Test
+	public void anAllergySupposedBeforeTheProposalIsTheSameQuestion() {
+		String[][] cases = { { "Penicillin allergy - amoxicillin ok?", "amoxicillin ok?", "Penicillin" },
+			{ "Sulfa allergy and cotrimoxazole ok?", "cotrimoxazole ok?", "Sulfa" },
+			{ "Penicillin allergy: can I give ceftriaxone?", "can I give ceftriaxone?", "Penicillin" },
+			{ "Is ceftriaxone ok with a penicillin allergy?", "Is ceftriaxone ok?", "penicillin" } };
+		for (String[] each : cases) {
+			String proposal = ask(each[1]);
+			assertNotNull(proposal, "precondition: the module answers " + each[1]);
+			assertEquals(proposal + "\n" + DrugReferenceInjector.SUPPOSED_ALLERGY_NOT_WEIGHED_OPENING + each[2] + ").",
+				ask(each[0]), each[0]);
+		}
+	}
+
 	@Test
 	public void aProposalBesideASupposedAllergyIsTheProposalSayingTheSupposedAllergyWasNotWeighed() {
 		String[][] cases = { { "Is ibuprofen ok if she is allergic to aspirin?", "Is ibuprofen ok?", "aspirin" },

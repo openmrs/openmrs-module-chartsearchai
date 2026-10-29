@@ -24567,3 +24567,30 @@ there.
 lead there, the folded sentence on the summary.
 
 Pinned by `AlwaysCollapsedAnswerTest` and `ChartSearchAiAnswerSummaryTest.theSearchResponseStatesWhetherTheDetailsStateLimits`.
+
+## Decision 520: An allergy supposed before the proposal is the same question as one supposed after it
+
+**Status: Accepted** (October 2026) — found asking 17 allergy and special-population wordings of 15 patients on the 3.7.1
+standalone on 2026-10-29.
+
+### Context
+
+*"Penicillin allergy - amoxicillin ok?"* went to the model. On 2 of 15 patients it answered *"Amoxicillin can be
+given"*, a clearance of a penicillin for a patient the question says is allergic to penicillin. *"Can I give her
+amoxicillin if she is allergic to penicillin?"* is the module's
+(Decision 410). It answers the proposal and closes that the check weighs only the allergies her chart records, not the
+one the question supposes. Every clause Decision 410 reads names the allergy after the proposal.
+
+### The decision
+
+- An allergy named first, then the proposal, is the same question: *"X allergy - Y ok?"*, *"X allergy: can I give Y?"*,
+  *"X allergy and Y ok?"*. So is *"Y ok with a X allergy?"*.
+- Only where the allergen is named, not a word like *"drug"*, *"food"* or *"any"*. *"Drug allergy: what does she have?"*
+  asks of her allergies.
+- Only where the words after it propose something (ok, safe, give, start, can…).
+- *"with her penicillin allergy"* is left as found. Her chart may record that allergy and the answer weigh it, so the
+  closing sentence that it was not weighed could be false.
+- Also left as found: the drug alone after the allergy, *"Sulfa allergy and cotrimoxazole?"*, proposes nothing the
+  router can tell from a word, and stays the model's.
+
+Pinned by `SupposedAllergyTest.anAllergySupposedBeforeTheProposalIsTheSameQuestion`.

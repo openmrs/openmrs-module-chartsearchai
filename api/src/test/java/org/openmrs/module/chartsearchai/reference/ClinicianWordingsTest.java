@@ -1926,6 +1926,23 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/** ADR Decision 522: a note stating an allergy, then a plan, is the plan with the statement said not weighed. */
+	@Test
+	public void aNoteStatingAnAllergyThenAPlanIsThePlanWithTheStatementSaidNotWeighed() {
+		String plan = ask("Plan cotrimoxazole. Safe?");
+		assertNotNull(plan, "precondition: the module answers the plan");
+		assertEquals(plan + "\n" + DrugReferenceInjector.STATEMENT_NOT_WEIGHED_OPENING + "Pt allergic to sulfa).",
+			ask("Pt allergic to sulfa. Plan cotrimoxazole. Safe?"));
+		assertEquals(plan + "\n" + DrugReferenceInjector.STATEMENT_NOT_WEIGHED_OPENING + "Patient is allergic to sulfa).",
+			ask("Patient is allergic to sulfa. Plan cotrimoxazole. Safe?"));
+		String prophylaxis = ask("Can I give her cotrimoxazole prophylaxis?");
+		assertNotNull(prophylaxis, "precondition: the module answers it");
+		assertEquals(prophylaxis, ask("Cotrimoxazole prophylaxis ok?"));
+		assertEquals(ask("Plan cotrimoxazole prophylaxis. Safe?") + "\n" + DrugReferenceInjector.STATEMENT_NOT_WEIGHED_OPENING
+				+ "Pt allergic to sulfa).", ask("Pt allergic to sulfa. Plan cotrimoxazole prophylaxis. Safe?"));
+		assertNotNull(ask("Plan cotrimoxazole prophylaxis. Safe?"), "the plan with its prophylaxis is the module's");
+	}
+
 	/** ADR Decision 521: red flags or a no-go asked of a drug, and how serious its interaction is, are what was found about it. */
 	@Test
 	public void redFlagsANoGoAndHowSeriousItsInteractionIsAreWhatWasFoundAboutIt() {

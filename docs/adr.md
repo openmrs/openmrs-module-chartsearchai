@@ -24622,3 +24622,31 @@ These went to the model:
   pair by pair.
 
 Pinned by `ClinicianWordingsTest.redFlagsANoGoAndHowSeriousItsInteractionIsAreWhatWasFoundAboutIt`.
+
+## Decision 522: A note stating an allergy, then a plan, is the plan with the statement said not weighed
+
+**Status: Accepted** (October 2026) — found asking 15 note-style wordings of 15 patients on the 3.7.1 standalone on
+2026-10-29.
+
+### Context
+
+*"Pt allergic to sulfa. Plan cotrimoxazole prophylaxis. Safe?"* went to the model. On 5 of 15 patients it answered
+*"Cotrimoxazole can be given"*, clearing a sulfonamide for a patient the note says is allergic to sulfa. *"She is
+allergic to sulfa. Can I give cotrimoxazole?"* is the module's (Decision 419). It answers the proposal and closes that
+the check weighs only her chart, not what the question states about her. The note fell short of it three ways:
+
+- *"Pt"* and a verbless *"allergic"* were no statement's subject and verb.
+- A plan after the statement — *"Plan …"*, *"Starting …"* — was no question.
+- The residual reading never set aside a form or use named beside the drug, *"cotrimoxazole prophylaxis"*, though the
+  shapes do (Decisions 334, 419). One reading set it aside and the other did not, the disagreement Decision 472 warns of.
+
+### The decision
+
+- *"Pt"* opens a statement, and *"allergic"* is its verb.
+- A plan — plan, start, add, give, want — may follow a statement as its question does.
+- The residual reading sets aside a stated form or use with the same helper the shapes use. *"Cotrimoxazole
+  prophylaxis ok?"* is read as *"Can I give her cotrimoxazole prophylaxis?"* is, its answer saying the form was not
+  weighed.
+- A supposed allergy is still not weighed against the drug (Decision 410). The answer says so.
+
+Pinned by `ClinicianWordingsTest.aNoteStatingAnAllergyThenAPlanIsThePlanWithTheStatementSaidNotWeighed`.

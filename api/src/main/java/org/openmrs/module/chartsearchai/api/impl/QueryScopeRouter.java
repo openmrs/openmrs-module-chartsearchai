@@ -3099,6 +3099,12 @@ public final class QueryScopeRouter {
 		if (withoutADose != null) {
 			wordsWithTheDrugMarked = Arrays.asList(withoutADose.split(" "));
 		}
+		// And a form or use named beside it, which the shapes set aside too (ADR Decisions 334, 419, 522): "Cotrimoxazole
+		// prophylaxis ok?".
+		String withoutAForm = withoutAStatedForm(String.join(" ", wordsWithTheDrugMarked));
+		if (withoutAForm != null) {
+			wordsWithTheDrugMarked = Arrays.asList(withoutAForm.split(" "));
+		}
 		// And how long it would be given, which the answer says it did not weigh (ADR Decisions 419, 470): "Fluconazole 200 mg
 		// daily for 14 days ok?".
 		String withoutADuration = withoutAStatedDuration(String.join(" ", wordsWithTheDrugMarked));
@@ -3326,10 +3332,13 @@ public final class QueryScopeRouter {
 	/** A statement about her opening the question, then the question: "She has HIV and TB. Can I give her fluconazole?", "She
 	 *  is pregnant, can I give her fluconazole?", "Patient is on ART. Is fluconazole safe?", "I need to treat her UTI. Can I use
 	 *  ciprofloxacin?" (ADR Decision 419). */
-	private static final Pattern LEADING_STATEMENT = Pattern.compile("(?i)^\\s*((?:(?:she|he|they|the patient|this patient|patient)"
-			+ "\\s+(?:is|are|was|has|have|had|takes|gets|needs|need)|(?:her|his|their)\\s+[\\p{L} ]{1,30}?\\s+(?:is|are)|i\\s+(?:need|want|have)"
+	private static final Pattern LEADING_STATEMENT = Pattern.compile("(?i)^\\s*((?:(?:she|he|they|the patient|this patient|patient"
+			// and a note's "Pt allergic to sulfa." (ADR Decision 522)
+			+ "|pt)\\s+(?:is|are|was|has|have|had|takes|gets|needs|need|allergic)|(?:her|his|their)\\s+[\\p{L} ]{1,30}?\\s+(?:is|are)|i\\s+(?:need|want|have)"
 			+ "\\s+to\\s+treat\\s+(?:her|his|their))\\b[^.?!,;]{1,60}?)(?:\\s*[.,;:]|\\s+[-\u2013\u2014])\\s+((?:can|could|may|should|is|are|would|will|"
-			+ "what|which|does|do|any|before)\\b.+)$");
+			+ "what|which|does|do|any|before"
+			// and a plan after it, "Pt allergic to sulfa. Plan cotrimoxazole. Safe?" (ADR Decision 522)
+			+ "|plan|planning|starting|start|adding|add|giving|give|want)\\b.+)$");
 
 	/** The statement opening {@code question} and the question after it, or {@code null} (ADR Decision 419). The caller decides
 	 *  whether it names a drug, in which case it is a list of drugs and no statement. */

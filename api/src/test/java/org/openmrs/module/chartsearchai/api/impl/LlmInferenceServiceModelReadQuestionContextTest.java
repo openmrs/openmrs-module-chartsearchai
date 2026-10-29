@@ -28,6 +28,7 @@ import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
 import org.openmrs.module.chartsearchai.api.impl.LlmProvider.LlmResponse;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport;
+import org.openmrs.module.chartsearchai.reference.SafetyWarning;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.AlreadyOrderedDrug;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
@@ -310,6 +311,30 @@ public class LlmInferenceServiceModelReadQuestionContextTest extends BaseModuleC
 			assertEquals(0, provider.engine.readings, question + " is not read by the model");
 			assertFalse(answer.isAnsweredByTheModule(), question + " is not answered with the screen: " + answer.getAnswer());
 			assertTrue(answer.getSafetyWarnings().isEmpty(), question + " carries no chip: " + answer.getSafetyWarnings());
+		}
+	}
+
+	/**
+	 * ADR Decision 535: her sleep, her appetite or her mood stands where a second drug would in "Will ibuprofen interfere
+	 * with her sleep?". Each is no drug's name, so the question is no pair of drugs: on the 3.7.1 standalone "Will
+	 * fluconazole interfere with her sleep?" was answered with fluconazole's screen of her orders and "Did you mean
+	 * Diphenhydramine?", and "Will fluconazole affect her appetite?" with the note that "appetite" is no drug name.
+	 * The drug it names is still screened, as any question of what a drug does to her is (ADR Decision 399).
+	 */
+	@Test
+	public void aBodilyFunctionWhereADrugWouldStandIsNoDrug() {
+		for (String question : new String[] { "Will ibuprofen interfere with her sleep?", "Will ibuprofen affect her appetite?",
+				"Does ibuprofen affect her mood?", "Will ibuprofen interfere with her memory?",
+				"Will ibuprofen interfere with her contraception?" }) {
+			ChartAnswer answer = serviceWith(new RecordingProvider("YES")).search(patient, question);
+
+			assertFalse(answer.isAnsweredByTheModule(), question + " is not answered with the screen: " + answer.getAnswer());
+			// Ibuprofen's own findings stay beside a question of what it does to her (ADR Decision 399); none is of the word.
+			for (SafetyWarning chip : answer.getSafetyWarnings()) {
+				assertEquals("Ibuprofen", chip.getDrug(), question + " carries only ibuprofen's chips: " + chip);
+			}
+			assertFalse(answer.getAnswer().contains("not a drug name"), question + " states no drug name: " + answer.getAnswer());
+			assertFalse(answer.getAnswer().contains("is named"), question + " names no order: " + answer.getAnswer());
 		}
 	}
 

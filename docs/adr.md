@@ -25021,3 +25021,30 @@ once its label went up, and a second *"Yes —"* under the first where a sentenc
 a several-statement bottom line still repeats under the toggle.
 
 Pinned by `BottomLineOpensTheAnswerTest`.
+
+## Decision 535: Her sleep, her appetite or her mood where a second drug would stand is no drug
+
+**Status: Accepted** (October 2026) — found asking 5 wordings of what a drug would do to her of 3 patients on the 3.7.1
+standalone on 2026-10-30.
+
+### Context
+
+*"Will fluconazole interfere with her sleep?"* fits Decision 360's shape *"will X interfere with her Y"*, with *"sleep"*
+in the second drug's place. *"sleep"* begins a brand's name, so Decision 490 offered it as a clipped name. The module
+answered the question itself, on 3 of 3 patients: *"None of this patient's active orders is named "sleep"."*, *"Did you
+mean Diphenhydramine?"*, and fluconazole's interaction with her nevirapine as a chip. *"Will fluconazole affect her
+appetite?"* went to the model, but the answer carried the module's notes that no order is named *"appetite"* and that
+*"appetite"* is no drug name the interaction data recognises. *"Will fluconazole interfere with her contraception?"*
+carried the same notes and no chip at all, since Decision 479 withholds every chip beside an unrecognised name.
+
+### The decision
+
+- What of her a drug would act on is never an unrecognised drug's name: her sleep, appetite, mood, memory, energy,
+  concentration, libido, weight, breathing, vision, hearing, balance, skin, heart, liver, kidneys, stomach, bowels,
+  periods, cycle, pregnancy, baby, breastfeeding, contraception, labs, results, BP and pressure. Milk and sugar are not among them:
+  something to eat or drink is told it is no drug name (`SomethingToEatOrDrinkTest`).
+- The question is then no pair of drugs, and goes to the model with no note about the word.
+- The drug it names is still screened, as any question of what a drug does to her is (Decision 399). Its chips stay
+  beside the answer, and only its own.
+
+Pinned by `LlmInferenceServiceModelReadQuestionContextTest.aBodilyFunctionWhereADrugWouldStandIsNoDrug`.

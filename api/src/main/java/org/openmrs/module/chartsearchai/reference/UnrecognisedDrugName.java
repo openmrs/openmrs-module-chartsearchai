@@ -60,7 +60,12 @@ final class UnrecognisedDrugName {
 		// and what a question asks of a drug: "Fluconazole - red flags?" (ADR Decision 521)
 		"red", "flag", "flags", "warning", "warnings",
 		// and an order-entry note's words: "Order fluconazole?", "Add fluconazole to her list?" (ADR Decision 531)
-		"order", "rx", "list", "proceed", "indicated", "objection", "right", "shall", "put"));
+		"order", "rx", "list", "proceed", "indicated", "objection", "right", "shall", "put",
+		// and what of her a drug would act on: "Will fluconazole interfere with her sleep?", whose "sleep" begins a brand's
+		// name (ADR Decision 535)
+		"sleep", "appetite", "mood", "memory", "energy", "concentration", "libido", "weight", "breathing", "vision",
+		"hearing", "balance", "skin", "heart", "liver", "kidney", "kidneys", "stomach", "bowels", "periods", "period",
+		"cycle", "pregnancy", "baby", "breastfeeding", "contraception", "labs", "results", "bp", "pressure"));
 
 	private static final int MAX_SUGGESTIONS = 4;
 

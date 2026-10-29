@@ -429,51 +429,6 @@ public class ConversationServicePersistenceTest extends BaseModuleContextSensiti
 		assertNull(stored.getAnswerText());
 	}
 
-	// A bundled answer's measurements live on the ChartAnswer, not in its wire payload; a turn settled
-	// from the retained answer must still audit them.
-	@Test
-	public void aFailedOptionalTailAuditsTheMeasurementsOfTheRetainedBundledAnswer() {
-		ClinicalConversation conversation = conversationService.openOrCreate(patient, "bundled", ProviderMode.QUERY_SCOPED);
-		ClinicalConversationTurn turn = conversationService.startTurn(conversation, "retained-measured", "Question");
-		Map<String, Object> payload = new LinkedHashMap<>();
-		payload.put("answer", "Checked answer");
-		payload.put("answerValidation", Collections.singletonMap("status", "checked"));
-		ChartAnswer source = new ChartAnswer("Checked answer", Collections.emptyList(), 12, 3, 0,
-				Collections.emptyList(), "fullChart", new ReferenceSlice(7, 320));
-		assertTrue(conversationService.recordCheckedAnswer(turn, AnswerEnvelope.fromPayload(payload, source)));
-		conversationService.finishTurn(turn, TurnResult.error("bundled", ProviderMode.QUERY_SCOPED,
-				"provider_stream_interrupted"), 50L);
-		Context.flushSession();
-		Context.clearSession();
-		ChartSearchAuditLog audit = conversationDAO.getTurnByUuid(turn.getUuid()).getAuditLog();
-		assertEquals("Checked answer", audit.getAnswer());
-		assertEquals("fullChart", audit.getSearchMode());
-		assertEquals(7, audit.getReferenceSliceRecords());
-		assertEquals(320, audit.getReferenceSliceChars());
-		assertEquals(12, audit.getInputTokens());
-		assertEquals(3, audit.getOutputTokens());
-	}
-
-	// Zero reference material is a measurement, as the live path files it, not an unmeasured slice.
-	@Test
-	public void aRetainedAnswerWithNoReferenceMaterialAuditsAZeroSlice() {
-		ClinicalConversation conversation = conversationService.openOrCreate(patient, "bundled", ProviderMode.QUERY_SCOPED);
-		ClinicalConversationTurn turn = conversationService.startTurn(conversation, "retained-zero", "Question");
-		Map<String, Object> payload = new LinkedHashMap<>();
-		payload.put("answer", "Checked answer");
-		payload.put("answerValidation", Collections.singletonMap("status", "checked"));
-		ChartAnswer source = new ChartAnswer("Checked answer", Collections.emptyList(), 12, 3, 0,
-				Collections.emptyList(), "fullChart", new ReferenceSlice(0, 0));
-		assertTrue(conversationService.recordCheckedAnswer(turn, AnswerEnvelope.fromPayload(payload, source)));
-		conversationService.finishTurn(turn, TurnResult.error("bundled", ProviderMode.QUERY_SCOPED,
-				"provider_stream_interrupted"), 50L);
-		Context.flushSession();
-		Context.clearSession();
-		ChartSearchAuditLog audit = conversationDAO.getTurnByUuid(turn.getUuid()).getAuditLog();
-		assertEquals(0, audit.getReferenceSliceRecords());
-		assertEquals(0, audit.getReferenceSliceChars());
-	}
-
 	// A relayed payload's own fields belong to its provider and never stand in for this module's measurements.
 	@Test
 	public void aRelayedPayloadsOwnSearchModeAndSliceAreNotAudited() {

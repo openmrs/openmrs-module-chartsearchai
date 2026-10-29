@@ -13,7 +13,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -53,9 +52,6 @@ import org.springframework.transaction.annotation.Transactional;
 public class ConversationServiceImpl implements ConversationService {
 
 	private static final ObjectMapper MAPPER = new ObjectMapper();
-
-	/** Where a retained bundled answer's payload carries this module's search mode and slice. */
-	static final String MODULE_MEASUREMENTS = "chartsearchaiMeasurements";
 
 	@Autowired
 	private ConversationDAO conversationDAO;
@@ -228,7 +224,7 @@ public class ConversationServiceImpl implements ConversationService {
 		}
 
 		stored.setAnswerText(answer.getText());
-		stored.setProviderPayload(serialize(retainedPayload(answer)));
+		stored.setProviderPayload(serialize(answer.getPayload()));
 		stored.setPayloadMediaType(ClinicalConversationTurn.MEDIA_TYPE_JSON);
 		Date now = new Date();
 		conversationDAO.touchConversation(stored.getConversation().getConversationId(), now);
@@ -239,38 +235,6 @@ public class ConversationServiceImpl implements ConversationService {
 			turn.setPayloadMediaType(stored.getPayloadMediaType());
 		}
 		return true;
-	}
-
-	/**
-	 * The payload a checked answer is retained with. A bundled answer carries its measurements on the
-	 * {@link ChartAnswer} it was built from, not in its wire payload; they are written alongside it
-	 * here so the audit of a turn settled from the retained answer (an optional tail that failed) keeps
-	 * the search mode, the reference slice and the token counts the delivered answer was measured with.
-	 * The search mode and slice are this module's own measurements and go under
-	 * {@link #MODULE_MEASUREMENTS}, so a relayed payload's fields of the same names are never read as
-	 * them.
-	 */
-	private static Map<String, Object> retainedPayload(AnswerEnvelope answer) {
-		ChartAnswer source = answer.getSource();
-		if (source == null) {
-			return answer.getPayload();
-		}
-		Map<String, Object> payload = new LinkedHashMap<>(answer.getPayload());
-		Map<String, Object> measurements = new LinkedHashMap<>();
-		measurements.put("searchMode", source.getSearchMode());
-		ReferenceSlice slice = source.getReferenceSlice();
-		if (slice != null) {
-			measurements.put("referenceSliceRecords", slice.getRecords());
-			measurements.put("referenceSliceChars", slice.getCharacters());
-		}
-		payload.put(MODULE_MEASUREMENTS, measurements);
-		if (measured(source.getInputTokens()) != null) {
-			payload.put("inputTokens", source.getInputTokens());
-		}
-		if (measured(source.getOutputTokens()) != null) {
-			payload.put("outputTokens", source.getOutputTokens());
-		}
-		return payload;
 	}
 
 	@Override
@@ -301,25 +265,17 @@ public class ConversationServiceImpl implements ConversationService {
 		audit.setPatient(conversation.getPatient());
 		audit.setQuestion(turn.getQuestion());
 		// A failed turn audits what its client was last sent, else the checked answer the turn retained.
-		AnswerEnvelope retained = result.getAnswer() == null && result.getDeliveredAnswer() == null
-				? retainedAnswer(turn) : null;
 		AnswerEnvelope answer = result.getAnswer() != null ? result.getAnswer()
-				: result.getDeliveredAnswer() != null ? result.getDeliveredAnswer() : retained;
+				: result.getDeliveredAnswer() != null ? result.getDeliveredAnswer() : retainedAnswer(turn);
 		audit.setAnswer(answer == null ? "" : answer.getText());
 		audit.setReferenceCount(referenceCount(answer));
+		// Only the bundled answer carries this module's measurements, on the ChartAnswer it was built from; a
+		// relayed payload's own fields are the provider's and are never read as them.
 		ChartAnswer source = answer == null ? null : answer.getSource();
-		// A retained bundled answer states its measurements under MODULE_MEASUREMENTS (retainedPayload); a
-		// relayed payload's own fields are the provider's and are never read as this module's measurements.
-		Map<?, ?> measured = moduleMeasurements(retained);
-		Object storedMode = measured.get("searchMode");
-		String retainedMode = storedMode instanceof String ? (String) storedMode : null;
-		audit.setSearchMode(source != null ? source.getSearchMode()
-				: retainedMode != null ? retainedMode : ChartSearchAiConstants.SEARCH_MODE_UNKNOWN);
+		audit.setSearchMode(source == null ? ChartSearchAiConstants.SEARCH_MODE_UNKNOWN : source.getSearchMode());
 		ReferenceSlice slice = source == null ? null : source.getReferenceSlice();
-		audit.setReferenceSliceRecords(slice != null ? Integer.valueOf(slice.getRecords())
-				: count(measured.get("referenceSliceRecords")));
-		audit.setReferenceSliceChars(slice != null ? Integer.valueOf(slice.getCharacters())
-				: count(measured.get("referenceSliceChars")));
+		audit.setReferenceSliceRecords(slice == null ? null : slice.getRecords());
+		audit.setReferenceSliceChars(slice == null ? null : slice.getCharacters());
 		audit.setResponseTimeMs(responseTimeMs);
 		// The bundled answer's counts are on the ChartAnswer it was built from, as saveAuditLog reads
 		// them; only a relayed answer states them in its payload.
@@ -363,17 +319,6 @@ public class ConversationServiceImpl implements ConversationService {
 		}
 		Object value = answer.getPayload().get(field);
 		return value instanceof Number ? measured(((Number) value).intValue()) : null;
-	}
-
-	/** The module's own measurements a retained bundled answer was stored with; empty for any other. */
-	private static Map<?, ?> moduleMeasurements(AnswerEnvelope retained) {
-		Object value = retained == null ? null : retained.getPayload().get(MODULE_MEASUREMENTS);
-		return value instanceof Map ? (Map<?, ?>) value : Collections.emptyMap();
-	}
-
-	/** A slice count as stated: zero is a measurement here, unlike a token count. */
-	private static Integer count(Object value) {
-		return value instanceof Number ? Integer.valueOf(((Number) value).intValue()) : null;
 	}
 
 	/** Zero is no measurement, as saveAuditLog files it: a module-composed answer reports 0/0. */

@@ -376,6 +376,61 @@ public class LlmInferenceServiceModuleBudgetContextTest extends BaseModuleContex
 		}
 	}
 
+	/**
+	 * With the drug reference on, a question the router reads no drug in is read by the model before the chart
+	 * is answered (ADR Decision 489), so a cancel while that call stalls must release the request too, not wait
+	 * out its timeout.
+	 */
+	@Test
+	public void cancellingAStalledSafetyReadingReleasesTheRequest() throws Exception {
+		TurnCancellation cancellation = new TurnCancellation();
+		AtomicBoolean reachedReading = new AtomicBoolean();
+		CountDownLatch release = new CountDownLatch(1);
+		HttpServer server = HttpServer.create(new InetSocketAddress(LlamaServerEndpoint.LOOPBACK_HOST, 0), 0);
+		server.setExecutor(java.util.concurrent.Executors.newCachedThreadPool());
+		server.createContext("/v1/chat/completions", exchange -> {
+			try {
+				String request = new String(exchange.getRequestBody().readAllBytes(),
+						java.nio.charset.StandardCharsets.UTF_8);
+				if (request.contains("You classify one question a clinician typed")) {
+					reachedReading.set(true);
+					cancellation.cancel();
+					release.await(30, TimeUnit.SECONDS);
+					return;
+				}
+				exchange.sendResponseHeaders(500, -1);
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+			} finally {
+				exchange.close();
+			}
+		});
+		server.start();
+		try {
+			Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS, "false");
+			Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_LLM_ENGINE, "remote");
+			Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_LLM_REMOTE_MODEL_NAME, "test-model");
+			Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_LLM_REMOTE_ENDPOINT_URL,
+					"http://" + server.getAddress().getHostString() + ":" + server.getAddress().getPort() + "/v1/chat/completions");
+			LlmInferenceService service = service(null);
+			LlmProvider llm = new LlmProvider();
+			ReflectionTestUtils.setField(llm, "remoteEngine", new RemoteLlmEngine());
+			service.setLlmProvider(llm);
+			long start = System.nanoTime();
+			TurnResult result = new BundledClinicalAnswerProvider(service).execute(
+					new TurnRequest(Context.getPatientService().getPatient(7), "What is her latest weight?",
+							"conversation", "request", null), event -> { }, cancellation).toCompletableFuture().join();
+			assertTrue(reachedReading.get(), "exercise the real safety-reading request before the answer");
+			assertEquals("cancelled", result.getProblemCode());
+			assertTrue(TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start) < 6000,
+					"cancellation must return before the stalled peer is released");
+			assertFalse(Thread.currentThread().isInterrupted(), "do not leak cancellation into request cleanup");
+		} finally {
+			release.countDown();
+			server.stop(0);
+		}
+	}
+
 	private void assertModelCancellation(boolean sendHeaders) throws Exception {
 		assertModelCancellation(sendHeaders, false, null);
 	}

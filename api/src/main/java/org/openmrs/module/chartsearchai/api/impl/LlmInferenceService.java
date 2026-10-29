@@ -1214,7 +1214,7 @@ public class LlmInferenceService implements ChartSearchService {
 			PatientChart built = chartBuildingStrategy.buildChart(patient, question, reservedTokens);
 			requireActiveTurn(cancellation);
 			ChartReadStatus chartRead = new ChartReadStatus();
-			SafetyReading reading = readForDrugSafety(patient, question, built, chartRead);
+			SafetyReading reading = readForDrugSafety(patient, question, built, chartRead, cancellation);
 			PatientChart injected = reading.chart;
 			requireActiveTurn(cancellation);
 			AssembledChart assembled = new AssembledChart(built, injected, chartRead, reading.question);
@@ -1350,7 +1350,7 @@ public class LlmInferenceService implements ChartSearchService {
 	 * engine keeps the first injection.
 	 */
 	private SafetyReading readForDrugSafety(Patient patient, String question, PatientChart built,
-			ChartReadStatus chartRead) {
+			ChartReadStatus chartRead, CancellationSignal cancellation) {
 		PatientChart injected = drugReferenceInjector.inject(built, patient, question, chartRead);
 		if (injected == null || question == null || question.trim().isEmpty() || !ChartSearchAiUtils.isDrugReferenceEnabled()
 				|| !ChartSearchAiUtils.getBooleanGlobalProperty(
@@ -1372,7 +1372,9 @@ public class LlmInferenceService implements ChartSearchService {
 				|| QueryScopeRouter.asksOfDrugResistance(question)) {
 			return new SafetyReading(injected, question);
 		}
-		LlmProvider.MedicationSafetyReading reading = llmProvider.readMedicationSafetyQuestion(question);
+		// Only the model call runs under the cancel interrupt, keeping the chart reads around it outside.
+		LlmProvider.MedicationSafetyReading reading = LlmProvider.interruptible(cancellation,
+				() -> llmProvider.readMedicationSafetyQuestion(question));
 		if (reading == null || reading == LlmProvider.MedicationSafetyReading.OTHER) {
 			return new SafetyReading(injected, question);
 		}

@@ -26,21 +26,30 @@ public final class TurnResult {
 
 	private final String problemCode;
 
+	private final AnswerEnvelope deliveredAnswer;
+
 	private TurnResult(String providerId, ProviderMode mode, TurnEventType terminalState,
-			AnswerEnvelope answer, String problemCode) {
+			AnswerEnvelope answer, String problemCode, AnswerEnvelope deliveredAnswer) {
 		this.providerId = providerId;
 		this.mode = mode;
 		this.terminalState = terminalState;
 		this.answer = answer;
 		this.problemCode = problemCode;
+		this.deliveredAnswer = deliveredAnswer;
 	}
 
 	public static TurnResult done(String providerId, ProviderMode mode, AnswerEnvelope answer) {
-		return new TurnResult(providerId, mode, TurnEventType.TURN_DONE, answer, null);
+		return new TurnResult(providerId, mode, TurnEventType.TURN_DONE, answer, null, null);
 	}
 
 	public static TurnResult error(String providerId, ProviderMode mode, String problemCode) {
-		return new TurnResult(providerId, mode, TurnEventType.TURN_ERROR, null, problemCode);
+		return error(providerId, mode, problemCode, null);
+	}
+
+	/** A failed turn whose client had already been sent {@code deliveredAnswer}, or {@code null}. */
+	public static TurnResult error(String providerId, ProviderMode mode, String problemCode,
+			AnswerEnvelope deliveredAnswer) {
+		return new TurnResult(providerId, mode, TurnEventType.TURN_ERROR, null, problemCode, deliveredAnswer);
 	}
 
 	public String getProviderId() {
@@ -65,5 +74,13 @@ public final class TurnResult {
 	/** Normalized machine-readable failure code; {@code null} on a completed turn. */
 	public String getProblemCode() {
 		return problemCode;
+	}
+
+	/**
+	 * On a failed turn, the last answer the client was sent before it failed; {@code null} when none
+	 * was. Audited only: it is never stored on the turn, so unchecked text cannot reach later prompts.
+	 */
+	public AnswerEnvelope getDeliveredAnswer() {
+		return deliveredAnswer;
 	}
 }

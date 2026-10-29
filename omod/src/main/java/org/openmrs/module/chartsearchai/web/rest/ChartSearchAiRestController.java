@@ -1048,7 +1048,8 @@ public class ChartSearchAiRestController {
 	 * {@code questionId}, or {@code null} when the save failed — audit failures are logged and never
 	 * break the response, exactly as before the async-grounding split.
 	 *
-	 * <p><b>The only place a row is built.</b> All four write sites go through here: the blocking
+	 * <p>All four legacy search write sites go through here; conversation turns are audited by
+	 * {@code ConversationServiceImpl.buildAudit}. The search sites are: the blocking
 	 * {@code /search} handler, the streaming classic post-return path, the streaming async
 	 * early-{@code done} path, and {@link #auditStreamedQueryIfUnrecorded}, which is the one that
 	 * runs when a stream ended before any of the other three could (issue #450). Before issue #178
@@ -1196,6 +1197,12 @@ public class ChartSearchAiRestController {
 			entry.put("referenceSliceRecords", auditLog.getReferenceSliceRecords());
 			entry.put("referenceSliceChars", auditLog.getReferenceSliceChars());
 			entry.put("searchMode", auditLog.getSearchMode());
+			// Conversation turns' attribution: providerId separates a relayed turn's unknown mode
+			// from an unfinished query's, which /search and /search/stream rows leave null.
+			entry.put("providerId", auditLog.getProviderId());
+			entry.put("providerMode", auditLog.getProviderMode());
+			entry.put("conversationUuid", auditLog.getConversationUuid());
+			entry.put("requestId", auditLog.getRequestId());
 			entry.put("responseTimeMs", auditLog.getResponseTimeMs());
 			entry.put("inputTokens", auditLog.getInputTokens());
 			entry.put("outputTokens", auditLog.getOutputTokens());

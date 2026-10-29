@@ -10,6 +10,7 @@
 package org.openmrs.module.chartsearchai.api;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
@@ -18,6 +19,24 @@ import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
  * Unit tests for {@link AuditLogPurgeTask} retention day parsing.
  */
 public class AuditLogPurgeTaskTest {
+
+	@Test
+	public void aFailingAuditPurgeDoesNotSkipTheChatPurge() {
+		boolean[] chatPurged = { false };
+		AuditLogPurgeTask task = new AuditLogPurgeTask() {
+			@Override
+			void purgeAuditLogs() {
+				throw new IllegalStateException("lock wait timeout on the audit rows");
+			}
+
+			@Override
+			void purgeConversations() {
+				chatPurged[0] = true;
+			}
+		};
+		task.execute();
+		assertTrue(chatPurged[0], "chat retention is independent of audit retention and must still run");
+	}
 
 	@Test
 	public void parseRetentionDays_shouldReturnDefaultWhenNull() {

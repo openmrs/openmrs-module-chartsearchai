@@ -3237,6 +3237,22 @@ public final class QueryScopeRouter {
 				: Residual.NONE;
 	}
 
+	/**
+	 * Whether {@code word} is one the residual reading knows as a word of the question around a drug — an asking word,
+	 * filler, a giving verb, or a word saying the drug is safe, harmful or interacts — and so never the name of a drug the
+	 * data does not recognise (ADR Decision 537). ONE list for both: "Fluconazole PO ok?" put "PO ok" in a second drug's
+	 * place, whose "ok" this reading knows, and every chip was withheld beside it.
+	 */
+	public static boolean isAWordOfTheQuestion(String word) {
+		// Never "ddI", which the words lower-case to the screen's "ddi": it is didanosine (MEDICATION_SAFETY_CUES).
+		if (word.matches("ddis?")) {
+			return false;
+		}
+		return RESIDUAL_FILLER.contains(word) || RESIDUAL_GIVE.contains(word) || RESIDUAL_SAFE.contains(word)
+				|| RESIDUAL_HARMS.contains(word) || RESIDUAL_INTERACTS.contains(word) || RESIDUAL_ASKING.contains(word)
+				|| RESIDUAL_QUESTION.contains(word) || PLANNED_GIVING.contains(word);
+	}
+
 	/** The one word {@link #withEitherWayAsked} makes of "side effect(s)". */
 	private static final String SIDE_EFFECTS = "side-effects";
 

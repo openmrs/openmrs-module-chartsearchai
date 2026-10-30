@@ -25070,3 +25070,27 @@ fluconazole"* and *"Check fluconazole against her meds"* were already screened.
   of the bare cue stay the model's: *"Will warfarin interfere with her sleep?"* is not a screen (Decision 535).
 
 Pinned by `ClinicianWordingsTest.screeningADrugOrItMessingWithHerMedicationsAsksItsInteractions`.
+
+## Decision 537: A word the wording rules know is no unrecognised drug's name
+
+**Status: Accepted** (October 2026) — found asking 24 wordings of 15 patients on the 3.7.1 standalone on 2026-10-30.
+
+### Context
+
+*"Fluconazole PO ok?"*, *"She was started on fluconazole today - issues?"* and *"Patient requesting fluconazole"* each
+put two words in a second drug's place: *"PO ok"*, *"was started"* and *"Patient requesting"*. Each was reported a drug name
+the interaction data does not recognise, and Decision 479 withholds every chip beside such a name. On all 15 patients the
+answers opened *"Fluconazole can be given, with one caution"* with no chip beside them. Each span held a word the residual
+reading (Decision 396) knows as a word of the question: *"ok"*, *"started"*, *"patient"*. Two lists said two things of
+those words.
+
+### The decision
+
+- `QueryScopeRouter.isAWordOfTheQuestion` answers from the residual reading's own lists whether a word is an asking word,
+  filler, a giving verb, or a word saying a drug is safe, harmful or interacts.
+- A span carrying such a word is no name standing beside a named drug, so the drug is screened and its chips stand.
+- A name the question writes with a hyphen is one word, whatever its parts: *"co-zorblatine"* is still unrecognised, though
+  *"co"* is filler (Decision 245).
+- *"ddI"* is never such a word: the words lower-case it to the screen's *"ddi"*, and it is didanosine.
+
+Pinned by `LlmInferenceServiceModelReadQuestionContextTest.aWordTheWordingRulesKnowIsNoUnrecognisedDrugsName`.

@@ -338,6 +338,24 @@ public class LlmInferenceServiceModelReadQuestionContextTest extends BaseModuleC
 		}
 	}
 
+	/**
+	 * ADR Decision 537: a word the wording rules know — "ok", "started", "patient" — is never the name of a drug the data
+	 * does not recognise. On the 3.7.1 standalone "Fluconazole PO ok?", "She was started on fluconazole today - issues?"
+	 * and "Patient requesting fluconazole" each put two such words in a second drug's place — "PO ok", "was started",
+	 * "Patient requesting" — and Decision 479 withheld every chip beside them, on all 15 patients, under answers opening
+	 * "Fluconazole can be given".
+	 */
+	@Test
+	public void aWordTheWordingRulesKnowIsNoUnrecognisedDrugsName() {
+		for (String question : new String[] { "Ibuprofen PO ok?", "She was started on ibuprofen today - issues?",
+				"Patient requesting ibuprofen" }) {
+			ChartAnswer answer = serviceWith(new RecordingProvider("YES")).search(patient, question);
+
+			assertFalse(answer.getAnswer().contains("not a drug name"), question + " states no drug name: " + answer.getAnswer());
+			assertFalse(answer.getSafetyWarnings().isEmpty(), question + " carries ibuprofen's chips: " + answer.getAnswer());
+		}
+	}
+
 	@Test
 	public void aQuestionNamingADrugIsNotReadByTheModel() {
 		RecordingProvider provider = new RecordingProvider("YES");

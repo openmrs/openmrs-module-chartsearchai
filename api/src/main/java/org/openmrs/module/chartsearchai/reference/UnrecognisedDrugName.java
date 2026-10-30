@@ -309,7 +309,8 @@ final class UnrecognisedDrugName {
 				if (word.contains("allerg")) {
 					return null;
 				}
-				if (!isAName(span) || namedByOneOf(questionDrugs, word) || namesOneOfHerOrders(context, word)
+				if (!isAName(span) || carriesAWordOfTheQuestion(span, question) || namedByOneOf(questionDrugs, word)
+						|| namesOneOfHerOrders(context, word)
 						|| hers && (QueryScopeRouter.namesAMedicationGroup(word) || context == null
 								|| !context.activeDrugOrdersRead())) {
 					return null;
@@ -318,6 +319,24 @@ final class UnrecognisedDrugName {
 			}
 		}
 		return null;
+	}
+
+	/**
+	 * Whether {@code span} carries a word the wording rules know around a drug (ADR Decision 537), so is no name standing
+	 * beside the named drug: "Fluconazole PO ok?" put "PO ok" there, "She was started on fluconazole today - issues?" "was
+	 * started", and Decision 479 withheld every chip beside them. A name the question writes with a hyphen is one word,
+	 * whatever its parts: "co-zorblatine" is no "co".
+	 */
+	private static boolean carriesAWordOfTheQuestion(List<String> span, String question) {
+		if (span.size() > 1 && question.toLowerCase().contains(String.join("-", span))) {
+			return false;
+		}
+		for (String w : span) {
+			if (QueryScopeRouter.isAWordOfTheQuestion(w)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/** Whether the data finds a near name for the word — or, of two, for either (ADR Decision 384): a word it finds none for

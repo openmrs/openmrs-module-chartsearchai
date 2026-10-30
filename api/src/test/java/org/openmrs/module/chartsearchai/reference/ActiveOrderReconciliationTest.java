@@ -28,7 +28,7 @@ import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.LogCapture;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
-
+import static org.junit.jupiter.api.Assertions.assertThrows;
 /**
  * Reconciliation between the drug-safety layer's active-order read and the serialized chart
  * (issue #118), exercised through the real {@link DrugReferenceInjector#injectRecords} seam over
@@ -482,5 +482,23 @@ public class ActiveOrderReconciliationTest {
 		}
 		assertFalse(result.getText().contains("] null"),
 				"no record may render a literal null: " + result.getText());
+	}
+
+	@Test
+	public void uuidMatchedNumbersCannotBeMutatedByAConsumer() {
+		PatientClinicalContext.ActiveDrugOrder order = DrugReferenceTestSupport.activeOrder(
+				SIMVASTATIN_ORDER_UUID, "Simvastatin Co 20mg", "simvastatin");
+
+		DrugReferenceInjector.DrugOrderRecords records =
+				new DrugReferenceInjector.DrugOrderRecords(Collections.singletonList(
+						DrugReferenceTestSupport.drugOrderRecord(1, SIMVASTATIN_ORDER_UUID,
+								"Simvastatin Co 20mg")));
+
+		List<Integer> numbers = records.numbersFor(order);
+
+		assertFalse(numbers.isEmpty(),
+				"the arrangement must exercise the uuid-match branch");
+		assertThrows(UnsupportedOperationException.class, () -> numbers.remove(0),
+				"a consumer must not be able to mutate the indexed uuid records");
 	}
 }

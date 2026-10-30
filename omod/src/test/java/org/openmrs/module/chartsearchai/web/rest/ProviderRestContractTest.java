@@ -25,7 +25,9 @@ import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -36,14 +38,20 @@ import java.util.stream.Collectors;
 import java.util.function.Consumer;
 
 import org.junit.jupiter.api.Test;
+import org.openmrs.Location;
 import org.openmrs.Patient;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.api.provider.BundledClinicalAnswerProvider;
+import org.openmrs.Role;
+import org.openmrs.User;
+import org.openmrs.api.context.Context;
+import org.openmrs.api.context.UserContext;
 import org.openmrs.module.chartsearchai.api.ChartSearchService;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceLoad;
 import org.openmrs.module.chartsearchai.reference.SafetyWarning;
 import org.openmrs.module.chartsearchai.api.conversation.ConversationService;
 import org.openmrs.module.chartsearchai.api.conversation.PriorClinicalTurn;
+import org.openmrs.module.chartsearchai.api.provider.AccountContext;
 import org.openmrs.module.chartsearchai.api.provider.AnswerEnvelope;
 import org.openmrs.module.chartsearchai.api.provider.CancellationSignal;
 import org.openmrs.module.chartsearchai.api.provider.ClinicalAnswerProvider;
@@ -65,6 +73,7 @@ import org.openmrs.module.chartsearchai.model.ClinicalConversationTurn;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.mock.web.MockHttpServletResponse;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -108,7 +117,7 @@ public class ProviderRestContractTest {
 		ChartSearchAiRestController controller = new ChartSearchAiRestController();
 		controller.setConversationService(new RecordingConversationService());
 		controller.setProviderRegistry(stubRegistry(provider));
-		controller.streamProviderTurn(out, patient(), "Question", "bundled", null, null, null, 20);
+		controller.streamProviderTurn(out, patient(), "Question", "bundled", null, null, null, AccountContext.unavailable(), 20);
 		assertTrue(sseTypes(out).contains("turn_done"));
 		int completedSize = out.size();
 		new CountDownLatch(1).await(100, TimeUnit.MILLISECONDS);
@@ -134,7 +143,7 @@ public class ProviderRestContractTest {
 		controller.setConversationService(new RecordingConversationService());
 		controller.setProviderRegistry(stubRegistry(provider));
 		ByteArrayOutputStream out = new ByteArrayOutputStream();
-		controller.streamProviderTurn(out, patient(), "Question", "bundled", null, null, null);
+		controller.streamProviderTurn(out, patient(), "Question", "bundled", null, null, null, AccountContext.unavailable());
 		for (String[] expected : new String[][] {
 				{ "answer_delta", "Dose \uD83D\uDC89 given" },
 				{ "reasoning_delta", "Check \uD83D\uDD0E chart" },
@@ -146,6 +155,91 @@ public class ProviderRestContractTest {
 				}
 			}
 			assertEquals(expected[1], text.toString(), expected[0]);
+		}
+	}
+
+	@Test
+	public void chatEndpointSuppliesSessionContextToEitherProviderAndIgnoresBodyRoleClaims() throws Exception {
+		RestControllerContext fixture = new RestControllerContext();
+		fixture.install();
+		try {
+			User user = new User(3);
+			user.setUuid("signed-in-account");
+			Role nurse = new Role("Organizational: Nurse");
+			nurse.setInheritedRoles(Collections.singleton(new Role("Application: Uses Patient Summary")));
+			user.addRole(nurse);
+			user.addRole(new Role("Organizational: Peer Educator"));
+			Location location = new Location(1);
+			location.setUuid("session-location");
+			location.setName("Outpatient");
+			Context.setUserContext(new UserContext(null) {
+				@Override
+				public boolean hasPrivilege(String privilege) {
+					return true;
+				}
+
+				@Override
+				public User getAuthenticatedUser() {
+					return user;
+				}
+
+				@Override
+				public Set<Role> getAllRoles() {
+					return user.getAllRoles();
+				}
+
+				@Override
+				public Location getLocation() {
+					return location;
+				}
+
+				@Override
+				public Locale getLocale() {
+					return Locale.forLanguageTag("en-KE");
+				}
+			});
+			for (String providerId : Arrays.asList("bundled", "hub")) {
+				ChartSearchAiRestController controller = new ChartSearchAiRestController();
+				RecordingConversationService conversations = new RecordingConversationService();
+				ScriptedProvider provider = new ScriptedProvider(providerId, true);
+				Map<String, Object> answer = answerPayload("Answer");
+				answer.put("accountContext", Collections.singletonMap("user_uuid", "provider-spoof"));
+				AnswerEnvelope envelope = AnswerEnvelope.fromPayload(answer, "bundled".equals(providerId)
+						? new ChartSearchService.ChartAnswer("Answer", Collections.emptyList()) : null);
+				provider.events = Arrays.asList(TurnEvent.of(TurnEventType.TURN_STARTED, 0, providerId),
+						TurnEvent.withAnswer(TurnEventType.ANSWER_DONE, 1, providerId, envelope),
+						TurnEvent.withAnswer(TurnEventType.TURN_DONE, 2, providerId, envelope));
+				provider.result = TurnResult.done(providerId, ProviderMode.QUERY_SCOPED, envelope);
+				controller.setConversationService(conversations);
+				controller.setProviderRegistry(stubRegistry(provider));
+				controller.setAuditLogService(new StubAuditLogService());
+				controller.setPatientAccessCheck((actor, patient) -> actor == user);
+				Map<String, String> body = RestControllerContext.searchBody("What medications are documented?");
+				body.put("provider", providerId);
+				body.put("profile", "test-profile");
+				body.put("roles", "System Developer");
+				body.put("account_context", "forged-account-context");
+				body.put("sessionLocation", "forged-location");
+				MockHttpServletResponse response = new MockHttpServletResponse();
+
+				controller.chatStream(body, response);
+
+				assertEquals(1, provider.calls.get(), response.getContentAsString());
+				assertEquals("signed-in-account", provider.lastRequest.getAccountContext().getUserUuid());
+				assertEquals(Arrays.asList("Organizational: Nurse", "Organizational: Peer Educator"),
+						provider.lastRequest.getAccountContext().getAssignedRoles());
+				assertTrue(provider.lastRequest.getAccountContext().getEffectiveRoles()
+						.contains("Application: Uses Patient Summary"));
+				assertEquals("session-location",
+						provider.lastRequest.getAccountContext().getSessionLocation().get("uuid"));
+				assertFalse(provider.lastRequest.getAccountContext().getEffectiveRoles().contains("System Developer"));
+				assertEquals(provider.lastRequest.getAccountContext().toPayload(),
+						conversations.lastFinishedPayload.get("accountContext"));
+				assertFalse(response.getContentAsString().contains("provider-spoof"));
+			}
+		}
+		finally {
+			fixture.restore();
 		}
 	}
 
@@ -215,7 +309,7 @@ public class ProviderRestContractTest {
 
 		ByteArrayOutputStream out = new ByteArrayOutputStream();
 		controller.streamProviderTurn(out, patient(), "What meds?", "bundled",
-				ProviderMode.QUERY_SCOPED, null, null);
+				ProviderMode.QUERY_SCOPED, null, null, AccountContext.unavailable());
 
 		for (String type : Arrays.asList("answer_done", "turn_done")) {
 			JsonNode payload = ssePayload(out, type);
@@ -267,7 +361,7 @@ public class ProviderRestContractTest {
 		controller.setProviderRegistry(stubRegistry(provider));
 		ByteArrayOutputStream out = new ByteArrayOutputStream();
 		controller.streamProviderTurn(out, patient(), "What medications?", "bundled",
-				ProviderMode.QUERY_SCOPED, null, null);
+				ProviderMode.QUERY_SCOPED, null, null, AccountContext.unavailable());
 		for (String type : Arrays.asList("answer_done", "evidence_updated", "turn_done")) {
 			assertCitationWireShape(ssePayload(out, type));
 		}
@@ -311,7 +405,7 @@ public class ProviderRestContractTest {
 
 		ByteArrayOutputStream out = new ByteArrayOutputStream();
 		controller.streamProviderTurn(out, patient(), "What meds?", "bundled",
-				ProviderMode.QUERY_SCOPED, null, null);
+				ProviderMode.QUERY_SCOPED, null, null, AccountContext.unavailable());
 
 		List<String> types = sseTypes(out);
 		assertEquals(Arrays.asList("turn_started", "answer_delta", "answer_done", "turn_done"),
@@ -351,7 +445,7 @@ public class ProviderRestContractTest {
 		controller.setProviderRegistry(stubRegistry(provider));
 
 		controller.streamProviderTurn(new ByteArrayOutputStream(), patient(), "What was the visit date?",
-				"hub", ProviderMode.QUERY_SCOPED, "single-e4b-checked", null);
+				"hub", ProviderMode.QUERY_SCOPED, "single-e4b-checked", null, AccountContext.unavailable());
 
 		assertEquals(1, conversations.recordedCheckedAnswers,
 				"checked answer must persist before an optional In-Depth tail completes");
@@ -372,7 +466,8 @@ public class ProviderRestContractTest {
 		controller.setConversationService(conversations);
 		controller.setProviderRegistry(stubRegistry(provider));
 		ByteArrayOutputStream out = new ByteArrayOutputStream();
-		controller.streamProviderTurn(out, patient(), "Question", "bundled", ProviderMode.QUERY_SCOPED, null, null);
+		controller.streamProviderTurn(out, patient(), "Question", "bundled", ProviderMode.QUERY_SCOPED,
+				null, null, AccountContext.unavailable());
 		assertEquals(Arrays.asList("turn_started", "answer_done", "turn_error"), sseTypes(out));
 		assertEquals("provider_failure", ssePayload(out, "turn_error").path("problemCode").asText());
 	}
@@ -409,7 +504,7 @@ public class ProviderRestContractTest {
 		controller.setProviderRegistry(stubRegistry(provider));
 
 		controller.streamProviderTurn(new ByteArrayOutputStream(), patient(), "Question", "bundled",
-				ProviderMode.QUERY_SCOPED, null, null);
+				ProviderMode.QUERY_SCOPED, null, null, AccountContext.unavailable());
 
 		assertEquals(expectCancelled, provider.capturedCancellations.get(0).isCancelled());
 		return held;
@@ -434,7 +529,7 @@ public class ProviderRestContractTest {
 		ByteArrayOutputStream out = new ByteArrayOutputStream();
 
 		controller.streamProviderTurn(out, patient(), "Question", "hub", ProviderMode.QUERY_SCOPED,
-				"product-profile-a", null);
+				"product-profile-a", null, AccountContext.unavailable());
 
 		assertEquals(Arrays.asList("turn_started", "answer_done", "turn_error"), sseTypes(out));
 		assertEquals("provider_failure", ssePayload(out, "turn_error").path("problemCode").asText());
@@ -462,7 +557,7 @@ public class ProviderRestContractTest {
 
 		Thread firstTurn = new Thread(() -> controller.streamProviderTurn(new ByteArrayOutputStream(),
 				patient(), "First question", "bundled", ProviderMode.QUERY_SCOPED, null,
-				"conversation-uuid-1"));
+				"conversation-uuid-1", AccountContext.unavailable()));
 		firstTurn.start();
 		// Deterministic handoff: wait for the first turn to actually be inside execute() and have
 		// registered its cancellation signal, rather than racing it with a fixed sleep.
@@ -475,7 +570,7 @@ public class ProviderRestContractTest {
 		assertFalse(firstCancellation.isCancelled(), "not cancelled yet — no second turn has started");
 
 		controller.streamProviderTurn(new ByteArrayOutputStream(), patient(), "Second question",
-				"bundled", ProviderMode.QUERY_SCOPED, null, "conversation-uuid-1");
+				"bundled", ProviderMode.QUERY_SCOPED, null, "conversation-uuid-1", AccountContext.unavailable());
 
 		assertTrue(firstCancellation.isCancelled(),
 				"starting a new turn on the same conversation must cancel the prior in-flight turn");
@@ -506,7 +601,8 @@ public class ProviderRestContractTest {
 
 		ThrowingOutputStream deadConnection = new ThrowingOutputStream();
 		Thread firstTurn = new Thread(() -> controller.streamProviderTurn(deadConnection, patient(),
-				"First question", "bundled", ProviderMode.QUERY_SCOPED, null, "conversation-uuid-1", 20));
+				"First question", "bundled", ProviderMode.QUERY_SCOPED, null, "conversation-uuid-1",
+				AccountContext.unavailable(), 20));
 		firstTurn.start();
 		long deadline = System.currentTimeMillis() + 2000;
 		while (provider.capturedCancellations.isEmpty() && System.currentTimeMillis() < deadline) {
@@ -516,7 +612,7 @@ public class ProviderRestContractTest {
 
 		// The second turn on the same conversation preempts (cancels) the first.
 		controller.streamProviderTurn(new ByteArrayOutputStream(), patient(), "Second question",
-				"bundled", ProviderMode.QUERY_SCOPED, null, "conversation-uuid-1");
+				"bundled", ProviderMode.QUERY_SCOPED, null, "conversation-uuid-1", AccountContext.unavailable());
 		assertTrue(provider.capturedCancellations.get(0).isCancelled());
 
 		int writesWhenCancelled = deadConnection.writeAttempts;
@@ -561,7 +657,7 @@ public class ProviderRestContractTest {
 		controller.setProviderRegistry(stubRegistry(provider));
 
 		controller.streamProviderTurn(new FailOnEventOutputStream("answer_done"), patient(), "What meds?",
-				"hub", ProviderMode.QUERY_SCOPED, "single-e4b-checked", null);
+				"hub", ProviderMode.QUERY_SCOPED, "single-e4b-checked", null, AccountContext.unavailable());
 
 		assertEquals(1, conversations.finished,
 				"the final answer must persist after the browser disconnects during its staged tail");
@@ -619,7 +715,7 @@ public class ProviderRestContractTest {
 
 		ByteArrayOutputStream out = new ByteArrayOutputStream();
 		controller.streamProviderTurn(out, patient(), "What meds?", "hub",
-				ProviderMode.QUERY_SCOPED, null, null);
+				ProviderMode.QUERY_SCOPED, null, null, AccountContext.unavailable());
 
 		List<String> types = sseTypes(out);
 		assertEquals(Arrays.asList("turn_started", "turn_error"), types);
@@ -652,7 +748,7 @@ public class ProviderRestContractTest {
 
 		ByteArrayOutputStream out = new ByteArrayOutputStream();
 		controller.streamProviderTurn(out, patient(), "Any known drug allergies?", "hub",
-				ProviderMode.QUERY_SCOPED, "single-e4b-checked", null);
+				ProviderMode.QUERY_SCOPED, "single-e4b-checked", null, AccountContext.unavailable());
 
 		assertEquals(0, hubCalls.get());
 		assertEquals(Arrays.asList("turn_started", "turn_error"), sseTypes(out));
@@ -669,7 +765,7 @@ public class ProviderRestContractTest {
 
 		ByteArrayOutputStream out = new ByteArrayOutputStream();
 		controller.streamProviderTurn(out, patient(), "What meds?", "hub",
-				ProviderMode.QUERY_SCOPED, null, null);
+				ProviderMode.QUERY_SCOPED, null, null, AccountContext.unavailable());
 
 		assertEquals(0, hub.calls.get());
 		assertEquals(Arrays.asList("turn_started", "turn_error"), sseTypes(out));
@@ -756,7 +852,7 @@ public class ProviderRestContractTest {
 		// No "mode" key — the only shape any real caller sends.
 		ProviderMode resolved = controller.resolveMode(body);
 		controller.streamProviderTurn(out, patient(), "Summarize the chart", "bundled",
-				resolved, null, null);
+				resolved, null, null, AccountContext.unavailable());
 
 		assertEquals(Arrays.asList("turn_started", "answer_done", "turn_done"), sseTypes(out));
 		assertEquals("Full chart summary.", ssePayload(out, "answer_done").get("answer").asText());
@@ -829,6 +925,8 @@ public class ProviderRestContractTest {
 
 	private static final class ScriptedProvider implements ClinicalAnswerProvider {
 
+		TurnRequest lastRequest;
+
 		private final String id;
 
 		private final boolean ready;
@@ -867,6 +965,7 @@ public class ProviderRestContractTest {
 		@Override
 		public CompletionStage<TurnResult> execute(TurnRequest request, TurnEventSink sink,
 				CancellationSignal cancellation) {
+			lastRequest = request;
 			int callNumber = calls.incrementAndGet();
 			capturedCancellations.add(cancellation);
 			if (callNumber == 1 && blockFirstCallUntilReleased != null) {

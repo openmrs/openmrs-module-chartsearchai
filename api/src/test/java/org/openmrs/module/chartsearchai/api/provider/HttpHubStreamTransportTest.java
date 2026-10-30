@@ -26,9 +26,12 @@ import org.openmrs.Patient;
 import org.openmrs.module.chartsearchai.LogCapture;
 import org.apache.logging.log4j.Level;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -42,6 +45,9 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.openmrs.Role;
+import org.openmrs.User;
+import org.openmrs.api.context.UserContext;
 import org.openmrs.module.chartsearchai.api.conversation.PriorClinicalTurn;
 
 /**
@@ -234,7 +240,7 @@ public class HttpHubStreamTransportTest {
 		Patient patient = new Patient(7);
 		patient.setUuid("patient-1");
 		return new TurnRequest(patient, "question", "conversation-1", "request-1",
-				ProviderMode.QUERY_SCOPED, "profile", Collections.emptyList());
+				ProviderMode.QUERY_SCOPED, "profile", Collections.emptyList(), AccountContext.unavailable());
 	}
 
 	private static final class CloseTrackingInputStream extends ByteArrayInputStream {
@@ -265,10 +271,29 @@ public class HttpHubStreamTransportTest {
 	@Test
 	@SuppressWarnings("unchecked")
 	public void requestJsonCarriesProfilePatientPriorsAndProductContext() throws Exception {
+		User user = new User(1);
+		user.setUuid("account-1");
+		user.addRole(new Role("Organizational: Nurse"));
+		AccountContext account = AccountContext.fromSession(new UserContext(null) {
+			@Override
+			public User getAuthenticatedUser() {
+				return user;
+			}
+
+			@Override
+			public Set<Role> getAllRoles() {
+				return user.getAllRoles();
+			}
+
+			@Override
+			public Locale getLocale() {
+				return Locale.ENGLISH;
+			}
+		});
 		HubCallRequest request = new HubCallRequest(
 				"http://hub.example/v1/chat/completions", "product-a", "patient-1",
 				"conversation-1", "request-1", "current question",
-				Collections.singletonList(new PriorClinicalTurn("earlier q", "earlier a")));
+				Collections.singletonList(new PriorClinicalTurn("earlier q", "earlier a")), account);
 
 		String json = HttpHubStreamTransport.requestJson(request);
 		Map<String, Object> root = MAPPER.readValue(json, Map.class);
@@ -289,6 +314,11 @@ public class HttpHubStreamTransportTest {
 		assertEquals(Boolean.TRUE, context.get("require_product_profile"));
 		assertEquals("conversation-1", context.get("session"));
 		assertEquals("request-1", context.get("request_id"));
+		Map<?, ?> sent = (Map<?, ?>) context.get("account_context");
+		assertEquals(Arrays.asList("source", "assigned_roles", "session_location"), new ArrayList<>(sent.keySet()));
+		assertEquals(account.toPayload().get("assigned_roles"), sent.get("assigned_roles"));
+		assertEquals(account.toPayload().get("session_location"), sent.get("session_location"));
+		assertEquals("openmrs_session", sent.get("source"));
 	}
 
 	@Test
@@ -343,7 +373,7 @@ public class HttpHubStreamTransportTest {
 		HttpHubStreamTransport transport = new HttpHubStreamTransport();
 		HubCallRequest request = new HubCallRequest(
 				"http://127.0.0.1:" + server.getAddress().getPort() + "/stream", "product-a",
-				"patient-1", "conversation-1", "request-1", "question", Collections.emptyList());
+				"patient-1", "conversation-1", "request-1", "question", Collections.emptyList(), AccountContext.unavailable());
 		TurnCancellation cancellation = new TurnCancellation();
 		List<HubWireEvent> received = Collections.synchronizedList(new ArrayList<>());
 
@@ -398,7 +428,7 @@ public class HttpHubStreamTransportTest {
 		server.start();
 		HubCallRequest request = new HubCallRequest(
 				"http://127.0.0.1:" + server.getAddress().getPort() + "/stream", "product-a",
-				"patient-1", "conversation-1", "request-1", "question", Collections.emptyList());
+				"patient-1", "conversation-1", "request-1", "question", Collections.emptyList(), AccountContext.unavailable());
 		List<HubWireEvent> received = Collections.synchronizedList(new ArrayList<>());
 		executor = Executors.newSingleThreadExecutor();
 		Future<?> completed = executor.submit(() -> new HttpHubStreamTransport()
@@ -433,7 +463,7 @@ public class HttpHubStreamTransportTest {
 		server.start();
 		HubCallRequest request = new HubCallRequest(
 				"http://127.0.0.1:" + server.getAddress().getPort() + "/stream", "product-a",
-				"patient-1", "conversation-1", "request-1", "question", Collections.emptyList());
+				"patient-1", "conversation-1", "request-1", "question", Collections.emptyList(), AccountContext.unavailable());
 		RuntimeException failure = assertThrows(RuntimeException.class,
 				() -> new HttpHubStreamTransport().stream(request, event -> { }, CancellationSignal.NONE));
 		if (status == 200) {

@@ -25125,3 +25125,41 @@ On several of those patients the model wrote *"can be given"* beside the chips.
   her record (Decision 399), and so does *"Has she been on fluconazole long?"*.
 
 Pinned by `ClinicianWordingsTest.aRouteAfterTheDrugOrADrugJustStartedIsAskedOf`.
+
+## Decision 539: A composed line cites every prescription of the order it names
+
+**Status: Accepted** (October 2026). Found on the public demo on 2026-10-30.
+
+### Context
+
+On patient dd74dc61, *"Can I give him codeine for pain?"* was answered by the module. Its finding line under the bottom
+line was *"Codeine interacts with active order Nevirapine — Moderate. [114]"*. The [114] is the finding. The line cited
+no nevirapine order, so the clinician could not reach the prescription the line is about.
+
+He has three Nevirapine orders. Each one resolves to its own record by its uuid (`DrugOrderRecords.citableNumberFor`).
+`orderRecordNumbers` then keys the numbers by display, and it strikes a display that two prescriptions spell when they
+are different records. That rule is right for the item it was written for. The model-facing clause names an order by
+its display (Decision 77), and one item can state one number. A composed line (Decision 140) is not one item, though.
+It is about every order spelling that display, so the strike left it citing none.
+
+### The decision
+
+- `orderRecordNumbers` returns an `OrderRecordNumbers`. As a map it is unchanged: the one record each display is.
+- Beside that map, `everyRecordOf` holds every record an order spelling that display resolved to.
+- `orderRecordMarkers`, the markers after a composed line, reads every record. The demo's line becomes
+  *"Codeine interacts with active order Nevirapine — Moderate. [114] [a] [b] [c]"*, citing his three prescriptions.
+- Every number in it passed `citableNumberFor`, so a record the module cannot say is that order is still cited by
+  nothing.
+
+### What it does not change
+
+- The model-facing clause, still gated by `chartsearchai.drugSafety.citeOrderRecords`, which reads the map.
+- `PatientChart.getOrderRecordNumbers()` (Decision 168), which copies the map.
+- An item naming one order by its display, *"Nevirapine [N]"*.
+
+### What it gives up
+
+A line about a drug ordered several times carries a marker per prescription. On the demo that is three. Those lines sit
+under the collapsed details (Decision 519), so the sentence in view is unchanged.
+
+Pinned by `EveryOrderOfThePartnerIsCitedTest.aLineAboutAPartnerOfThreePrescriptionsCitesEachOfThem`.

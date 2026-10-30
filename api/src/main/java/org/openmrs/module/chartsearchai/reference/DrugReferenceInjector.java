@@ -2468,7 +2468,7 @@ public class DrugReferenceInjector {
 		// ones orders came back with — see recordsSeveralOrdersName, which carries what the second
 		// reading missed.
 		Set<Integer> contested = records.recordsSeveralOrdersName(orders);
-		Map<String, Integer> byDisplay = new LinkedHashMap<String, Integer>();
+		OrderRecordNumbers byDisplay = new OrderRecordNumbers();
 		Set<String> ambiguous = new HashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : orders) {
 			String display = order.getDisplay() == null ? null : order.getDisplay().trim();
@@ -2476,6 +2476,9 @@ public class DrugReferenceInjector {
 				continue;
 			}
 			Integer number = records.citableNumberFor(order, claimedByUuid, contested);
+			if (number != null) {
+				byDisplay.everyRecordOf.computeIfAbsent(display, d -> new TreeSet<Integer>()).add(number);
+			}
 			if (number == null) {
 				// Two effects, and only the first is obvious: this order's item states no number, AND
 				// the display is struck, so a SIBLING order spelling it that did resolve cannot number
@@ -2501,6 +2504,32 @@ public class DrugReferenceInjector {
 		}
 		byDisplay.keySet().removeAll(ambiguous);
 		return byDisplay;
+	}
+
+	/**
+	 * What {@link #orderRecordNumbers} resolves: as a map, the ONE record each display is, for an item that names an order
+	 * by its display and so can state one number; and {@link #everyRecordOf}, every record an order spelling that display
+	 * resolved to, for a composed line, which is about every such order. Three prescriptions spelling "Nevirapine" are
+	 * three records, so the map numbers none of them, and a line about nevirapine cites all three (ADR Decision 539) — each
+	 * an order the line is about, which no model reads as one item. Every number in it passed
+	 * {@code DrugOrderRecords.citableNumberFor}, so a record the module cannot say is that order is in neither.
+	 */
+	private static final class OrderRecordNumbers extends LinkedHashMap<String, Integer> {
+
+		private static final long serialVersionUID = 1L;
+
+		private final Map<String, Set<Integer>> everyRecordOf = new LinkedHashMap<String, Set<Integer>>();
+	}
+
+	/** Every record {@code display}'s orders resolved to where {@code numbers} carries them ({@link OrderRecordNumbers}),
+	 *  else its one number, else none. */
+	private static Collection<Integer> everyRecordOf(Map<String, Integer> numbers, String display) {
+		if (numbers instanceof OrderRecordNumbers) {
+			Set<Integer> every = ((OrderRecordNumbers) numbers).everyRecordOf.get(display);
+			return every == null ? Collections.<Integer> emptySet() : every;
+		}
+		Integer number = numbers.get(display);
+		return number == null ? Collections.<Integer> emptySet() : Collections.singleton(number);
 	}
 
 	/** Lowercased marker querystore renders a drug order's END date under. It emits
@@ -3726,8 +3755,9 @@ public class DrugReferenceInjector {
 
 	/**
 	 * The markers of the chart records a composed line's finding is about — each active order its arm
-	 * matched the finding's drugs against ({@code SafetyWarning.matchedOrderNames()}), by the number
-	 * {@link #orderRecordNumbers} resolved for that order's display, ascending, skipping a number the
+	 * matched the finding's drugs against ({@code SafetyWarning.matchedOrderNames()}), by every number
+	 * {@link #orderRecordNumbers} resolved for an order spelling that display ({@link #everyRecordOf}, ADR Decision 539),
+	 * ascending, skipping a number the
 	 * line already cites (ADR Decision 140). A model's answer cites her order where it reports the
 	 * finding; this cites it for the module's, so the clinician reaches the prescription and the chips
 	 * pass, which is scoped by the chart records an answer cites, reads the same subject matter. An
@@ -3737,9 +3767,10 @@ public class DrugReferenceInjector {
 			Set<Integer> alreadyCited) {
 		Set<Integer> numbers = new TreeSet<Integer>();
 		for (String name : finding.matchedOrderNames()) {
-			Integer number = herOrderRecords.get(name == null ? null : name.trim());
-			if (number != null && !alreadyCited.contains(number)) {
-				numbers.add(number);
+			for (Integer number : everyRecordOf(herOrderRecords, name == null ? null : name.trim())) {
+				if (!alreadyCited.contains(number)) {
+					numbers.add(number);
+				}
 			}
 		}
 		StringBuilder markers = new StringBuilder();

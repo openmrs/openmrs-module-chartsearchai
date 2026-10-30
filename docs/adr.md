@@ -25184,3 +25184,26 @@ check.
   its own chips only.
 
 Pinned by `LlmInferenceServiceModelReadQuestionContextTest.aFoodHadOnHerMedicationsIsNoScreen`.
+
+## Decision 541: A route beside the dose is set aside with it
+
+**Status: Accepted** (October 2026). Found on the 3.7.1 standalone on 2026-10-30, asking 24 wordings of 15 patients.
+
+### Context
+
+On all 15 patients, *"Fluconazole 200mg PO daily - ok with her meds?"* went to the model. On 7 of them the model wrote
+*"Fluconazole can be given, with one caution"* beside the chips.
+
+*"Fluconazole for 14 days - ok with her meds?"* was the module's. So were *"x 14 days"* and *"Oral fluconazole …"*.
+
+What stopped the reading was the order of the stripping. The dose reader (Decision 269) took *"200mg"* and stopped at
+*"PO"*. The form reader (Decisions 419, 538) then took *"PO"* and left *"daily"*, a word no reading knows.
+
+### The decision
+
+- `DOSE_AFTER_THE_DRUG` admits a route on either side of the amount, or after how often: *"200mg PO daily"*, *"PO
+  200mg daily"*, *"5mg daily PO"*, *"5 mg IV stat"*.
+- `statedForm` reports that route, so the answer says the form was not weighed. The question then reads as it would with
+  the route written before the drug, *"Oral fluconazole 200mg daily …"*, under Decision 334's rule for a stated form.
+
+Pinned by `ClinicianWordingsTest.aRouteBesideTheDoseIsSetAsideWithIt`.

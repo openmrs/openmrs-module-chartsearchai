@@ -2418,7 +2418,16 @@ public final class QueryScopeRouter {
 	/** A dose stated before the drug, "1 g of paracetamol", and after it, "amoxicillin 500 mg three times a day". */
 	private static final Pattern DOSE_BEFORE_THE_DRUG = Pattern.compile("(?<=^| )" + AMOUNT + "(?: of)? (" + D + ")");
 
-	private static final Pattern DOSE_AFTER_THE_DRUG = Pattern.compile("(" + D + ") (?:" + AMOUNT + "(?: " + FREQUENCY + ")?|"
+	/** A route as a prescription writes it beside the dose: "fluconazole 200mg PO daily", "PO 200mg daily" (ADR Decision
+	 *  541). */
+	private static final String ROUTE_BESIDE_A_DOSE = "(?:po|oral|orally|iv|im|sc|subcut|sl|pr|pv|inhaled|nebulised|nebulized)";
+
+	/** A route on either side of the amount, in the words {@link #statedForm} reports (ADR Decision 541). */
+	private static final Pattern ROUTE_BESIDE_THE_DOSE = Pattern.compile("(?<=^| )" + D + " (?:(" + ROUTE_BESIDE_A_DOSE + ") "
+			+ AMOUNT + "|" + AMOUNT + "(?: " + FREQUENCY + ")? (" + ROUTE_BESIDE_A_DOSE + "))(?= |$)");
+
+	private static final Pattern DOSE_AFTER_THE_DRUG = Pattern.compile("(" + D + ") (?:(?:" + ROUTE_BESIDE_A_DOSE + " )?" + AMOUNT
+			+ "(?: " + ROUTE_BESIDE_A_DOSE + ")?(?: " + FREQUENCY + ")?(?: " + ROUTE_BESIDE_A_DOSE + ")?|"
 			// how often alone, "fluconazole once a week" (ADR Decision 428)
 			+ FREQUENCY
 			// and an amount with no unit before how often, "ibuprofen 400 tds", "warfarin 2.5 daily" (ADR Decision 516)
@@ -2491,7 +2500,11 @@ public final class QueryScopeRouter {
 			return form.group(2);
 		}
 		Matcher before = FORM_BEFORE_THE_DRUG.matcher(String.join(" ", wordsWithTheDrugMarked));
-		return before.find() ? before.group(1) : null;
+		if (before.find()) {
+			return before.group(1);
+		}
+		Matcher besideTheDose = ROUTE_BESIDE_THE_DOSE.matcher(String.join(" ", wordsWithTheDrugMarked));
+		return besideTheDose.find() ? (besideTheDose.group(1) != null ? besideTheDose.group(1) : besideTheDose.group(2)) : null;
 	}
 
 	/** {@code joined} without a duration stated within it — "for 7 days" — or {@code null} where it states none, or nothing is

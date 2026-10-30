@@ -2221,4 +2221,18 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		assertNull(ask("Was she started on warfarin?"));
 		assertNull(ask("Has she been on warfarin long?"));
 	}
+
+	/** ADR Decision 541: a route written beside the dose reads as the route written before the drug. */
+	@Test
+	public void aRouteBesideTheDoseIsSetAsideWithIt() {
+		String[][] pairs = { { "Warfarin 5mg PO daily - ok with her meds?", "Oral warfarin 5mg daily - ok with her meds?" },
+			{ "Warfarin PO 5mg daily ok?", "Oral warfarin 5mg daily ok?" }, { "Warfarin 5mg daily PO ok?", "Oral warfarin 5mg daily ok?" },
+			{ "Warfarin 5 mg IV stat - any problem?", "IV warfarin 5 mg stat - any problem?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertTrue(canonical.contains("did not weigh the form asked about"), "precondition: " + canonical);
+			assertEquals(canonical.replace("(oral)", "(po)"), ask(pair[0]), pair[0]);
+		}
+	}
 }

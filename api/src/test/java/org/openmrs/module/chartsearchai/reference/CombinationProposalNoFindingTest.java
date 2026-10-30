@@ -46,10 +46,12 @@ public class CombinationProposalNoFindingTest extends BaseModuleContextSensitive
 		String answer = ask(Arrays.asList(DrugReferenceTestSupport.activeOrder("order-asa", "Aspirin 81mg", "Aspirin")));
 		assertNotNull(answer, "the module answers");
 		String[] lines = answer.split("\n");
-		assertTrue(lines[0].matches("The interaction data gives no rated reason to withhold Trimethoprim-sulfamethoxazole: it "
-				+ "lists Trimethoprim-sulfamethoxazole against one of this patient's orders, with no severity( or mechanism)? on "
-				+ "file\\. \\[\\d+\\] \\[\\d+\\]"), "was: " + answer);
-		assertEquals(DrugReferenceInjector.BELOW_FLOOR_SCOPE, lines[1], "was: " + answer);
+		// The bottom line opens the answer, and the rest of its sentence follows it (ADR Decision 534).
+		assertEquals("The interaction data gives no rated reason to withhold Trimethoprim-sulfamethoxazole.", lines[0],
+			"was: " + answer);
+		assertTrue(lines[1].matches("The data lists Trimethoprim-sulfamethoxazole against one of this patient's medications, with no "
+				+ "severity( or mechanism)? on file\\. \\[\\d+\\] \\[\\d+\\]"), "was: " + answer);
+		assertEquals(DrugReferenceInjector.BELOW_FLOOR_SCOPE, lines[2], "was: " + answer);
 		assertEquals("This check did not weigh what the drug is for (her UTI).", lines[lines.length - 1], "was: " + answer);
 	}
 

@@ -50,8 +50,11 @@ public class TogetherWithHerOwnBelowFloorTest extends BaseModuleContextSensitive
 			String[] lines = answer.split("\n", 2);
 			assertEquals("Acetylsalicylic acid (aspirin) is one of this patient's active medications.", lines[0],
 				question + " — was: " + answer);
-			// Word for word; the record numbers differ, the question naming her drug injecting its record too.
-			assertEquals(alone.replaceAll("\\[\\d+\\]", "[n]"), lines[1].replaceAll("\\[\\d+\\]", "[n]"),
+			// Word for word; the record numbers differ, the question naming her drug injecting its record too. Asked alone, the
+			// answer opens with its bottom line cut from that sentence; here its bottom line is several statements, so the
+			// sentence stays whole (ADR Decision 534).
+			assertEquals(alone.replaceFirst("\\.\nThe data lists ", ": the data lists ").replaceAll("\\[\\d+\\]", "[n]"),
+				lines[1].replaceAll("\\[\\d+\\]", "[n]"),
 				question + " — the proposal's own answer follows: " + answer);
 		}
 	}

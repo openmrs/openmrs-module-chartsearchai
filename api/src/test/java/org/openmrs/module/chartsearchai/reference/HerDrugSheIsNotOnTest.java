@@ -67,7 +67,10 @@ public class HerDrugSheIsNotOnTest extends BaseModuleContextSensitiveTest {
 			for (String question : QUESTIONS) {
 				String answer = ask(question, order);
 				assertNotNull(answer, question + " / " + order.getDisplay() + " — the module answers");
-				assertEquals("Methotrexate" + DrugReferenceInjector.NOT_HER_MEDICATION + "\n" + mask(plain), mask(answer),
+				// Asked alone, the answer opens with its bottom line cut from that sentence; under the lead its bottom line is
+				// several statements, so the sentence stays whole (ADR Decision 534).
+				assertEquals("Methotrexate" + DrugReferenceInjector.NOT_HER_MEDICATION + "\n"
+						+ mask(plain).replaceFirst("\\.\nThe data lists ", ": the data lists "), mask(answer),
 					question + " / " + order.getDisplay());
 			}
 		}

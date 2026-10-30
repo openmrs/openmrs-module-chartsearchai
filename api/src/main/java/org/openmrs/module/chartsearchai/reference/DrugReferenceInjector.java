@@ -1757,6 +1757,7 @@ public class DrugReferenceInjector {
 				}
 			}
 			summary = statedThenCounted(moduleAnswer, new HashSet<Integer>(findingNumbers), cited);
+			moduleAnswer = openedWithItsBottomLine(moduleAnswer, summary);
 		}
 		if (moduleAnswer != null) {
 			injected.markModuleAnswer(moduleAnswer);
@@ -3815,8 +3816,11 @@ public class DrugReferenceInjector {
 		int n = rows.orders.size();
 		// In a clinician's words, not the data's: "rows" was the dataset's term for what a clinician reads as the drug
 		// being listed against her orders (ADR Decision 144, reworded on the owner's decision 2026-10-13).
-		String against = "it lists " + rows.drug + " against " + (n == 1 ? "one" : String.valueOf(n))
-				+ " of this patient's orders"
+		// Her MEDICATIONS: the count is of distinct order displays, so three drugs in nine orders are 3 (ADR Decision 534).
+		// "the data", not "it": the clause follows the bottom line alone where that line is cut from this sentence (ADR
+		// Decision 534), and an "it" there reads as the drug.
+		String against = "the data lists " + rows.drug + " against " + (n == 1 ? "one" : String.valueOf(n))
+				+ " of this patient's medications"
 				+ (scheduled == 0 ? "" : scheduled == n ? (n == 1 ? ", " : ", all ") + "scheduled and not yet started"
 						: " (" + (scheduled == 1 ? "one" : String.valueOf(scheduled)) + " of them scheduled and not yet started)")
 				+ ", ";
@@ -3824,7 +3828,7 @@ public class DrugReferenceInjector {
 				: (n == 1 ? "with no severity" : "none with a severity") + (rows.noMechanism ? " or mechanism" : "") + " on file";
 		if (relates && !proposes) {
 			return "The interaction data lists " + rows.drug + " against " + (n == 1 ? "one" : String.valueOf(n))
-					+ " of this patient's orders, " + joinedAsAList(rows.orders)
+					+ " of this patient's medications, " + joinedAsAList(rows.orders)
 					+ (scheduled == 0 ? "" : scheduled == n ? (n == 1 ? ", " : ", all ") + "scheduled and not yet started"
 							: " (" + (scheduled == 1 ? "one" : String.valueOf(scheduled)) + " of them scheduled and not yet started)")
 					+ ", " + rated + "." + recordMarkers(records) + "\n" + BELOW_FLOOR_SCOPE;
@@ -5826,6 +5830,27 @@ public class DrugReferenceInjector {
 	}
 
 	/**
+	 * {@code answer} opening with {@code summary} on a line of its own where that bottom line is the answer's first
+	 * sentence cut at the colon that opens its detail, the rest of the sentence following it (ADR Decision 534): <em>"The
+	 * interaction data gives no rated reason to withhold Ibuprofen.\nThe data lists Ibuprofen against 3 of this patient's
+	 * medications, …"</em>. A client collapses what follows the bottom line where the answer opens with it, and the whole
+	 * answer where it does not, so a bottom line cut from the first sentence was shown again under it. Any other bottom
+	 * line — several statements, a count, a sentence it shortened otherwise — leaves the answer as it is: moving such a line
+	 * into the answer put its joins ("…?; Ask again") and its dropped labels into the answer's own words.
+	 */
+	static String openedWithItsBottomLine(String answer, String summary) {
+		if (summary == null || !summary.endsWith(".")) {
+			return answer;
+		}
+		String cut = summary.substring(0, summary.length() - 1) + ": ";
+		if (!answer.startsWith(cut) || answer.length() == cut.length()) {
+			return answer;
+		}
+		String rest = answer.substring(cut.length());
+		return summary + "\n" + Character.toUpperCase(rest.charAt(0)) + rest.substring(1);
+	}
+
+	/**
 	 * The one sentence a client shows of an answer with no bottom line of its own (ADR Decision 529): where it cites
 	 * findings, what its first line states, unless that line cites one, then {@link #countedSummary} of them; where it
 	 * cites none, every statement it makes — each in short. <em>"Nevirapine is one of this patient's active medications; the
@@ -6744,10 +6769,10 @@ public class DrugReferenceInjector {
 		int n = rows.orders.size();
 		// "other" only where no order it is listed against carries the drug itself: a constituent of its own combination
 		// order is not another order (ADR Decision 212).
-		String ofHers = Collections.disjoint(rows.orders, itsOwnOrders) ? " of this patient's other orders, "
-				: " of this patient's orders, ";
+		String ofHers = Collections.disjoint(rows.orders, itsOwnOrders) ? " of this patient's other medications, "
+				: " of this patient's medications, ";
 		String statement = rows.drug + OWN_MEDICATION_LEAD + herOrders
-				+ ". The interaction data gives no rated reason to change it: it lists "
+				+ ". The interaction data gives no rated reason to change it: the data lists "
 				+ rows.drug + " against " + (n == 1 ? "one" : String.valueOf(n)) + ofHers
 				+ (!rows.allUnknown ? "rated " + rows.ratings() + ", below the level this module reports as a finding"
 						: (n == 1 ? "with no severity" : "none with a severity") + (rows.noMechanism ? " or mechanism" : "")

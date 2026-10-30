@@ -87,7 +87,7 @@ public class WhichOfHerMedicationsInteractTest extends BaseModuleContextSensitiv
 			DrugReferenceTestSupport.activeOrder("order-asa", "Aspirin 81mg", "Aspirin"));
 		for (String question : Arrays.asList("Which of her medications interact with rifampicin?",
 				"Does rifampicin interact with her medications?", "Is she on any drugs that interact with rifampicin?")) {
-			assertEquals("The interaction data lists Rifampicin (rifampin) against one of this patient's orders, Aspirin 81mg, "
+			assertEquals("The interaction data lists Rifampicin (rifampin) against one of this patient's medications, Aspirin 81mg, "
 					+ "with no severity or mechanism on file. [n]\n" + DrugReferenceInjector.BELOW_FLOOR_SCOPE,
 				mask(ask(question, aspirin)), question);
 			assertEquals("This patient has no active medication orders, so the interaction check had none to relate Rifampicin "

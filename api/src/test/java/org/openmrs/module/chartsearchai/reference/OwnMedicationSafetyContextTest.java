@@ -252,7 +252,7 @@ public class OwnMedicationSafetyContextTest extends BaseModuleContextSensitiveTe
 			String answer = answer(question, null, orders);
 
 			assertEquals("Ibuprofen is one of this patient's active medications (Ibuprofen 400mg [2]). The interaction data "
-					+ "gives no rated reason to change it: it lists Ibuprofen against one of this patient's other orders, rated "
+					+ "gives no rated reason to change it: the data lists Ibuprofen against one of this patient's other medications, rated "
 					+ "Moderate, below the level this module reports as a finding. [4]\n" + DrugReferenceInjector.BELOW_FLOOR_SCOPE,
 				answer, question);
 		}
@@ -282,8 +282,8 @@ public class OwnMedicationSafetyContextTest extends BaseModuleContextSensitiveTe
 			assertNotNull(answer, "the module answers " + question);
 			String[] lines = answer.split("\n");
 			assertTrue(lines[0].matches("Ibuprofen is one of this patient's active medications \\(Ibuprofen 400mg, 2 orders\\)\\. "
-					+ "The interaction data gives no rated reason to change it: it lists Ibuprofen against .* of this patient's "
-					+ "other orders, rated Moderate, below the level this module reports as a finding\\. \\[\\d+\\]"),
+					+ "The interaction data gives no rated reason to change it: the data lists Ibuprofen against .* of this patient's "
+					+ "other medications, rated Moderate, below the level this module reports as a finding\\. \\[\\d+\\]"),
 				question + " was: " + answer);
 			// Its own two orders are stated once: by the lead ("2 orders"), and as a line where the question did not propose it.
 			// Her prednisone in two orders is about prednisone, which the question does not name (ADR Decision 387).
@@ -305,7 +305,7 @@ public class OwnMedicationSafetyContextTest extends BaseModuleContextSensitiveTe
 		String answer = answer("Which of her medications interact with ibuprofen?", null, orders);
 
 		assertNotNull(answer, "the module answers");
-		assertTrue(answer.split("\n")[0].contains("it lists Ibuprofen against one of this patient's orders, rated Moderate"),
+		assertTrue(answer.split("\n")[0].contains("the data lists Ibuprofen against one of this patient's medications, rated Moderate"),
 			"was: " + answer);
 	}
 

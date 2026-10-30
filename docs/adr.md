@@ -24987,3 +24987,37 @@ proposal said nothing, and its details read *"Show details"*, promising no limit
   them as a line a clinician can do nothing with, and nothing here is new evidence against it.
 
 Pinned by `ProposalSaysHerConditionsWereNotCheckedTest`.
+
+## Decision 534: A bottom line cut from the first sentence opens the answer, and is not repeated under it
+
+**Status: Accepted** (October 2026) — found asking the public demo *"Can I give her ibuprofen?"* for patient dd74dc61 on
+2026-10-30.
+
+### Context
+
+The sentence in view was *"The interaction data gives no rated reason to withhold Ibuprofen."*, Decision 529's first
+sentence cut at its colon. Under *"Show details and limits"* the client showed the whole answer, opening with those words
+again: it collapses what follows the bottom line where the answer opens with it, and the whole answer where it does not.
+The same answer counted his three drugs as *"3 of this patient's orders"*, where he has nine: the count is of distinct
+order displays.
+
+### The decision
+
+- `DrugReferenceInjector.openedWithItsBottomLine`: where the bottom line is the answer's first sentence cut at that colon,
+  the answer opens with it on a line of its own, and the rest of the sentence follows — *"It lists Ibuprofen against 3 of
+  this patient's medications, none with a severity or mechanism on file. [113]"*. Every word of the answer is kept; none
+  is shown twice.
+- A bottom line of several statements, or of a count, leaves the answer as it is: no one line of it is the cut.
+- The below-floor sentences count her *medications*, not her orders, and say *"the data lists"* where they said *"it
+  lists"*: under a bottom line cut from the sentence, the clause stands alone, and an *"it"* there reads as the drug.
+
+### Tried and reverted
+
+Dropping from under every bottom line each statement it carries — the several-statement lines included — was built and
+run over the suite on 2026-10-30: 98 tests pinned answers it changed. It moved the bottom line's own words into the
+answer, and they are a summary's, not an answer's: *"Did you mean Clarithromycin?; Ask again …"*, capitals kept after a
+semicolon, *"1 Major interaction — Fluconazole"* with no partner, a recorded allergy left as a bare *"Amoxicillin."* line
+once its label went up, and a second *"Yes —"* under the first where a sentence carrying a marker stayed whole. Not shipped;
+a several-statement bottom line still repeats under the toggle.
+
+Pinned by `BottomLineOpensTheAnswerTest`.

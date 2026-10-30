@@ -2235,4 +2235,18 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 			assertEquals(canonical.replace("(oral)", "(po)"), ask(pair[0]), pair[0]);
 		}
 	}
+
+	/** ADR Decision 543: a drug named as hers, then asked of its interactions, asks what "Any interactions with her X?" asks. */
+	@Test
+	public void aDrugNamedAsHersThenAskedOfItsInteractionsAsksThem() {
+		String[][] pairs = { { "Her warfarin - any interactions?", "Any interactions with her warfarin?" },
+			{ "Her nevirapine - any interactions?", "Any interactions with her nevirapine?" },
+			{ "Her warfarin: interactions?", "Any interactions with her warfarin?" },
+			{ "Her nevirapine - any DDIs?", "Any interactions with her nevirapine?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+	}
 }

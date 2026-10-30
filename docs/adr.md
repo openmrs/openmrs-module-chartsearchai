@@ -25236,3 +25236,25 @@ counted as stated.
 after them.
 
 Pinned by `CautionsLineNamesItsDrugsTest.theCautionsLineNamesTheDrugsOfEachCaution`.
+
+## Decision 543: A drug named as hers, then asked of its interactions, asks them
+
+**Status: Accepted** (October 2026). Found on the 3.7.1 standalone on 2026-10-30, asking 24 wordings of 15 patients.
+
+### Context
+
+On all 15 patients, *"Her fluconazole - any interactions?"* went to the model. On 4 of them it answered *"Fluconazole can be
+given, with one caution"*, of a drug none of them was on. *"Any interactions with her fluconazole?"* was the module's on
+all 15. That answer says *"Fluconazole is not one of this patient's active medications."* and then states the findings.
+
+The residual reading (Decision 396) refuses any drug named as hers, because her own medication's questions are read by
+their own shapes (Decisions 335, 374). No shape reads the drug named first with its question tagged after it.
+
+### The decision
+
+- A drug named as hers is read without its possessive when the words around it ask its interactions and nothing else:
+  no word of safety, harm or giving.
+- *"Her fluconazole ok?"* stays the model's. Of a drug she is on, *"ok"* or a harm may ask whether it is working, which
+  the findings do not answer.
+
+Pinned by `ClinicianWordingsTest.aDrugNamedAsHersThenAskedOfItsInteractionsAsksThem`.

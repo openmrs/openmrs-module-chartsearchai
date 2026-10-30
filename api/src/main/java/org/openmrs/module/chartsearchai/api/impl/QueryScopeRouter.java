@@ -3145,7 +3145,12 @@ public final class QueryScopeRouter {
 		int at = wordsWithTheDrugMarked.indexOf(DRUG_NAME);
 		if (at > 0 && RESIDUAL_POSSESSIVES.contains(wordsWithTheDrugMarked.get(at - 1))
 				&& (at < 2 || !RESIDUAL_GIVE.contains(wordsWithTheDrugMarked.get(at - 2)))) {
-			return Residual.NONE;
+			// Save its interactions alone, asked of it and nothing else: "Her fluconazole - any interactions?" asks what "Any
+			// interactions with her fluconazole?" asks, which the model answered "Fluconazole can be given" of a drug she
+			// was not on (ADR Decision 543). Never "ok" or a harm of her own drug, which may ask whether it is working.
+			List<String> rest = new ArrayList<String>(wordsWithTheDrugMarked);
+			rest.remove(at - 1);
+			return residualReading(rest) == Residual.INTERACTS && interactionsAlone(rest) ? Residual.INTERACTS : Residual.NONE;
 		}
 		// Only where no shape reads it: a question a shape answers is that shape's.
 		if (fitsAOneDrugShape(wordsWithTheDrugMarked)) {
@@ -3278,6 +3283,18 @@ public final class QueryScopeRouter {
 
 	private static boolean isSafeOrAHarm(String word) {
 		return RESIDUAL_SAFE.contains(word) || RESIDUAL_HARMS.contains(word);
+	}
+
+	/** Whether the words around the drug ask of its interactions and of nothing else: no word of safety, harm or giving (ADR
+	 *  Decision 542). */
+	private static boolean interactionsAlone(List<String> words) {
+		for (String word : words) {
+			if (RESIDUAL_SAFE.contains(word) || RESIDUAL_HARMS.contains(word) || RESIDUAL_GIVE.contains(word)
+					|| PLANNED_GIVING.contains(word)) {
+				return false;
+			}
+		}
+		return true;
 	}
 
 	/** The one word {@link #withEitherWayAsked} makes of "side effect(s)". */

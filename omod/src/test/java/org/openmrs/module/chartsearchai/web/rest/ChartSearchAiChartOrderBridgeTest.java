@@ -10,6 +10,7 @@
 package org.openmrs.module.chartsearchai.web.rest;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -215,6 +216,15 @@ public class ChartSearchAiChartOrderBridgeTest {
 	@Test
 	public void everyFieldAnXmlClientReceivesIsAFieldAJsonClientReceives() {
 		XmlPayloads.assertEveryFieldHasAPublicGetterOfItsName(SafetyWarning.ChartOrderBridge.class);
+	}
+
+	@Test
+	public void anXmlClientReceivesTheChipsOnBothSurfacesAsValuesAndNotAsBackReferences() throws Exception {
+		// XStream writes an object's second occurrence as a reference to the first, so a chip shared by the
+		// safetyCheck envelope and the top-level keys reached an XML client as reference="../.." only.
+		String xml = XmlPayloads.marshal(searchPayload(), "a chip with attributions on both surfaces");
+
+		assertFalse(xml.contains("reference="), "was: " + xml);
 	}
 
 	@Test

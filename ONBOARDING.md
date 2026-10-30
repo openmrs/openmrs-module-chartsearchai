@@ -46,6 +46,11 @@ Base path: `/ws/rest/v1/chartsearchai`. Every endpoint gates on a privilege up f
 | POST | `/feedback` | AI Query Patient Data | Submit thumbs-up/down on an answer |
 | GET | `/drugreferencestatus` | Get Global Properties | Which drug-reference dataset is actually loaded |
 | GET | `/chartalerts` | AI Query Patient Data | This patient's standing chart findings, outside the answer thread |
+| GET | `/providers` | AI Query Patient Data | Configured answer providers, their capabilities, availability and the default |
+| GET | `/models` | AI Query Patient Data | Product profiles of the configured Med Agent Hub |
+| GET | `/chat` | AI Query Patient Data | A patient's recorded conversation history for the current user |
+| POST | `/chat/new` | AI Query Patient Data | Close the current conversation and open a fresh one |
+| POST | `/chat/stream` | AI Query Patient Data | One provider turn, as Server-Sent Events, persisted to the conversation |
 
 **Writing a `/search/stream` client.** Events arrive in this order: `preliminary`, `thinking`, `token`, `references`, `done`, `grounded`, `error`. Three framing rules, and a client that breaks any of them does so in a way the server cannot detect. `grounded` is a *trailing* event after `done` (async grounding only), so keep consuming the stream past `done` rather than treating it as terminal. And between events the stream carries SSE *comments* — lines opening with `:`, written so a reverse proxy never sees a read-idle connection — which must be skipped rather than read as a frame, as the SSE spec requires, by whatever parser you use: `EventSource` would do it for you but cannot be used here, since it issues a GET and sends no body and so cannot reach this POST endpoint. Finally, join a frame's `data:` values with `\n`, dropping one optional space after each `data:` — one, not all leading whitespace, since the rest is the model's own text. The server terminates every line with LF and never writes a bare CR, and a line break in the model's own text is framed as a further `data:` line — so a client that concatenates data lines without putting the newline back loses the answer's own line breaks. README's [Streaming search (SSE)](README.md#streaming-search-sse) section has each event's payload and the proxy read timeouts behind the comments.
 

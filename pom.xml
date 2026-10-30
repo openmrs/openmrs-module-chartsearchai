@@ -29,6 +29,7 @@
 
 	<properties>
 		<openmrsPlatformVersion>2.9.0-SNAPSHOT</openmrsPlatformVersion>
+		<querystoreVersion>1.0.0-SNAPSHOT</querystoreVersion>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<maven.compiler.source>11</maven.compiler.source>
 		<maven.compiler.target>11</maven.compiler.target>
@@ -36,6 +37,12 @@
 
 	<dependencyManagement>
 		<dependencies>
+			<!-- One version for api (provided) and omod (test), which Maven does not pass on between them. -->
+			<dependency>
+				<groupId>org.openmrs.module</groupId>
+				<artifactId>querystore-api</artifactId>
+				<version>${querystoreVersion}</version>
+			</dependency>
 			<dependency>
 				<groupId>org.openmrs.api</groupId>
 				<artifactId>openmrs-api</artifactId>

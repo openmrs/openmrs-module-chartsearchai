@@ -55,8 +55,15 @@ public class ClinicalAnswerProviderRegistry {
 
 	/** The configured enabled provider ids, in configuration order. */
 	public List<String> enabledProviderIds() {
+		return enabledProviderIds(gp(ChartSearchAiConstants.GP_PROVIDERS_ENABLED, ChartSearchAiConstants.DEFAULT_PROVIDER));
+	}
+
+	/** The provider ids {@code configured} (the {@code chartsearchai.providers.enabled} value) enables, in its
+	 *  order: the one reading of that property, for a caller that holds no registry. */
+	public static List<String> enabledProviderIds(String configured) {
 		List<String> ids = new ArrayList<>();
-		for (String id : gp(ChartSearchAiConstants.GP_PROVIDERS_ENABLED, ChartSearchAiConstants.DEFAULT_PROVIDER).split(",")) {
+		String value = configured == null ? ChartSearchAiConstants.DEFAULT_PROVIDER : configured;
+		for (String id : value.split(",")) {
 			String trimmed = id.trim();
 			if (!trimmed.isEmpty() && !ids.contains(trimmed)) {
 				ids.add(trimmed);

@@ -2182,4 +2182,21 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 					DrugReferenceTestSupport.ctx(45, null, names, null, null, null, ORDERS), question).getModuleAnswer();
 		return answer == null ? null : answer.replaceAll("\\[\\d+\\]", "[n]");
 	}
+
+	/** ADR Decision 536: screening a drug, and a drug messing, interfering or conflicting with her medications, ask its interactions. */
+	@Test
+	public void screeningADrugOrItMessingWithHerMedicationsAsksItsInteractions() {
+		String[][] pairs = { { "Screen warfarin", "Any interactions with warfarin?" },
+			{ "Screen warfarin against her meds", "Check warfarin against her meds" },
+			{ "Will warfarin mess with her meds?", "Will warfarin interact with her meds?" },
+			{ "Will warfarin interfere with her meds?", "Will warfarin interact with her meds?" },
+			{ "Does warfarin conflict with her meds?", "Does warfarin interact with her meds?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+		// What it would do to her otherwise stays the model's.
+		assertNull(ask("Will warfarin interfere with her sleep?"));
+	}
 }

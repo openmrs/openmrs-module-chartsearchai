@@ -65,7 +65,9 @@ final class UnrecognisedDrugName {
 		// name (ADR Decision 535)
 		"sleep", "appetite", "mood", "memory", "energy", "concentration", "libido", "weight", "breathing", "vision",
 		"hearing", "balance", "skin", "heart", "liver", "kidney", "kidneys", "stomach", "bowels", "periods", "period",
-		"cycle", "pregnancy", "baby", "breastfeeding", "contraception", "labs", "results", "bp", "pressure"));
+		"cycle", "pregnancy", "baby", "breastfeeding", "contraception", "labs", "results", "bp", "pressure",
+		// and a screen's: "Screen fluconazole" (ADR Decision 536)
+		"screen", "screening"));
 
 	private static final int MAX_SUGGESTIONS = 4;
 

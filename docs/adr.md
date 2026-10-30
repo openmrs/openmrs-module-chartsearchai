@@ -25048,3 +25048,25 @@ carried the same notes and no chip at all, since Decision 479 withholds every ch
   beside the answer, and only its own.
 
 Pinned by `LlmInferenceServiceModelReadQuestionContextTest.aBodilyFunctionWhereADrugWouldStandIsNoDrug`.
+
+## Decision 536: Screening a drug, and a drug messing with her medications, ask its interactions
+
+**Status: Accepted** (October 2026) — found asking 14 wordings of 15 patients on the 3.7.1 standalone on 2026-10-29.
+
+### Context
+
+*"Screen fluconazole"* went to the model with *"Screen"* reported as a drug name the interaction data does not
+recognise. Decision 479 withholds every chip beside such a word, so all 15 answers carried no chip, and every one began
+*"Fluconazole can be given, with one caution"*. *"Will fluconazole mess with her meds?"* went to the model too: its chips
+stood, but the answer named whichever of her drugs it chose, once as *"Methotrexate can be given"*. *"DDI check
+fluconazole"* and *"Check fluconazole against her meds"* were already screened.
+
+### The decision
+
+- *"screen"* asks for a screen of the drug, as *"check"* does, and is never an unrecognised drug's name.
+- *"Screen X against her meds"* is Decision 391's *"Check X against her meds"*.
+- *"mess with"*, *"interfere with"* and *"conflict with"* her medications ask the drug's interactions, as *"clash"* does.
+  They are read so only where every other word of the question is known, so the everyday senses Decision 182 keeps out
+  of the bare cue stay the model's: *"Will warfarin interfere with her sleep?"* is not a screen (Decision 535).
+
+Pinned by `ClinicianWordingsTest.screeningADrugOrItMessingWithHerMedicationsAsksItsInteractions`.

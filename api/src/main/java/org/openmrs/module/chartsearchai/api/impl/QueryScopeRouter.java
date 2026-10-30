@@ -815,8 +815,8 @@ public final class QueryScopeRouter {
 	 * <em>"No — X should not be given: it interacts with …"</em> on the 3.7.1 standalone.
 	 */
 	private static final List<Pattern> INTERACTS_WITH_HER_MEDICATIONS_SHAPES = shapes(
-			// "Check fluconazole against her meds" (ADR Decision 391)
-			"(?:please )?check " + D + " (?:against|with) (?:all of )?" + POSSESSIVE + " (?:other )?" + MEDICATIONS,
+			// "Check fluconazole against her meds" (ADR Decision 391), and "Screen fluconazole against her meds" (ADR Decision 536)
+			"(?:please )?(?:check|screen) " + D + " (?:against|with) (?:all of )?" + POSSESSIVE + " (?:other )?" + MEDICATIONS,
 			// "Does ibuprofen interact with her medications?", "Will ibuprofen interact with any of her current meds?", and the
 			// drug named as hers: "Does her lopinavir interact with her other medications?" (ADR Decision 292)
 			// and "react with" (ADR Decision 431)
@@ -2839,7 +2839,10 @@ public final class QueryScopeRouter {
 
 	/** Words saying the question is about the drug's interactions. */
 	private static final Set<String> RESIDUAL_INTERACTS = new HashSet<String>(Arrays.asList("interact", "interacts",
-		"interacting", "interaction", "interactions", "ddi", "ddis", "clash", "clashes", "clashing", "disturb", "disturbs"));
+		"interacting", "interaction", "interactions", "ddi", "ddis", "clash", "clashes", "clashing", "disturb", "disturbs",
+		// "Screen fluconazole", "Will fluconazole mess with her meds?", "Does fluconazole conflict with her meds?" — read only
+		// where every other word is known, so the everyday senses of these words stay the model's (ADR Decision 536)
+		"screen", "screening", "mess", "messes", "interfere", "interferes", "conflict", "conflicts"));
 
 	/** Words saying the question is about whether the drug is safe to give. */
 	private static final Set<String> RESIDUAL_SAFE = new HashSet<String>(Arrays.asList("safe", "safely", "ok", "okay",

@@ -6061,9 +6061,11 @@ public class DrugReferenceInjector {
 
 	/**
 	 * A screen's cautions as one line saying where they are (ADR Decision 506): <em>"Also in the safety warnings beside this
-	 * answer: 9 interactions, each a caution (8 Moderate, 1 Minor). [121] …"</em> — "Also" only after another line.
-	 * Counted as the screen counts pairs, a pair per order a line names; rated by each finding's own severity, an
-	 * unrated caution as having none rated.
+	 * answer: 9 interactions, each a caution (8 Moderate, 1 Minor) — Codeine with Nevirapine; … [121] …"</em> — "Also"
+	 * only after another line. Counted as the screen counts pairs, a pair per order a line names; rated by each finding's
+	 * own severity, an unrated caution as having none rated. Each drug is named once with every order its cautions name
+	 * (ADR Decision 542): a count alone left a clinician who opened the details to find which of her drugs it was in the
+	 * chips. Semicolons between cautions, because a combination's name carries "and" of its own.
 	 */
 	static String inTheWarningsLine(List<SafetyWarning> findings, List<Integer> numbers, List<Integer> cautions,
 			boolean also) {
@@ -6075,8 +6077,10 @@ public class DrugReferenceInjector {
 		boolean allInteractions = true;
 		StringBuilder markers = new StringBuilder();
 		Set<Integer> cited = new LinkedHashSet<Integer>();
+		Map<String, Set<String>> partnersOf = new LinkedHashMap<String, Set<String>>();
 		for (Integer i : cautions) {
 			SafetyWarning finding = findings.get(i);
+			partnersOf.computeIfAbsent(finding.getDrug(), d -> new LinkedHashSet<String>()).addAll(finding.namedPartners());
 			int pairs = Math.max(1, finding.namedPartners().size());
 			count += pairs;
 			allInteractions &= SafetyWarning.TYPE_INTERACTION.equals(finding.getType());
@@ -6089,6 +6093,11 @@ public class DrugReferenceInjector {
 				markers.append(" [").append(numbers.get(i)).append(']');
 			}
 		}
+		List<String> named = new ArrayList<String>(partnersOf.size());
+		for (Map.Entry<String, Set<String>> drug : partnersOf.entrySet()) {
+			named.add(drug.getValue().isEmpty() ? drug.getKey()
+					: drug.getKey() + " with " + String.join(", ", drug.getValue()));
+		}
 		List<String> ratings = new ArrayList<String>();
 		for (Map.Entry<String, Integer> rating : byRating.entrySet()) {
 			if (rating.getValue() > 0) {
@@ -6097,7 +6106,8 @@ public class DrugReferenceInjector {
 		}
 		String noun = allInteractions ? (count == 1 ? "interaction" : "interactions") : (count == 1 ? "finding" : "findings");
 		return (also ? ALSO_IN_THE_WARNINGS : IN_THE_WARNINGS) + count + " " + noun
-				+ (count == 1 ? ", a caution (" : ", each a caution (") + String.join(", ", ratings) + ")." + markers;
+				+ (count == 1 ? ", a caution (" : ", each a caution (") + String.join(", ", ratings) + ") — "
+				+ String.join("; ", named) + "." + markers;
 	}
 
 	/** How {@link #inTheWarningsLine} opens where no line comes before it. */
@@ -6121,9 +6131,9 @@ public class DrugReferenceInjector {
 	/**
 	 * {@code composed}, a module answer, without the lines that count or list findings rather than state them — {@link
 	 * #inTheWarningsLine} and {@link #sharedSubstancesLine} (ADR Decisions 493, 506). Those lines cite every finding they
-	 * stand for, so the chips pass publishes each, but name none of the orders a finding covers, by design: the chips beside the
-	 * answer do. So the check naming every order a CITED finding covers that the answer leaves unnamed (ADR Decision
-	 * 100) reads the answer without them, and does not name, under the last line, the orders of findings the answer
+	 * stand for, so the chips pass publishes each, and state none of them: the chips beside the answer do, and the
+	 * names {@link #inTheWarningsLine} gives each caution (ADR Decision 542) only say which they are. So the check
+	 * naming every order a CITED finding covers that the answer leaves unnamed (ADR Decision 100) reads the answer without them, and does not name, under the last line, the orders of findings the answer
 	 * only counted. The composer that writes them is the one place that knows their words.
 	 */
 	public static String withoutCountingLines(String composed) {

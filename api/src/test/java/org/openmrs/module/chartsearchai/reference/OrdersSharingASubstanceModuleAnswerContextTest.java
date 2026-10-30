@@ -67,7 +67,8 @@ public class OrdersSharingASubstanceModuleAnswerContextTest extends BaseModuleCo
 				shared = i;
 			}
 			if (lines.get(i).startsWith(DrugReferenceInjector.ALSO_IN_THE_WARNINGS
-					+ "2 interactions, each a caution (1 Moderate, 1 Minor).")) {
+					+ "2 interactions, each a caution (1 Moderate, 1 Minor) — Ethambutol with Isoniazid; Rifampicin (rifampin) "
+					+ "with Isoniazid.")) {
 				cautions = i;
 			}
 		}
@@ -97,7 +98,8 @@ public class OrdersSharingASubstanceModuleAnswerContextTest extends BaseModuleCo
 			"the Major leads the findings: " + answer);
 		assertTrue(lines.get(2).startsWith("Rifampicin (rifampin) is in active orders Isoniazid / pyrazinamide /"
 				+ " rifampin and Rifampicin 150mg — possible duplicate therapy."), "then this finding: " + answer);
-		assertTrue(lines.get(3).startsWith(DrugReferenceInjector.ALSO_IN_THE_WARNINGS + "1 interaction, a caution (1 Minor). ["),
+		assertTrue(lines.get(3).startsWith(DrugReferenceInjector.ALSO_IN_THE_WARNINGS + "1 interaction, a caution (1 Minor) — "
+				+ "Isoniazid with Rifampicin (rifampin). ["),
 			"then the caution, counted (ADR Decisions 493, 506): " + answer);
 	}
 

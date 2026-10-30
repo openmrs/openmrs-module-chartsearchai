@@ -61,7 +61,9 @@ public class BriefScreenAnswerTest extends BaseModuleContextSensitiveTest {
 		assertTrue(lines[1].startsWith("Nelfinavir interacts with active order Rifampin — Major. ["), "was: " + answer);
 		assertTrue(lines[2].startsWith(SHARED_SUBSTANCES), "was: " + answer);
 		assertTrue(lines[3].startsWith("Also in the safety warnings beside this answer: 12 interactions, each a caution (8 "
-				+ "Moderate, 4 Minor). ["), "was: " + answer);
+				+ "Moderate, 4 Minor) — Efavirenz with Lamivudine, Stavudine, Sulfamethoxazole, Rifampicin and isoniazid, "
+				+ "Rifampin, Nelfinavir, Trimethoprim; Stavudine with Rifampicin and isoniazid; Sulfamethoxazole with Rifampin; "
+				+ "Trimethoprim with Rifampin; Lamivudine with Trimethoprim; Rifampicin (rifampin) with Isoniazid. ["), "was: " + answer);
 		assertEquals(NOT_CHECKED, lines[4]);
 	}
 

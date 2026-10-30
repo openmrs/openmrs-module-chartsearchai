@@ -52,8 +52,8 @@ public class ScreenInteractionsOnlyContextTest extends BaseModuleContextSensitiv
 
 		String answer = answer(INTERACTIONS_ONLY);
 
-		assertEquals("Also in the safety warnings beside this answer: 5 interactions, each a caution (5 Moderate). [7] [9] "
-				+ "[8]", answer.split("\n")[2], "its five interactions, and no contraindication: " + answer);
+		assertEquals("Also in the safety warnings beside this answer: 5 interactions, each a caution (5 Moderate)"
+				+ " — Ibuprofen with Prednisone, Dexamethasone, Celecoxib; Celecoxib with Prednisone, Dexamethasone. [7] [9] [8]", answer.split("\n")[2], "its five interactions, and no contraindication: " + answer);
 		assertFalse(answer.contains("allergy"), "no contraindication line: " + answer);
 		assertTrue(answer.endsWith("\n" + DrugReferenceInjector.BELOW_FLOOR_SCOPE),
 			"and the scope says the answer covers interactions: " + answer);

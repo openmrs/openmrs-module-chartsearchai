@@ -55,7 +55,8 @@ public class ScreenSharedMechanismContextTest extends BaseModuleContextSensitive
 		// drug group (ADR Decision 197).
 		assertEquals("No Major interactions; 1 possible duplicate therapy and 5 cautions.\n"
 				+ "Ibuprofen and Celecoxib are in one drug group (NSAID) — possible duplicate therapy. [2] [3]\n"
-				+ "Also in the safety warnings beside this answer: 5 interactions, each a caution (5 Moderate). [6] [8] [7]\n"
+				+ "Also in the safety warnings beside this answer: 5 interactions, each a caution (5 Moderate)"
+				+ " — Ibuprofen with Prednisone, Dexamethasone, Celecoxib; Celecoxib with Prednisone, Dexamethasone. [6] [8] [7]\n"
 				+ DrugReferenceInjector.BELOW_FLOOR_SCOPE, answer);
 	}
 
@@ -69,7 +70,8 @@ public class ScreenSharedMechanismContextTest extends BaseModuleContextSensitive
 
 		assertEquals("No Major interactions; 1 possible duplicate therapy and 4 cautions.\n"
 				+ "Ibuprofen and Celecoxib are in one drug group (NSAID) — possible duplicate therapy. [2] [3]\n"
-				+ "Also in the safety warnings beside this answer: 4 interactions, each a caution (4 Moderate). [6] [7] [8]\n"
+				+ "Also in the safety warnings beside this answer: 4 interactions, each a caution (4 Moderate)"
+				+ " — Ibuprofen with Prednisone, Dexamethasone, Celecoxib; Celecoxib with Prednisone. [6] [7] [8]\n"
 				+ DrugReferenceInjector.BELOW_FLOOR_SCOPE, answer);
 	}
 
@@ -80,8 +82,8 @@ public class ScreenSharedMechanismContextTest extends BaseModuleContextSensitive
 		String answer = screen().getModuleAnswer();
 
 		assertNotNull(answer, "the module answers the screen");
-		assertEquals("Also in the safety warnings beside this answer: 5 interactions, each a caution (5 Moderate). [6] [8] "
-				+ "[7]", answer.split("\n")[2], "five pairs on three lines fit a cap of three: " + answer);
+		assertEquals("Also in the safety warnings beside this answer: 5 interactions, each a caution (5 Moderate)"
+				+ " — Ibuprofen with Prednisone, Dexamethasone, Celecoxib; Celecoxib with Prednisone, Dexamethasone. [6] [8] [7]", answer.split("\n")[2], "five pairs on three lines fit a cap of three: " + answer);
 		assertTrue(!answer.contains(" not shown."), "so nothing is withheld: " + answer);
 	}
 

@@ -25207,3 +25207,32 @@ What stopped the reading was the order of the stripping. The dose reader (Decisi
   the route written before the drug, *"Oral fluconazole 200mg daily …"*, under Decision 334's rule for a stated form.
 
 Pinned by `ClinicianWordingsTest.aRouteBesideTheDoseIsSetAsideWithIt`.
+
+## Decision 542: A screen's cautions line names the drugs of each caution
+
+**Status: Accepted** (October 2026) — on the owner's request after the public demo's patient
+`dd55a928-1691-11df-97a5-7038c432aabf`, on Lamivudine / zidovudine, Lamivudine, Stavudine and Nevirapine, was answered for
+*"Does he have any drug interactions?"* with *"Also in the safety warnings beside this answer: 1 interaction, a caution (1
+Moderate). [138]"*. The one caution was zidovudine with stavudine, two drugs that compete for the enzymes that activate
+them; a clinician who opened the details still had to find which of his drugs it was in the chips.
+
+### The decision
+
+Decision 506's line, `DrugReferenceInjector.inTheWarningsLine`, keeps its count and its ratings and then names each
+caution's drug once with every order its cautions name: *"… 1 interaction, a caution (1 Moderate) — Zidovudine with
+Stavudine. [138]"*; several, semicolon-separated, because a combination's name carries "and" of its own (Decision 493's
+reason). A finding naming no order is named by its drug alone. The line sits under the bottom line a client collapses
+(Decisions 506–528), so the visible answer is no longer.
+
+What this does not change: the line still states no rating per pair and no mechanism — the chips do — and
+`withoutCountingLines` still leaves it out of what Decision 100's check reads, so a finding the answer only lists is not
+counted as stated.
+
+### Spec change
+
+`ScreenSharedMechanismContextTest` (three cases), `ScreenInteractionsOnlyContextTest.aQuestionAboutInteractionsOnlyStatesNoContraindication`,
+`BriefScreenAnswerTest.theDemoPatientsScreenOpensWithItsMajorAndSaysWhereTheRestAre` and two
+`OrdersSharingASubstanceModuleAnswerContextTest` cases pinned the line ending at its ratings, and now assert the names
+after them.
+
+Pinned by `CautionsLineNamesItsDrugsTest.theCautionsLineNamesTheDrugsOfEachCaution`.

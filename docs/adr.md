@@ -25094,3 +25094,34 @@ those words.
 - *"ddI"* is never such a word: the words lower-case it to the screen's *"ddi"*, and it is didanosine.
 
 Pinned by `LlmInferenceServiceModelReadQuestionContextTest.aWordTheWordingRulesKnowIsNoUnrecognisedDrugsName`.
+
+## Decision 538: A route after the drug, or a drug just started, is asked of
+
+**Status: Accepted** (October 2026). Found on the 3.7.1 standalone on 2026-10-30, asking 24 wordings of 15 patients.
+
+### Context
+
+Once Decision 537 let their chips stand, three wordings still went to the model on all 15 patients:
+
+- *"Fluconazole PO ok?"*
+- *"She was started on fluconazole today - issues?"*
+- *"Just prescribed fluconazole, ok?"*
+
+On several of those patients the model wrote *"can be given"* beside the chips.
+
+- *"Fluconazole IV ok?"* was answered by the module, because *"IV"* is a route Decision 419 sets aside after the drug. *"PO"*
+  is not in that list, so the residual reading (Decision 396) met an unknown word.
+- *"was"*, *"just"*, *"been"* and *"has"* were not filler.
+- A harm word closing seven words was not taken as a question, though *"I gave her fluconazole, any problem?"* was.
+
+### The decision
+
+- `FORM_AFTER_THE_DRUG` admits a route by its abbreviation or its adjective: po, oral, sc, subcut, subcutaneously, sl,
+  sublingual, pr, pv, inhaled, nebulised and nebulized. The answer says it did not weigh that form, as it does for *"iv"*.
+- `RESIDUAL_FILLER` admits *"was"*, *"just"*, *"been"* and *"has"*. A drug given already is asked of as one proposed, from
+  the same findings.
+- Words closing on a word saying the drug is safe or a harm are a question. That word acts as a tag: *"…today - issues?"*.
+- *"Was she started on fluconazole?"* still proposes nothing, because no asking word asks its giving. It stays a question of
+  her record (Decision 399), and so does *"Has she been on fluconazole long?"*.
+
+Pinned by `ClinicianWordingsTest.aRouteAfterTheDrugOrADrugJustStartedIsAskedOf`.

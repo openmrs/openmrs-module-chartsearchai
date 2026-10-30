@@ -2199,4 +2199,26 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		// What it would do to her otherwise stays the model's.
 		assertNull(ask("Will warfarin interfere with her sleep?"));
 	}
+
+	/** ADR Decision 538: a route after the drug is set aside as one before it is, and a drug already started or just prescribed
+	 *  is asked of as one given. */
+	@Test
+	public void aRouteAfterTheDrugOrADrugJustStartedIsAskedOf() {
+		for (String route : new String[] { "PO", "SC", "SL", "PR", "inhaled", "nebulised" }) {
+			String answer = ask("Warfarin " + route + " ok?");
+			assertNotNull(answer, "Warfarin " + route + " ok?");
+			assertEquals(ask("Warfarin IV ok?").replace("(iv)", "(" + route.toLowerCase() + ")"), answer, route);
+		}
+		String[][] pairs = { { "She was started on warfarin today - issues?", "Is warfarin a risk?" },
+			{ "Just prescribed warfarin, ok?", "Is warfarin ok?" },
+			{ "Has she been started on warfarin - any problems?", "Is warfarin a risk?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+		// Her record stays the model's.
+		assertNull(ask("Was she started on warfarin?"));
+		assertNull(ask("Has she been on warfarin long?"));
+	}
 }

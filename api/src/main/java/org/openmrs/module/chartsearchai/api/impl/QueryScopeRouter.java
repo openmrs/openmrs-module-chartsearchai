@@ -2457,7 +2457,9 @@ public final class QueryScopeRouter {
 			// chamomile tea?" went to the model, which answered "Chamomile can be given, with one caution" (ADR Decision 438)
 			+ "|tea|teas|juice|supplements?|extract|powder"
 			// a route or a use after it — "ciprofloxacin IV", "isoniazid preventive therapy" (ADR Decision 419)
-			+ "|iv|im|intravenously|intramuscularly|orally|topically|prophylaxis|preventive therapy|preventative therapy)(?= |$)");
+			+ "|iv|im|intravenously|intramuscularly|orally|topically|prophylaxis|preventive therapy|preventative therapy"
+			// and a route by its abbreviation — "Fluconazole PO ok?" went to the model (ADR Decision 538)
+			+ "|po|oral|sc|subcut|subcutaneously|sl|sublingual|pr|pv|inhaled|nebulised|nebulized)(?= |$)");
 
 	/** A route named right before the drug — "oral fluconazole", "topical clotrimazole" (ADR Decision 419). */
 	private static final Pattern FORM_BEFORE_THE_DRUG = Pattern.compile("(?<=^| )(oral|topical|intravenous|iv|im|intramuscular|"
@@ -2835,7 +2837,11 @@ public final class QueryScopeRouter {
 		// "Rx fluconazole 200mg od - any interactions?", a prescription's mark (ADR Decision 470)
 		"rx",
 		// "Add fluconazole to her list?", "Fluconazole is fine right?", "Shall I start fluconazole?" (ADR Decision 531)
-		"list", "right", "shall"));
+		"list", "right", "shall",
+		// "She was started on fluconazole today - issues?", "Just prescribed fluconazole, ok?" — a drug given already is asked
+		// of as one proposed; "Was she started on fluconazole?" proposes nothing, its giving asked by no asking word (ADR
+		// Decision 538)
+		"was", "just", "been", "has"));
 
 	/** Words saying the question is about the drug's interactions. */
 	private static final Set<String> RESIDUAL_INTERACTS = new HashSet<String>(Arrays.asList("interact", "interacts",
@@ -3221,7 +3227,9 @@ public final class QueryScopeRouter {
 			}
 		}
 		// A drug, the patient and a word saying it is safe — "Warfarin for her - safe?" — is asked whole (ADR Decision 405).
-		boolean aQuestion = asked || wordsWithTheDrugMarked.size() <= 2 || (safe || harms) && wordsWithTheDrugMarked.size() <= 4;
+		boolean aQuestion = asked || wordsWithTheDrugMarked.size() <= 2 || (safe || harms) && wordsWithTheDrugMarked.size() <= 4
+				// and the words closing on one saying it is safe or a harm, a tag: "...today - issues?" (ADR Decision 538)
+				|| (safe || harms) && isSafeOrAHarm(wordsWithTheDrugMarked.get(wordsWithTheDrugMarked.size() - 1));
 		for (String word : wordsWithTheDrugMarked) {
 			asked |= RESIDUAL_ASKING.contains(word);
 			aQuestion |= RESIDUAL_QUESTION.contains(word);
@@ -3251,6 +3259,10 @@ public final class QueryScopeRouter {
 		return RESIDUAL_FILLER.contains(word) || RESIDUAL_GIVE.contains(word) || RESIDUAL_SAFE.contains(word)
 				|| RESIDUAL_HARMS.contains(word) || RESIDUAL_INTERACTS.contains(word) || RESIDUAL_ASKING.contains(word)
 				|| RESIDUAL_QUESTION.contains(word) || PLANNED_GIVING.contains(word);
+	}
+
+	private static boolean isSafeOrAHarm(String word) {
+		return RESIDUAL_SAFE.contains(word) || RESIDUAL_HARMS.contains(word);
 	}
 
 	/** The one word {@link #withEitherWayAsked} makes of "side effect(s)". */

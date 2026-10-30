@@ -25163,3 +25163,24 @@ A line about a drug ordered several times carries a marker per prescription. On 
 under the collapsed details (Decision 519), so the sentence in view is unchanged.
 
 Pinned by `EveryOrderOfThePartnerIsCitedTest.aLineAboutAPartnerOfThreePrescriptionsCitesEachOfThem`.
+
+## Decision 540: A food had on her medications is no screen
+
+**Status: Accepted** (October 2026). Found on the 3.7.1 standalone on 2026-10-30, asking 24 wordings of 15 patients.
+
+### Context
+
+On all 15 patients, *"Can she eat eggs on her meds?"* was answered with the screen of her orders: every chip of it, 40 in
+all. Decision 492 keeps that screen off a food, a drink or her diet asked beside her medications, but only where the food is
+had *with* them, *while on* them, *while taking* them, *alongside* them or *together with* them. *"on her meds"* was
+not among those words. The question therefore fell to the model's reading (Decision 489), which read it as a medication
+check.
+
+### The decision
+
+- The shape reading a food had beside her medications as a whole also admits *"on"*, *"while she is on"* and *"while
+  they are on"*.
+- A drug had on them is unaffected: *"Can she have ibuprofen on her meds?"* is still checked as the drug it is, and keeps
+  its own chips only.
+
+Pinned by `LlmInferenceServiceModelReadQuestionContextTest.aFoodHadOnHerMedicationsIsNoScreen`.

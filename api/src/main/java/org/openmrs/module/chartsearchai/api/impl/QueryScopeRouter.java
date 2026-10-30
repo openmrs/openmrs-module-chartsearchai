@@ -397,8 +397,10 @@ public final class QueryScopeRouter {
 			"(?:is|are) (\\p{L}+(?: \\p{L}+){0,2}?) (?:ok|okay|fine|bad|good|harmful|dangerous|a problem) (?:with|for|alongside) "
 					+ HER_MEDICATIONS_AS_A_WHOLE,
 			// "Can she have tea with her pills?", "Can she eat oranges with her ARVs?" (ADR Decision 492)
+			// and one had ON them: "Can she eat eggs on her meds?" was answered with the screen (ADR Decision 540)
 			"(?:can|could|may|should) (?:she|he|they|the patient|this patient) (?:eat|drink|have) (\\p{L}+(?: \\p{L}+){0,2}?) "
-					+ "(?:with|while on|while taking|alongside|together with) " + HER_MEDICATIONS_AS_A_WHOLE);
+					+ "(?:with|on|while on|while taking|while (?:she|he) is on|while they are on|alongside|together with) "
+					+ HER_MEDICATIONS_AS_A_WHOLE);
 
 	/** Her diet, or the foods she should avoid, asked of — "Is her diet ok with her medicines?", "Should she avoid any
 	 *  foods?" — no question of her medications' own safety (ADR Decision 492). */

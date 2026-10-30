@@ -237,6 +237,29 @@ public class LlmInferenceServiceModelReadQuestionContextTest extends BaseModuleC
 	}
 
 	/**
+	 * A food or a drink had ON her medications asks nothing of their safety together, as one had WITH them does (ADR Decision
+	 * 540): on the 3.7.1 standalone "Can she eat eggs on her meds?" was answered with the screen of her orders, every chip of
+	 * it, on all 15 patients. A drug had on them is still checked as the drug it is.
+	 */
+	@Test
+	public void aFoodHadOnHerMedicationsIsNoScreen() {
+		for (String question : new String[] { "Can she eat eggs on her meds?", "Can she drink milk on her ARVs?",
+				"Can she have coffee on her medications?", "Can she eat oranges while she is on her meds?" }) {
+			RecordingProvider provider = new RecordingProvider("YES");
+			ChartAnswer answer = serviceWith(provider).search(patient, question);
+
+			assertEquals(0, provider.engine.readings, question + " is not read by the model");
+			assertFalse(answer.isAnsweredByTheModule(), question + " is not answered with the screen: " + answer.getAnswer());
+			assertTrue(answer.getSafetyWarnings().isEmpty(), question + " carries no chip: " + answer.getSafetyWarnings());
+		}
+		ChartAnswer drug = serviceWith(new RecordingProvider("YES")).search(patient, "Can she have ibuprofen on her meds?");
+		assertFalse(drug.getSafetyWarnings().isEmpty(), "a drug had on her medications keeps its chips");
+		for (SafetyWarning chip : drug.getSafetyWarnings()) {
+			assertEquals("Ibuprofen", chip.getDrug(), "only the drug's own chips: " + chip);
+		}
+	}
+
+	/**
 	 * An activity, a meal or her tolerance asked beside her medications as a whole asks nothing of their safety together
 	 * (ADR Decision 511): on the 3.7.1 standalone "Can she exercise while on her meds?", "Can she drive on her meds?", "Can
 	 * she take her meds with food?", "Can she fast with her meds?" and "Is she tolerating her meds?" were each answered with

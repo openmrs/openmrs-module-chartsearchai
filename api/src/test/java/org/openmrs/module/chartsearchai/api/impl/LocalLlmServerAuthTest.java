@@ -45,10 +45,11 @@ import org.openmrs.api.APIException;
  * by binding the port while the server is down — be adopted as the server and handed the system
  * prompt plus the patient's serialized chart.
  *
- * <p>Nothing here is a stand-in for the transport. Every assertion about a request drives the
- * production {@link LlamaServerEndpoint} against a REAL listener ({@link HttpServer} on the
- * loopback interface, answering 401 unless the bearer matches) over a real {@link HttpClient}, and
- * every assertion about the port drives the production check against a real {@link ServerSocket}.
+ * <p>Only {@link #aProbeThatTimesOutFailsTheStart} stands in for the transport. Every assertion
+ * about a request drives the production {@link LlamaServerEndpoint} against a REAL listener
+ * ({@link HttpServer} on the loopback interface, answering 401 unless the bearer matches) over a
+ * real {@link HttpClient}, and every other assertion about the port drives the production check
+ * against a real {@link ServerSocket}.
  * Liveness arrives as the liveness of a real OS process — an exited child, or this JVM.
  * {@code llama-server} itself cannot be launched in CI (the binary is not in the checkout, and
  * {@code llama-server-natives} pins no version), which is why the readiness and port entry points
@@ -300,6 +301,26 @@ public class LocalLlmServerAuthTest {
 	}
 
 	/**
+	 * The refusal branch through the probe's seam: a connect that times out establishes no refusal, so
+	 * the start is refused, whatever the kernel does with a full accept queue.
+	 */
+	@Test
+	public void aProbeThatTimesOutFailsTheStart() {
+		APIException thrown = assertThrows(APIException.class,
+				() -> LocalLlmEngine.requireLoopbackPortFree(8080, (address, timeoutMs) -> {
+					throw new java.net.SocketTimeoutException("connect timed out");
+				}),
+				"a probe that neither connects nor is refused has established nothing, so the start "
+				+ "must be refused — reading it as a free port is how this check fails OPEN");
+		assertTrue(thrown.getMessage().contains("Could not establish"),
+				"and say that is what happened, rather than claiming a listener was found: "
+				+ thrown.getMessage());
+	}
+
+	/** How long a connect gets to show the accept queue still admits one before the queue counts as full. */
+	private static final int SATURATION_CONFIRM_MS = 3000;
+
+	/**
 	 * The refusal branch, which nothing pinned: reverting it to the fail-open form that read every
 	 * {@code IOException} as "nothing listening" left the FULL suite green, and that form is what a
 	 * review round measured shipping twice. A listener whose accept queue is full answers neither
@@ -316,6 +337,13 @@ public class LocalLlmServerAuthTest {
 	 * is DERIVED from the kernel predicate quoted above and from the macOS count, not observed
 	 * here; the one-filler form is green on this host, which is exactly why the loop is not
 	 * optional.
+	 *
+	 * <p>Only a connect that TIMES OUT shows the queue full. In full local runs on macOS this test
+	 * failed in 1 to 2 ms, far inside the 250 ms connect: a filler refused at once ended the loop with
+	 * room left, and the probe connected. A refused filler is therefore retried, and a timed-out one is
+	 * confirmed by a connect given {@link #SATURATION_CONFIRM_MS}. Where the kernel keeps refusing
+	 * instead of dropping, the queue cannot be shown full and the test is skipped, not failed: the
+	 * branch itself is pinned without the kernel by {@link #aProbeThatTimesOutFailsTheStart}.
 	 */
 	@Test
 	public void aPortHeldByAListenerThatAcceptsNothingFailsTheStart() throws IOException {
@@ -330,12 +358,26 @@ public class LocalLlmServerAuthTest {
 					filler.connect(new InetSocketAddress(loopback, held), 250);
 					fillers.add(filler);
 				}
-				catch (IOException queueIsFull) {
+				catch (java.net.SocketTimeoutException maybeFull) {
 					filler.close();
-					saturated = true;
+					java.net.Socket confirm = new java.net.Socket(java.net.Proxy.NO_PROXY);
+					try {
+						confirm.connect(new InetSocketAddress(loopback, held), SATURATION_CONFIRM_MS);
+						fillers.add(confirm);
+					}
+					catch (java.net.SocketTimeoutException queueIsFull) {
+						confirm.close();
+						saturated = true;
+					}
+					catch (IOException refusedForNow) {
+						confirm.close();
+					}
+				}
+				catch (IOException refusedForNow) {
+					filler.close();
 				}
 			}
-			assertTrue(saturated,
+			org.junit.jupiter.api.Assumptions.assumeTrue(saturated,
 					"could not fill the accept queue of a backlog-1 listener in 256 connects, so "
 					+ "this test never reached the state it is about — a fixture that asserts an "
 					+ "outcome it did not produce is the failure mode this loop exists to remove");

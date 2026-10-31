@@ -1226,7 +1226,8 @@ public class LocalLlmEngine implements LlmEngine {
 	 * accept backlog is full, which answers with a timeout and is refused HERE rather than passed
 	 * on to a later gate. That shape is what the branch is TESTED through, being the one reachable
 	 * on a healthy host:
-	 * {@code LocalLlmServerAuthTest.aPortHeldByAListenerThatAcceptsNothingFailsTheStart}. It is not
+	 * {@code LocalLlmServerAuthTest.aPortHeldByAListenerThatAcceptsNothingFailsTheStart}, and through
+	 * the probe's seam by {@code LocalLlmServerAuthTest.aProbeThatTimesOutFailsTheStart}. It is not
 	 * the only path in: a connect that SUCCEEDS and then fails to close lands here too, where the
 	 * message says nothing could be established about a probe that established a listener. The
 	 * verdict is still right — refuse — and only the wording misdiagnoses, which is why this
@@ -1242,6 +1243,21 @@ public class LocalLlmEngine implements LlmEngine {
 	 * enumerating shapes.
 	 */
 	static void requireLoopbackPortFree(int port) {
+		requireLoopbackPortFree(port, LOOPBACK_PROBE);
+	}
+
+	/** One connect to a loopback address within a timeout: what the port check asks, and its test seam. */
+	interface LoopbackConnector {
+
+		void connect(InetSocketAddress address, int timeoutMs) throws IOException;
+	}
+
+	/**
+	 * The production probe. A refused connect reads as a free port, even when the close then
+	 * fails; any other failure, of the connect or of the close after it, reads as "could not
+	 * establish".
+	 */
+	static final LoopbackConnector LOOPBACK_PROBE = (address, timeoutMs) -> {
 		// Proxy.NO_PROXY, not new Socket(): the no-arg constructor is proxy-aware, and a proxied
 		// probe answers about the proxy rather than about the port. The trigger is NOT
 		// socksProxyHost alone — measured, that is a no-op here, because the JDK's default
@@ -1254,11 +1270,18 @@ public class LocalLlmEngine implements LlmEngine {
 		// — measured 252 ms against an unroutable proxy, not the seconds an earlier form of this
 		// comment claimed, which were this class's one-time loading.)
 		try (Socket probe = new Socket(java.net.Proxy.NO_PROXY)) {
+			probe.connect(address, timeoutMs);
+		}
+	};
+
+	/** As {@link #requireLoopbackPortFree(int)}, probing through {@code connector}. */
+	static void requireLoopbackPortFree(int port, LoopbackConnector connector) {
+		try {
 			// getByName(LOOPBACK_HOST), not getLoopbackAddress(): the latter is ::1 on a JVM
 			// started with -Djava.net.preferIPv6Addresses, which would probe an address the
 			// engine never dials and the child never binds — reporting a real 127.0.0.1 squatter
 			// as free, and a ::1 listener that can never receive the chart as a conflict.
-			probe.connect(new InetSocketAddress(
+			connector.connect(new InetSocketAddress(
 					InetAddress.getByName(LlamaServerEndpoint.LOOPBACK_HOST), port),
 					PORT_PROBE_TIMEOUT_MS);
 		}

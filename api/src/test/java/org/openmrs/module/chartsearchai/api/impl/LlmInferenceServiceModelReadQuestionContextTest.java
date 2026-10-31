@@ -301,6 +301,41 @@ public class LlmInferenceServiceModelReadQuestionContextTest extends BaseModuleC
 	}
 
 	/**
+	 * Whether her medications cause a symptom, or how an organ fares on them, is no question of their interactions (ADR
+	 * Decision 549). On the 3.7.1 standalone "Are her meds causing her low blood pressure?", "Is her liver ok on her meds?" and
+	 * "Can her meds make her sleepy?" were read by the model as YES and answered with the screen of her orders. The model
+	 * reads these as drug-safety questions whatever its prompt says (measured by {@code MedicationSafetyQuestionEvalTest}),
+	 * so the router knows their shape.
+	 */
+	@Test
+	public void whetherHerMedicationsCauseASymptomIsNoScreen() {
+		for (String question : new String[] { "Are her meds causing her low blood pressure?",
+				"Could her meds be causing the diarrhoea?", "Is her liver ok on her meds?", "Can her meds make her sleepy?",
+				"Is her kidney function affected by her medications?", "Is her kidney function ok for her meds?",
+				"Do her ARVs cause headaches?",
+				"Are her pills behind the rash?" }) {
+			RecordingProvider provider = new RecordingProvider("YES");
+			ChartAnswer answer = serviceWith(provider).search(patient, question);
+
+			assertEquals(0, provider.engine.readings, question + " is not read by the model");
+			assertFalse(answer.isAnsweredByTheModule(), question + " is not answered with the screen: " + answer.getAnswer());
+			assertTrue(answer.getSafetyWarnings().isEmpty(), question + " carries no chip: " + answer.getSafetyWarnings());
+		}
+	}
+
+	/** And whether her medications cause a problem together, or with one another, still reaches the check. */
+	@Test
+	public void whetherHerMedicationsCauseAProblemTogetherStillReachesTheCheck() {
+		for (String question : new String[] { "Can her meds cause problems together?",
+				"Could her medications be causing an interaction?", "Are her meds causing problems with each other?" }) {
+			RecordingProvider provider = new RecordingProvider("YES");
+			ChartAnswer answer = serviceWith(provider).search(patient, question);
+
+			assertTrue(answer.isAnsweredByTheModule(), question + " is answered with the screen: " + answer.getAnswer());
+		}
+	}
+
+	/**
 	 * A question asking of one thing the data does not resolve, standing where a drug would — "amox ok?" — asks of that
 	 * thing, never of her medications as a whole, so it is not read by the model (ADR Decision 514): on the 3.7.1 standalone
 	 * the model read "amox ok?" as YES, and the screen of her orders answered "No rated interaction found", of a question

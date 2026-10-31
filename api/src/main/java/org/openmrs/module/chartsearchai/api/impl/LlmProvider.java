@@ -1009,7 +1009,10 @@ public class LlmProvider {
 			+ "their patient. Set drug_safety to true when the question asks whether any drug - one the patient takes or one "
 			+ "being considered - is safe for this patient, interacts, is contraindicated, should be avoided, stopped or "
 			+ "not given, or causes a problem. Set it to false for every other question, including ones that only ask which "
-			+ "drugs the patient takes, a dose, a date, or why a drug was given.";
+			+ "drugs the patient takes, a dose, a date, or why a drug was given. Set it to false as well when the question "
+			+ "asks about something else beside the patient's drugs - a food or drink, smoking or another activity, a "
+			+ "vaccine, a procedure or giving blood, when or how to take them, or whether they cause a symptom, a weight "
+			+ "change or an abnormal result - since it asks about that other thing, not whether a drug is safe.";
 
 	/** The first reply's one field, a JSON boolean. */
 	static final String MEDICATION_SAFETY_FIELD = "drug_safety";

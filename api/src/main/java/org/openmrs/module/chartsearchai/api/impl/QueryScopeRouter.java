@@ -436,6 +436,9 @@ public final class QueryScopeRouter {
 	private static final String CAUSED_BY_THEM = "(?:from|due to|caused by|because of|related to|a side effect of|an? effect of"
 			+ "|the result of) " + HER_MEDICATIONS_AS_A_WHOLE;
 
+	private static final String CAUSING = "(?:causing|cause|causes|making|make|makes|giving|give|gives|behind|"
+			+ "responsible for|to blame for)";
+
 	private static final String CONCEIVING = "(?:breastfeed|breast feed|breast-feed|nurse|conceive|get pregnant|become pregnant"
 			+ "|fall pregnant|be pregnant|have a baby)";
 
@@ -444,7 +447,14 @@ public final class QueryScopeRouter {
 			"(?:is it|it is) (?:ok|okay|safe|fine|alright) (?:for (?:her|him|them) )?to " + CONCEIVING + " " + BESIDE_THEM,
 			"(?:any|are there(?: any)?|what are(?: the)?|does (?:she|he|they) have(?: any)?) (?:side effects?|adverse effects?"
 					+ "|adverse reactions?) (?:from|of|due to|on) " + HER_MEDICATIONS_AS_A_WHOLE,
-			"(?:is|are|could|might|may) " + POSSESSIVE + " (\\p{L}+(?: \\p{L}+){0,2}?) (?:be )?" + CAUSED_BY_THEM);
+			"(?:is|are|could|might|may) " + POSSESSIVE + " (\\p{L}+(?: \\p{L}+){0,2}?) (?:be )?" + CAUSED_BY_THEM,
+			// Whether they cause a symptom, never a problem with one another or another drug (ADR Decision 549).
+			"(?:are|is|could|can|might|may|would|will|do|does) " + HER_MEDICATIONS_AS_A_WHOLE + " (?:be )?" + CAUSING
+					+ " (?!.*\\b(?:with|interact\\w*|clash\\w*|together|each other|problems?|issues?|reactions?)\\b)"
+					+ "\\p{L}+(?: \\p{L}+){0,4}",
+			// And how an organ or a result fares on them: "Is her liver ok on her meds?" (ADR Decision 549).
+			"(?:is|are) " + POSSESSIVE + " (\\p{L}+(?: \\p{L}+){0,2}?) (?:ok|okay|fine|alright|normal|affected|damaged) "
+					+ "(?:on|while on|by|from|for) " + HER_MEDICATIONS_AS_A_WHOLE);
 
 	/** The words of an infection's response to treatment: "Any drug resistance?", "Is her TB drug-sensitive?" (ADR Decision
 	 *  525). */

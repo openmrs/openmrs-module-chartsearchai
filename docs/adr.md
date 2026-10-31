@@ -25455,3 +25455,41 @@ The list composer's lead sums `DrugReferenceInjector.pairsOf` over the findings 
 `screenSummary` do. Its lines are unchanged and still name every order.
 
 Pinned by `ScreenSharedMechanismContextTest.aProposalAfterAListOfHerOrdersCountsItsCautionsByPair`.
+
+## Decision 549: Something else asked beside her medications is not read as a question of their safety
+
+**Status: Accepted** (November 2026). Found on the 3.7.1 standalone on 2026-11-01, probing 70 questions that ask nothing
+of drug interactions.
+
+### Context
+
+A question naming no drug that ran no screen is put to the model (Decision 489). A YES runs the screen of her orders,
+and the module answers with it. The model said YES to *"Can she smoke on her meds?"*, *"Can she take her meds at
+night?"*, *"Can she get the COVID vaccine on her meds?"*, *"Are her meds causing her low blood pressure?"* and *"Is her
+liver ok on her meds?"*. Each was answered *"No Major interactions; 10 contraindications, 1 possible duplicate therapy
+and 21 cautions."* with 19 chips: an interaction screen in place of an answer to the question asked.
+
+`MedicationSafetyQuestionEvalTest` measured it against the shipped E4B (gemma-4-E4B-it-Q4_K_M, `--reasoning-budget 0`).
+All ten new negative rows were read as drug-safety questions.
+
+### The decision
+
+- The prompt says the question is false as well when it asks about something else beside her drugs: a food or drink,
+  smoking or another activity, a vaccine, a procedure or giving blood, when or how to take them, or whether they cause a
+  symptom, a weight change or an abnormal result. Measured: six of the ten rows then read OTHER. Every positive row read
+  exactly as before.
+- The model still read four rows as drug-safety questions: whether her medications cause a symptom, and how an organ fares
+  on them. So did a second wording that narrowed *"causes a problem"* to *"with another drug"*, which was reverted.
+  `QueryScopeRouter.HER_STATE_ON_HER_MEDICATIONS` knows those shapes instead:
+  - *"Are her meds causing …"*, never with *with*, *interact…*, *clash…*, *together*, *each other*, *problems*, *issues*
+    or *reactions* after it.
+  - *"Is her liver ok on her meds?"*, and *"Is her kidney function ok for her meds?"*, never with *with*, which pairs one thing
+    with another.
+- The six the prompt reaches are rows of the eval. The four the router reaches are pinned by
+  `LlmInferenceServiceModelReadQuestionContextTest.whetherHerMedicationsCauseASymptomIsNoScreen`.
+  `.whetherHerMedicationsCauseAProblemTogetherStillReachesTheCheck` pins the wordings that must still screen.
+
+### Residue
+
+The eval's third gate fails on *"Should I stop any of his drugs?"*, read as asking which drugs to avoid. It read so
+under the unchanged prompt as well. The router screens that question itself, so production never puts it to the model.

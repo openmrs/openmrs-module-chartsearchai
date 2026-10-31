@@ -71,7 +71,13 @@ public class MedicationSafetyQuestionEvalTest {
 			"List his active drug orders", "When was nevirapine started?", "What dose of lamivudine is he taking?",
 			"Why is he on rifampicin?", "Has he had a CD4 count?", "Does he have TB?", "Who prescribed his ARVs?",
 			"How long has he been on Retrovir?", "Is he allergic to anything?", "What vaccines has he had?",
-			"Did he miss any appointments?", "How is he interacting with his care team?", "Is his weight going down?" };
+			"Did he miss any appointments?", "How is he interacting with his care team?", "Is his weight going down?",
+			// Something else asked beside her medications, which a screen of them does not answer (ADR Decision 549): each
+			// was read as a drug-safety question on 2026-11-01, and its answer replaced by the screen. Whether they cause
+			// a symptom the model reads as one under any prompt measured, so the router knows those shapes instead.
+			"Can she smoke on her meds?", "Can she take her meds at night?", "Can she get the COVID vaccine on her meds?",
+			"Can she donate blood on her meds?", "Is she gaining weight on her ARVs?",
+			"Can she eat oranges after taking her pills?" };
 
 	@Test
 	public void everyDrugSafetyQuestionReachesTheCheckReadAsItAsksAndNoOtherIsReadAsOne() {

@@ -1744,12 +1744,21 @@ public class DrugReferenceInjector {
 		// What the closing line says was not covered is what this pass did not SCREEN, decided here for every composer
 		// alike, never what a composer did not FIND (ADR Decision 544). A pass that weighed her contraindications says so —
 		// where no drug-condition rule weighed her conditions, only beside the line saying they were not checked, which a
-		// question about interactions alone does not carry (ADR Decision 533), so there the narrower line stays.
-		boolean contraindicationsScreened = moduleAnswer != null && drugSafetyValidator != null
-				&& (conditionsUnchecked
-						|| drugSafetyValidator.conditionRuleCoverage() == DrugReferenceLoad.Coverage.PUBLISHED)
+		// question about interactions alone does not carry (ADR Decision 533), so there the narrower line stays. Any other
+		// question whose answer closes on the narrower line takes that part into the line it widens, whatever its shape —
+		// two drugs proposed together, a switch — so an answer stating a contraindication never closes saying they were
+		// not covered (ADR Decision 547). It joins the line it widens and adds none.
+		boolean weighedHerContraindications = moduleAnswer != null && drugSafetyValidator != null
 				&& screenedHerContraindications(moduleAnswer, question, questionDrugs, namedClass, drugReferenceService,
 						context, findings, findingNumbers);
+		if (weighedHerContraindications && !conditionsUnchecked
+				&& drugSafetyValidator.conditionRuleCoverage() == DrugReferenceLoad.Coverage.ABSENT
+				&& !QueryScopeRouter.asksOnlyAboutInteractions(question)
+				&& Arrays.asList(moduleAnswer.split("\n", -1)).contains(BELOW_FLOOR_SCOPE)) {
+			conditionsUnchecked = true;
+		}
+		boolean contraindicationsScreened = weighedHerContraindications && (conditionsUnchecked
+				|| drugSafetyValidator.conditionRuleCoverage() == DrugReferenceLoad.Coverage.PUBLISHED);
 		if (moduleAnswer != null) {
 			moduleAnswer = withWhatWasNotChecked(moduleAnswer, contraindicationsScreened, conditionsUnchecked,
 					unidentifiedOnAScreen);

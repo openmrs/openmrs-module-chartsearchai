@@ -66,6 +66,50 @@ public class ClosingLineScreenedCoverageTest extends BaseModuleContextSensitiveT
 		assertEquals(WIDENED, lines[lines.length - 1], "was: " + answer);
 	}
 
+	/**
+	 * An answer stating a contraindication must not close saying contraindications were not covered (ADR Decision 547). On
+	 * the demo's data, a patient recorded allergic to "Penicillins" asked "Can I give her amoxicillin and ibuprofen
+	 * together?" was told amoxicillin is in the penicillin group she is allergic to, and then "Interactions the data does not
+	 * rate, and anything beyond drug interactions, are not covered." — a two-drug proposal carries no line about her
+	 * conditions, and Decision 544 widened only beside one.
+	 */
+	@Test
+	public void twoDrugsProposedTogetherBesideAStatedContraindicationCloseSayingContraindicationsWereCovered() {
+		String answer = ask("Can I give her amoxicillin and ibuprofen together?", DrugReferenceTestSupport.set("penicillins"));
+
+		assertNotNull(answer, "the module answers");
+		assertTrue(answer.contains("Amoxicillin is in the drug group (Penicillins) the patient has a recorded allergy to."),
+			"precondition: the contraindication is stated; was: " + answer);
+		String[] lines = answer.split("\n");
+		assertEquals(WIDENED, lines[lines.length - 1], "was: " + answer);
+	}
+
+	/** And with no finding at all: two drugs proposed together were each weighed against her allergy records. */
+	@Test
+	public void twoDrugsProposedTogetherWithNoFindingCloseSayingContraindicationsWereCovered() {
+		String answer = ask("Can I give her amoxicillin and ibuprofen together?", Collections.<String> emptySet());
+
+		assertNotNull(answer, "the module answers");
+		String[] lines = answer.split("\n");
+		assertEquals(WIDENED, lines[lines.length - 1], "was: " + answer);
+	}
+
+	/**
+	 * Widening joins the line it widens and adds none (ADR Decision 547): an answer closing on no scope line — a switch from a
+	 * drug she does not take to one she does, answered so — gains no line about her conditions from it.
+	 */
+	@Test
+	public void anAnswerClosingOnNoScopeLineGainsNoLine() {
+		String withoutTheStep = ask("Can I switch her from zidovudine to efavirenz?", Collections.<String> emptySet(),
+			"Efavirenz");
+
+		assertNotNull(withoutTheStep, "the module answers");
+		assertTrue(withoutTheStep.contains("Efavirenz is already one of this patient's active medications"),
+			"precondition: answered that she takes it; was: " + withoutTheStep);
+		assertFalse(withoutTheStep.contains("beyond drug interactions"), "precondition: no scope line; was: " + withoutTheStep);
+		assertFalse(withoutTheStep.contains(DrugReferenceInjector.CONDITIONS_UNCHECKED_PART), "was: " + withoutTheStep);
+	}
+
 	/** With the contraindication arm switched off nothing weighed her allergies, and no answer may say it did. */
 	@Test
 	public void aPassThatDidNotWeighHerContraindicationsNeverSaysItDid() {
@@ -104,7 +148,7 @@ public class ClosingLineScreenedCoverageTest extends BaseModuleContextSensitiveT
 		assertEquals(DrugReferenceInjector.BELOW_FLOOR_SCOPE, lines[lines.length - 1], "was: " + answer);
 	}
 
-	private static String ask(String question, Set<String> allergies) {
+	private static String ask(String question, Set<String> allergies, String... moreOrders) {
 		DrugReferenceService service = new DrugReferenceService();
 		assertEquals(DrugReferenceLoad.Coverage.ABSENT,
 			service.getLoadStatus().coverageOf(DrugReferenceLoad.Arm.CONDITION_RULES),
@@ -115,9 +159,14 @@ public class ClosingLineScreenedCoverageTest extends BaseModuleContextSensitiveT
 				orders.add(DrugReferenceTestSupport.activeOrder("order-" + drug + "-" + n, drug, drug));
 			}
 		}
+		Set<String> names = DrugReferenceTestSupport.set("Lamivudine", "Nevirapine", "Stavudine");
+		for (String drug : moreOrders) {
+			orders.add(DrugReferenceTestSupport.activeOrder("order-" + drug, drug, drug));
+			names.add(drug);
+		}
 		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(service).injectRecords(
 			DrugReferenceTestSupport.oneRecordChart(),
-			DrugReferenceTestSupport.ctx(66, null, DrugReferenceTestSupport.set("Lamivudine", "Nevirapine", "Stavudine"), null,
+			DrugReferenceTestSupport.ctx(66, null, names, null,
 				allergies, null, orders),
 			question);
 		return chart.getModuleAnswer();

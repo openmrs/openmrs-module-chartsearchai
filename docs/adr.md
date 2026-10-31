@@ -25304,9 +25304,18 @@ Pre-registered on the demo replica (`:8088`, the demo's dump and GPs), `origin/m
 lines may change, and only from narrow to wide, and only on a patient with no unidentified allergy. **It passed.**
 Exactly two cells changed, both Kamwara's — *"Can I give her amoxicillin?"* and *"Can I give him ibuprofen?"* — each in
 its closing line alone, from *"anything beyond drug interactions,"* to *"anything beyond drug interactions and
-contraindications,"*. Chips were identical in every cell. The two patients allergic to "Penicillins" (an allergen the data
-does not identify) were unchanged, as was *"Does amoxicillin interact with her medications?"*. Twenty-five cells were
-byte-identical; the three the model answers were not compared, one of them having timed out on the first build.
+contraindications,"*. Chips were identical in every cell. The two patients allergic to "Penicillins" were unchanged, as was
+*"Does amoxicillin interact with her medications?"*. Twenty-five cells were byte-identical; the three the model answers
+were not compared, one of them having timed out on the first build.
+
+**That run's two "Penicillins" patients were measured on a broken rig, corrected 2026-11-01.** It reported their allergy
+as one *"the drug data does not identify"*; the public demo flags amoxicillin against it, and so does the shipped data.
+The replica's core, a 2.9.0-SNAPSHOT built before TRUNK-6675, "cleared" a module's lib-cache folder with `File.delete()`,
+which fails silently on a non-empty folder, so a `chartsearchai/cross-reactivity-groups.json` expanded on 2026-10-07 —
+the NSAID group alone — shadowed the current two-group file in the jars (`drugreferencestatus` read `groupCount: 1`). No
+released core this module runs on has the defect (the fix is on 2.9.x since 2026-07-14). Re-run with the cache rebuilt
+(`groupCount: 2`), the same build pair, `aee76eff` against it, over the same 30 cells: six closing lines widened, nothing
+else moved, chips identical in every cell. It also showed what Decision 547 fixes.
 
 ### Spec change
 
@@ -25389,3 +25398,41 @@ The interaction data holds no lactation, pregnancy or adverse-effect information
   carries the drug's findings.
 
 Pinned by `LlmInferenceServiceModelReadQuestionContextTest.herPregnancyBreastfeedingOrSymptomsOnHerMedicationsIsNoScreen`.
+
+## Decision 547: An answer stating a contraindication never closes saying contraindications were not covered
+
+**Status: Accepted** (November 2026) — found re-measuring Decision 544 on the demo's data. A patient recorded allergic to
+"Penicillins" (`dd8e64d8-1691-11df-97a5-7038c432aabf`) asked *"Can I give her amoxicillin and ibuprofen together?"* was
+told *"Amoxicillin is in the drug group (Penicillins) the patient has a recorded allergy to."* and then *"Interactions the
+data does not rate, and anything beyond drug interactions, are not covered."* — the answer contradicting itself.
+
+### Context
+
+Decision 544 widens the closing line only where the pass weighed her contraindications AND either a drug-condition rule
+is published or the answer already says her conditions were not checked, so the wider line cannot read as covering
+conditions no rule could weigh. That part is added by Decision 533 for two question shapes — one drug proposed that she
+does not take, and a screen not about interactions alone — so on the shipped data (no drug-condition rule) every other
+shape kept the narrow line: two drugs proposed together, a switch, a question about her own drug. The shape test was the
+same kind of choice Decision 544 removed from the composers.
+
+### The decision
+
+Where the pass weighed her contraindications (`screenedHerContraindications`), no drug-condition rule is published, the
+question is not about interactions alone (`QueryScopeRouter.asksOnlyAboutInteractions`, Decision 190's predicate), and
+the answer closes on `BELOW_FLOOR_SCOPE`, the conditions part joins that line as it widens: *"Not checked: unrated
+interactions, anything beyond drug interactions and contraindications, and this patient's conditions (no drug-condition
+rules are loaded)."* It joins the line it widens and adds none — an answer with no scope line gains nothing — and a
+question about interactions alone keeps Decision 533's silence on her conditions and its narrow line.
+
+### Measured
+
+The demo replica (`:8088`, its lib cache rebuilt), `main` @ 22a02a32 against this change, over Decision 544's 30 cells.
+Exactly five cells changed, each in its closing line alone, from `BELOW_FLOOR_SCOPE` to the line above: *"Can I give her
+amoxicillin and ibuprofen together?"* on all three patients — the "Penicillins" patient's among them, which now no longer
+contradicts the allergy finding it states — and *"Can I switch her from nevirapine to efavirenz?"* on the two whose answer
+closed on a scope line. Chips were identical in every cell; the other 25 were byte-identical.
+
+Pinned by `ClosingLineScreenedCoverageTest.twoDrugsProposedTogetherBesideAStatedContraindicationCloseSayingContraindicationsWereCovered`
+and `.twoDrugsProposedTogetherWithNoFindingCloseSayingContraindicationsWereCovered` (both red on Decision 544's `main`),
+`.aQuestionOnlyWhetherItInteractsKeepsTheNarrowLineWhereNoConditionRuleIsLoaded` (red with the interactions-only conjunct
+removed) and `.anAnswerClosingOnNoScopeLineGainsNoLine` (red with the scope-line conjunct removed).

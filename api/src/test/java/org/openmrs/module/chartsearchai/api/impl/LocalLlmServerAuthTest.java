@@ -45,10 +45,11 @@ import org.openmrs.api.APIException;
  * by binding the port while the server is down — be adopted as the server and handed the system
  * prompt plus the patient's serialized chart.
  *
- * <p>Nothing here is a stand-in for the transport. Every assertion about a request drives the
- * production {@link LlamaServerEndpoint} against a REAL listener ({@link HttpServer} on the
- * loopback interface, answering 401 unless the bearer matches) over a real {@link HttpClient}, and
- * every assertion about the port drives the production check against a real {@link ServerSocket}.
+ * <p>Only {@link #aProbeThatTimesOutFailsTheStart} stands in for the transport. Every assertion
+ * about a request drives the production {@link LlamaServerEndpoint} against a REAL listener
+ * ({@link HttpServer} on the loopback interface, answering 401 unless the bearer matches) over a
+ * real {@link HttpClient}, and every other assertion about the port drives the production check
+ * against a real {@link ServerSocket}.
  * Liveness arrives as the liveness of a real OS process — an exited child, or this JVM.
  * {@code llama-server} itself cannot be launched in CI (the binary is not in the checkout, and
  * {@code llama-server-natives} pins no version), which is why the readiness and port entry points

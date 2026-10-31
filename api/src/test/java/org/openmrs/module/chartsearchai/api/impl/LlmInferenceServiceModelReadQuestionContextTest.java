@@ -280,6 +280,27 @@ public class LlmInferenceServiceModelReadQuestionContextTest extends BaseModuleC
 	}
 
 	/**
+	 * Her pregnancy, breastfeeding, side effects or a symptom asked of her medications as a whole is no question of their
+	 * interactions (ADR Decision 546): on the 3.7.1 standalone "Can she breastfeed on her meds?" and "Is her weight gain from
+	 * her meds?" were read by the model as YES and answered with the screen of her orders on all 15 patients — "No rated
+	 * interactions." alone for a patient on three ARVs, an answer to a question nobody asked that reads as a clearance.
+	 */
+	@Test
+	public void herPregnancyBreastfeedingOrSymptomsOnHerMedicationsIsNoScreen() {
+		for (String question : new String[] { "Can she breastfeed on her meds?", "Can she get pregnant on her meds?",
+				"Is it safe for her to breastfeed while on her medications?", "Is her weight gain from her meds?",
+				"Any side effects from her meds?", "Could her nausea be caused by her medications?",
+				"Is her rash a side effect of her ARVs?", "Can she conceive while taking her pills?" }) {
+			RecordingProvider provider = new RecordingProvider("YES");
+			ChartAnswer answer = serviceWith(provider).search(patient, question);
+
+			assertEquals(0, provider.engine.readings, question + " is not read by the model");
+			assertFalse(answer.isAnsweredByTheModule(), question + " is not answered with the screen: " + answer.getAnswer());
+			assertTrue(answer.getSafetyWarnings().isEmpty(), question + " carries no chip: " + answer.getSafetyWarnings());
+		}
+	}
+
+	/**
 	 * A question asking of one thing the data does not resolve, standing where a drug would — "amox ok?" — asks of that
 	 * thing, never of her medications as a whole, so it is not read by the model (ADR Decision 514): on the 3.7.1 standalone
 	 * the model read "amox ok?" as YES, and the screen of her orders answered "No rated interaction found", of a question

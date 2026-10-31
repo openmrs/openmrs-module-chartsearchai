@@ -426,6 +426,26 @@ public final class QueryScopeRouter {
 					+ "|after|before) (?:food|meals?|milk|water|breakfast|lunch|dinner|supper|an empty stomach)",
 			"(?:is|are) (?:she|he|they|the patient|this patient) (?:tolerating|coping with|managing) " + HER_MEDICATIONS_AS_A_WHOLE);
 
+	/** Her own state — pregnancy, breastfeeding, a side effect or a symptom — asked beside or of her medications as a whole:
+	 *  "Can she breastfeed on her meds?", "Is her weight gain from her meds?". The interaction data holds nothing of either,
+	 *  so it is no question of their interactions (ADR Decision 546); a drug named there keeps its own path. */
+	private static final String SHE = "(?:she|he|they|the patient|this patient)";
+
+	private static final String BESIDE_THEM = "(?:on|while on|with|while taking|whilst on|taking) " + HER_MEDICATIONS_AS_A_WHOLE;
+
+	private static final String CAUSED_BY_THEM = "(?:from|due to|caused by|because of|related to|a side effect of|an? effect of"
+			+ "|the result of) " + HER_MEDICATIONS_AS_A_WHOLE;
+
+	private static final String CONCEIVING = "(?:breastfeed|breast feed|breast-feed|nurse|conceive|get pregnant|become pregnant"
+			+ "|fall pregnant|be pregnant|have a baby)";
+
+	private static final List<Pattern> HER_STATE_ON_HER_MEDICATIONS = shapes(
+			"(?:can|could|may|should) " + SHE + " " + CONCEIVING + " " + BESIDE_THEM,
+			"(?:is it|it is) (?:ok|okay|safe|fine|alright) (?:for (?:her|him|them) )?to " + CONCEIVING + " " + BESIDE_THEM,
+			"(?:any|are there(?: any)?|what are(?: the)?|does (?:she|he|they) have(?: any)?) (?:side effects?|adverse effects?"
+					+ "|adverse reactions?) (?:from|of|due to|on) " + HER_MEDICATIONS_AS_A_WHOLE,
+			"(?:is|are|could|might|may) " + POSSESSIVE + " (\\p{L}+(?: \\p{L}+){0,2}?) (?:be )?" + CAUSED_BY_THEM);
+
 	/** The words of an infection's response to treatment: "Any drug resistance?", "Is her TB drug-sensitive?" (ADR Decision
 	 *  525). */
 	private static final Set<String> RESISTANCE = new HashSet<String>(Arrays.asList("resistance", "resistant", "sensitive",
@@ -462,7 +482,8 @@ public final class QueryScopeRouter {
 			return false;
 		}
 		String joined = String.join(" ", words(question));
-		if (fitsAShape(words(question), HER_DIET) || fitsAShape(words(question), AN_ACTIVITY_BESIDE_HER_MEDICATIONS)) {
+		if (fitsAShape(words(question), HER_DIET) || fitsAShape(words(question), AN_ACTIVITY_BESIDE_HER_MEDICATIONS)
+				|| fitsAShape(words(question), HER_STATE_ON_HER_MEDICATIONS)) {
 			return true;
 		}
 		for (Pattern shape : SOMETHING_ELSE_WITH_HER_MEDICATIONS) {

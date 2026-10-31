@@ -25357,3 +25357,35 @@ cautions for Celecoxib — 2 Moderate."* over three Moderate pairs. It now reads
 
 Pinned by `ScreenSharedMechanismContextTest.aProposalCountsItsCautionsByPairLikeAScreenOfTheSameOrders` and
 `.oneCollapsedChipCountsEachOrderItNamesAndStillNamesThem`.
+
+## Decision 546: Her pregnancy, breastfeeding or symptoms asked of her medications is no screen of them
+
+**Status: Accepted** (October 2026). Found on the 3.7.1 standalone on 2026-10-31, asking 22 wordings of 15 patients.
+It narrows Decision 511's second list.
+
+### Context
+
+Decision 511 left pregnancy, breastfeeding and side effects asked of her medications "as found", so that they kept their
+safety material. What they actually got was the screen of her orders as the module's whole answer, on all 15 patients.
+The model was asked whether they ask about her medications' safety (Decision 489) and said YES.
+
+- *"Can she breastfeed on her meds?"* was answered *"No rated interactions."* for Mogan Kamwara, who is on three ARVs.
+  That is an answer to a question nobody asked, and a clinician can read it as a clearance.
+- *"Is her weight gain from her meds?"* was answered *"No Major interactions; 10 contraindications, 1 possible
+  duplicate therapy and 21 cautions."* for Sarah Taylor. Nothing in it is about weight.
+
+The interaction data holds no lactation, pregnancy or adverse-effect information, so a screen cannot answer either.
+
+### The decision
+
+- Her own state asked beside or of her medications as a whole is something else asked with them
+  (`QueryScopeRouter.asksOfSomethingElseWithHerMedications`): no screen runs, the model is not asked to read the
+  question, and no chip is attached. The model answers from her chart.
+  - Breastfeeding, conceiving or becoming pregnant while on them.
+  - Side effects or adverse effects of them.
+  - A symptom of hers said to come from them: *"Is her weight gain from her meds?"*, *"Is her rash a side effect of her
+    ARVs?"*.
+- A question naming one drug keeps that drug's own path (Decisions 399, 457): *"Is efavirenz safe in pregnancy?"* still
+  carries the drug's findings.
+
+Pinned by `LlmInferenceServiceModelReadQuestionContextTest.herPregnancyBreastfeedingOrSymptomsOnHerMedicationsIsNoScreen`.

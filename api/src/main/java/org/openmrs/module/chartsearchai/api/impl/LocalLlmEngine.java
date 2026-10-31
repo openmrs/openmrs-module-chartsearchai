@@ -1237,8 +1237,9 @@ public class LocalLlmEngine implements LlmEngine {
 	}
 
 	/**
-	 * The production probe. Its connect and its close both count: a failure of either is an
-	 * {@link IOException} the port check reads as "could not establish".
+	 * The production probe. A refused connect reads as a free port, even when the close then
+	 * fails; any other failure, of the connect or of the close after it, reads as "could not
+	 * establish".
 	 */
 	static final LoopbackConnector LOOPBACK_PROBE = (address, timeoutMs) -> {
 		// Proxy.NO_PROXY, not new Socket(): the no-arg constructor is proxy-aware, and a proxied

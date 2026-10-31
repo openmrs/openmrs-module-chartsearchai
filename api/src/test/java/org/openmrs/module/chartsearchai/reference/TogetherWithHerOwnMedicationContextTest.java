@@ -69,9 +69,10 @@ public class TogetherWithHerOwnMedicationContextTest extends BaseModuleContextSe
 		String answer = DrugReferenceTestSupport.injectorWithSafety(service())
 				.injectRecords(DrugReferenceTestSupport.oneRecordChart(), context(), QUESTION).getModuleAnswer();
 
-		// What ibuprofen is to her, then celecoxib's own answer — its cautions, the pair asked about among them.
+		// What ibuprofen is to her, then celecoxib's own answer — its cautions, the pair asked about among them. Three
+		// of her orders, three Moderate pairs, counted by pair though two share one chip (ADR Decision 545).
 		assertEquals("Ibuprofen is one of this patient's active medications.\n"
-				+ "2 interaction cautions for Celecoxib — 2 Moderate.\n"
+				+ "3 interaction cautions for Celecoxib — 3 Moderate.\n"
 				+ "Celecoxib interacts with active order Prednisone and Dexamethasone — Moderate. [7] [3] [4]\n"
 				+ "Celecoxib interacts with active order Ibuprofen — Moderate. [8] [2]", answer);
 	}

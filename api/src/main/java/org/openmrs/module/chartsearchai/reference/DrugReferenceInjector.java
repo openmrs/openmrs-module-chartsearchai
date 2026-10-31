@@ -5733,7 +5733,7 @@ public class DrugReferenceInjector {
 		int duplicates = drugGroups;
 		int cautions = 0;
 		for (SafetyWarning finding : findings) {
-			int pairs = Math.max(1, finding.namedPartners().size());
+			int pairs = pairsOf(finding);
 			String clause = moduleClause(finding);
 			if (finding.statesOrdersSharingASubstance()) {
 				duplicates++;
@@ -5812,13 +5812,19 @@ public class DrugReferenceInjector {
 	 * A proposal's cautions as the one sentence its answer opens with (ADR Decision 517): <em>"1 interaction caution for
 	 * Ibuprofen — Moderate, with Zidovudine."</em>, or, for several, their ratings counted — <em>"3 interaction cautions
 	 * for Glyburide — 2 Moderate, 1 Minor."</em> In place of Decision 140's heading, <em>"1 interaction caution for
-	 * Ibuprofen:"</em>, which a client could not show alone; never that the drug can be given.
+	 * Ibuprofen:"</em>, which a client could not show alone; never that the drug can be given. Counted by PAIR, as
+	 * {@link #screenSummary} counts (ADR Decisions 99, 545): a chip stating one mechanism for several of her orders is
+	 * a caution about each — <em>"2 interaction cautions for Ibuprofen — Moderate, with Prednisone and
+	 * Dexamethasone."</em> — so the drug asked about is counted alike whichever way it is asked.
 	 */
 	static String cautionSummary(List<SafetyWarning> cautions, String drug) {
-		int count = cautions.size();
+		int count = 0;
+		for (SafetyWarning finding : cautions) {
+			count += pairsOf(finding);
+		}
 		StringBuilder summary = new StringBuilder().append(count)
 				.append(count == 1 ? " interaction caution for " : " interaction cautions for ").append(drug).append(" — ");
-		if (count == 1) {
+		if (cautions.size() == 1) {
 			SafetyWarning finding = cautions.get(0);
 			String severity = finding.getSeverity();
 			summary.append(severity == null || severity.trim().isEmpty() || "unknown".equalsIgnoreCase(severity.trim())
@@ -5833,7 +5839,7 @@ public class DrugReferenceInjector {
 				String rating = severity == null || severity.trim().isEmpty() || "unknown".equalsIgnoreCase(severity.trim())
 						? "with no severity rated" : severity.trim();
 				Integer seen = byRating.get(rating);
-				byRating.put(rating, (seen == null ? 0 : seen) + 1);
+				byRating.put(rating, (seen == null ? 0 : seen) + pairsOf(finding));
 			}
 			List<String> ratings = new ArrayList<String>();
 			for (Map.Entry<String, Integer> rating : byRating.entrySet()) {
@@ -5843,6 +5849,12 @@ public class DrugReferenceInjector {
 					: String.join(", ", ratings));
 		}
 		return summary.append('.').toString();
+	}
+
+	/** How many of her orders {@code finding} relates the drug to — each order a chip names, or the one pair a chip
+	 *  naming none states; what {@link #screenSummary} and {@link #cautionSummary} both count. */
+	private static int pairsOf(SafetyWarning finding) {
+		return Math.max(1, finding.namedPartners().size());
 	}
 
 	/** The shape of {@link #cautionSummary}'s sentence, as an answer's first line. */

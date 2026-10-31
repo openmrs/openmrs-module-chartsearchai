@@ -25329,3 +25329,31 @@ that would not. The record-read one: a chart not read is never answered by the m
 (`LlmInferenceServiceAnswerFromFindingsContextTest.aProposalOverAChartThatWasNotReadStillAsksTheModel`). The screen one
 (`anAllergyCheckBearsOn` for a question naming no drug): on the shipped data the condition-rule conjunct already keeps an
 interactions-only screen narrow, so it binds only on an install publishing drug-condition rules, which no case builds.
+
+## Decision 545: A proposal counts its cautions by pair, as a screen does
+
+**Status: Accepted** (October 2026). Found on the 3.7.1 standalone on 2026-10-31, comparing two wordings for Sarah Taylor.
+
+### Context
+
+Fluconazole relates to seven of Sarah Taylor's orders, all Moderate. Four corticosteroids share one mechanism, so they
+are one chip naming all four (Decision 99). *"Her fluconazole - any interactions?"* summed it up as *"7 cautions"*.
+*"Can I give her fluconazole?"* opened *"4 interaction cautions for Fluconazole — 4 Moderate."* over the same seven
+pairs. `screenSummary` counted pairs and `cautionSummary` counted chips, so a proposal's count fell whenever a mechanism
+collapsed. A single collapsed chip read *"1 interaction caution for Ethanol — Moderate, with Diclofenac and
+Ibuprofen."*, which is one caution in words and two of her orders in the list.
+
+### The decision
+
+- `cautionSummary` counts pairs: each order a chip names, or one for a chip that names none. Its ratings are counted the
+  same way. `DrugReferenceInjector.pairsOf` is the one count both summaries use.
+- A single chip still names its orders: *"2 interaction cautions for Ibuprofen — Moderate, with Prednisone and
+  Dexamethasone."*
+
+### Spec change
+
+`TogetherWithHerOwnMedicationContextTest.theModuleSaysWhichDrugIsHersAndAnswersForTheOther` pinned *"2 interaction
+cautions for Celecoxib — 2 Moderate."* over three Moderate pairs. It now reads *"3 … — 3 Moderate."*
+
+Pinned by `ScreenSharedMechanismContextTest.aProposalCountsItsCautionsByPairLikeAScreenOfTheSameOrders` and
+`.oneCollapsedChipCountsEachOrderItNamesAndStillNamesThem`.

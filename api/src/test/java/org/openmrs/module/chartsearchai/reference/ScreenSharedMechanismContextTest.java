@@ -87,6 +87,51 @@ public class ScreenSharedMechanismContextTest extends BaseModuleContextSensitive
 		assertTrue(!answer.contains(" not shown."), "so nothing is withheld: " + answer);
 	}
 
+	@Test
+	public void aProposalCountsItsCautionsByPairLikeAScreenOfTheSameOrders() throws IOException {
+		// Ibuprofen proposed beside her celecoxib, prednisone and dexamethasone: the two corticosteroids share one
+		// mechanism, so one chip names both (ADR Decision 99), and celecoxib has its own. Three of her orders are
+		// affected, each a Moderate pair. The bottom line counts PAIRS, as a screen's does (ADR Decision 545): counting
+		// chips said "2 Moderate" of three Moderate pairs, where asking the same drug's interactions said three.
+		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
+			DrugReferenceTestSupport.activeOrder("order-celecoxib", "Celecoxib 200mg"),
+			DrugReferenceTestSupport.activeOrder("order-prednisone", "Prednisone 5mg"),
+			DrugReferenceTestSupport.activeOrder("order-dexamethasone", "Dexamethasone 8mg"));
+		List<String> names = new ArrayList<String>();
+		for (PatientClinicalContext.ActiveDrugOrder order : orders) {
+			names.addAll(order.getNames());
+		}
+		PatientClinicalContext context = DrugReferenceTestSupport.ctx(40, null, new LinkedHashSet<String>(names), null,
+			null, null, orders);
+		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.ddiFixtureService(FIXTURE))
+				.injectRecords(DrugReferenceTestSupport.oneRecordChart(), context, "Can I give her ibuprofen?");
+
+		String answer = chart.getModuleAnswer();
+		assertNotNull(answer, "the module answers the proposal");
+		assertEquals("3 interaction cautions for Ibuprofen — 3 Moderate.", answer.split("\n")[0], "was: " + answer);
+		assertEquals("3 interaction cautions for Ibuprofen — 3 Moderate.", chart.getModuleAnswerSummary(), "was: " + answer);
+	}
+
+	@Test
+	public void oneCollapsedChipCountsEachOrderItNamesAndStillNamesThem() throws IOException {
+		// Ibuprofen beside her prednisone and dexamethasone only: one chip, one mechanism, two Moderate pairs.
+		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
+			DrugReferenceTestSupport.activeOrder("order-prednisone", "Prednisone 5mg"),
+			DrugReferenceTestSupport.activeOrder("order-dexamethasone", "Dexamethasone 8mg"));
+		List<String> names = new ArrayList<String>();
+		for (PatientClinicalContext.ActiveDrugOrder order : orders) {
+			names.addAll(order.getNames());
+		}
+		PatientClinicalContext context = DrugReferenceTestSupport.ctx(40, null, new LinkedHashSet<String>(names), null,
+			null, null, orders);
+		String answer = DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.ddiFixtureService(FIXTURE))
+				.injectRecords(DrugReferenceTestSupport.oneRecordChart(), context, "Can I give her ibuprofen?").getModuleAnswer();
+
+		assertNotNull(answer, "the module answers the proposal");
+		assertEquals("2 interaction cautions for Ibuprofen — Moderate, with Prednisone and Dexamethasone.",
+			answer.split("\n")[0], "was: " + answer);
+	}
+
 	private static PatientChart screen() throws IOException {
 		return screen(FIXTURE);
 	}

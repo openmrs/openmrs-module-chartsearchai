@@ -132,6 +132,30 @@ public class ScreenSharedMechanismContextTest extends BaseModuleContextSensitive
 			answer.split("\n")[0], "was: " + answer);
 	}
 
+	@Test
+	public void aProposalAfterAListOfHerOrdersCountsItsCautionsByPair() throws IOException {
+		// The same three orders, listed in the question before the proposal (ADR Decision 150): the lead counts PAIRS,
+		// as a proposal asked alone does (ADR Decision 548). Counting lines said "2 interaction cautions" of three.
+		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
+			DrugReferenceTestSupport.activeOrder("order-celecoxib", "Celecoxib 200mg"),
+			DrugReferenceTestSupport.activeOrder("order-prednisone", "Prednisone 5mg"),
+			DrugReferenceTestSupport.activeOrder("order-dexamethasone", "Dexamethasone 8mg"));
+		List<String> names = new ArrayList<String>();
+		for (PatientClinicalContext.ActiveDrugOrder order : orders) {
+			names.addAll(order.getNames());
+		}
+		PatientClinicalContext context = DrugReferenceTestSupport.ctx(40, null, new LinkedHashSet<String>(names), null,
+			null, null, orders);
+		String answer = DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.ddiFixtureService(FIXTURE))
+				.injectRecords(DrugReferenceTestSupport.oneRecordChart(), context,
+					"The patient is currently on Celecoxib, Prednisone and Dexamethasone, is it safe to give Ibuprofen?")
+				.getModuleAnswer();
+
+		assertNotNull(answer, "the module answers the proposal");
+		assertEquals("3 interaction cautions for Ibuprofen:", answer.split("\n")[0], "was: " + answer);
+		assertTrue(answer.contains("Prednisone") && answer.contains("Dexamethasone"), "each order still named: " + answer);
+	}
+
 	private static PatientChart screen() throws IOException {
 		return screen(FIXTURE);
 	}

@@ -4586,7 +4586,12 @@ public class DrugReferenceInjector {
 			lines.add(0, "No if the patient is on " + joinedAsAlternatives(names) + " — this module's drug-safety check found "
 					+ "a reason to withhold " + drug + (names.size() == 1 ? " against it." : " against each."));
 		} else {
-			lines.add(0, cautionLead(order.size(), drug));
+			// Counted by PAIR, as a proposal asked alone counts its cautions (ADR Decisions 545, 548).
+			int pairs = 0;
+			for (Integer i : order) {
+				pairs += pairsOf(findings.get(i));
+			}
+			lines.add(0, cautionLead(pairs, drug));
 		}
 		return String.join("\n", lines);
 	}

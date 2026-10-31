@@ -25436,3 +25436,22 @@ Pinned by `ClosingLineScreenedCoverageTest.twoDrugsProposedTogetherBesideAStated
 and `.twoDrugsProposedTogetherWithNoFindingCloseSayingContraindicationsWereCovered` (both red on Decision 544's `main`),
 `.aQuestionOnlyWhetherItInteractsKeepsTheNarrowLineWhereNoConditionRuleIsLoaded` (red with the interactions-only conjunct
 removed) and `.anAnswerClosingOnNoScopeLineGainsNoLine` (red with the scope-line conjunct removed).
+
+## Decision 548: A proposal after a list of drugs counts its cautions by pair
+
+**Status: Accepted** (November 2026). Found reading the call sites of `cautionLead` after Decision 545.
+
+### Context
+
+Decision 545 made a proposal asked alone count its cautions by pair. A proposal that follows a list of drugs (*"The
+patient is currently on Celecoxib, Prednisone and Dexamethasone, is it safe to give Ibuprofen?"*, Decision 150) is
+composed by `composeListFindings`, which still led with `cautionLead(order.size(), …)`. That is one per line, so the
+chip naming both corticosteroids counted once: *"2 interaction cautions for Ibuprofen:"* over three Moderate pairs.
+Asking *"Can I give her ibuprofen?"* of the same chart says three.
+
+### The decision
+
+The list composer's lead sums `DrugReferenceInjector.pairsOf` over the findings it states, as `cautionSummary` and
+`screenSummary` do. Its lines are unchanged and still name every order.
+
+Pinned by `ScreenSharedMechanismContextTest.aProposalAfterAListOfHerOrdersCountsItsCautionsByPair`.

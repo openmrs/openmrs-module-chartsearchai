@@ -1741,8 +1741,18 @@ public class DrugReferenceInjector {
 						|| proposesADrugNotHers(question, questionDrugs, screenedSubstances))
 				&& drugSafetyValidator != null
 				&& drugSafetyValidator.conditionRuleCoverage() == DrugReferenceLoad.Coverage.ABSENT;
+		// What the closing line says was not covered is what this pass did not SCREEN, decided here for every composer
+		// alike, never what a composer did not FIND (ADR Decision 544). A pass that weighed her contraindications says so —
+		// where no drug-condition rule weighed her conditions, only beside the line saying they were not checked, which a
+		// question about interactions alone does not carry (ADR Decision 533), so there the narrower line stays.
+		boolean contraindicationsScreened = moduleAnswer != null && drugSafetyValidator != null
+				&& (conditionsUnchecked
+						|| drugSafetyValidator.conditionRuleCoverage() == DrugReferenceLoad.Coverage.PUBLISHED)
+				&& screenedHerContraindications(moduleAnswer, question, questionDrugs, namedClass, drugReferenceService,
+						context, findings, findingNumbers);
 		if (moduleAnswer != null) {
-			moduleAnswer = withWhatWasNotChecked(moduleAnswer, conditionsUnchecked, unidentifiedOnAScreen);
+			moduleAnswer = withWhatWasNotChecked(moduleAnswer, contraindicationsScreened, conditionsUnchecked,
+					unidentifiedOnAScreen);
 		}
 		// Every answer of more than one line has one sentence a client shows, the rest collapsed under it (ADR Decisions
 		// 519, 529). With no bottom line of its own: what the answer states before its findings, in short, then a count of
@@ -4046,10 +4056,23 @@ public class DrugReferenceInjector {
 	 * own. With no scope line — a screen note, an answer that no order was identified — her conditions and the orders keep
 	 * a line each, as before.
 	 *
+	 * <p>Where {@code contraindicationsScreened}, a {@link #BELOW_FLOOR_SCOPE} line becomes {@link #SCREEN_SCOPE} first: the
+	 * pass weighed her contraindications, so "anything beyond drug interactions" would be false of it (ADR Decision 544).
+	 *
+	 * @param contraindicationsScreened {@link #screenedHerContraindications}'s answer for this pass
 	 * @param unidentified the orders the drug data does not identify, on a screen; {@code null} or empty where none
 	 */
-	static String withWhatWasNotChecked(String answer, boolean conditionsUnchecked,
+	static String withWhatWasNotChecked(String answer, boolean contraindicationsScreened, boolean conditionsUnchecked,
 			List<PatientClinicalContext.ActiveDrugOrder> unidentified) {
+		if (contraindicationsScreened) {
+			List<String> scoped = new ArrayList<String>(Arrays.asList(answer.split("\n", -1)));
+			for (int n = 0; n < scoped.size(); n++) {
+				if (BELOW_FLOOR_SCOPE.equals(scoped.get(n))) {
+					scoped.set(n, SCREEN_SCOPE);
+				}
+			}
+			answer = String.join("\n", scoped);
+		}
 		boolean orders = unidentified != null && !unidentified.isEmpty();
 		if (!conditionsUnchecked && !orders) {
 			return answer;
@@ -4085,6 +4108,38 @@ public class DrugReferenceInjector {
 			kept.append('\n').append(CONDITIONS_NOT_CHECKED);
 		}
 		return kept.toString();
+	}
+
+	/**
+	 * Whether the pass that produced {@code answer} weighed this patient's contraindications for what it answers (ADR
+	 * Decision 544): the question names a drug — the drug-in-play arm weighs every such drug against her allergy and
+	 * condition records whatever the question's wording, so two wordings of one question close alike — or, for a screen
+	 * naming none, a check of her allergies bears on it ({@link #anAllergyCheckBearsOn}); both contraindication toggles are
+	 * on ({@link DrugSafetyValidator#reportsContraindications}); her allergy and condition records were read
+	 * ({@link PatientClinicalContext#contraindicationRecordsRead}); every recorded drug allergy is one the data identifies
+	 * ({@link DrugSafetyValidator#unresolvedDrugAllergens} — one it does not was compared with nothing, ADR Decision 223);
+	 * and every contraindication the pass raised is one the answer cites. Each conjunct is a fact about the pass, and none
+	 * is whether a contraindication was FOUND: a composer choosing its closing line by that told a clinician asking "Can I
+	 * give her amoxicillin?" — her allergies read, none conflicting — that nothing beyond drug interactions was covered. A
+	 * raised contraindication the answer leaves out (a question about interactions only sets them apart, ADR Decision 190)
+	 * keeps the narrower line, which is then true. Whether her CONDITIONS were weighed is the caller's conjunct, beside it.
+	 */
+	private static boolean screenedHerContraindications(String answer, String question, List<DrugReference> questionDrugs,
+			String namedClass, DrugReferenceService service, PatientClinicalContext context, List<SafetyWarning> findings,
+			List<Integer> findingNumbers) {
+		if (context == null || !context.contraindicationRecordsRead() || !DrugSafetyValidator.reportsContraindications()
+				|| questionDrugs.isEmpty() && !anAllergyCheckBearsOn(question, questionDrugs, namedClass, service)
+				|| !DrugSafetyValidator.unresolvedDrugAllergens(service, context).isEmpty()) {
+			return false;
+		}
+		Set<Integer> cited = ChartSearchAiUtils.citedIndexes(answer);
+		for (int i = 0; i < findings.size(); i++) {
+			if (SafetyWarning.TYPE_CONTRAINDICATION.equals(findings.get(i).getType())
+					&& !cited.contains(findingNumbers.get(i))) {
+				return false;
+			}
+		}
+		return true;
 	}
 
 	/** Her conditions as one part of a screen's one "Not checked" line (ADR Decisions 493, 496): bracketed, so the line's

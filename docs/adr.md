@@ -25258,3 +25258,74 @@ their own shapes (Decisions 335, 374). No shape reads the drug named first with 
   the findings do not answer.
 
 Pinned by `ClinicianWordingsTest.aDrugNamedAsHersThenAskedOfItsInteractionsAsksThem`.
+
+## Decision 544: The closing line says what the pass did not screen, never what it did not find
+
+**Status: Accepted** (October 2026) — on the owner's request, after the public demo's patient
+`dd74dc61-1691-11df-97a5-7038c432aabf` (no allergies recorded; on nevirapine, lamivudine and stavudine) was answered for
+*"Can I give her amoxicillin?"* with *"Not checked: unrated interactions, anything beyond drug interactions, and this
+patient's conditions (no drug-condition rules are loaded)."* The pass had read her allergy records and weighed amoxicillin
+against them; the line told the clinician to check, by hand, the allergies the module had just checked.
+
+### Context
+
+Every composer chose its own closing line between `BELOW_FLOOR_SCOPE` (*"anything beyond drug interactions"*) and
+`SCREEN_SCOPE` (*"… and contraindications"*), over twenty sites, and the choice tracked the FINDINGS the composer was
+handed, not the screen that produced them — `composeAboutHerOwnMedication` spells it `contraindications > 0 ? SCREEN_SCOPE
+: BELOW_FLOOR_SCOPE`. A below-floor proposal is only reached where no contraindication was raised, so its narrow line was
+false exactly where the allergy screen ran clean. Decision 144 wrote *"the check covers rated pairs in its data and
+nothing beyond drug interactions"*; the drug-in-play arm weighs every drug the question names against her allergy and
+condition records, ungated, so that premise was false of the module's own pass.
+
+### The decision
+
+- **One decision for every composer**, made where every module answer passes:
+  `DrugReferenceInjector.screenedHerContraindications`, applied by `withWhatWasNotChecked`, which turns a
+  `BELOW_FLOOR_SCOPE` line into `SCREEN_SCOPE`. Its conjuncts are facts about the pass: a drug named by the question (the
+  drug-in-play arm weighs it whatever the wording, so *"Should I stop her ibuprofen?"* and *"Is ibuprofen safe with her
+  other medications?"* still close alike), or for a screen naming
+  none, `anAllergyCheckBearsOn` (Decision 388); both contraindication toggles on (`reportsContraindications`); her
+  allergy and condition records read (`contraindicationRecordsRead`); every recorded drug allergy identified
+  (`unresolvedDrugAllergens` empty — one the data does not identify was compared with nothing, Decision 223); and every
+  contraindication the pass raised cited by the answer. None is whether a contraindication was FOUND.
+- **Where no drug-condition rule is published, the line widens only beside the part saying her conditions were not
+  checked** (Decision 533's), never alone — so it cannot read as covering conditions no rule could weigh. A question about
+  interactions only does not carry that part (Decision 533,
+  `ProposalSaysHerConditionsWereNotCheckedTest.aQuestionOnlyWhetherItInteractsDoesNotSpeakOfHerConditions`), so on the
+  shipped data its narrow line stays. Nothing is appended to make the widening possible.
+- It only widens. A composer's `SCREEN_SCOPE` is never narrowed here, and a question about interactions only (Decision
+  190) still sets her contraindications apart: a raised contraindication the answer does not cite keeps the narrow line,
+  which is then true.
+
+### Measured
+
+Pre-registered on the demo replica (`:8088`, the demo's dump and GPs), `origin/main` @ aee76eff against this change,
+30 cells (three patients — Kamwara, and two recorded allergic to "Penicillins" — by ten questions). Only closing scope
+lines may change, and only from narrow to wide, and only on a patient with no unidentified allergy. **It passed.**
+Exactly two cells changed, both Kamwara's — *"Can I give her amoxicillin?"* and *"Can I give him ibuprofen?"* — each in
+its closing line alone, from *"anything beyond drug interactions,"* to *"anything beyond drug interactions and
+contraindications,"*. Chips were identical in every cell. The two patients allergic to "Penicillins" (an allergen the data
+does not identify) were unchanged, as was *"Does amoxicillin interact with her medications?"*. Twenty-five cells were
+byte-identical; the three the model answers were not compared, one of them having timed out on the first build.
+
+### Spec change
+
+None. The cases that pin a narrow line on a below-floor proposal build their service with `setEntries`, so its load status
+is `UNLOADED`: whether a condition rule could have been asked is unknown there, the condition-rule rule (the second bullet) declines, and
+their narrow line is the true one. The shipped dataset, which the demo runs, is `ABSENT`.
+
+Pinned by `ClosingLineScreenedCoverageTest`, over the shipped data and the demo patient's nine orders:
+`.aProposalWhoseContraindicationsWereScreenedDoesNotCallThemUnchecked` and `.anotherWordingOfTheSameProposalClosesAlike`
+(both red on `main`, with the demo's own line), `.aPassThatDidNotWeighHerContraindicationsNeverSaysItDid` (red with the
+toggle conjunct removed), `.aPassBesideAnAllergyTheDataDoesNotIdentifyNeverSaysItWeighedHerContraindications` (red with
+the unidentified-allergy conjunct removed) and `.aQuestionOnlyWhetherItInteractsKeepsTheNarrowLineWhereNoConditionRuleIsLoaded`
+(red with the condition-rule conjunct removed).
+
+### Residue
+
+Three conjuncts redden no test. The cited-contraindication one: every composer answering a question that names a drug
+states every contraindication it is handed or gives the question up, so no path reaches it today; it guards a composer
+that would not. The record-read one: a chart not read is never answered by the module
+(`LlmInferenceServiceAnswerFromFindingsContextTest.aProposalOverAChartThatWasNotReadStillAsksTheModel`). The screen one
+(`anAllergyCheckBearsOn` for a question naming no drug): on the shipped data the condition-rule conjunct already keeps an
+interactions-only screen narrow, so it binds only on an install publishing drug-condition rules, which no case builds.

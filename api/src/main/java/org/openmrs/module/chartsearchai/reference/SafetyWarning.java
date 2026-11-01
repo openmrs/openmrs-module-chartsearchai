@@ -1834,8 +1834,8 @@ public class SafetyWarning {
 	 * @return the uuids of the chart records this finding FIRED ON — the recorded allergy or condition
 	 *         whose match raised it (issue #305). Empty is the honest answer wherever the module
 	 *         attributed nothing, and it is not a denial. THIS layer is empty for three reasons — the
-	 *         finding is not a contraindication (an interaction's evidence is an ORDER, which issue
-	 *         #379 attributes on its own path), the context states no provenance, or the module could
+	 *         finding is not a contraindication (an interaction's evidence is an ORDER, whose record the
+	 *         injector resolves itself — ADR Decision 554), the context states no provenance, or the module could
 	 *         read no allergy or condition rows — and the injector's own refusals add more. The whole
 	 *         list is enumerated in one place, {@code RecordMapping.getDerivedFrom()}; a non-empty
 	 *         answer here does NOT mean a non-empty one there.

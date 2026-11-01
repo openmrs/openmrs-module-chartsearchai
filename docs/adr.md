@@ -6296,7 +6296,7 @@ Grounding asks whether the claim the MODEL attached to a citation is supported b
 ### What this decision does NOT do
 
 - **It does not touch the prompt.** The ticket rules that out and this repository's record supports it: a generalized labs rule, a worked-example few-shot and a 16% prompt trim each regressed the gate.
-- **It does not attribute an INTERACTION finding.** That finding's evidence is the patient's active ORDERS, which Decision 77 already resolves to record numbers on its own flag-gated path. `SafetyWarning.chartRecords()` is set by the two contraindication factories only, so an interaction answers empty by construction rather than by remembering to.
+- **It does not attribute an INTERACTION finding.** That finding's evidence is the patient's active ORDERS, which Decision 77 already resolves to record numbers on its own flag-gated path. `SafetyWarning.chartRecords()` is set by the two contraindication factories only, so an interaction answers empty by construction rather than by remembering to. **Superseded by [Decision 554](#decision-554-a-cited-interaction-finding-publishes-the-record-of-the-order-it-is-about)**: Decision 77 numbers an order only inside a bridge clause, so an order displaying the substance's own name reached neither path.
 - **It does not fix the nondeterminism or the phrasing sensitivity.** The ticket's own comment corrects its body on the first: the flips are llama.cpp prefix-cache state, removable by resetting the slot at a latency cost that wants a measurement first. The capitalisation difference survives a controlled empty cache, so it is the model's, not the cache's. Neither is what this closes; what this closes is the citation's dependence on either.
 - **It is not gated behind a global property**, unlike Decision 77. That decision's gate reason is stated of the RENDERING the model reads — every cost it enumerates is a prompt cost, dormant while the flag is off — and nothing here reaches the prompt: `renderFinding` never sees the numbers and the injected text is byte-for-byte what it was. What changes is the published reference list, deterministically, so there is no generation behaviour to A/B.
 
@@ -25642,3 +25642,46 @@ A named drug keeps its own path (Decision 399).
 Pinned by `LlmInferenceServiceModelReadQuestionContextTest.whetherHerDosesShouldChangeForHerKidneysIsNoScreen` (six
 wordings). `.whetherHerMedicationsShouldChangeStillReachesTheCheck` pins the interactions reason and *"Should I stop any
 of her drugs?"*.
+
+## Decision 554: A cited interaction finding publishes the record of the order it is about
+
+**Status: Accepted** (November 2026). Extends [Decision 80](#decision-80-the-module-publishes-the-chart-record-a-cited-finding-fired-on-as-a-citation-the-model-did-not-emit).
+Found on the public demo on 2026-11-02.
+
+### Context
+
+*"can i give Samuel Panadol?"* (patient `dd74d1cd-1691-11df-97a5-7038c432aabf`) answered *"Acetaminophen can be given,
+with one caution: it interacts with active order Isoniazid, a Moderate problem [296]"*. The response cited the finding
+and no record of the Isoniazid prescription the sentence is about (`activeOrderClaims` stated 1, uncited 1). Turning
+`chartsearchai.drugSafety.citeOrderRecords` on changed nothing, word for word.
+
+Two decisions each looked like they covered it, and neither did. Decision 80 attaches a cited finding's chart records,
+but only a contraindication's, because it took an interaction's orders to be Decision 77's. Decision 77 numbers an
+order only inside the finding's bridge clause (*"<Substance> from <order display> [N]"*). An order whose display names
+the substance itself states no bridge (Decision 70's silence test), so it is never numbered, with the flag on or off.
+
+### The decision
+
+An interaction finding's `RecordMapping.getDerivedFrom()` is the records of the active orders it is about, so citing
+the finding publishes them, marked `attachedByTheModule`, exactly as Decision 80 publishes an allergy record.
+
+- **One join, already in use.** `DrugReferenceInjector.orderRecordsOf` is the join the module's own composed lines
+  already cite her orders by (Decisions 140 and 539): each order the arm matched the finding's drugs against
+  (`SafetyWarning.matchedOrderNames()`), through `orderRecordNumbers`. `orderRecordMarkers` now calls it too, so a
+  composed line and a cited finding cannot name different records for one order.
+- **The refusals are Decision 77's.** Every number has passed `DrugOrderRecords.citableNumberFor` and the
+  shared-display rule. An order the module cannot say which record it is contributes nothing.
+- **Ungated.** Like Decision 80, nothing reaches the prompt: `renderFinding` never sees the numbers, so the finding's
+  text is byte for byte what it was. The flag gates Decision 77's rendering, not this.
+- **Interaction findings only.** A contraindication keeps Decision 80's provenance, which is the allergy or
+  condition it fired on.
+
+Pinned by `InteractionFindingOrderProvenanceTest.aCitedInteractionFindingNamesTheRecordOfTheOrderItsSentenceIsAbout`,
+the demo's own finding over the shipped knowledge base; it fails without the change. The refusal on a chart carrying
+no record of the order is `.aChartCarryingNoRecordOfTheOrderNamesNothing`.
+
+### What this does not do
+
+It does not put a number in the prompt, so it does not reopen Decision 77's measured cost to completeness, and it
+does not make the model write `[N]` after the order's name. The answer's prose is unchanged. What changes is that the
+order's record is on the response whenever the finding is cited.

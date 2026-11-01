@@ -915,6 +915,12 @@ public class DrugReferenceInjector {
 		// Each finding's record number, in injection order, for the module-composed answer below
 		// (issue #469) — the numbers this loop is about to assign, never re-derived afterwards.
 		List<Integer> findingNumbers = new ArrayList<Integer>(findings.size());
+		// Her orders' records for an interaction finding's PROVENANCE (ADR Decision 554) — ungated, because it reaches
+		// the published reference list and never the prompt, so it is the gated map where the flag resolved one and the
+		// same resolution otherwise, never a second rule.
+		Map<String, Integer> provenanceOrderRecords = findingRecords == null || !orderRecordNumbers.isEmpty()
+				? orderRecordNumbers
+				: orderRecordNumbers(findingRecords, context);
 		for (SafetyWarning finding : findings) {
 			findingNumbers.add(Integer.valueOf(index));
 			String rendered = renderFinding(finding, orderRecordNumbers);
@@ -939,7 +945,7 @@ public class DrugReferenceInjector {
 					rowIds(finding.subjectRows()),
 					finding.namedPartners(), SafetyWarning.orderNamesOf(finding), partnerRowIds(finding),
 					finding.partnerScheduledStarts(),
-					chartRecordNumbers(finding, findingRecords)));
+					chartRecordNumbers(finding, findingRecords, provenanceOrderRecords)));
 			text.append("[").append(index).append("] ").append(rendered).append("\n");
 			index++;
 		}
@@ -2367,7 +2373,11 @@ public class DrugReferenceInjector {
 
 	/**
 	 * The numbers of the chart records a finding FIRED ON — issue #305's provenance, resolved off the
-	 * same uuid index the order-record numbering reads.
+	 * same uuid index the order-record numbering reads — and, for an INTERACTION finding, the records of
+	 * the active orders it is about (ADR Decision 554), by {@link #orderRecordsOf}, the join the module's
+	 * own composed lines cite her orders by. An interaction's evidence is her ORDER: Decision 77 numbers
+	 * one only inside a bridge clause, which an order displaying the substance's own name never states,
+	 * so without this a finding about her Isoniazid order published no record of that order at all.
 	 *
 	 * <p>What it answers is not a rendering: nothing about it reaches the prompt, and
 	 * {@code renderFinding} never sees it. It rides on the {@code safety_finding} mapping, which is
@@ -2397,11 +2407,14 @@ public class DrugReferenceInjector {
 	 * findings. It is not one of the refusals above — no arrangement produces it — and is kept for the
 	 * reason its neighbours in this class are, so a second caller cannot introduce it silently.
 	 */
-	private static List<Integer> chartRecordNumbers(SafetyWarning finding, DrugOrderRecords records) {
-		if (records == null || finding.chartRecords().isEmpty()) {
+	private static List<Integer> chartRecordNumbers(SafetyWarning finding, DrugOrderRecords records,
+			Map<String, Integer> herOrderRecords) {
+		if (records == null) {
 			return Collections.emptyList();
 		}
-		Set<Integer> numbers = new TreeSet<Integer>();
+		Set<Integer> numbers = SafetyWarning.TYPE_INTERACTION.equals(finding.getType())
+				? orderRecordsOf(finding, herOrderRecords)
+				: new TreeSet<Integer>();
 		for (String recordUuid : finding.chartRecords()) {
 			Integer number = records.numberOfRecord(recordUuid);
 			if (number != null) {
@@ -3794,19 +3807,29 @@ public class DrugReferenceInjector {
 	 */
 	private static String orderRecordMarkers(SafetyWarning finding, Map<String, Integer> herOrderRecords,
 			Set<Integer> alreadyCited) {
-		Set<Integer> numbers = new TreeSet<Integer>();
-		for (String name : finding.matchedOrderNames()) {
-			for (Integer number : everyRecordOf(herOrderRecords, name == null ? null : name.trim())) {
-				if (!alreadyCited.contains(number)) {
-					numbers.add(number);
-				}
-			}
-		}
+		Set<Integer> numbers = orderRecordsOf(finding, herOrderRecords);
+		numbers.removeAll(alreadyCited);
 		StringBuilder markers = new StringBuilder();
 		for (Integer number : numbers) {
 			markers.append(" [").append(number).append("]");
 		}
 		return markers.toString();
+	}
+
+	/**
+	 * The chart records of the active orders {@code finding} is about — each order its arm matched the finding's drugs
+	 * against ({@code SafetyWarning.matchedOrderNames()}), by every number {@link #orderRecordNumbers} resolved for an
+	 * order spelling that display ({@link #everyRecordOf}, ADR Decision 539), ascending and mutable. ONE join for both its
+	 * readers — a composed line's markers ({@link #orderRecordMarkers}) and an interaction finding's provenance
+	 * ({@link #chartRecordNumbers}, ADR Decision 554) — so the record a module answer cites for an order and the record a
+	 * cited finding publishes for it cannot differ. An order with no citable record contributes nothing.
+	 */
+	private static Set<Integer> orderRecordsOf(SafetyWarning finding, Map<String, Integer> herOrderRecords) {
+		Set<Integer> numbers = new TreeSet<Integer>();
+		for (String name : finding.matchedOrderNames()) {
+			numbers.addAll(everyRecordOf(herOrderRecords, name == null ? null : name.trim()));
+		}
+		return numbers;
 	}
 
 	/**

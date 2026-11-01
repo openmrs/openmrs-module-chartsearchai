@@ -63,7 +63,7 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  * <p>Patient 7 is the arrangement, and its single active drug order (order 111, concept 88 "ASPIRIN")
  * is left in place rather than voided: it raises an INTERACTION finding beside the contraindication
  * under test, through the curated NSAID cross-reactivity group, and that second finding is what
- * {@link #anInteractionFindingNamesNoChartRecord} asserts about. So every case here selects the
+ * {@link #anInteractionFindingNamesNoContraindicationRecord} asserts about. So every case here selects the
  * finding it is about rather than asserting over a set.
  */
 public class FindingChartRecordProvenanceContextTest extends BaseModuleContextSensitiveTest {
@@ -286,13 +286,13 @@ public class FindingChartRecordProvenanceContextTest extends BaseModuleContextSe
 	}
 
 	/**
-	 * An INTERACTION finding names nothing, and that is the scope line rather than an omission: its
-	 * provenance is the patient's active ORDERS, which issue #379 already resolves to record numbers
-	 * on a separate, flag-gated path. Two findings of one response, and only the one whose evidence is
-	 * a chart record of the contraindication family carries a derivation.
+	 * An INTERACTION finding names no allergy or condition record: its provenance is the patient's
+	 * active ORDERS, whose records {@code InteractionFindingOrderProvenanceTest} asserts (ADR Decision
+	 * 554) — and this chart carries none. Two findings of one response, and only the one whose evidence
+	 * is a chart record of the contraindication family carries a derivation here.
 	 */
 	@Test
-	public void anInteractionFindingNamesNoChartRecord() {
+	public void anInteractionFindingNamesNoContraindicationRecord() {
 		String allergyUuid = recordAllergyTo("Ibuprofen");
 
 		PatientChart injected = inject(DrugReferenceTestSupport.chartOf(

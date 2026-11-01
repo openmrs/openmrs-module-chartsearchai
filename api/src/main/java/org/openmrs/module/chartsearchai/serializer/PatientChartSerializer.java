@@ -1674,14 +1674,20 @@ public class PatientChartSerializer {
 		 *         list at any of them. A consumer must not read emptiness as "this claim rests on
 		 *         nothing in the chart".
 		 *
-		 *         <p>Five situations, from the two layers above this one. From
-		 *         {@code SafetyWarning.chartRecords()}: the record is not a contraindication finding at
-		 *         all (an interaction's evidence is an ORDER, attributed on issue #379's own path); the
-		 *         context stated no provenance, which is every context assembled by hand; or the module
-		 *         could read no allergy or condition rows for this patient. From
+		 *         <p>For a CONTRAINDICATION finding, four situations, from the two layers above this one. From
+		 *         {@code SafetyWarning.chartRecords()}: the context stated no provenance, which is every
+		 *         context assembled by hand; or the module could read no allergy or condition rows for
+		 *         this patient. From
 		 *         {@code DrugReferenceInjector.chartRecordNumbers}: this chart carries no record for the
 		 *         uuid — a query-scoped slice need not carry the patient's allergies at all — or it
 		 *         carries more than one, which the citing reading refuses rather than guessing between.
+		 *
+		 *         <p>For an INTERACTION finding the list is the records of the active orders it is about
+		 *         (ADR Decision 554), through {@code DrugReferenceInjector.orderRecordsOf}, and empty where
+		 *         its arm matched no order of hers by its display, where the chart carries no record of
+		 *         one, or where every record it does carry is one {@code DrugOrderRecords.citableNumberFor}
+		 *         or the shared-display rule in {@code orderRecordNumbers} refuses — the refusals ADR
+		 *         Decision 77 records, each of which leaves the module unable to say WHICH record the order is.
 		 *
 		 *         <p>Structural rather than appended to {@link #getText()}, like {@link #getSource()}
 		 *         and {@link #getWithheldInteractions()} and for the same measured reason: anything

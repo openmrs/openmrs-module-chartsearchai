@@ -357,14 +357,25 @@ jobs:
             mv "$FRONTEND_DIR/importmap.json.tmp" "$FRONTEND_DIR/importmap.json"
           fi
 
-          # Update routes.registry.json
+          # Update routes.registry.json. The app shell reads an app's routes from the registry's
+          # "routes" object where the registry has one (RefApp 3.8.0's does) and ignores a sibling
+          # key: there the banner's AI Search button never rendered. Older registries are the map.
           ROUTES_JSON="$FRONTEND_DIR/$MODULE_NAME/routes.json"
           if [ -f "$FRONTEND_DIR/routes.registry.json" ] && [ -f "$ROUTES_JSON" ]; then
             jq --slurpfile routes "$ROUTES_JSON" \
-               '.["@openmrs/esm-chartsearchai-app"] = $routes[0]' \
+               'if (.routes | type) == "object"
+                then .routes["@openmrs/esm-chartsearchai-app"] = $routes[0]
+                else .["@openmrs/esm-chartsearchai-app"] = $routes[0] end' \
                "$FRONTEND_DIR/routes.registry.json" > "$FRONTEND_DIR/routes.registry.json.tmp"
             mv "$FRONTEND_DIR/routes.registry.json.tmp" "$FRONTEND_DIR/routes.registry.json"
           fi
+
+          # The SPA serves a precompressed .br/.gz beside a file in preference to the file itself,
+          # to every browser that accepts the encoding. The ones the frontend build wrote predate the
+          # two edits above, so a browser was handed the importmap and registry WITHOUT chartsearchai.
+          # Remove them; the server then compresses the edited files on the fly.
+          rm -f "$FRONTEND_DIR"/importmap.json.br "$FRONTEND_DIR"/importmap.json.gz \
+                "$FRONTEND_DIR"/routes.registry.json.br "$FRONTEND_DIR"/routes.registry.json.gz
 
       # Re-run just the assembly phase to produce the final zip with the ESM included
       - name: Assemble final standalone zip
@@ -394,7 +405,10 @@ jobs:
           echo ""
           echo "=== Routes registry entry ==="
           unzip -p "$ZIP_FILE" "*/frontend/routes.registry.json" | \
-            python3 -c "import json,sys; d=json.load(sys.stdin); print('@openmrs/esm-chartsearchai-app' in d)"
+            python3 -c "import json,sys; d=json.load(sys.stdin); m=d['routes'] if isinstance(d.get('routes'), dict) else d; k='@openmrs/esm-chartsearchai-app'; print(k in m); sys.exit(0 if k in m else 1)" \
+            || { echo "ERROR: chartsearchai is not where the app shell reads routes.registry.json"; exit 1; }
+          STALE=$(zipinfo -1 "$ZIP_FILE" | grep -E '/frontend/(importmap|routes\.registry)\.json\.(br|gz)$' || true)
+          [ -z "$STALE" ] || { echo "ERROR: precompressed copies would be served instead of the edited files: $STALE"; exit 1; }
 
           echo ""
           echo "=== Querystore components ==="

@@ -323,6 +323,42 @@ public class LlmInferenceServiceModelReadQuestionContextTest extends BaseModuleC
 		}
 	}
 
+	/**
+	 * A group of drugs proposed for her — an antacid, an antibiotic, TB treatment — names no drug the check can resolve, so
+	 * the answer says no interaction check was run for it, and the model is never asked to read the question (ADR Decision
+	 * 551). On the 3.7.1 standalone "Can I give her an antacid?", "Can she take calcium with her ARVs?" and "Is TB treatment
+	 * ok with her ARVs?" were read by the model as YES and answered with the screen of her own orders, which said nothing of
+	 * the antacid, the calcium or the TB treatment, every one of which interacts with ARVs.
+	 */
+	@Test
+	public void aGroupOfDrugsProposedForHerIsSaidToBeUnchecked() {
+		String[][] cases = { { "Can I give her an antacid?", "antacid" }, { "Can I give her an antibiotic?", "antibiotic" },
+			{ "Can I give her a painkiller?", "painkiller" }, { "Is TB treatment ok with her meds?", "TB treatment" },
+			{ "Can she take supplements with her ARVs?", "supplements" }, { "Can she take calcium with her ARVs?", "calcium" },
+			{ "Can she take calcium with her pills?", "calcium" } };
+		for (String[] c : cases) {
+			RecordingProvider provider = new RecordingProvider("YES");
+			ChartAnswer answer = serviceWith(provider).search(patient, c[0]);
+
+			assertEquals(0, provider.engine.readings, c[0] + " is not read by the model");
+			assertTrue(answer.getAnswer().contains("No interaction check was run: \"" + c[1] + "\" is not a drug name"),
+				c[0] + " says the check did not run for it: " + answer.getAnswer());
+			assertTrue(answer.getSafetyWarnings().isEmpty(), c[0] + " carries no chip: " + answer.getSafetyWarnings());
+		}
+	}
+
+	/** A group named as hers is her medications, never a drug proposed: no unchecked statement (ADR Decisions 416, 551). */
+	@Test
+	public void aGroupNamedAsHersIsNoUncheckedDrug() {
+		for (String question : new String[] { "Is her TB treatment working?", "Are there any issues with her treatment?",
+				"Can she take her TB drugs with her ARVs?", "Is her antibiotic course finished?" }) {
+			RecordingProvider provider = new RecordingProvider("NO");
+			ChartAnswer answer = serviceWith(provider).search(patient, question);
+
+			assertFalse(answer.getAnswer().contains("No interaction check was run"), question + ": " + answer.getAnswer());
+		}
+	}
+
 	/** And whether her medications cause a problem together, or with one another, still reaches the check. */
 	@Test
 	public void whetherHerMedicationsCauseAProblemTogetherStillReachesTheCheck() {

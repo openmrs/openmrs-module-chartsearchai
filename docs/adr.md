@@ -25514,3 +25514,60 @@ stands alone. A food in a drug's place keeps its statement (Decision 384): a wor
 and these words never are.
 
 Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.herPregnancyInADrugsPlaceIsNoUnrecognisedDrugName`.
+
+## Decision 551: A group of drugs proposed for her is said to be unchecked, never answered with the screen of her orders
+
+**Status: Accepted** (November 2026). Found on the 3.7.1 standalone on 2026-11-01, probing 40 drug-interaction wordings
+over 8 patients.
+
+### Context
+
+The following were each answered with the screen of the patient's own orders, on every patient:
+
+- *"Can I give her an antacid?"*
+- *"Can she take calcium with her ARVs?"*
+- *"Is TB treatment ok with her ARVs?"*
+
+For Sarah Taylor the answer read *"2 Major interactions — Nevirapine with Lopinavir / ritonavir …"*, and no line said the
+antacid, the calcium or the TB treatment had not been checked. Antacids and calcium chelate integrase inhibitors, and
+rifampicin induces most ARVs. A clinician reading the screen has no sign that the thing asked was never weighed.
+
+Each question named no drug the data resolves, ran no screen, and so was put to the model (Decision 489). The model read
+it as a drug-safety question, and the screen of her orders answered it. Read NO, the model answered alone, with no line
+saying no check ran. `UnrecognisedDrugName`, whose statement keeps the model read off, missed them for three reasons:
+
+- `wordInADrugsPlace` skipped every word of `QueryScopeRouter.MEDICATION_GROUP_NOUN` (Decision 416). That list holds
+  *antacids*, *antibiotics*, *painkillers*, *supplements* and *treatment* as well as *meds*.
+- *"an antacid"* fits the proposal shape only as a two-word span, and the article made it no name.
+- The take-with shapes spelled her medications as `MEDICATIONS`, which has no *ARVs*, *pills* or *tablets*.
+
+### The decision
+
+- A group-noun phrase in a drug's place is skipped only where it names every medication she takes
+  (`QueryScopeRouter.namesEveryMedicationSheTakes`), or is named as hers. Otherwise it is a drug the check cannot
+  resolve: *"antacid"*, *"antibiotic"*, *"TB treatment"*. The rules that keep it from reading her own medications or a
+  word of the question as one were each found by the full suite:
+  - Its leading words must be a name's: never an article, a possessive, a determiner (*"what drugs"*), or a word the
+    question is read by (*"Are there drug-drug interactions?"*), *TB* and *ARV* aside. An article before one word gives
+    that word.
+  - Its head is never a singular word of medication, which qualifies the noun after it (*"significant drug
+    interactions"*).
+  - Named as hers covers a possessive before the kinds it lists (*"her TB and HIV meds"*). It also covers *"her"* after
+    a verb of giving where the question asks of drugs together (*"Is it safe to give her TB drugs together?"*).
+- A group proposed reaches its drug place by the residual readings too, since its words already say it names drugs. A
+  word of unknown kind still needs a shape (Decision 396).
+- The two take-with shapes accept `HER_MEDICATION_GROUP` beside `MEDICATIONS`, so *"Can she take calcium with her
+  ARVs?"* puts *"calcium"* in a drug's place.
+- The answer is the chart answer with *"No interaction check was run: "antacid" is not a drug name the interaction data
+  recognises."* after it (Decision 384), and the model read does not run. A class this module names (*statin*,
+  *steroid*, `DrugClassTerms`) keeps the class path, which the detector already yields to.
+
+Pinned by `LlmInferenceServiceModelReadQuestionContextTest.aGroupOfDrugsProposedForHerIsSaidToBeUnchecked`.
+`.aGroupNamedAsHersIsNoUncheckedDrug` pins *"her TB treatment"*, *"her treatment"* and *"her TB drugs with her ARVs"*.
+
+### Residue
+
+*"Can I give her magnesium?"* is told the names the data carries (*Magnesium carbonate*, …), as a misspelt drug is. An
+antacid named as a class with its WHO group (A02A, six substances in the shipped knowledge base) would say which of her
+orders are antacids. That would put a class statement after every question about her own antacid, as for every class
+term, so it was left out.

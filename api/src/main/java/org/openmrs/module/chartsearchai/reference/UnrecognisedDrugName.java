@@ -466,21 +466,41 @@ final class UnrecognisedDrugName {
 					continue;
 				}
 				// Nor a word of medication — "her treatment", "her regimen" — which names her medications and no drug (ADR
-				// Decision 416): read as a drug's name, "Are there any issues with her treatment?" stood the screen down.
-				if (QueryScopeRouter.namesAMedicationGroup(String.join(" ", span))) {
-					continue;
+				// Decision 416): read as a drug's name, "Are there any issues with her treatment?" stood the screen down. A group
+				// she is not said to take, proposed — "an antacid", "TB treatment" — is a drug the check cannot resolve, said so
+				// (ADR Decision 551): the model read "Can I give her an antacid?" as asking of her medications, and the screen
+				// of her orders answered it.
+				// The word after an article is the name the shape puts there: "an antacid" (ADR Decision 551).
+				int at = span.size() == 2 && ARTICLES.contains(span.get(0)) ? i + 1 : i;
+				List<String> named = words.subList(at, i + length);
+				String joined = String.join(" ", named);
+				boolean group = false;
+				if (QueryScopeRouter.namesAMedicationGroup(joined)) {
+					// Never a singular word of medication, which qualifies the noun after it: "significant drug interactions".
+					group = leadsWithNames(named) && !ADJECTIVAL_HEADS.contains(named.get(named.size() - 1))
+							&& !QueryScopeRouter.namesEveryMedicationSheTakes(joined)
+							&& !groupNamedAsHers(words, at);
+					if (!group) {
+						continue;
+					}
 				}
 				// Or whether to stop it, named as hers (ADR Decision 335) — or whether her drug is safe, or what interacts with
 				// it (ADR Decision 374).
-				// The shapes alone: the residual reading is of a name the data recognises (ADR Decision 396).
+				// The shapes alone: the residual reading is of a name the data recognises (ADR Decision 396). A group proposed
+				// is a drug's place by the residual reading too, since its words already say it names drugs: "Is TB treatment
+				// ok with her meds?" (ADR Decision 551).
 				if (!QueryScopeRouter.fitsAProposalShape(marked)
 						&& !QueryScopeRouter.fitsAnInteractsShape(marked)
 						&& !QueryScopeRouter.asksWhetherToStopHerDrug(marked)
 						&& !(QueryScopeRouter.asksAboutHerNamedDrug(marked)
-								&& !QueryScopeRouter.namesAMedicationGroup(String.join(" ", span)))) {
+								&& !QueryScopeRouter.namesAMedicationGroup(String.join(" ", span)))
+						&& !(group && (QueryScopeRouter.asksWhetherToGiveADrug(marked)
+								|| QueryScopeRouter.asksWhetherADrugInteractsWithHerMedications(marked)
+								|| QueryScopeRouter.asksWhetherADrugIsSafeWithHerMedications(marked)
+								|| QueryScopeRouter.asksAboutADrugBesideHerMedications(marked)))) {
 					continue;
 				}
-				return isAName(span) ? String.join(" ", span) : null;
+				return group ? joined : isAName(span) ? String.join(" ", span) : null;
 			}
 		}
 		return null;
@@ -492,6 +512,56 @@ final class UnrecognisedDrugName {
 		Matcher m = Pattern.compile("(?i)(?<![\\p{L}\\p{N}])"
 				+ Pattern.quote(word).replace(" ", "\\E[\\s-]+\\Q") + "(?![\\p{L}\\p{N}])").matcher(question);
 		return m.find() ? m.group() : word;
+	}
+
+	/** The words that pick out which of a group, never a group's own name: "what drugs", "which antibiotics" (ADR Decision
+	 *  551). */
+	private static final Set<String> DETERMINERS = new HashSet<String>(Arrays.asList("what", "which", "whose", "each", "every",
+		"both", "several", "many", "few", "such", "different", "usual", "regular", "daily", "current", "active", "existing",
+		"prescribed", "her", "these", "those", "no", "other", "another", "any", "some", "all", "more", "most", "less"));
+
+	/** The singular words of medication, which in a question qualify the noun after them — "drug interactions", "medication
+	 *  list" — and never name a group proposed (ADR Decision 551). */
+	private static final Set<String> ADJECTIVAL_HEADS = new HashSet<String>(Arrays.asList("drug", "medication", "medicine",
+		"med"));
+
+	/** The words of the question that name a kind of treatment before a group's noun: "TB treatment", "ARV drugs". */
+	private static final Set<String> GROUP_KINDS = new HashSet<String>(Arrays.asList("tb", "arv"));
+
+	/** The articles a drug's name may follow in its place. */
+	private static final Set<String> ARTICLES = new HashSet<String>(Arrays.asList("a", "an", "some", "any"));
+
+	/**
+	 * Whether the group whose first word is at {@code at} is named as hers (ADR Decision 551): a possessive before it, or
+	 * before the kinds it lists — "her TB and HIV meds". "Her" after a verb of giving gives her the group — "give her an
+	 * antibiotic" — but where the question asks of drugs together, they are hers: "Is it safe to give her TB drugs
+	 * together?".
+	 */
+	private static boolean groupNamedAsHers(List<String> words, int at) {
+		int j = at - 1;
+		while (j >= 1 && "and".equals(words.get(j))) {
+			j -= 2;
+		}
+		if (j < 0) {
+			return false;
+		}
+		String before = words.get(j);
+		boolean together = words.contains("together") || String.join(" ", words).matches(".*\\b(?:each other|one another)\\b.*");
+		return POSSESSIVES.contains(before) || "her".equals(before) && (together || !(j > 0 && GIVING.contains(words.get(j - 1))));
+	}
+
+	/** Whether every word of {@code span} before its last is a name's — "TB treatment", never "an antacid" or "her
+	 *  treatment", whose first word is an article's or hers (ADR Decision 551). */
+	private static boolean leadsWithNames(List<String> span) {
+		for (String w : span.subList(0, span.size() - 1)) {
+			if (NOT_A_NAME.contains(w) || POSSESSIVES.contains(w) || DETERMINERS.contains(w) || !w.matches("\\p{L}[\\p{L}\\-]*")
+					// nor a word the question is read by — "Are there drug-drug interactions?" is no group "there drug" — but
+					// for the kinds of treatment it lists as words of her medications: "TB treatment".
+					|| QueryScopeRouter.isAWordOfTheQuestion(w) && !GROUP_KINDS.contains(w)) {
+				return false;
+			}
+		}
+		return true;
 	}
 
 	private static boolean isAName(List<String> span) {

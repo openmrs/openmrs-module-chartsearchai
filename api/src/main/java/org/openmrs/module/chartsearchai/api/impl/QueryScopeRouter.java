@@ -592,9 +592,9 @@ public final class QueryScopeRouter {
 			// 300) — a substance she would take herself, beside what she takes,
 			// proposed as "Can she drink alcohol?" is (ADR Decision 268)
 			"(?:can|could|may|should) (?:she|he|they|the patient|this patient) (?:safely )?(?:drink|have|take|consume) " + D
-					+ " (?:with|alongside|while (?:on|taking)) " + POSSESSIVE + " " + MEDICATIONS,
+					+ " (?:with|alongside|while (?:on|taking)) " + "(?:" + POSSESSIVE + " " + MEDICATIONS + "|" + HER_MEDICATION_GROUP + ")",
 			"is it (?:safe|ok|okay) for (?:her|him|them|the patient|this patient) to (?:drink|have|take|consume) " + D
-					+ " (?:with|alongside|while (?:on|taking)) " + POSSESSIVE + " " + MEDICATIONS,
+					+ " (?:with|alongside|while (?:on|taking)) " + "(?:" + POSSESSIVE + " " + MEDICATIONS + "|" + HER_MEDICATION_GROUP + ")",
 			// "Can this patient take warfarin?", "Can she take ibuprofen?", "Can she drink alcohol?" (ADR Decision 268)
 			"(?:can|could|may|should) (?:she|he|they|the patient|this patient) (?:also )?(?:safely )?(?:take|start|be given|be started on"
 					// and "Can she get fluconazole?" (ADR Decision 431), and "Can she eat ginger?", answered by the model "Ginger
@@ -1266,6 +1266,13 @@ public final class QueryScopeRouter {
 	 * with her TB preventive therapy?" — or {@code null} where it names none, or names every medication she takes ("her
 	 * current regimen"). The words name no drug, so the check cannot tell which of her orders they mean (ADR Decision 313).
 	 */
+	/** Whether {@code words} name every medication she takes — "treatment", "her current meds" — rather than one group of
+	 *  them: a group the question proposes, "an antibiotic", "TB treatment", is a drug the check cannot resolve (ADR Decision
+	 *  551). */
+	public static boolean namesEveryMedicationSheTakes(String words) {
+		return words != null && EVERY_MEDICATION_SHE_TAKES.matcher(words.toLowerCase(Locale.ROOT).trim()).matches();
+	}
+
 	public static String groupOfHerMedicationsNamed(String question) {
 		if (question == null) {
 			return null;

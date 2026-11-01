@@ -25571,3 +25571,44 @@ Pinned by `LlmInferenceServiceModelReadQuestionContextTest.aGroupOfDrugsProposed
 antacid named as a class with its WHO group (A02A, six substances in the shipped knowledge base) would say which of her
 orders are antacids. That would put a class statement after every question about her own antacid, as for every class
 term, so it was left out.
+
+## Decision 552: Something else asked beside her medications hands the model no safety finding, as it publishes no chip
+
+**Status: Accepted** (November 2026). Found on the 3.7.1 standalone on 2026-11-01, probing 40 questions over 8
+patients.
+
+### Context
+
+Sarah Taylor is recorded allergic to the dexamethasone she is prescribed. The model answered two non-drug questions
+from that finding:
+
+- *"Can she exercise on her meds?"*: *"No — the patient should not exercise while taking these medications: The
+  patient has a recorded allergy to Dexamethasone …"*
+- *"Can she travel on her meds?"*: *"No — Dexamethasone should not be taken: …"*
+
+No chip stood beside either. Decisions 390 and 473 publish none where a question asks of something else beside her
+medications. The findings the model is handed were not put to that test. The validator's subject matter reads *"her
+meds"* as covering her active orders, so her allergy to one of them was written into the prompt as *"Safety finding —
+… a reason to change a medication this patient is already taking."*. The model read it as the answer to whatever was
+asked.
+
+### The decision
+
+- `DrugReferenceInjector.injectRecords` hands the model no finding for a question
+  `QueryScopeRouter.asksOfSomethingElseWithHerMedications` reads (a food, an activity or her own state beside her
+  medications) that names no drug. It is the test the chips already pass, as Decision 151 does for a question of
+  whether she has taken a drug.
+  - Never a question naming one of her orders by its own name (Decision 273): *"Does Zolvimix interact with his
+    medications?"* is his drug asked of.
+- `AN_ACTIVITY_BESIDE_HER_MEDICATIONS` takes up to three words after the activity, and a few more verbs: *"Can she
+  work night shifts on her meds?"*.
+
+A broader first version gave every question naming no drug that asks nothing of drug safety the chip test
+(`LlmInferenceService.asksAboutDrugSafety`). The full suite refused it. Issue #110 and Decision 79 put her allergy to
+one of her own orders in the prompt of any question about her medications, *"What medications is she taking?"* among
+them, so the clinician learns of a standing conflict. Those cases stand: a question about her medications themselves
+keeps it.
+
+Pinned by `OwnMedicationSafetyContextTest.aQuestionAskingNothingOfDrugSafetyHandsTheModelNoFinding`, which covers
+exercise, travel, night shifts, oranges and breastfeeding. `.aQuestionAskingOfHerMedicationsSafetyStillCarriesHerAllergyToOne`
+pins *"What medications is she taking?"*, *"Who prescribed her medications?"* and three safety questions.

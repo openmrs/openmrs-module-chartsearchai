@@ -700,6 +700,16 @@ public class DrugReferenceInjector {
 		PairChipExtent.Sink pairExtent = new PairChipExtent.Sink();
 		List<SafetyWarning> findings = preAnswerFindings(context, question, orderEntries, chart.getMappings(),
 				listed, pairExtent);
+		// A question asking of something else beside her medications — a food, an activity, her own state — hands the model
+		// no finding, as it publishes no chip (ADR Decisions 473, 552): "Can she exercise on her meds?" carried her allergy to
+		// one of her orders into the prompt, and the model answered that she should not exercise. A question about her
+		// medications themselves keeps her allergy to one of them (issue #110).
+		// Never a question naming one of her orders by its own name, which is her drug asked of (ADR Decision 273).
+		if (questionDrugs.isEmpty() && QueryScopeRouter.asksOfSomethingElseWithHerMedications(question)
+				&& asksAboutOneOfHerOrdersByName(question, context, drugReferenceService) == null
+				&& !QueryScopeRouter.asksAboutADrugNamedAsHersByAnyName(question)) {
+			findings = new ArrayList<SafetyWarning>();
+		}
 		// A question asking whether she has ever taken the drug it names carries no finding about GIVING it (ADR
 		// Decision 151): the model answered such a question with the proposal's verdict, "Acetaminophen can be given,
 		// but there are cautions", from those findings. The same test the published chips are put to. Whether she was given

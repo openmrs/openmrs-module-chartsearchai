@@ -419,9 +419,10 @@ public final class QueryScopeRouter {
 	 *  "Can she take her meds with food?", "Is she tolerating her meds?" — no question of their safety together (ADR
 	 *  Decision 511). */
 	private static final List<Pattern> AN_ACTIVITY_BESIDE_HER_MEDICATIONS = shapes(
+			// and what she does it on: "Can she work night shifts on her meds?" (ADR Decision 552)
 			"(?:can|could|may|should) (?:she|he|they|the patient|this patient) (?:exercise|drive|work|fast|travel|swim|run|walk"
-					+ "|sleep|study|work out|play sports|go to work|go to school) (?:while on|on|with|while taking|alongside) "
-					+ HER_MEDICATIONS_AS_A_WHOLE,
+					+ "|sleep|study|work out|play sports|go to work|go to school|smoke|fly|lift|garden|bathe|shower|dance|play)"
+					+ "(?: \\p{L}+){0,3}? (?:while on|on|with|while taking|alongside) " + HER_MEDICATIONS_AS_A_WHOLE,
 			"(?:can|could|may|should) (?:she|he|they|the patient|this patient) take " + HER_MEDICATIONS_AS_A_WHOLE + " (?:with|without"
 					+ "|after|before) (?:food|meals?|milk|water|breakfast|lunch|dinner|supper|an empty stomach)",
 			"(?:is|are) (?:she|he|they|the patient|this patient) (?:tolerating|coping with|managing) " + HER_MEDICATIONS_AS_A_WHOLE);

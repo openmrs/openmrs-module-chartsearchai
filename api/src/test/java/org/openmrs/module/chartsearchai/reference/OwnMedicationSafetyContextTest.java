@@ -515,6 +515,51 @@ public class OwnMedicationSafetyContextTest extends BaseModuleContextSensitiveTe
 		DrugReferenceTestSupport.activeOrder("order-prednisone", "Prednisone 5mg"),
 		DrugReferenceTestSupport.activeOrder("order-dexamethasone", "Dexamethasone 8mg"));
 
+	/**
+	 * A question asking of something else beside her medications hands the model no safety finding, as it publishes no chip
+	 * (ADR Decisions 473, 552): on the 3.7.1 standalone, Sarah Taylor's "Can she exercise on her meds?" carried her allergy
+	 * to the dexamethasone she is prescribed into the prompt, and the model answered "No — the patient should not exercise
+	 * while taking these medications".
+	 */
+	@Test
+	public void aQuestionAskingNothingOfDrugSafetyHandsTheModelNoFinding() {
+		for (String question : new String[] { "Can she exercise on her meds?", "Can she travel on her meds?",
+				"Can she work night shifts on her meds?", "Can she eat oranges with her meds?",
+				"Can she breastfeed on her meds?" }) {
+			String text = chartFor(question, DrugReferenceTestSupport.set("ibuprofen")).getText();
+			assertTrue(!text.contains("Safety finding"), question + " hands the model no finding: " + text);
+		}
+	}
+
+	/** And a question about her medications themselves still carries her allergy to one of them (issue #110, ADR Decision
+	 *  552). */
+	@Test
+	public void aQuestionAskingOfHerMedicationsSafetyStillCarriesHerAllergyToOne() {
+		for (String question : new String[] { "Any problems with her medications?", "Are her medications safe?",
+				"Does she have any drug allergies?", "What medications is she taking?", "Who prescribed her medications?" }) {
+			String text = chartFor(question, DrugReferenceTestSupport.set("ibuprofen")).getText();
+			assertTrue(text.contains("Safety finding — Ibuprofen: The patient has a recorded allergy to Ibuprofen."),
+				question + " carries the allergy: " + text);
+		}
+	}
+
+	private static org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart chartFor(String question,
+			java.util.Set<String> allergies) {
+		List<String> names = new ArrayList<String>();
+		for (PatientClinicalContext.ActiveDrugOrder order : ALL_FOUR) {
+			names.addAll(order.getNames());
+		}
+		PatientClinicalContext context = DrugReferenceTestSupport.ctx(40, null, new LinkedHashSet<String>(names), null,
+			allergies, null, ALL_FOUR);
+		try {
+			return DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.ddiFixtureService(FIXTURE))
+					.injectRecords(DrugReferenceTestSupport.oneRecordChart(), context, question);
+		}
+		catch (IOException e) {
+			throw new IllegalStateException(e);
+		}
+	}
+
 	private static String answer(String question) throws IOException {
 		return answer(question, null, ALL_FOUR);
 	}

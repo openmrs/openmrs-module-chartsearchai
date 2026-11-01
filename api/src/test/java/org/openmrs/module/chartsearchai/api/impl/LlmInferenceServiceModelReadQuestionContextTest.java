@@ -359,6 +359,39 @@ public class LlmInferenceServiceModelReadQuestionContextTest extends BaseModuleC
 		}
 	}
 
+	/**
+	 * Whether her doses should change for her kidneys, liver or weight is no question of her medications' interactions (ADR
+	 * Decision 553): on the 3.7.1 standalone "Should her dose be adjusted for her kidneys?" was read by the model as YES and
+	 * answered with the screen of her orders on all 8 patients probed.
+	 */
+	@Test
+	public void whetherHerDosesShouldChangeForHerKidneysIsNoScreen() {
+		for (String question : new String[] { "Should her dose be adjusted for her kidneys?",
+				"Does she need a dose adjustment for her kidneys?", "Do her meds need renal dose adjustment?",
+				"Should her doses be reduced for her liver?", "Do her medications need to be adjusted for her weight?",
+				"Should her meds be dose-adjusted for her renal function?" }) {
+			RecordingProvider provider = new RecordingProvider("YES");
+			ChartAnswer answer = serviceWith(provider).search(patient, question);
+
+			assertEquals(0, provider.engine.readings, question + " is not read by the model");
+			assertFalse(answer.isAnsweredByTheModule(), question + " is not answered with the screen: " + answer.getAnswer());
+			assertTrue(answer.getSafetyWarnings().isEmpty(), question + " carries no chip: " + answer.getSafetyWarnings());
+		}
+	}
+
+	/** And whether her medications should change for their interactions, or which to stop, still reaches the check (ADR
+	 *  Decision 553). */
+	@Test
+	public void whetherHerMedicationsShouldChangeStillReachesTheCheck() {
+		for (String question : new String[] { "Should her medications be changed because of interactions?",
+				"Should I stop any of her drugs?" }) {
+			RecordingProvider provider = new RecordingProvider("YES");
+			ChartAnswer answer = serviceWith(provider).search(patient, question);
+
+			assertTrue(answer.isAnsweredByTheModule(), question + " is answered with the screen: " + answer.getAnswer());
+		}
+	}
+
 	/** And whether her medications cause a problem together, or with one another, still reaches the check. */
 	@Test
 	public void whetherHerMedicationsCauseAProblemTogetherStillReachesTheCheck() {

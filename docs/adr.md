@@ -25612,3 +25612,33 @@ keeps it.
 Pinned by `OwnMedicationSafetyContextTest.aQuestionAskingNothingOfDrugSafetyHandsTheModelNoFinding`, which covers
 exercise, travel, night shifts, oranges and breastfeeding. `.aQuestionAskingOfHerMedicationsSafetyStillCarriesHerAllergyToOne`
 pins *"What medications is she taking?"*, *"Who prescribed her medications?"* and three safety questions.
+
+## Decision 553: Whether her doses should change for her kidneys, liver or weight is no screen of her medications
+
+**Status: Accepted** (November 2026). Found on the 3.7.1 standalone on 2026-11-01, probing 40 questions over 8
+patients.
+
+### Context
+
+*"Should her dose be adjusted for her kidneys?"* names no drug and ran no screen, so it was put to the model (Decision
+489). The model read it as a drug-safety question, and the screen of her orders answered it on all 8 patients. That
+screen is a list of her interactions, which says nothing of renal dosing. The prompt already says a question about a dose
+is not one (Decision 549). The model read this one as one regardless, as it reads symptoms.
+
+### The decision
+
+`QueryScopeRouter.HER_STATE_ON_HER_MEDICATIONS` knows three shapes, which keep the screen off and skip the model read:
+
+- Whether her doses should change, for a reason or none: *"Should her dose be adjusted for her kidneys?"*, *"Should her
+  doses be reduced for her liver?"*.
+- Whether her medications as a whole should change for a reason that is her state: *"Do her medications need to be
+  adjusted for her weight?"*. Never with no reason (*"Should her meds be changed?"*), and never for interactions, a
+  clash, an allergy or a contraindication (*"Should her medications be changed because of interactions?"*), which stay
+  questions of their safety.
+- Whether she or they need a dose adjustment: *"Does she need a dose adjustment for her kidneys?"*.
+
+A named drug keeps its own path (Decision 399).
+
+Pinned by `LlmInferenceServiceModelReadQuestionContextTest.whetherHerDosesShouldChangeForHerKidneysIsNoScreen` (six
+wordings). `.whetherHerMedicationsShouldChangeStillReachesTheCheck` pins the interactions reason and *"Should I stop any
+of her drugs?"*.

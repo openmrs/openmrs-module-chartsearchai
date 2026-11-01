@@ -437,6 +437,10 @@ public final class QueryScopeRouter {
 	private static final String CAUSED_BY_THEM = "(?:from|due to|caused by|because of|related to|a side effect of|an? effect of"
 			+ "|the result of) " + HER_MEDICATIONS_AS_A_WHOLE;
 
+	/** What a dose would change for, said or not: "for her kidneys", "given her renal function" (ADR Decision 553). */
+	private static final String FOR_HER_STATE = " (?:for|because of|given|due to|based on) (?!.*\\b(?:interact\\w*|clash\\w*|"
+			+ "allerg\\w*|contraindicat\\w*|ddis?)\\b)(?:\\p{L}+ ){0,3}\\p{L}+";
+
 	private static final String CAUSING = "(?:causing|cause|causes|making|make|makes|giving|give|gives|behind|"
 			+ "responsible for|to blame for)";
 
@@ -453,6 +457,15 @@ public final class QueryScopeRouter {
 			"(?:are|is|could|can|might|may|would|will|do|does) " + HER_MEDICATIONS_AS_A_WHOLE + " (?:be )?" + CAUSING
 					+ " (?!.*\\b(?:with|interact\\w*|clash\\w*|together|each other|problems?|issues?|reactions?)\\b)"
 					+ "\\p{L}+(?: \\p{L}+){0,4}",
+			// And whether her doses should change, for her kidneys, liver or weight (ADR Decision 553): the screen answered
+			// "Should her dose be adjusted for her kidneys?".
+			"(?:should|does|do|must|will|would|can) " + POSSESSIVE + " (?:doses?|dosing|dosages?) (?:need to |needs to )?(?:be )?"
+					+ "(?:adjusted|changed|reduced|lowered|increased|modified|altered)(?:" + FOR_HER_STATE + ")?",
+			// her medications as a whole only for a reason that is her state, never "Should her meds be changed?"
+			"(?:should|does|do|must|will|would|can) " + HER_MEDICATIONS_AS_A_WHOLE + " (?:need to |needs to )?(?:be )?"
+					+ "(?:dose[- ]?adjusted|adjusted|changed|reduced|lowered|increased|modified|altered)" + FOR_HER_STATE,
+			"(?:does|do) (?:" + SHE + "|" + HER_MEDICATIONS_AS_A_WHOLE + ") (?:need|require) (?:a |any )?(?:renal |hepatic )?"
+					+ "(?:dose |dosing )(?:adjustments?|changes?|reductions?|adjusting)(?:" + FOR_HER_STATE + ")?",
 			// And how an organ or a result fares on them: "Is her liver ok on her meds?" (ADR Decision 549).
 			"(?:is|are) " + POSSESSIVE + " (\\p{L}+(?: \\p{L}+){0,2}?) (?:ok|okay|fine|alright|normal|affected|damaged) "
 					+ "(?:on|while on|by|from|for) " + HER_MEDICATIONS_AS_A_WHOLE);

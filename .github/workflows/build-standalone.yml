@@ -9,9 +9,9 @@ on:
   workflow_dispatch:
     inputs:
       refapp_version:
-        description: 'O3 Reference Application version'
+        description: 'O3 Reference Application version (empty = the one the standalone branch builds)'
         required: false
-        default: '3.7.1'
+        default: ''
         type: string
       openmrs_version:
         description: 'OpenMRS Core version'
@@ -66,7 +66,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  REFAPP_VERSION: ${{ inputs.refapp_version || '3.7.1' }}
+  # Not REFAPP_VERSION: that is resolved off the standalone branch once it is checked out, below.
+  REFAPP_VERSION_INPUT: ${{ inputs.refapp_version || '' }}
   OPENMRS_VERSION: ${{ inputs.openmrs_version || '2.9.0-SNAPSHOT' }}
   STANDALONE_BRANCH: ${{ inputs.standalone_branch || 'openmrs-emr3' }}
   GGUF_MODEL_URL: ${{ inputs.gguf_model_url || '' }}
@@ -123,6 +124,33 @@ jobs:
           repository: openmrs/openmrs-standalone
           ref: ${{ env.STANDALONE_BRANCH }}
           path: standalone
+
+      # The RefApp version is the standalone branch's own, read off its pom, never a constant here.
+      # The branch ships exactly one pair of SQL dumps, {demo,empty}-db-<its refapp.version>.sql, and
+      # deletes the pair it superseded when it moves on: a version pinned in this file broke every
+      # build from 2026-10-08, when openmrs-emr3 moved from 3.7.1 to 3.8.0. The empty-database
+      # assembly then failed "archive cannot be empty", while the demo-database one succeeded on a
+      # dump that the settings append below had created from nothing. So both dumps are required
+      # here, before anything is built, with the version that was asked for named in the error.
+      - name: Resolve the RefApp version
+        working-directory: standalone
+        run: |
+          VERSION="$REFAPP_VERSION_INPUT"
+          if [ -z "$VERSION" ]; then
+            VERSION=$(sed -n 's|.*<refapp.version>\(.*\)</refapp.version>.*|\1|p' pom.xml | head -1)
+          fi
+          if [ -z "$VERSION" ]; then
+            echo "::error::no <refapp.version> in openmrs-standalone@${STANDALONE_BRANCH}'s pom.xml, and none was given"
+            exit 1
+          fi
+          for dump in demo empty; do
+            if [ ! -f "src/main/db/${dump}-db-${VERSION}.sql" ]; then
+              echo "::error::openmrs-standalone@${STANDALONE_BRANCH} has no src/main/db/${dump}-db-${VERSION}.sql (it has: $(ls src/main/db | tr '\n' ' '))"
+              exit 1
+            fi
+          done
+          echo "RefApp version: ${VERSION}"
+          echo "REFAPP_VERSION=${VERSION}" >> "$GITHUB_ENV"
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
@@ -248,6 +276,10 @@ jobs:
             echo "('querystore.embedding.modelFilePath','querystore/e5_model.onnx',UUID()),"
             echo "('querystore.embedding.vocabFilePath','querystore/vocab.txt',UUID());"
           } >> "src/main/db/demo-db-${REFAPP_VERSION}.sql"
+          # The append must have extended the branch's dump, never created one: the resolve step
+          # requires it, and this says so again where a later edit could move the two apart.
+          [ "$(wc -c < "src/main/db/demo-db-${REFAPP_VERSION}.sql")" -gt 1000000 ] \
+            || { echo "::error::demo-db-${REFAPP_VERSION}.sql is not the branch's demo dump"; exit 1; }
 
       - name: Pre-run OpenMRS SDK Plugin
         working-directory: standalone

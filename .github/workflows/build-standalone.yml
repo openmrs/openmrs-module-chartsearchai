@@ -61,8 +61,10 @@ on:
         default: ''
         type: string
 
+# One group per branch: a newer build of a branch replaces its older one, but a push to main
+# never cancels a branch build, nor a branch build the main build the README download serves.
 concurrency:
-  group: build-standalone
+  group: build-standalone-${{ github.ref }}
   cancel-in-progress: true
 
 env:

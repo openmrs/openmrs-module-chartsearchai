@@ -3183,6 +3183,22 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		assertTrue(answer.getSafetyWarnings().isEmpty(), "no check ran, so no chip: " + answer.getSafetyWarnings());
 	}
 
+	/**
+	 * Her pregnancy or breastfeeding, asked in a drug's place, names no drug, so the chart answer stands alone (ADR Decision
+	 * 550): on the 3.7.1 standalone "Can she get pregnant?" closed on "No interaction check was run: "pregnant" is not a drug
+	 * name the interaction data recognises." on every patient.
+	 */
+	@Test
+	public void herPregnancyInADrugsPlaceIsNoUnrecognisedDrugName() {
+		for (String question : new String[] { "Can she get pregnant?", "Can i give her pregnant?", "Can she breastfeed?",
+				"Can she be lactating?", "Can she get conceive?" }) {
+			RecordingProvider provider = new RecordingProvider();
+			ChartAnswer answer = serviceWith(provider, shipped()).search(patient, question);
+			assertEquals("The model's answer [1].", answer.getAnswer().replaceAll("\\[\\d+\\]", "[1]"), question);
+			assertTrue(answer.getSafetyWarnings().isEmpty(), question + " carries no chip: " + answer.getSafetyWarnings());
+		}
+	}
+
 	/** On the streaming path too: the answer it returns and the early done a streaming user sees first both carry the
 	 *  statement after the chart answer (ADR Decision 384). */
 	@Test

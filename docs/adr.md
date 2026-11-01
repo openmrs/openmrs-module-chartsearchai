@@ -25493,3 +25493,24 @@ All ten new negative rows were read as drug-safety questions.
 
 The eval's third gate fails on *"Should I stop any of his drugs?"*, read as asking which drugs to avoid. It read so
 under the unchanged prompt as well. The router screens that question itself, so production never puts it to the model.
+
+## Decision 550: Her pregnancy or breastfeeding in a drug's place is no unrecognised drug name
+
+**Status: Accepted** (November 2026). Found on the 3.7.1 standalone on 2026-11-01, probing questions that ask nothing of
+drug interactions.
+
+### Context
+
+*"Can she get pregnant?"* fits a proposal's shape with *"pregnant"* where a drug would stand. The data finds no drug by
+that word, so the answer closed on every patient with *"No interaction check was run: "pregnant" is not a drug name the
+interaction data recognises."* (Decision 384). That is a drug-interaction statement beside a question about her
+pregnancy. `UnrecognisedDrugName.NOT_A_NAME` knew *"pregnancy"* and *"breastfeeding"* (Decision 535), not the words
+for her state.
+
+### The decision
+
+*pregnant*, *breastfeed*, *lactating*, *lactation*, *conceive* and *nursing* are in `NOT_A_NAME`, so the chart answer
+stands alone. A food in a drug's place keeps its statement (Decision 384): a word of that kind may be a misspelt drug,
+and these words never are.
+
+Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.herPregnancyInADrugsPlaceIsNoUnrecognisedDrugName`.

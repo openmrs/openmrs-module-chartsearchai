@@ -66,6 +66,8 @@ final class UnrecognisedDrugName {
 		"sleep", "appetite", "mood", "memory", "energy", "concentration", "libido", "weight", "breathing", "vision",
 		"hearing", "balance", "skin", "heart", "liver", "kidney", "kidneys", "stomach", "bowels", "periods", "period",
 		"cycle", "pregnancy", "baby", "breastfeeding", "contraception", "labs", "results", "bp", "pressure",
+		// and her pregnancy or breastfeeding asked as her state: "Can she get pregnant?" (ADR Decision 550)
+		"pregnant", "breastfeed", "lactating", "lactation", "conceive", "nursing",
 		// and a screen's: "Screen fluconazole" (ADR Decision 536)
 		"screen", "screening"));
 

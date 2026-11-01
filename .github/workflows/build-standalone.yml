@@ -434,9 +434,12 @@ jobs:
       # never the artifact that gets uploaded: boot it headless against its bundled demo
       # database, trigger a full querystore reindex over REST, wait for completion, then
       # copy ONLY the generated appdata/querystore/lucene directory back into the pristine
-      # artifact. The published tree is therefore byte-identical to a normal build plus
-      # that one index directory — the user's first boot still imports the demo DB exactly
-      # as before, and the pre-seeded index's patient UUIDs match that bundled dump. The
+      # artifact, and append QueryStore's querystore_bootstrap_progress rows (with the
+      # liquibasechangelog rows of the changesets that create that table) to the bundled demo
+      # dump — scripts/carry-querystore-progress.sh. The published tree is therefore a normal
+      # build plus that index directory and those rows: the user's first boot still imports the
+      # demo DB as before, the pre-seeded index's patient UUIDs match that bundled dump, and
+      # QueryStore reads the index as complete, so chart search answers without a reindex. The
       # copy excludes the multi-GB *.gguf weights: indexing only needs the e5 embedder, and
       # leaving the LLM out keeps the bake run well under the runner's memory ceiling.
       #
@@ -545,6 +548,13 @@ jobs:
           LUCENE_DIR=$(find . -type d -path '*/appdata/querystore/lucene' | head -1)
           [ -n "$LUCENE_DIR" ] || fail "appdata/querystore/lucene was not created"
           echo "Baked index at $LUCENE_DIR ($(du -sh "$LUCENE_DIR" | cut -f1))."
+
+          # --- carry QueryStore's record of the finished index into the shipped demo dump ---
+          # The index files alone read as NOT_STARTED on the user's first start, and chartsearchai
+          # withholds every answer until each type has completed (#619). While MariaDB is still up.
+          "$GITHUB_WORKSPACE/chartsearchai-backend/scripts/carry-querystore-progress.sh" \
+            "$BAKE" "$PRISTINE/demodatabase.zip" "data/demo-db-${REFAPP_VERSION}.sql" \
+            || fail "could not carry querystore_bootstrap_progress into the shipped demo dump"
 
           # --- stop the server before copying the index out ---
           # Durability is already guaranteed: the reindex committed each per-type Lucene index

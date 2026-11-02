@@ -1293,7 +1293,7 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		assertEquals("1 interaction caution for Clarithromycin — Moderate, with Rifampicin (rifampin).", lines[0],
 				"the count is of the cautions about the drug, not of her own orders' duplicate");
 		assertEquals(lines[0], answer.getAnswerSummary());
-		assertTrue(lines[1].startsWith("Clarithromycin interacts with active order Rifampicin (rifampin) — Moderate.")
+		assertTrue(lines[1].startsWith("Clarithromycin interacts with active order Rifampicin (rifampin) (2 orders) — Moderate.")
 				&& lines[1].contains(" [" + caution.index + "]"), lines[1]);
 		assertFalse(answer.getAnswer().contains(" are in active orders "), answer.getAnswer());
 	}

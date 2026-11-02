@@ -71,7 +71,8 @@ public class EveryOrderOfThePartnerIsCitedTest extends BaseModuleContextSensitiv
 		assertTrue(cited.containsAll(nevirapineRecords), "each nevirapine prescription is cited: " + line + " — records "
 				+ nevirapineRecords);
 		assertEquals(nevirapineRecords.size() + 1, cited.size(), "the finding and those prescriptions, nothing else: " + line);
-		assertTrue(line.matches("Codeine interacts with active order Nevirapine — Moderate\\. \\[\\d+\\]( \\[\\d+\\]){3}"),
+		assertTrue(line.matches(
+			"Codeine interacts with active order Nevirapine \\(3 orders\\) — Moderate\\. \\[\\d+\\]( \\[\\d+\\]){3}"),
 			"its markers after its words: " + line);
 	}
 

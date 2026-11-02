@@ -58,7 +58,7 @@ public class BriefScreenAnswerTest extends BaseModuleContextSensitiveTest {
 		assertEquals(5, lines.length, "was: " + answer);
 		assertEquals(BOTTOM_LINE, lines[0], "was: " + answer);
 		assertEquals(BOTTOM_LINE, chart.getModuleAnswerSummary(), "the line a client shows, the rest collapsed");
-		assertTrue(lines[1].startsWith("Nelfinavir interacts with active order Rifampin — Major. ["), "was: " + answer);
+		assertTrue(lines[1].startsWith("Nelfinavir interacts with active order Rifampin (2 orders) — Major. ["), "was: " + answer);
 		assertTrue(lines[2].startsWith(SHARED_SUBSTANCES), "was: " + answer);
 		assertTrue(lines[3].startsWith("Also in the safety warnings beside this answer: 12 interactions, each a caution (8 "
 				+ "Moderate, 4 Minor) — Efavirenz with Lamivudine, Stavudine, Sulfamethoxazole, Rifampicin and isoniazid, "
@@ -86,7 +86,7 @@ public class BriefScreenAnswerTest extends BaseModuleContextSensitiveTest {
 		assertEquals("No drug allergies are recorded for this patient. This check does not list other drugs to avoid.",
 			lines[0]);
 		assertEquals(BOTTOM_LINE, lines[1], "was: " + answer);
-		assertTrue(lines[2].startsWith("Nelfinavir interacts with active order Rifampin — Major. ["), "was: " + answer);
+		assertTrue(lines[2].startsWith("Nelfinavir interacts with active order Rifampin (2 orders) — Major. ["), "was: " + answer);
 		assertEquals(NOT_CHECKED, lines[5]);
 	}
 

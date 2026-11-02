@@ -2563,6 +2563,40 @@ public class DrugReferenceInjector {
 		private final Map<String, Set<Integer>> everyRecordOf = new LinkedHashMap<String, Set<Integer>>();
 	}
 
+	/**
+	 * {@code text} with each partner {@code finding} names counted ({@link #countedPartners}) where it follows
+	 * {@link DrugSafetyValidator#ACTIVE_ORDER_INTERACTION_PHRASE} exactly as the finding joins them — the detail the module
+	 * wrote, so where the names sit is known rather than searched for (ADR Decision 555). Text that does not spell them
+	 * there is returned unchanged.
+	 */
+	static String withOrderCounts(String text, SafetyWarning finding) {
+		if (text == null || finding.partnerOrderCounts().isEmpty()) {
+			return text;
+		}
+		int at = text.indexOf(DrugSafetyValidator.ACTIVE_ORDER_INTERACTION_PHRASE);
+		String joined = DrugSafetyValidator.joinPartners(finding.namedPartners());
+		int start = at + DrugSafetyValidator.ACTIVE_ORDER_INTERACTION_PHRASE.length();
+		int end = start + joined.length();
+		if (at < 0 || joined.isEmpty() || !text.startsWith(joined, start)
+				|| end < text.length() && " .,;—".indexOf(text.charAt(end)) < 0) {
+			return text;
+		}
+		return text.substring(0, start)
+				+ DrugSafetyValidator.joinPartners(countedPartners(finding.namedPartners(), finding.partnerOrderCounts()))
+				+ text.substring(end);
+	}
+
+	/** Each of {@code partners}, with <em>" (2 orders)"</em> after one {@code counts} counts — the form ADR Decision 379
+	 *  gives a drug several orders carry. */
+	private static List<String> countedPartners(List<String> partners, Map<String, Integer> counts) {
+		List<String> named = new ArrayList<String>(partners.size());
+		for (String partner : partners) {
+			Integer count = counts.get(partner);
+			named.add(count == null ? partner : partner + " (" + count + " orders)");
+		}
+		return named;
+	}
+
 	/** Every record {@code display}'s orders resolved to where {@code numbers} carries them ({@link OrderRecordNumbers}),
 	 *  else its one number, else none. */
 	private static Collection<Integer> everyRecordOf(Map<String, Integer> numbers, String display) {
@@ -4018,7 +4052,8 @@ public class DrugReferenceInjector {
 				Integer number = numbers.get(i);
 				String markers = " [" + number + "]" + orderRecordMarkers(finding, herOrderRecords,
 						Collections.singleton(number));
-				lines.put(number, withMarkersBeforeItsEnd(DrugSafetyValidator.endSentence(briefDetail(finding)), markers));
+				lines.put(number, withMarkersBeforeItsEnd(
+						DrugSafetyValidator.endSentence(withOrderCounts(briefDetail(finding), finding)), markers));
 			}
 		}
 		return lines;
@@ -4584,8 +4619,8 @@ public class DrugReferenceInjector {
 					}
 				}
 			}
-			String line = findingBody(finding, briefDetail(finding), orderRecordNumbers, true) + " ["
-					+ findingNumbers.get(i) + "]";
+			String line = findingBody(finding, withOrderCounts(briefDetail(finding), finding), orderRecordNumbers, true)
+					+ " [" + findingNumbers.get(i) + "]";
 			lines.add(line + orderRecordMarkers(finding, herOrderRecords, ChartSearchAiUtils.citedIndexes(line)));
 		}
 		// The drug proposed, never the first finding's own subject: a finding about a listed drug her chart holds only as an
@@ -6516,7 +6551,7 @@ public class DrugReferenceInjector {
 		boolean onceForThis = saidOnce && SafetyWarning.TYPE_CONTRAINDICATION.equals(finding.getType());
 		// A recorded allergy to the drug itself has no severity to rate, and beside rated lines the sentence read as the
 		// least of them (ADR Decision 192). The record the model reads keeps it.
-		String line = findingBody(finding, proposal ? briefDetail(finding) : finding.getDetail(),
+		String line = findingBody(finding, withOrderCounts(proposal ? briefDetail(finding) : finding.getDetail(), finding),
 				orderRecordNumbers, true, onceForThis || severitySaidOnce || finding.isARecordedAllergyToItsOwnDrug())
 				+ (currentMedicationContraindication && !onceForThis ? COMPOSED_CURRENT_MEDICATION_REFERENT : "")
 				+ (interactingSubstance == null ? "" : INTERACTING_SUBSTANCE_OPENING + interactingSubstance + ".")
@@ -9633,8 +9668,27 @@ public class DrugReferenceInjector {
 			Map<String, Integer> herOrderRecords) {
 		List<List<String>> sides = sidesOfAGrid(findings, grid);
 		List<String> drugs = sides.get(0);
+		// A count only where every finding of the grid names that partner with that one count: the line states one name
+		// for them all, and the side printed after the phrase is not always theirs (ADR Decision 555).
+		Map<String, Integer> counts = new HashMap<String, Integer>();
+		for (String name : sides.get(1)) {
+			Integer agreed = null;
+			for (Integer i : grid) {
+				Integer count = findings.get(i).namedPartners().contains(name)
+						? findings.get(i).partnerOrderCounts().get(name) : null;
+				if (count == null || agreed != null && !agreed.equals(count)) {
+					agreed = null;
+					break;
+				}
+				agreed = count;
+			}
+			if (agreed != null) {
+				counts.put(name, agreed);
+			}
+		}
 		String line = (drugs.size() == 1 ? drugs.get(0) : "Each of " + DrugSafetyValidator.joinPartners(drugs))
-				+ DrugSafetyValidator.ACTIVE_ORDER_INTERACTION_PHRASE + DrugSafetyValidator.joinPartners(sides.get(1))
+				+ DrugSafetyValidator.ACTIVE_ORDER_INTERACTION_PHRASE
+				+ DrugSafetyValidator.joinPartners(countedPartners(sides.get(1), counts))
 				+ " — " + findings.get(grid.get(0)).getSeverity() + ".";
 		for (Integer i : grid) {
 			line += " [" + numbers.get(i) + "]";

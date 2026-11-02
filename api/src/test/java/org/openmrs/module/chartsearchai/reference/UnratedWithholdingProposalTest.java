@@ -79,6 +79,6 @@ public class UnratedWithholdingProposalTest extends BaseModuleContextSensitiveTe
 		// Her two metronidazole orders are about metronidazole, which the question does not name (ADR Decision 387).
 		assertEquals(2, lines.length, "was: " + answer);
 		assertEquals(DrugReferenceInjector.FOUND_LEAD_OPENING + "Ketoconazole:", lines[0], "was: " + answer);
-		assertTrue(lines[1].startsWith("Ketoconazole interacts with active order Metronidazole — Minor."), "was: " + answer);
+		assertTrue(lines[1].startsWith("Ketoconazole interacts with active order Metronidazole (2 orders) — Minor."), "was: " + answer);
 	}
 }

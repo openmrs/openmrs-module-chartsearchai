@@ -25685,3 +25685,85 @@ no record of the order is `.aChartCarryingNoRecordOfTheOrderNamesNothing`.
 It does not put a number in the prompt, so it does not reopen Decision 77's measured cost to completeness, and it
 does not make the model write `[N]` after the order's name. The answer's prose is unchanged. What changes is that the
 order's record is on the response whenever the finding is cited.
+
+## Decision 555: A composed line counts the orders behind the partner it names
+
+**Status: Accepted** (November 2026). Found on the public demo on 2026-11-02.
+
+### Context
+
+On patient dd926bb0, on two "(NEW) Isoniazid" prescriptions, *"Can i give him panadol?"* was answered by the module with
+*"Acetaminophen interacts with active order Isoniazid — Moderate. [67] [2] [32]"*. Decision 539 cites each prescription
+of the order a line names, so the line cited two orders under a sentence naming one, and the clinician asked why the
+answer did not say there were two.
+
+A first version found each order's display in the line's text and appended the count after it. A review refuted it
+before it was committed: the line prints the drug data's name for the partner, not the order's display (an order written
+*"Nevirapine 200mg"* is printed *"Nevirapine"*, `DrugBesideHerMedicationGroupTest`), so the count never appeared for a
+display carrying a strength; a rule with no note has no dash to end the scan on; and a display inside a combination's
+name could take another's count.
+
+### The decision
+
+- **Counted where the arm decides the partner, never searched for in the text.** Each of the two active-order
+  interaction arms of `DrugSafetyValidator` already walks the orders it lets witness the partner (`chartOrderBridges`,
+  over `partnerWitnesses`). The orders that walk matches and that have started are the orders behind the partner, and
+  the chip carries how many as `SafetyWarning.partnerOrderCounts()`, keyed by the name it prints, where that is more
+  than one. `collapseSharedMechanisms` unions its members'.
+- **So each arm's own reduction holds.** The screening arm lets no order that resolves the subject witness the
+  partner (Decision 486), so a combination that is the subject's only source is no order of its partner: a screen over
+  *"Isoniazid / pyrazinamide / rifampin"* and *"Rifampicin 150mg"* states *"Pyrazinamide interacts with active order
+  Rifampicin (rifampin) — Major."*, one order. The drug-in-play arm lets every order witness it, so a proposal of
+  paracetamol over *RHZE* and *Isoniazid 300mg* counts both. A brand order bridged to the partner (*"Isoniazid from
+  Nydrazid"*) and a generic order that names it and so states no bridge (Decision 70) are both counted.
+- **An order carrying the subject's own drug is never counted for the partner**, whatever the arm let witness it: for
+  *"Can I give him simvastatin?"* over Zolvimix (simvastatin and clarithromycin) and Klarizom, clarithromycin is one
+  other medication, Klarizom.
+- **A partner printed by an order's own display counts only the orders spelling it.** *"Isoniazid / Rifapentine"* is one
+  order's name, not the substance's, so a Priftin order beside it, rifapentine too, is not a second one. A partner
+  printed by its substance's own name counts every order of it, so an order displayed *"Isoniazid"* beside
+  *"Isoniazid 300mg"* makes two.
+- **Rendered in the form Decision 379 gives a drug several orders carry**, *"Isoniazid (2 orders)"*, after the name,
+  only where the text spells the chip's partners exactly as it joins them after
+  `DrugSafetyValidator.ACTIVE_ORDER_INTERACTION_PHRASE`; anything else is left as it was. The four composed-line sites
+  call it: `findingLine`, the proposal's own-order lines, the caution lines, and `gridLine`. A grid states a count for
+  a name only where every finding of it names that partner with that one count, since the line states one name for
+  them all and the side printed after the phrase is not always theirs.
+
+The demo's line becomes *"Acetaminophen interacts with active order Isoniazid (2 orders) — Moderate. [67] [2] [32]"*.
+
+### What it does not change
+
+- The chips, and the `safety_finding` record the model reads: `partnerOrderCounts` is package-private, reaches no wire,
+  and `renderFinding` never reads it.
+- A line's second sentence (*"… as active order Metronidazole — possible duplicate therapy"*) and the subject side
+  (*"Each of A and B"*) are not counted: the count is stated once, where the partner is first named.
+- A scheduled prescription of the same display is still cited by Decision 539 and is not counted, since the line calls
+  the partner an active order.
+
+### Spec change
+
+Seven tests pinned the uncounted wording of a line whose partner several orders stand behind, each over a fixture
+carrying those orders, and each now expects the count: `EveryOrderOfThePartnerIsCitedTest`, `AlwaysCollapsedAnswerTest`,
+`ProposalSaysHerConditionsWereNotCheckedTest`, `UnratedWithholdingProposalTest`,
+`LlmInferenceServiceAnswerFromFindingsContextTest`, `BriefScreenAnswerTest` and `SubstanceInSeveralOrdersPairTest`.
+
+Pinned by `PartnerOrderCountTest`: the demo's two-order line, a one-order line stating no count, orders written
+*"Nevirapine 200mg"* counted under the name printed, a started order beside a scheduled one stating none, a bridged
+brand beside a generic counted together, a proposal counting a combination carrying the partner, and the subject's own
+combination counted as no order of its partner on a screen, a partner printed by an order's own display, and an order
+carrying the proposed drug. The last four were found by review rounds that ran them against the previous version and saw
+them fail. Zolvimix against Klarizom on a screen stays uncounted in `HerOrdersNamedByTheirOwnNamesTest`.
+
+Each arm's reduction still decides which orders witness a partner, so a line can cite a prescription it does not count:
+on a screen, the subject's own combination is cited by Decision 539 and is not the partner's (Decision 486).
+
+### What it gives up
+
+*"Rifampicin (rifampin) (2 orders)"*: a partner whose printed name already ends in a parenthetical gets a second one.
+
+Two lines cite several prescriptions and state no count, by the rules above rather than by a slip, each found by a
+review that ran it. A grid whose side printed after the phrase is the findings' subjects counts nothing, so
+*"Itraconazole interacts with active order Lovastatin and Simvastatin"* does not say Itraconazole is two orders. A
+screen relating a drug to a second order of itself (*"Ketoconazole interacts with active order Ketoconazole"*) counts
+neither, both orders resolving the subject's own rows.

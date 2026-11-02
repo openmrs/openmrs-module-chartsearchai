@@ -48,7 +48,7 @@ public class ProposalSaysHerConditionsWereNotCheckedTest extends BaseModuleConte
 		String[] lines = answer.split("\n");
 		assertEquals(3, lines.length, "was: " + answer);
 		assertEquals("1 interaction caution for Clarithromycin — Moderate, with Nevirapine.", lines[0], "was: " + answer);
-		assertTrue(lines[1].startsWith("Clarithromycin interacts with active order Nevirapine — Moderate. ["),
+		assertTrue(lines[1].startsWith("Clarithromycin interacts with active order Nevirapine (3 orders) — Moderate. ["),
 			"was: " + answer);
 		// Not the pairs the data lists it in unrated, which a caution answer leaves out (ADR Decision 146).
 		assertEquals(DrugReferenceInjector.CONDITIONS_NOT_CHECKED, lines[2], "was: " + answer);

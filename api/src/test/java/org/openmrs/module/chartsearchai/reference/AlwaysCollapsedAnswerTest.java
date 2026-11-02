@@ -57,7 +57,7 @@ public class AlwaysCollapsedAnswerTest extends BaseModuleContextSensitiveTest {
 		assertEquals("1 interaction caution for Clarithromycin — Moderate, with Nevirapine.", lines[0], "was: " + answer);
 		assertEquals(lines[0], chart.getModuleAnswerSummary());
 		assertEquals(2, lines.length, "the sentence and its finding: " + answer);
-		assertTrue(lines[1].startsWith("Clarithromycin interacts with active order Nevirapine — Moderate."), "was: " + answer);
+		assertTrue(lines[1].startsWith("Clarithromycin interacts with active order Nevirapine (3 orders) — Moderate."), "was: " + answer);
 		assertFalse(chart.moduleAnswerDetailsStateLimits(), "nothing under the sentence says what was not checked");
 	}
 

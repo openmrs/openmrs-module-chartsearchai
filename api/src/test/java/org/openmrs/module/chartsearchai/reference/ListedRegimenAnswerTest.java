@@ -202,13 +202,27 @@ public class ListedRegimenAnswerTest extends BaseModuleContextSensitiveTest {
 	}
 
 	@Test
-	public void noRatedReasonToChangeHerDrugIsNeverFollowedByARatedFindingAgainstTheList() {
-		// Decision 204's lead says the data gives no rated reason to change her metformin; the listed ritonavir is rated
-		// Moderate against it. The two read as contradicting each other, so the model answers.
+	public void aRatedFindingAgainstTheListFollowsAStatementScopedToHerOwnMedications() {
+		// Decision 204's statement says the data gives no rated reason to change her metformin; the listed ritonavir is rated
+		// Moderate against it. Scoped to her own medications, the statement and the list's line say different things about
+		// different drugs (ADR Decision 558).
 		List<PatientClinicalContext.ActiveDrugOrder> metformin = orders("Metformin", "A10BA02", 1, "Lamivudine", "J05AF05", 1);
-		assertNotNull(ask(metformin, "Is it safe to give Metformin?"), "precondition: Decision 204 answers it alone");
-		assertNull(ask(metformin, "The patient is currently on Ritonavir, is it safe to give Metformin?"),
-			"no rated finding beneath 'no rated reason to change it'");
+		String alone = ask(metformin, "Is it safe to give Metformin?");
+		assertTrue(alone.contains(". The interaction data gives no rated reason to change it: the data lists Metformin against "
+				+ "one of this patient's other medications, with no severity or mechanism on file. ["),
+			"precondition, and unchanged asked alone: " + alone);
+		String answer = ask(metformin, "The patient is currently on Ritonavir, is it safe to give Metformin?");
+		assertNotNull(answer, "the module answers");
+		List<String> lines = Arrays.asList(answer.split("\n"));
+		assertTrue(lines.get(0).matches("Metformin is one of this patient's active medications \\(Metformin \\[\\d+\\]\\)\\. "
+				+ "Against this patient's other medications, the interaction data gives no rated reason to change it: the data "
+				+ "lists Metformin against one of them, with no severity or mechanism on file\\. \\[\\d+\\]"),
+			"scoped to her own medications: " + answer);
+		int heading = lines.indexOf(DrugReferenceInjector.LISTED_NOT_HERS_HEADING);
+		assertEquals(1, heading, "the list's findings under their heading, next: " + answer);
+		assertTrue(lines.get(2).matches("Ritonavir interacts with active order Metformin — Moderate\\.( \\[\\d+\\])+"),
+			"the listed ritonavir's rated finding: " + answer);
+		assertFalse(answer.contains("can be given") || answer.contains("No —"), "no verdict on her own drug: " + answer);
 	}
 
 	@Test

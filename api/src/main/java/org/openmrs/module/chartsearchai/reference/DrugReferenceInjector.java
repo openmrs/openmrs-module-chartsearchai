@@ -1245,17 +1245,30 @@ public class DrugReferenceInjector {
 				// Her orders' records even where no finding was raised to index them: this answer can have none (ADR
 				// Decision 204), and its lead cites the order.
 				&& (belowFloorAboutHerOwn = composeBelowFloorAboutHerOwnMedication(herOwnQuestion, herOwnAsked,
-						screenedSubstances, findings, findingNumbers, herOwnExtent, theListsOwn, mappings, orderEntries,
+						screenedSubstances, findings, findingNumbers, herOwnExtent, theListsOwn, false, mappings, orderEntries,
 						context, reading.states(), orderRecordNumbers,
 						!orderRecordNumbers.isEmpty() ? orderRecordNumbers
 								: orderRecordNumbers(findingRecords != null ? findingRecords : new DrugOrderRecords(mappings),
 										context))) != null) {
 			// Her own drug, which the check relates to her other orders only below the severity floor (ADR Decision 204) — after
-			// a list, with what the list adds (ADR Decision 557).
-			moduleAnswer = afterAList == null ? belowFloorAboutHerOwn
-					: withWhatTheListAdds(belowFloorAboutHerOwn, question, questionDrugs, herOwnAsked, screenedSubstances,
-							findings, findingNumbers, Collections.<Integer> emptyList(), pairExtent.stated(), true,
-							orderRecordNumbers, herOwnRecords(orderRecordNumbers, findingRecords, mappings, context), context);
+			// a list, with what the list adds (ADR Decision 557). Where that is a finding line, the statement is scoped to her
+			// own medications, so the two say different things about different drugs (ADR Decision 558); otherwise it is
+			// Decision 204's own, word for word, and never followed by one.
+			if (afterAList == null) {
+				moduleAnswer = belowFloorAboutHerOwn;
+			} else {
+				Map<String, Integer> herRecords = herOwnRecords(orderRecordNumbers, findingRecords, mappings, context);
+				String scoped = withWhatTheListAdds(composeBelowFloorAboutHerOwnMedication(herOwnQuestion, herOwnAsked,
+						screenedSubstances, findings, findingNumbers, herOwnExtent, theListsOwn, true, mappings, orderEntries,
+						context, reading.states(), orderRecordNumbers, herRecords), question, questionDrugs, herOwnAsked,
+						screenedSubstances, findings, findingNumbers, Collections.<Integer> emptyList(), pairExtent.stated(),
+						false, orderRecordNumbers, herRecords, context);
+				moduleAnswer = scoped != null && Arrays.asList(scoped.split("\n", -1)).contains(LISTED_NOT_HERS_HEADING)
+						? scoped
+						: withWhatTheListAdds(belowFloorAboutHerOwn, question, questionDrugs, herOwnAsked, screenedSubstances,
+								findings, findingNumbers, Collections.<Integer> emptyList(), pairExtent.stated(), true,
+								orderRecordNumbers, herRecords, context);
+			}
 		} else if (context != null
 				&& ChartSearchAiUtils.getBooleanGlobalProperty(
 						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
@@ -7221,12 +7234,17 @@ public class DrugReferenceInjector {
 	 * already carry it, which this lead states; and the drug's own reference record in the chart, which it cites. A
 	 * finding that another of her drugs is in several of her orders is stated under the statement, before the scope
 	 * (ADR Decision 212).
+	 *
+	 * <p>Where {@code scopedToHerMedications}, the statement opens <em>"Against this patient's other medications, the
+	 * interaction data gives no rated reason to change it: the data lists X against one of them, …"</em>: after a list whose
+	 * rated finding against a drug the question names follows it, so the two say different things about different drugs
+	 * (ADR Decision 558).
 	 */
 	private String composeBelowFloorAboutHerOwnMedication(String question, List<DrugReference> questionDrugs,
 			Set<Object> herSubstances, List<SafetyWarning> findings, List<Integer> findingNumbers, PairChipExtent extent,
-			Set<Object> theListsOwn, List<RecordMapping> mappings, List<DrugReference> orderEntries,
-			PatientClinicalContext context, boolean contraindicationsChecked, Map<String, Integer> orderRecordNumbers,
-			Map<String, Integer> herOrderRecords) {
+			Set<Object> theListsOwn, boolean scopedToHerMedications, List<RecordMapping> mappings,
+			List<DrugReference> orderEntries, PatientClinicalContext context, boolean contraindicationsChecked,
+			Map<String, Integer> orderRecordNumbers, Map<String, Integer> herOrderRecords) {
 		if (extent == null || extent.getFound() != 0 || extent.getBelowFloor() == null || extent.getBelowFloor().isEmpty()
 				|| !contraindicationsChecked) {
 			return null;
@@ -7279,11 +7297,16 @@ public class DrugReferenceInjector {
 		int n = rows.orders.size();
 		// "other" only where no order it is listed against carries the drug itself: a constituent of its own combination
 		// order is not another order (ADR Decision 212).
-		String ofHers = Collections.disjoint(rows.orders, itsOwnOrders) ? " of this patient's other medications, "
-				: " of this patient's medications, ";
+		boolean other = Collections.disjoint(rows.orders, itsOwnOrders);
+		String ofHers = other ? " of this patient's other medications, " : " of this patient's medications, ";
+		// Scoped to her own medications where a rated finding against a drug the question lists follows it (ADR Decision 558).
 		String statement = rows.drug + OWN_MEDICATION_LEAD + herOrders
-				+ ". The interaction data gives no rated reason to change it: the data lists "
-				+ rows.drug + " against " + (n == 1 ? "one" : String.valueOf(n)) + ofHers
+				+ (scopedToHerMedications
+						? ". Against this patient's " + (other ? "other " : "") + "medications, the interaction data gives no "
+								+ "rated reason to change it: the data lists " + rows.drug + " against "
+								+ (n == 1 ? "one" : String.valueOf(n)) + " of them, "
+						: ". The interaction data gives no rated reason to change it: the data lists "
+								+ rows.drug + " against " + (n == 1 ? "one" : String.valueOf(n)) + ofHers)
 				+ (!rows.allUnknown ? "rated " + rows.ratings() + ", below the level this module reports as a finding"
 						: (n == 1 ? "with no severity" : "none with a severity") + (rows.noMechanism ? " or mechanism" : "")
 								+ " on file")

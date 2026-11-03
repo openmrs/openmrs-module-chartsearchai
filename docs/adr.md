@@ -25946,10 +25946,11 @@ a list.
   answer already cites, so a shared-substance line the statement wrote is not written twice.
 - **Beneath Decision 204's sentence, no rated finding is added.** That sentence says *"The interaction data gives no
   rated reason to change it"*, and a Moderate against a listed drug beneath it reads as contradicting it. Her
-  metformin after a list naming ritonavir therefore goes to the model (`noFindingLines`); the "raised no finding" line
+  metformin after a list naming ritonavir therefore went to the model (`noFindingLines`); the "raised no finding" line
   is still added. Decision 206's sentence is scoped to her orders (*"relates it to none of this patient's … other
-  active medications"*) and takes the list's findings. Rewording Decision 204's sentence for this case is the owner's
-  call and was not made.
+  active medications"*) and takes the list's findings. **Superseded by
+  [Decision 558](#decision-558-decision-204s-statement-is-scoped-to-her-own-medications-where-the-list-adds-a-rated-finding)**,
+  which scopes the sentence instead.
 - **A proposal after a list says her conditions were not checked, as one asked alone does.** Decision 533's gate asked
   `questionProposes` of the whole question, which a list question never fits. So no list answer carried *"Not
   checked: … this patient's conditions (no drug-condition rules are loaded)"*. That included Decision 150's answers
@@ -25982,5 +25983,57 @@ Pinned by `ListedRegimenAnswerTest`:
 - `.herDrugRelatedToHerOrdersOnlyBelowTheFloorIsAnsweredAfterAListAsAlone`;
 - `.herDrugWithNoOtherOrderIsAnsweredAfterAListWithTheListsFinding`;
 - `.aFindingTheAnswerAlreadyStatesIsNotStatedAgainForTheList`;
-- `.noRatedReasonToChangeHerDrugIsNeverFollowedByARatedFindingAgainstTheList`;
+- `.aRatedFindingAgainstTheListFollowsAStatementScopedToHerOwnMedications` (Decision 558's since);
 - `.aProposalAfterAListSaysHerConditionsWereNotCheckedAsTheDrugAskedAloneDoes`.
+
+## Decision 558: Decision 204's statement is scoped to her own medications where the list adds a rated finding
+
+**Status: Accepted** (November 2026). The owner's decision, 2026-11-03, after the measurement below. Supersedes one
+bullet of [Decision 557](#decision-557-her-own-drug-that-the-check-relates-to-none-of-her-orders-above-the-floor-is-answered-after-a-list-too).
+
+### Context
+
+Decision 557 sent one case to the model. Her own drug is related to her other orders only below the floor, so
+Decision 204 answers *"The interaction data gives no rated reason to change it"*. But a drug the question lists is
+rated against it, and that finding beneath the sentence would read as contradicting it.
+
+Measured 2026-11-03 on the demo-seed replica, through the real `/search` endpoint:
+- **Sample:** 146 patients drawn at random from the 3,986 with two or more never-stopped drug orders.
+- **Questions:** one bare *"Is it safe to give X?"* for each of their drugs, vaccinations excluded. That is 521
+  questions, every one answering 200.
+- **Decision 204 answered 117 of the 521**, across 112 of the 146 patients. 109 of those were nevirapine.
+
+So the case is common, and it is reached by an ordinary list. A patient on nevirapine, stavudine and lamivudine, asked
+*"The patient is currently on Rifampicin, is it safe to give Nevirapine?"*, went to the model. It answered *"No —
+Nevirapine should not be given due to interaction with Rifampicin"* of a drug she takes, in 71 s. That is the shape
+Decision 556 was written to remove. DDInter rates nevirapine with rifampicin Major.
+
+### The decision
+
+Where the list adds a finding line, Decision 204's statement is scoped to her own medications. Asked about her
+metformin after a list naming ritonavir:
+
+> *"Metformin is one of this patient's active medications (Metformin [2]). Against this patient's other medications, the
+> interaction data gives no rated reason to change it: the data lists Metformin against one of them, with no severity or
+> mechanism on file. [4]"*
+
+Then `LISTED_NOT_HERS_HEADING` and *"Ritonavir interacts with active order Metformin — Moderate."* The two sentences
+now say different things about different drugs. "Other" is dropped where an order the data lists it against carries the
+drug itself, as Decision 212 has it.
+
+- **One composer, two forms.** `composeBelowFloorAboutHerOwnMedication` takes `scopedToHerMedications`. The dispatch
+  composes the scoped form and keeps it only where `withWhatTheListAdds` added the heading, which it writes exactly
+  when it adds a finding line. Otherwise Decision 204's own sentence stands word for word. `noFindingLines` stays on
+  that form, so the unscoped sentence is never followed by a finding line.
+- **The bare question is unchanged.** Asked alone, and after a list adding no finding line, the statement is Decision
+  204's.
+
+### Alternatives
+
+- **Keep the model call**, Decision 557's choice. The measured answer above is why not: the model withheld her own drug.
+- **Drop the "no rated reason" clause where a list follows.** The answer would state below-floor rows and leave the
+  clinician to infer what they mean, and saying what they mean is the clause's whole purpose.
+
+Pinned by `ListedRegimenAnswerTest.aRatedFindingAgainstTheListFollowsAStatementScopedToHerOwnMedications`: the scoped
+sentence, the heading next, and the ritonavir line. Forcing the unscoped form reddens it. Always taking the scoped
+form reddens `.herDrugRelatedToHerOrdersOnlyBelowTheFloorIsAnsweredAfterAListAsAlone`, whose list adds no finding line.

@@ -1128,6 +1128,13 @@ public class DrugReferenceInjector {
 		HerOwnAfterAList afterAList = herOwnDrugAfterAList(question, questionDrugs, screenedSubstances);
 		List<DrugReference> herOwnAsked = afterAList == null ? questionDrugs : afterAList.drugs;
 		String herOwnQuestion = afterAList == null ? question : afterAList.question;
+		// What the check relates the drug asked to among her orders: after a list, the drug-in-play arm's statement about that
+		// drug alone, since the question's own extent counts the listed drugs' pairs too (ADR Decisions 149, 557).
+		PairChipExtent herOwnExtent = afterAList == null ? pairExtent.stated()
+				: pairExtent.statedFor(herOwnAsked.get(0).substanceGroupKey());
+		// And, after a list, the listed drugs her orders do not resolve to, whose findings the list's lines state.
+		Set<Object> theListsOwn = afterAList == null ? null
+				: listedNotHers(question, questionDrugs, screenedSubstances, herOwnAsked).keySet();
 		if (heldInPart != null) {
 			moduleAnswer = heldInPart;
 		} else if (continuingTwo != null) {
@@ -1228,7 +1235,7 @@ public class DrugReferenceInjector {
 					companionLabels);
 			if (afterAList != null) {
 				moduleAnswer = withWhatTheListAdds(moduleAnswer, question, questionDrugs, herOwnAsked, screenedSubstances,
-						findings, findingNumbers, about, pairExtent.stated(), orderRecordNumbers, herRecords, context);
+						findings, findingNumbers, about, pairExtent.stated(), false, orderRecordNumbers, herRecords, context);
 			}
 		} else if (context != null
 				&& ChartSearchAiUtils.getBooleanGlobalProperty(
@@ -1237,27 +1244,35 @@ public class DrugReferenceInjector {
 				&& context.chartReadForSafety()
 				// Her orders' records even where no finding was raised to index them: this answer can have none (ADR
 				// Decision 204), and its lead cites the order.
-				&& (belowFloorAboutHerOwn = composeBelowFloorAboutHerOwnMedication(question, questionDrugs,
-						screenedSubstances, findings, findingNumbers, pairExtent.stated(), mappings, orderEntries, context,
-						reading.states(), orderRecordNumbers,
+				&& (belowFloorAboutHerOwn = composeBelowFloorAboutHerOwnMedication(herOwnQuestion, herOwnAsked,
+						screenedSubstances, findings, findingNumbers, herOwnExtent, theListsOwn, mappings, orderEntries,
+						context, reading.states(), orderRecordNumbers,
 						!orderRecordNumbers.isEmpty() ? orderRecordNumbers
 								: orderRecordNumbers(findingRecords != null ? findingRecords : new DrugOrderRecords(mappings),
 										context))) != null) {
-			// Her own drug, which the check relates to her other orders only below the severity floor (ADR Decision 204).
-			moduleAnswer = belowFloorAboutHerOwn;
+			// Her own drug, which the check relates to her other orders only below the severity floor (ADR Decision 204) — after
+			// a list, with what the list adds (ADR Decision 557).
+			moduleAnswer = afterAList == null ? belowFloorAboutHerOwn
+					: withWhatTheListAdds(belowFloorAboutHerOwn, question, questionDrugs, herOwnAsked, screenedSubstances,
+							findings, findingNumbers, Collections.<Integer> emptyList(), pairExtent.stated(), true,
+							orderRecordNumbers, herOwnRecords(orderRecordNumbers, findingRecords, mappings, context), context);
 		} else if (context != null
 				&& ChartSearchAiUtils.getBooleanGlobalProperty(
 						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
 						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS)
 				&& context.chartReadForSafety()
-				&& (noPairAboutHerOwn = composeNoPairAboutHerOwnMedication(question, questionDrugs, screenedSubstances,
-						findings, findingNumbers, pairExtent.stated(), mappings, orderEntries, context, reading.states(),
-						unidentified.size(), orderRecordNumbers,
+				&& (noPairAboutHerOwn = composeNoPairAboutHerOwnMedication(herOwnQuestion, herOwnAsked, screenedSubstances,
+						findings, findingNumbers, herOwnExtent, theListsOwn, mappings, orderEntries, context,
+						reading.states(), unidentified.size(), orderRecordNumbers,
 						!orderRecordNumbers.isEmpty() ? orderRecordNumbers
 								: orderRecordNumbers(findingRecords != null ? findingRecords : new DrugOrderRecords(mappings),
 										context))) != null) {
-			// Her own drug, which the check relates to none of her other orders (ADR Decision 206).
-			moduleAnswer = noPairAboutHerOwn;
+			// Her own drug, which the check relates to none of her other orders (ADR Decision 206) — after a list, with what the
+			// list adds (ADR Decision 557).
+			moduleAnswer = afterAList == null ? noPairAboutHerOwn
+					: withWhatTheListAdds(noPairAboutHerOwn, question, questionDrugs, herOwnAsked, screenedSubstances,
+							findings, findingNumbers, Collections.<Integer> emptyList(), pairExtent.stated(), false,
+							orderRecordNumbers, herOwnRecords(orderRecordNumbers, findingRecords, mappings, context), context);
 		} else if (!findings.isEmpty() && context != null
 				&& ChartSearchAiUtils.getBooleanGlobalProperty(
 						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
@@ -1763,7 +1778,10 @@ public class DrugReferenceInjector {
 		boolean conditionsUnchecked = moduleAnswer != null
 				&& (questionDrugs.isEmpty() && QueryScopeRouter.asksOnlyToScreenHerMedications(question)
 						&& !QueryScopeRouter.asksOnlyAboutInteractions(question)
-						|| proposesADrugNotHers(question, questionDrugs, screenedSubstances))
+						|| proposesADrugNotHers(question, questionDrugs, screenedSubstances)
+						// Or proposes one after a list, which the whole question never fits as a proposal shape: the list's
+						// own scan found that clause to be one (ADR Decision 557).
+						|| !listedBeforeTheProposal(question, questionDrugs).isEmpty())
 				&& drugSafetyValidator != null
 				&& drugSafetyValidator.conditionRuleCoverage() == DrugReferenceLoad.Coverage.ABSENT;
 		// What the closing line says was not covered is what this pass did not SCREEN, decided here for every composer
@@ -4738,13 +4756,14 @@ public class DrugReferenceInjector {
 	 * the answer's scope line, so it still closes what it covers; then, after it, her own orders sharing a substance (ADR
 	 * Decision 165). Every other finding about a listed drug stays unstated, as after any list (ADR Decision 150).
 	 *
-	 * <p>{@code null}, so the model answers, where "raised no finding" could be a guess: the question-pair arm's cap
+	 * <p>{@code null}, so the model answers, where {@code noFindingLines} and the list would add a finding line (Decision
+	 * 204's lead, ADR Decision 557), or where "raised no finding" could be a guess: the question-pair arm's cap
 	 * withheld a pair ({@code questionPairs}, Decision 150's guard), or a finding about a listed drug names a partner no arm
 	 * resolved to a substance.
 	 */
 	private static String withWhatTheListAdds(String answer, String question, List<DrugReference> questionDrugs,
 			List<DrugReference> proposed, Set<Object> herSubstances, List<SafetyWarning> findings, List<Integer> numbers,
-			List<Integer> about, PairChipExtent questionPairs, Map<String, Integer> orderRecordNumbers,
+			List<Integer> about, PairChipExtent questionPairs, boolean noFindingLines, Map<String, Integer> orderRecordNumbers,
 			Map<String, Integer> herOrderRecords, PatientClinicalContext context) {
 		if (answer == null) {
 			return null;
@@ -4753,23 +4772,16 @@ public class DrugReferenceInjector {
 		for (DrugReference entry : proposed) {
 			asked.add(entry.substanceGroupKey());
 		}
-		Map<Object, List<DrugReference>> notHers = new LinkedHashMap<Object, List<DrugReference>>();
-		for (DrugReference entry : listedBeforeTheProposal(question, questionDrugs)) {
-			Object key = entry.substanceGroupKey();
-			if (!herSubstances.contains(key) && !asked.contains(key)) {
-				if (!notHers.containsKey(key)) {
-					notHers.put(key, new ArrayList<DrugReference>());
-				}
-				notHers.get(key).add(entry);
-			}
-		}
+		Map<Object, List<DrugReference>> notHers = listedNotHers(question, questionDrugs, herSubstances, proposed);
+		// A finding the answer already cites is stated: never a second time.
+		Set<Integer> cited = ChartSearchAiUtils.citedIndexes(answer);
 		List<Integer> againstTheList = new ArrayList<Integer>();
 		List<SafetyWarning> sharing = new ArrayList<SafetyWarning>();
 		List<Integer> sharingNumbers = new ArrayList<Integer>();
 		Set<Object> related = new HashSet<Object>();
 		for (int i = 0; i < findings.size(); i++) {
 			SafetyWarning finding = findings.get(i);
-			if (about.contains(Integer.valueOf(i))) {
+			if (about.contains(Integer.valueOf(i)) || cited.contains(numbers.get(i))) {
 				continue;
 			}
 			if (finding.statesOrdersSharingASubstance()) {
@@ -4816,6 +4828,11 @@ public class DrugReferenceInjector {
 				related.addAll(listedPartners);
 			}
 		}
+		// Beneath Decision 204's "no rated reason to change it", a rated finding against a listed drug reads as contradicting
+		// it: the model answers instead (ADR Decision 557).
+		if (noFindingLines && !againstTheList.isEmpty()) {
+			return null;
+		}
 		final List<SafetyWarning> all = findings;
 		Collections.sort(againstTheList, Comparator.<Integer> comparingInt(i -> strengthRank(strengthClause(all.get(i)))));
 		List<String> added = new ArrayList<String>();
@@ -4851,6 +4868,61 @@ public class DrugReferenceInjector {
 		lines.addAll(at, added);
 		return withHerOwnOrdersSharingASubstance(String.join("\n", lines), sharing, sharingNumbers, orderRecordNumbers,
 				herOrderRecords);
+	}
+
+	/**
+	 * The drugs {@code question} lists before {@code proposed} that her orders do not resolve to, each substance's rows in
+	 * the order the question lists them — the drugs {@link #withWhatTheListAdds} states the list's findings against.
+	 */
+	private static Map<Object, List<DrugReference>> listedNotHers(String question, List<DrugReference> questionDrugs,
+			Set<Object> herSubstances, List<DrugReference> proposed) {
+		Set<Object> asked = new HashSet<Object>();
+		for (DrugReference entry : proposed) {
+			asked.add(entry.substanceGroupKey());
+		}
+		Map<Object, List<DrugReference>> notHers = new LinkedHashMap<Object, List<DrugReference>>();
+		for (DrugReference entry : listedBeforeTheProposal(question, questionDrugs)) {
+			Object key = entry.substanceGroupKey();
+			if (!herSubstances.contains(key) && !asked.contains(key)) {
+				if (!notHers.containsKey(key)) {
+					notHers.put(key, new ArrayList<DrugReference>());
+				}
+				notHers.get(key).add(entry);
+			}
+		}
+		return notHers;
+	}
+
+	/**
+	 * Whether {@code finding} is the list's business rather than the drug asked's, after a list ({@code theListsOwn} the
+	 * listed drugs her orders do not resolve to, {@code null} with no list): the drug asked is on neither of its sides, or
+	 * a listed drug she is not on is on the other (ADR Decision 557). The first is never stated, as after any list (ADR
+	 * Decision 150); the second is {@link #withWhatTheListAdds}' to state. Its sides are its subject rows and the rows its
+	 * arm resolved for each partner. A finding with no subject rows is never the list's: the composer's own gate decides
+	 * it. One about a listed drug whose partner has no rows makes {@link #withWhatTheListAdds} fail closed.
+	 */
+	private static boolean isTheListsOwn(SafetyWarning finding, Set<Object> asked, Set<Object> theListsOwn) {
+		// A finding with no subject rows cannot be placed: the composer's own gate decides it.
+		if (theListsOwn == null || finding.statesOrdersSharingASubstance() || finding.subjectRows().isEmpty()) {
+			return false;
+		}
+		Set<Object> sides = new HashSet<Object>();
+		for (DrugReference row : finding.subjectRows()) {
+			sides.add(row.substanceGroupKey());
+		}
+		for (List<DrugReference> rows : finding.partnerRows().values()) {
+			for (DrugReference row : rows) {
+				sides.add(row.substanceGroupKey());
+			}
+		}
+		return Collections.disjoint(sides, asked) || !Collections.disjoint(sides, theListsOwn);
+	}
+
+	/** {@code orderRecordNumbers}, or her orders' records resolved where no finding indexed them. */
+	private static Map<String, Integer> herOwnRecords(Map<String, Integer> orderRecordNumbers,
+			DrugOrderRecords findingRecords, List<RecordMapping> mappings, PatientClinicalContext context) {
+		return !orderRecordNumbers.isEmpty() ? orderRecordNumbers
+				: orderRecordNumbers(findingRecords != null ? findingRecords : new DrugOrderRecords(mappings), context);
 	}
 
 	/** What heads the lines {@link #withWhatTheListAdds} states about the drugs a question lists that her orders do not
@@ -7152,8 +7224,9 @@ public class DrugReferenceInjector {
 	 */
 	private String composeBelowFloorAboutHerOwnMedication(String question, List<DrugReference> questionDrugs,
 			Set<Object> herSubstances, List<SafetyWarning> findings, List<Integer> findingNumbers, PairChipExtent extent,
-			List<RecordMapping> mappings, List<DrugReference> orderEntries, PatientClinicalContext context,
-			boolean contraindicationsChecked, Map<String, Integer> orderRecordNumbers, Map<String, Integer> herOrderRecords) {
+			Set<Object> theListsOwn, List<RecordMapping> mappings, List<DrugReference> orderEntries,
+			PatientClinicalContext context, boolean contraindicationsChecked, Map<String, Integer> orderRecordNumbers,
+			Map<String, Integer> herOrderRecords) {
 		if (extent == null || extent.getFound() != 0 || extent.getBelowFloor() == null || extent.getBelowFloor().isEmpty()
 				|| !contraindicationsChecked) {
 			return null;
@@ -7177,7 +7250,7 @@ public class DrugReferenceInjector {
 		List<Integer> sharingNumbers = new ArrayList<Integer>();
 		for (int i = 0; i < findings.size(); i++) {
 			SafetyWarning finding = findings.get(i);
-			if (finding.alreadyOrdered() != null) {
+			if (finding.alreadyOrdered() != null || isTheListsOwn(finding, asked, theListsOwn)) {
 				continue;
 			}
 			if (!finding.statesOrdersSharingASubstance() && !namesOnlyItsOwnOrders(finding, itsOwnOrders)) {
@@ -7237,9 +7310,9 @@ public class DrugReferenceInjector {
 	 */
 	private String composeNoPairAboutHerOwnMedication(String question, List<DrugReference> questionDrugs,
 			Set<Object> herSubstances, List<SafetyWarning> findings, List<Integer> findingNumbers, PairChipExtent extent,
-			List<RecordMapping> mappings, List<DrugReference> orderEntries, PatientClinicalContext context,
-			boolean contraindicationsChecked, int unidentified, Map<String, Integer> orderRecordNumbers,
-			Map<String, Integer> herOrderRecords) {
+			Set<Object> theListsOwn, List<RecordMapping> mappings, List<DrugReference> orderEntries,
+			PatientClinicalContext context, boolean contraindicationsChecked, int unidentified,
+			Map<String, Integer> orderRecordNumbers, Map<String, Integer> herOrderRecords) {
 		// No pair found; whether any was listed below the floor matters only where she has another order to list it against,
 		// asked below — a product's below-floor rows are not read at all (ADR Decision 372).
 		if (extent == null || extent.getFound() != 0 || !contraindicationsChecked || unidentified != 0) {
@@ -7264,7 +7337,7 @@ public class DrugReferenceInjector {
 		List<Integer> lines = new ArrayList<Integer>();
 		for (int i = 0; i < findings.size(); i++) {
 			SafetyWarning finding = findings.get(i);
-			if (finding.alreadyOrdered() != null) {
+			if (finding.alreadyOrdered() != null || isTheListsOwn(finding, asked, theListsOwn)) {
 				continue;
 			}
 			if (!finding.statesOrdersSharingASubstance() && !namesOnlyItsOwnOrders(finding, itsOwnOrders)) {

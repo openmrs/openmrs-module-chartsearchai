@@ -189,6 +189,75 @@ public class ListedRegimenAnswerTest extends BaseModuleContextSensitiveTest {
 	}
 
 	@Test
+	public void herDrugRelatedToHerOrdersOnlyBelowTheFloorIsAnsweredAfterAListAsAlone() {
+		// Metformin against her lamivudine is a DDInter Unknown row: Decision 204's statement, as asked alone.
+		List<PatientClinicalContext.ActiveDrugOrder> metformin = orders("Metformin", "A10BA02", 1, "Lamivudine", "J05AF05", 1);
+		String alone = ask(metformin, "Is it safe to give Metformin?");
+		assertNotNull(alone, "precondition: the module answers the drug asked alone");
+		String answer = ask(metformin, "The patient is currently on Nevirapine, is it safe to give Metformin?");
+		assertNotNull(answer, "the module answers after the list too");
+		assertEquals(alone.split("\n")[0], answer.split("\n")[0], "the same statement about her own orders: " + answer);
+		assertTrue(answer.contains("\nThe check of Metformin against Nevirapine, also named in the question, raised no "
+				+ "finding."), "and what the list adds: " + answer);
+	}
+
+	@Test
+	public void noRatedReasonToChangeHerDrugIsNeverFollowedByARatedFindingAgainstTheList() {
+		// Decision 204's lead says the data gives no rated reason to change her metformin; the listed ritonavir is rated
+		// Moderate against it. The two read as contradicting each other, so the model answers.
+		List<PatientClinicalContext.ActiveDrugOrder> metformin = orders("Metformin", "A10BA02", 1, "Lamivudine", "J05AF05", 1);
+		assertNotNull(ask(metformin, "Is it safe to give Metformin?"), "precondition: Decision 204 answers it alone");
+		assertNull(ask(metformin, "The patient is currently on Ritonavir, is it safe to give Metformin?"),
+			"no rated finding beneath 'no rated reason to change it'");
+	}
+
+	@Test
+	public void aProposalAfterAListSaysHerConditionsWereNotCheckedAsTheDrugAskedAloneDoes() {
+		// The shipped data carries no drug-condition rule, so a proposal says her conditions were not checked (ADR Decision
+		// 533) — after a list as alone, whether the drug is hers or not.
+		DrugReferenceService shipped = new DrugReferenceService();
+		assertEquals(DrugReferenceLoad.Coverage.ABSENT, shipped.getLoadStatus().coverageOf(DrugReferenceLoad.Arm.CONDITION_RULES),
+			"premise: the shipped dataset, as installed, publishes no drug-condition rule");
+		for (String drug : Arrays.asList("Metformin", "Rifampicin")) {
+			String alone = ask(shipped, TWO_TB_COMBINATIONS, "Is it safe to give " + drug + "?");
+			String listed = ask(shipped, TWO_TB_COMBINATIONS, LISTING_HER_REGIMEN + drug + "?");
+			assertTrue(alone.contains(DrugReferenceInjector.CONDITIONS_UNCHECKED_PART),
+				"precondition: " + drug + " asked alone says so: " + alone);
+			assertTrue(listed.contains(DrugReferenceInjector.CONDITIONS_UNCHECKED_PART), drug + " after the list: " + listed);
+		}
+	}
+
+	@Test
+	public void aFindingTheAnswerAlreadyStatesIsNotStatedAgainForTheList() {
+		// Two prescriptions of one combination, and its lamivudine listed: the statement already says the two orders share
+		// their substances, and what the list adds must not say it a second time.
+		List<PatientClinicalContext.ActiveDrugOrder> orders = orders("Metformin", "A10BA02", 1, "Lamivudine / zidovudine",
+			"J05AR01", 2);
+		String answer = ask(orders, "The patient is currently on Lamivudine and Nevirapine, is it safe to give Metformin?");
+		assertNotNull(answer, "the module answers");
+		assertTrue(answer.contains(" are in active orders Lamivudine / zidovudine (2 orders) — possible duplicate therapy."),
+			"precondition: her two prescriptions sharing their substances, stated: " + answer);
+		assertNoTwoLinesAlike(answer);
+	}
+
+	@Test
+	public void herDrugWithNoOtherOrderIsAnsweredAfterAListWithTheListsFinding() {
+		List<PatientClinicalContext.ActiveDrugOrder> zidovudine = orders("Zidovudine", "J05AF01", 1);
+		String alone = ask(zidovudine, "Is it safe to give Zidovudine?");
+		assertNotNull(alone, "precondition: the module answers the drug asked alone");
+		String answer = ask(zidovudine, "The patient is currently on Fluconazole, is it safe to give Zidovudine?");
+		assertNotNull(answer, "the module answers after the list too");
+		List<String> lines = Arrays.asList(answer.split("\n"));
+		assertEquals(alone.split("\n")[0], lines.get(0), "the same statement about her own orders: " + answer);
+		int heading = lines.indexOf(DrugReferenceInjector.LISTED_NOT_HERS_HEADING);
+		assertTrue(heading > 0, "the list's finding under its own heading: " + answer);
+		assertTrue(lines.get(heading + 1).matches("Fluconazole interacts with active order Zidovudine — Moderate\\.( \\[\\d+\\]){2}"),
+			"the fluconazole finding, citing itself and her order: " + answer);
+		assertEquals(1, answer.split("Fluconazole interacts with").length - 1, "stated once: " + answer);
+		assertFalse(answer.contains("can be given") || answer.contains("No —"), "no verdict on her own drug: " + answer);
+	}
+
+	@Test
 	public void aLineNamingHerCombinationByOneDisplayNamesTheOtherOrderCarryingItsSubstance() {
 		String line = lineAbout(ask(TWO_TB_COMBINATIONS, "Is it safe to give Metformin?"), "The interacting substance is Rifampicin.");
 		assertTrue(line.matches("Metformin interacts with active order Isoniazid / pyrazinamide / rifampin \\(2 orders\\) — "
@@ -250,13 +319,18 @@ public class ListedRegimenAnswerTest extends BaseModuleContextSensitiveTest {
 	}
 
 	private static String ask(List<PatientClinicalContext.ActiveDrugOrder> orders, String question) {
+		return ask(DrugReferenceTestSupport.shippedServiceWithGroups(), orders, question);
+	}
+
+	private static String ask(DrugReferenceService service, List<PatientClinicalContext.ActiveDrugOrder> orders,
+			String question) {
 		Set<String> names = new LinkedHashSet<String>();
 		Set<String> codes = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : orders) {
 			names.addAll(order.getNames());
 			codes.addAll(order.getAtcCodes());
 		}
-		return DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.shippedServiceWithGroups())
+		return DrugReferenceTestSupport.injectorWithSafety(service)
 				.injectRecords(DrugReferenceTestSupport.oneRecordChart(),
 					DrugReferenceTestSupport.ctx(40, null, names, codes, null, null, orders), question)
 				.getModuleAnswer();

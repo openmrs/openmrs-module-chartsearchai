@@ -25874,6 +25874,8 @@ the answer the bare question gets, plus the list's ibuprofen against her warfari
 - A drug she takes whose only finding is against a listed drug, with none against her other orders, still goes to the
   model: `aboutHerOwnMedication` admits it only with a finding about her own orders. The below-floor and no-pair
   answers about her own drug still read the whole question, so after a list they decline as before.
+  [Decision 557](#decision-557-her-own-drug-that-the-check-relates-to-none-of-her-orders-above-the-floor-is-answered-after-a-list-too)
+  answers both.
 - Stating the list's lines through `findingLine` makes two changes the drug asked alone already makes. It drops *"No
   severity is rated"* from an allergy to the drug's own substance, which is Decision 192's rule. And it adds the
   current-medication sentence to a contraindication about a medication she already takes.
@@ -25908,3 +25910,77 @@ shipped knowledge base. The cases cover:
 And by `LlmInferenceServiceAnswerFromFindingsContextTest`: `.aListQuestionProposingADrugSheAlreadyTakesIsAnsweredAsHerOwnMedication`
 (the listed drug's chip, through the real service) and `.aListedDrugSheTakesPublishesItsPairWithTheDrugProposedOnce`
 (no second chip from a listed drug she takes).
+
+## Decision 557: Her own drug that the check relates to none of her orders above the floor is answered after a list too
+
+**Status: Accepted** (November 2026). Extends [Decision 556](#decision-556-a-question-listing-her-medications-is-answered-as-the-drug-asked-alone-is),
+[Decision 204](#decision-204-her-own-drug-related-to-her-other-orders-only-below-the-severity-floor-is-answered-as-hers--the-interaction-data-giving-no-rated-reason-to-change-it)
+and [Decision 206](#decision-206-her-own-drug-in-two-of-her-orders-is-no-interaction-with-her-other-medications-and-one-related-to-none-of-them-is-answered-as-hers).
+The owner's go-ahead, 2026-11-03.
+
+### Context
+
+Decision 556 answered a drug she takes, asked after a list, only where the check related it to another of her orders
+above the severity floor, through Decision 193's branch. Its two siblings were left behind:
+
+- **Decision 204's branch** answers her own drug related to her other orders only below the floor.
+- **Decision 206's branch** answers her own drug related to none of them, or her only order.
+
+Both still read the whole question and every drug it names, and the question-wide pair extent, which counts the
+listed drugs' pairs too. Both also declined on any finding not about her own orders, and every listed drug's finding
+is one. So a list sent the question to the model. That covered both remaining cases: her drug with nothing against her
+own orders whose only finding is against a listed drug, and any below-floor or no-pair answer about her own drug after
+a list.
+
+### The decision
+
+- **Both branches read the proposal, not the list.** They take Decision 556's proposal words and drug. For the extent
+  they take `PairChipExtent.Sink.statedFor` of that drug, the drug-in-play arm's statement about it alone
+  (Decision 149).
+- **The list's findings are skipped there, not refused.** `isTheListsOwn` places a finding by its subject rows and its
+  partners' rows. A finding is the list's own where the drug asked is on neither side, or where a listed drug she is not
+  on is on the other side. The first kind is never stated, as after any list (Decision 150). The second kind is for
+  `withWhatTheListAdds` to state.
+- **Then `withWhatTheListAdds` states what the list adds, as after Decision 193's answer.** It keeps every guard it
+  has: the heading, the cap, a partner it cannot place, and a chip still withheld. It now also skips a finding the
+  answer already cites, so a shared-substance line the statement wrote is not written twice.
+- **Beneath Decision 204's sentence, no rated finding is added.** That sentence says *"The interaction data gives no
+  rated reason to change it"*, and a Moderate against a listed drug beneath it reads as contradicting it. Her
+  metformin after a list naming ritonavir therefore goes to the model (`noFindingLines`); the "raised no finding" line
+  is still added. Decision 206's sentence is scoped to her orders (*"relates it to none of this patient's … other
+  active medications"*) and takes the list's findings. Rewording Decision 204's sentence for this case is the owner's
+  call and was not made.
+- **A proposal after a list says her conditions were not checked, as one asked alone does.** Decision 533's gate asked
+  `questionProposes` of the whole question, which a list question never fits. So no list answer carried *"Not
+  checked: … this patient's conditions (no drug-condition rules are loaded)"*. That included Decision 150's answers
+  for a drug she is not on, and the demo's own list answers on 2026-11-03. The gate now also counts the clause
+  `listedBeforeTheProposal`'s scan found, which that scan admits only where it fits a proposal shape.
+- **A finding with no subject rows is never the list's.** `isTheListsOwn` leaves it to the composer's own gate. Only the
+  screening arm builds one, and a list question is no screen.
+
+*"The patient is currently on Fluconazole, is it safe to give Zidovudine?"*, of a patient on zidovudine alone, now
+answers *"Zidovudine is one of this patient's active medications (Zidovudine [2]), and this patient has no other active
+medication to check it against."*, then the heading and *"Fluconazole interacts with active order Zidovudine —
+Moderate. [5] [2]"*. Her metformin, which the data lists against her lamivudine with no rating, keeps Decision 204's
+sentence after a list naming nevirapine, then *"The check of Metformin against Nevirapine, also named in the question,
+raised no finding."*
+
+### Alternatives
+
+**A new opening for her drug with only a listed drug's finding** — *"X is one of this patient's active medications."*
+then the heading, offered to the owner in the same session — was not needed. Decisions 204 and 206 already say what the
+check found among her own orders, and an opening saying nothing about them would leave the clinician to infer it.
+Where neither branch's own gates hold, the model still answers.
+
+### What it gives up
+
+- A one-sided rule raised only from a listed drug she takes is still not stated (Decision 556's residue).
+- Decision 204's and 206's other gates are unchanged, so they still decline where they declined for the drug asked
+  alone: a missing reference record, an order not started, an order the data does not identify.
+
+Pinned by `ListedRegimenAnswerTest`:
+- `.herDrugRelatedToHerOrdersOnlyBelowTheFloorIsAnsweredAfterAListAsAlone`;
+- `.herDrugWithNoOtherOrderIsAnsweredAfterAListWithTheListsFinding`;
+- `.aFindingTheAnswerAlreadyStatesIsNotStatedAgainForTheList`;
+- `.noRatedReasonToChangeHerDrugIsNeverFollowedByARatedFindingAgainstTheList`;
+- `.aProposalAfterAListSaysHerConditionsWereNotCheckedAsTheDrugAskedAloneDoes`.

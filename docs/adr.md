@@ -10556,8 +10556,8 @@ the combination case.
 - **The `Major` gate is fixed at load**, so `all` would need the loader to keep what it drops.
 - **Order among a drug's chips.** It is appended after the drug's pairwise chips, so it trails that drug's
   caution chips too rather than being ranked among them — the limit the class-only chips already carry
-  (#346). Where Decision 108's composer writes the answer, it states the finding as a caution line, below
-  any withholding one; that path is not pinned by a case.
+  (#346). Where Decision 108's composer writes the answer (and, since [Decision 559](#decision-559-a-proposal-whose-cautions-include-a-condition-mediated-chain-is-answered-by-the-module-with-the-chain-counted-apart), Decision 140's), it states the finding as a caution line, below
+  any withholding one; that path is not pinned by a case (Decision 140's is, by `ConditionMediatedComposedAnswerTest`).
 - **One chip per condition and DIRECTION, so a pair can raise several.** Two drugs each rated for, and
   each naming, the same conditions raise a chip per condition in each direction: a review agent measured
   four for *Can I give Trandolapril?* on a Perindopril order at `26005a6b` (Heart Failure and Hypotension,
@@ -13487,7 +13487,7 @@ cited her lidocaine order as *"Metoclopramide [6]"*, and the significance qualif
 - **A third shape is answered**: a proposal of one drug she is not taking, over a chart read in full, whose every
   finding is an INTERACTION stating the PROPOSAL caution clause about that drug alone —
   `DrugReferenceInjector.cautionsOnlyAbout`. Any finding of another type (a contraindication, a condition-mediated
-  chain), stating another clause (a withholding interaction, a current-medication or ended-order referent) or about
+  chain — admitted as a caution since [Decision 559](#decision-559-a-proposal-whose-cautions-include-a-condition-mediated-chain-is-answered-by-the-module-with-the-chain-counted-apart)), stating another clause (a withholding interaction, a current-medication or ended-order referent) or about
   another drug keeps the model call.
 - **The lead counts the cautions and names their kind, never a clearance or a negative**:
   `DrugReferenceInjector.cautionLead` — *"2 interaction cautions for Omeprazole:"*. Not "can be given", not that
@@ -26037,3 +26037,95 @@ drug itself, as Decision 212 has it.
 Pinned by `ListedRegimenAnswerTest.aRatedFindingAgainstTheListFollowsAStatementScopedToHerOwnMedications`: the scoped
 sentence, the heading next, and the ritonavir line. Forcing the unscoped form reddens it. Always taking the scoped
 form reddens `.herDrugRelatedToHerOrdersOnlyBelowTheFloorIsAnsweredAfterAListAsAlone`, whose list adds no finding line.
+
+## Decision 559: A proposal whose cautions include a condition-mediated chain is answered by the module, with the chain counted apart
+
+**Status: Accepted** (November 2026) — implemented, no issue. Extends [Decision 140](#decision-140-a-proposal-whose-findings-are-all-cautions-about-the-drug-is-answered-with-the-cautions-found) and [Decision 150](#decision-150-a-proposal-after-a-list-is-answered-from-its-findings-about-the-drug-proposed); reverses what `ConditionMediatedFindingPartnerCompletionContextTest` pinned of Decision 140.
+
+### Context
+
+An external evaluation sheet asked the public demo's ARV patients whether metformin is safe and graded the answers a miss
+for leaving out the lactic-acidosis risk metformin shares with their nucleoside analogues. That risk is what [Decision
+111](#decision-111-drugs-linked-through-one-drug-disease-condition-are-stated-as-one-derived-finding-and-it-is-a-caution)'s
+derived tier states, behind `chartsearchai.drugSafety.derivedFindings`, which ships `off`.
+
+Switched on, it raised the chain, and the question went to the model. Decision 140's gate (`cautionsOnlyAbout`) and
+Decision 150's (`composeListFindings`) admitted interaction findings alone, and the one reason recorded for that was the
+lead: it counted INTERACTION cautions, which a chain is not. Decision 111 meanwhile said a composed answer states the
+chain as a caution line. Measured on the demo-seed replica at `d42c5b606` with the tier on, the sheet's 12 prompts and
+their 12 bare forms, plus one Decision 558 probe:
+- **25 answered 200**, 19 by the module.
+- **All 6 carrying a chain went to the model**, and none of the other 19 carried one.
+- **Row 9's answer was** *"No Metformin should not be given due to interactions with active orders"*, over findings that
+  are all cautions. Row 1's was *"The records do not address the safety of giving metformin to the patient"*. These are
+  the verdicts the sheet first reported, back.
+
+### The decision
+
+- **A chain stating the proposal caution is a caution to both gates.** `DrugReferenceInjector.isAChain` is the type test.
+  `cautionsOnlyAbout` and `composeListFindings` admit it as they admit an interaction caution. Every other clause
+  still keeps the model call, as before: a chain about her own medication, or about an ended order, states another one.
+- **It is counted apart, by its own name, and rates nothing.** For the drug asked alone, `cautionSummary` gives
+  *"2 interaction cautions for Metformin — 2 Moderate; and 1 condition-mediated caution, with no severity of its
+  own."* With only a chain it gives *"1 condition-mediated caution for Metformin — no severity of its own, with
+  Stavudine."* After a list, `cautionLead` gives *"3 interaction cautions and 1 condition-mediated caution for
+  Metformin:"*. The answer summary counts it the same way (`screenSummary`, through `statedThenCounted`): *"Metformin:
+  no Major interactions; 2 cautions and 1 condition-mediated caution."* A review agent measured the first build
+  counting it there once per order it names. "Condition-mediated" is the chip's own `type`, so a client shows one word
+  for both.
+- **Its line keeps its last sentence.** `briefDetail` keeps *"Derived from DDInter's drug-disease rows by a text match;
+  not a DDInter pairwise rating, and this finding has no severity of its own."* The first sentence states a
+  drug-disease rating ("rated Major in Acidosis, Lactic"), and Decision 111 measured the model reading that as a rating
+  of the pair once the closing sentence was gone.
+- **A stock install is unchanged.** With the tier off no chain is raised, so neither gate meets one. On the replica, all
+  25 answers at this build matched the public demo's (`d42c5b606`) word for word with the tier off.
+
+### Measured
+
+On the demo-seed replica at this build with the tier on, the same 25:
+- **all 25 answered by the module**, the 6 chains among them;
+- **row 9** opens *"2 interaction cautions and 1 condition-mediated caution for Metformin:"*. Its chain names abacavir,
+  lamivudine/zidovudine, stavudine and didanosine, so it states the didanosine signal the sheet said was missed.
+
+**60 sample patients**, the first 60 of Decision 558's sample, asked *"Is it safe to give Metformin?"*:
+- **all 60 answered by the module**;
+- **56 carried a chain**. 54 of them are lactic acidosis.
+- **The other 2** link metformin to the patient's streptomycin through *Dehydration*. That is a derived-tier precision
+  question ([#480](https://github.com/openmrs/openmrs-module-chartsearchai/issues/480)), and the chip states it whatever
+  this decision does.
+
+### Residues
+
+- **No-verdict and withholding-without-a-rating shapes** (Decisions 257, 311, 312, 351) still refuse a chain, so a
+  contraindication or an unrated withholding beside a chain keeps the model call for a drug asked alone. After a list,
+  `composeListFindings` already states a contraindication under the found-lead, so the two forms differ there.
+- **Her own medication** (Decision 193) and the screens still refuse it. A chain about her own drug states the
+  current-medication clause, which neither gate admits.
+- **The listed drugs are not joined.** The chain arm relates the drug in play to her ORDERS only (Decision 111). So after
+  a list naming stavudine she is not on, *"The check of Metformin against … Stavudine, also named in the question,
+  raised no finding"* still stands beside a lactic-acidosis chain through her other orders. That sentence is about the
+  interaction check, as before.
+- **The tier stays off by default.** Turning it on for an install, the public demo included, is a decision to take
+  against #480's precision figure. This decision does not take it.
+
+### Alternatives
+
+- **Turn the tier on and leave the gates.** Measured above: every chain cell regresses to the model's verdicts.
+- **Fold the chain into the interaction count.** The lead would then call a text match an interaction, and count it
+  once per order it names.
+- **Keep the model call, Decision 140's choice.** The measured verdicts above are why not.
+
+Pinned by `ConditionMediatedComposedAnswerTest`, over the sheet's own charts:
+- **the drug asked alone:** removing the chain from `cautionsOnlyAbout` reddens
+  `.aDrugAskedAloneWhoseCautionsIncludeAChainIsAnsweredWithTheChainCountedApart`;
+- **after a list:** removing it from `composeListFindings` reddens
+  `.aListOfDrugsSheIsNotOnStatesTheChainUnderALeadCountingItApart`;
+- **the provenance sentence:** dropping its leg in `briefDetail` reddens every composed case;
+- **the summary:** the chain counter in `screenSummary` reddens
+  `.aListOfHerMedicationsBeforeTheProposalStatesTheChainAsTheDrugAskedAloneDoes`, and the `CAUTION_SUMMARY`
+  alternative reddens `.aProposalWhoseOnlyFindingIsAChainIsAnsweredWithIt`.
+
+`ConditionMediatedFindingPartnerCompletionContextTest.aProposalWhoseCautionsIncludeAChainIsAnsweredByTheModule` replaces
+`.aProposalWhoseCautionsIncludeAChainIsStillAnsweredByTheModel`, a spec change made here. That class's #555 cases now
+set `answerFromFindings` off, as `CitedFindingPartnerCompletionTest` does (Decision 131), because what they judge is the
+model's answer.

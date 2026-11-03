@@ -41,29 +41,29 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 public class ListedRegimenAnswerTest extends BaseModuleContextSensitiveTest {
 
 	/** dd556a73: two differently named rifampicin combinations, and her ARVs and cotrimoxazole. */
-	private static final List<PatientClinicalContext.ActiveDrugOrder> TWO_TB_COMBINATIONS = orders(
+	static final List<PatientClinicalContext.ActiveDrugOrder> TWO_TB_COMBINATIONS = orders(
 		"Lamivudine / zidovudine", "J05AR01", 6, "Efavirenz", "J05AG03", 7, "Isoniazid / pyrazinamide / rifampin", "J04AM05", 2,
 		"Trimethoprim and sulfamethoxazole", "J01EE01", 6, "Rifampicin isoniazid pyrazinamide and ethambutol", "J04AM06", 2,
 		"Lamivudine", "J05AF05", 1, "Stavudine", "J05AF04", 1);
 
 	/** dd5558ed: one rifampicin combination, and no nevirapine or stavudine at all. */
-	private static final List<PatientClinicalContext.ActiveDrugOrder> ONE_TB_COMBINATION = orders(
+	static final List<PatientClinicalContext.ActiveDrugOrder> ONE_TB_COMBINATION = orders(
 		"Lamivudine / zidovudine", "J05AR01", 5, "Efavirenz", "J05AG03", 5, "Trimethoprim and sulfamethoxazole", "J01EE01", 5,
 		"Rifampicin isoniazid pyrazinamide and ethambutol", "J04AM06", 3);
 
 	/** dd79194e: lopinavir/ritonavir beside nevirapine. */
-	private static final List<PatientClinicalContext.ActiveDrugOrder> LOPINAVIR_RITONAVIR = orders(
+	static final List<PatientClinicalContext.ActiveDrugOrder> LOPINAVIR_RITONAVIR = orders(
 		"Lamivudine / zidovudine", "J05AR01", 5, "Nevirapine", "J05AG01", 6, "Trimethoprim and sulfamethoxazole", "J01EE01", 7,
 		"Lamivudine", "J05AF05", 1, "Stavudine", "J05AF04", 1, "Lopinavir / ritonavir", "J05AR10", 2, "Abacavir", "J05AF06", 2,
 		"Didanosine", "J05AF02", 2);
 
-	private static final String LISTING_HER_REGIMEN = "The patient is currently on Lamivudine / zidovudine, Efavirenz, "
+	static final String LISTING_HER_REGIMEN = "The patient is currently on Lamivudine / zidovudine, Efavirenz, "
 			+ "Trimethoprim and sulfamethoxazole  is it safe to give ";
 
-	private static final String LISTING_DRUGS_SHE_IS_NOT_ON = "The patient is currently on Lamivudine, Nevirapine, Stavudine, "
+	static final String LISTING_DRUGS_SHE_IS_NOT_ON = "The patient is currently on Lamivudine, Nevirapine, Stavudine, "
 			+ "is it safe to give ";
 
-	private static final String LISTING_HER_PROTEASE_INHIBITOR = "The patient is currently on Abacavir, Lopinavir / ritonavir, "
+	static final String LISTING_HER_PROTEASE_INHIBITOR = "The patient is currently on Abacavir, Lopinavir / ritonavir, "
 			+ "Didanosine and Trimethoprim and sulfamethoxazole is it safe to give ";
 
 	@BeforeEach
@@ -332,12 +332,23 @@ public class ListedRegimenAnswerTest extends BaseModuleContextSensitiveTest {
 		return line.replaceAll("( \\[\\d+\\])+$", "");
 	}
 
-	private static String ask(List<PatientClinicalContext.ActiveDrugOrder> orders, String question) {
+	static String ask(List<PatientClinicalContext.ActiveDrugOrder> orders, String question) {
 		return ask(DrugReferenceTestSupport.shippedServiceWithGroups(), orders, question);
 	}
 
 	private static String ask(DrugReferenceService service, List<PatientClinicalContext.ActiveDrugOrder> orders,
 			String question) {
+		return injected(service, orders, question).getModuleAnswer();
+	}
+
+	/** The chart the real injector returns for {@code question} over {@code orders}, the shipped knowledge base. */
+	static org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart injected(
+			List<PatientClinicalContext.ActiveDrugOrder> orders, String question) {
+		return injected(DrugReferenceTestSupport.shippedServiceWithGroups(), orders, question);
+	}
+
+	private static org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart injected(
+			DrugReferenceService service, List<PatientClinicalContext.ActiveDrugOrder> orders, String question) {
 		Set<String> names = new LinkedHashSet<String>();
 		Set<String> codes = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : orders) {
@@ -346,12 +357,11 @@ public class ListedRegimenAnswerTest extends BaseModuleContextSensitiveTest {
 		}
 		return DrugReferenceTestSupport.injectorWithSafety(service)
 				.injectRecords(DrugReferenceTestSupport.oneRecordChart(),
-					DrugReferenceTestSupport.ctx(40, null, names, codes, null, null, orders), question)
-				.getModuleAnswer();
+					DrugReferenceTestSupport.ctx(40, null, names, codes, null, null, orders), question);
 	}
 
 	/** Display, the ATC code of its concept, and how many prescriptions of it her chart holds, never stopped. */
-	private static List<PatientClinicalContext.ActiveDrugOrder> orders(Object... displayCodeAndCount) {
+	static List<PatientClinicalContext.ActiveDrugOrder> orders(Object... displayCodeAndCount) {
 		List<PatientClinicalContext.ActiveDrugOrder> orders = new ArrayList<PatientClinicalContext.ActiveDrugOrder>();
 		for (int i = 0; i < displayCodeAndCount.length; i += 3) {
 			String display = (String) displayCodeAndCount[i];

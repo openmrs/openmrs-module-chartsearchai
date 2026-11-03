@@ -3866,7 +3866,39 @@ public class DrugReferenceInjector {
 	 * findings of an interaction check, not a review of whether the drug suits her.
 	 */
 	static String cautionLead(int count, String drug) {
-		return count + (count == 1 ? " interaction caution for " : " interaction cautions for ") + drug + ":";
+		return cautionLead(count, 0, drug);
+	}
+
+	/**
+	 * As above, with {@code chains} condition-mediated findings ({@link #isAChain}) counted apart, after the interaction
+	 * cautions and by their own name, since a chain is not an interaction the data rates (ADR Decision 559): <em>"3
+	 * interaction cautions and 1 condition-mediated caution for Metformin:"</em>; <em>"1 condition-mediated caution for
+	 * Metformin:"</em> where there is no interaction caution.
+	 */
+	static String cautionLead(int count, int chains, String drug) {
+		StringBuilder lead = new StringBuilder();
+		if (count > 0 || chains == 0) {
+			lead.append(count).append(count == 1 ? " interaction caution" : " interaction cautions");
+		}
+		if (chains > 0) {
+			lead.append(lead.length() > 0 ? " and " : "").append(chains)
+					.append(chains == 1 ? CHAIN_CAUTION : CHAIN_CAUTIONS);
+		}
+		return lead.append(" for ").append(drug).append(":").toString();
+	}
+
+	/** What a composed answer's count calls a condition-mediated finding, by the chip's own type name (ADR Decision
+	 *  559). */
+	private static final String CHAIN_CAUTION = " " + SafetyWarning.TYPE_CONDITION_MEDIATED + " caution";
+
+	private static final String CHAIN_CAUTIONS = CHAIN_CAUTION + "s";
+
+	/**
+	 * Whether {@code finding} is a CONDITION-MEDIATED chain (ADR Decision 111) — never a rating of a pair, so a composed
+	 * answer counts it apart from the interaction cautions and states it with what it is not (ADR Decision 559).
+	 */
+	private static boolean isAChain(SafetyWarning finding) {
+		return SafetyWarning.TYPE_CONDITION_MEDIATED.equals(finding.getType());
 	}
 
 	/**
@@ -4627,7 +4659,9 @@ public class DrugReferenceInjector {
 				againstListed.put(i, new ArrayList<Object>());
 				continue;
 			}
-			if (!SafetyWarning.TYPE_INTERACTION.equals(finding.getType()) || finding.subjectRows().isEmpty()
+			// A chain is a caution, stated as the drug asked alone states it (ADR Decision 559).
+			if (!SafetyWarning.TYPE_INTERACTION.equals(finding.getType()) && !isAChain(finding)
+					|| finding.subjectRows().isEmpty()
 					|| !(STRENGTH_CAUTION.equals(clause)
 							|| STRENGTH_WITHHOLD.equals(clause) && licensesTheModulesNo(finding))) {
 				return null;
@@ -4701,12 +4735,18 @@ public class DrugReferenceInjector {
 			lines.add(0, "No if the patient is on " + joinedAsAlternatives(names) + " — this module's drug-safety check found "
 					+ "a reason to withhold " + drug + (names.size() == 1 ? " against it." : " against each."));
 		} else {
-			// Counted by PAIR, as a proposal asked alone counts its cautions (ADR Decisions 545, 548).
+			// Counted by PAIR, as a proposal asked alone counts its cautions (ADR Decisions 545, 548), and a chain apart, by
+			// chain (ADR Decision 559).
 			int pairs = 0;
+			int chains = 0;
 			for (Integer i : order) {
-				pairs += pairsOf(findings.get(i));
+				if (isAChain(findings.get(i))) {
+					chains++;
+				} else {
+					pairs += pairsOf(findings.get(i));
+				}
 			}
-			lines.add(0, cautionLead(pairs, drug));
+			lines.add(0, cautionLead(pairs, chains, drug));
 		}
 		return String.join("\n", lines);
 	}
@@ -5325,24 +5365,26 @@ public class DrugReferenceInjector {
 	}
 
 	/**
-	 * Whether {@code findings} are all PROPOSAL interaction cautions about the substance {@code asked} names —
-	 * each an INTERACTION stating {@link #STRENGTH_CAUTION}, each with subject rows of that substance alone (ADR
-	 * Decision 140). Fail-closed both ways: any finding of another type (a contraindication, a condition-mediated
-	 * chain), stating another clause (a withholding interaction, a current-medication or ended-order referent)
-	 * or about another drug keeps the model call, so {@link #cautionLead}, which counts its lines as
-	 * interaction cautions about that drug, is true of every line under it.
+	 * Whether {@code findings} are all PROPOSAL cautions about the substance {@code asked} names —
+	 * each an INTERACTION or a condition-mediated chain ({@link #isAChain}, ADR Decision 559) stating {@link
+	 * #STRENGTH_CAUTION}, each with subject rows of that substance alone (ADR Decision 140). Fail-closed both ways: any
+	 * finding of another type (a contraindication), stating another clause (a withholding interaction, a
+	 * current-medication or ended-order referent) or about another drug keeps the model call, so {@link
+	 * #cautionSummary}, which counts its lines as interaction cautions and chains about that drug, is true of every line
+	 * under it.
 	 *
 	 * <p><b>The two subject-row conditions are defensive and nothing pins them</b>: no finding a single-drug
 	 * proposal raises today states a caution clause without subject rows of the drug proposed, so deleting
-	 * either leaves the suite green (ADR Decision 140 records the probe). The type and the caution clause are
-	 * pinned — the type by the condition-mediated cases, whose chains would otherwise be composed.
+	 * either leaves the suite green (ADR Decision 140 records the probe). The caution clause is pinned, and so is the
+	 * chain's admission ({@code ConditionMediatedComposedAnswerTest}, ADR Decision 559); what dropping the type test
+	 * altogether reddens is not recorded.
 	 */
 	private static boolean cautionsOnlyAbout(Set<Object> asked, List<SafetyWarning> findings) {
 		if (findings.isEmpty()) {
 			return false;
 		}
 		for (SafetyWarning finding : findings) {
-			if (!SafetyWarning.TYPE_INTERACTION.equals(finding.getType())
+			if (!SafetyWarning.TYPE_INTERACTION.equals(finding.getType()) && !isAChain(finding)
 					|| !STRENGTH_CAUTION.equals(moduleClause(finding)) || finding.subjectRows().isEmpty()) {
 				return false;
 			}
@@ -6113,10 +6155,15 @@ public class DrugReferenceInjector {
 		int unrated = 0;
 		int duplicates = drugGroups;
 		int cautions = 0;
+		int chains = 0;
 		for (SafetyWarning finding : findings) {
 			int pairs = pairsOf(finding);
 			String clause = moduleClause(finding);
-			if (finding.statesOrdersSharingASubstance()) {
+			if (isAChain(finding)) {
+				// A chain rates no pair, so it is counted by chain and by its own name, as a proposal's lead counts it (ADR
+				// Decision 559): counted per order it names, it read as that many interaction cautions.
+				chains++;
+			} else if (finding.statesOrdersSharingASubstance()) {
 				duplicates++;
 			} else if (SafetyWarning.TYPE_CONTRAINDICATION.equals(finding.getType())) {
 				contraindications++;
@@ -6153,6 +6200,9 @@ public class DrugReferenceInjector {
 		}
 		if (cautions > 0) {
 			rest.add(cautions + (cautions == 1 ? " caution" : " cautions"));
+		}
+		if (chains > 0) {
+			rest.add(chains + (chains == 1 ? CHAIN_CAUTION : CHAIN_CAUTIONS));
 		}
 		StringBuilder summary = new StringBuilder();
 		for (Map.Entry<String, List<String>> rating : rated.entrySet()) {
@@ -6196,9 +6246,28 @@ public class DrugReferenceInjector {
 	 * Ibuprofen:"</em>, which a client could not show alone; never that the drug can be given. Counted by PAIR, as
 	 * {@link #screenSummary} counts (ADR Decisions 99, 545): a chip stating one mechanism for several of her orders is
 	 * a caution about each — <em>"2 interaction cautions for Ibuprofen — Moderate, with Prednisone and
-	 * Dexamethasone."</em> — so the drug asked about is counted alike whichever way it is asked.
+	 * Dexamethasone."</em> — so the drug asked about is counted alike whichever way it is asked. A condition-mediated chain
+	 * ({@link #isAChain}) is counted apart, after them, by its own name and with no rating, since it rates no pair (ADR
+	 * Decision 559): <em>"2 interaction cautions for Metformin — 2 Moderate; and 1 condition-mediated caution, with no
+	 * severity of its own."</em>; alone, <em>"1 condition-mediated caution for Metformin — no severity of its own, with
+	 * Stavudine."</em>
 	 */
-	static String cautionSummary(List<SafetyWarning> cautions, String drug) {
+	static String cautionSummary(List<SafetyWarning> findings, String drug) {
+		// A chain is counted apart, after the interactions, and rates nothing (ADR Decision 559).
+		List<SafetyWarning> cautions = new ArrayList<SafetyWarning>();
+		List<SafetyWarning> chains = new ArrayList<SafetyWarning>();
+		for (SafetyWarning finding : findings) {
+			(isAChain(finding) ? chains : cautions).add(finding);
+		}
+		if (cautions.isEmpty() && !chains.isEmpty()) {
+			StringBuilder summary = new StringBuilder().append(chains.size())
+					.append(chains.size() == 1 ? CHAIN_CAUTION : CHAIN_CAUTIONS).append(" for ").append(drug)
+					.append(" — no severity of ").append(chains.size() == 1 ? "its own" : "their own");
+			if (chains.size() == 1 && !chains.get(0).namedPartners().isEmpty()) {
+				summary.append(", with ").append(joinedAsAList(new ArrayList<String>(chains.get(0).namedPartners())));
+			}
+			return summary.append('.').toString();
+		}
 		int count = 0;
 		for (SafetyWarning finding : cautions) {
 			count += pairsOf(finding);
@@ -6229,6 +6298,10 @@ public class DrugReferenceInjector {
 			summary.append(byRating.size() == 1 && byRating.containsKey("with no severity rated") ? "none with a severity rated"
 					: String.join(", ", ratings));
 		}
+		if (!chains.isEmpty()) {
+			summary.append("; and ").append(chains.size()).append(chains.size() == 1 ? CHAIN_CAUTION : CHAIN_CAUTIONS)
+					.append(", with no severity of ").append(chains.size() == 1 ? "its own" : "their own");
+		}
 		return summary.append('.').toString();
 	}
 
@@ -6239,7 +6312,8 @@ public class DrugReferenceInjector {
 	}
 
 	/** The shape of {@link #cautionSummary}'s sentence, as an answer's first line. */
-	private static final Pattern CAUTION_SUMMARY = Pattern.compile("\\d+ interaction cautions? for .+ — .+\\.");
+	private static final Pattern CAUTION_SUMMARY = Pattern.compile("\\d+ (interaction|"
+			+ Pattern.quote(SafetyWarning.TYPE_CONDITION_MEDIATED) + ") cautions? for .+ — .+\\.");
 
 	/**
 	 * The one sentence a client shows of {@code answer}, its bottom line {@code summary} with any leads above it folded in
@@ -10347,8 +10421,12 @@ public class DrugReferenceInjector {
 		boolean folded = SafetyWarning.TYPE_INTERACTION.equals(finding.getType())
 				&& finding.carriesUnratedRelationship();
 		boolean scheduled = finding.orderScheduledStart() != null;
+		// A chain's last sentence says it is no rating of the pair: without it the drug-disease rating its first sentence
+		// states reads as one (ADR Decisions 111, 559).
+		boolean chain = isAChain(finding);
 		for (int i = 1; i < sentences.size(); i++) {
-			if (ChartSearchAiUtils.UNKNOWN_SIGNIFICANCE.matcher(sentences.get(i)).find() || (folded || scheduled) && i == last) {
+			if (ChartSearchAiUtils.UNKNOWN_SIGNIFICANCE.matcher(sentences.get(i)).find()
+					|| (folded || scheduled || chain) && i == last) {
 				brief.append(' ').append(sentences.get(i));
 			}
 		}

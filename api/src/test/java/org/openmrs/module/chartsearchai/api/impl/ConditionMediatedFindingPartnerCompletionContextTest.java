@@ -43,10 +43,17 @@ public class ConditionMediatedFindingPartnerCompletionContextTest extends BaseMo
 	/** The knowledge base's label for her lactic acid order, which the finding names it by. */
 	private static final String LACTIC_ACID_LABEL = "Lactic acid (lactate)";
 
+	/**
+	 * The answers the #555 cases judge are the MODEL's, and since ADR Decision 559 a proposal whose findings are cautions and
+	 * chains is answered by the module, so that is stated here rather than inherited from a shipped default, as
+	 * {@link CitedFindingPartnerCompletionTest} states it (ADR Decision 131).
+	 */
 	@BeforeEach
 	public void setUp() {
 		Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_DRUG_SAFETY_DERIVED_FINDINGS,
 			ChartSearchAiConstants.DERIVED_FINDINGS_MAJOR);
+		Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
+			"false");
 	}
 
 	@Test
@@ -121,12 +128,15 @@ public class ConditionMediatedFindingPartnerCompletionContextTest extends BaseMo
 	}
 
 	/**
-	 * A proposal whose findings are an interaction caution AND a chain keeps the model's answer (ADR Decision 140):
-	 * the module's caution answer is led by a count of INTERACTION cautions, which a chain is not. Zidovudine over
-	 * her warfarin and simvastatin raises both.
+	 * A proposal whose findings are an interaction caution AND a chain is answered by the module (ADR Decision 559), which
+	 * counts the chain apart from the interaction cautions and states it with what it is not. It kept the model's answer
+	 * until then (ADR Decision 140), because the module's caution answer was led by a count of INTERACTION cautions, which a
+	 * chain is not. Zidovudine over her warfarin and simvastatin raises both.
 	 */
 	@Test
-	public void aProposalWhoseCautionsIncludeAChainIsStillAnsweredByTheModel() {
+	public void aProposalWhoseCautionsIncludeAChainIsAnsweredByTheModule() {
+		Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
+			"true");
 		OverShippedData arrangement = new OverShippedData("Can I give her zidovudine?",
 				new String[][] { { "Warfarin", null }, { "Simvastatin", null } });
 		boolean chain = false;
@@ -143,8 +153,14 @@ public class ConditionMediatedFindingPartnerCompletionContextTest extends BaseMo
 		ChartAnswer answer = arrangement.service(modelAnswer).search(CitedFindingPartnerCompletionTest.patient(),
 			arrangement.question);
 
-		assertFalse(answer.isAnsweredByTheModule(), "the model answers: " + answer.getAnswer());
-		assertEquals(modelAnswer, OwnOrderFindingStatementTestSupport.withoutTheOwnOrderStatement(answer.getAnswer()));
+		assertTrue(answer.isAnsweredByTheModule(), "the module answers: " + answer.getAnswer());
+		String[] lines = answer.getAnswer().split("\n");
+		assertEquals("1 interaction caution for Zidovudine — Moderate, with Simvastatin; and 1 condition-mediated caution, "
+				+ "with no severity of its own.", lines[0]);
+		assertTrue(lines[1].startsWith("Zidovudine interacts with active order Simvastatin — Moderate."), lines[1]);
+		assertTrue(lines[2].startsWith("The DDInter drug-disease note of Zidovudine (Muscular Diseases, Major) names "
+				+ "Rhabdomyolysis") && lines[2].contains("not a DDInter pairwise rating, and this finding has no severity of its "
+				+ "own. ["), lines[2]);
 	}
 
 	private static OverShippedData metforminOverStavudineAndLacticAcid() {

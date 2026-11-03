@@ -37,6 +37,7 @@ Companion documents:
 ## Contents
 
 - [Prerequisites](#prerequisites)
+- [What the checks look for](#what-the-checks-look-for)
 - [Step 1 — Does the question name a drug?](#step-1--does-the-question-name-a-drug)
 - [Step 2 — If no drug was named, is it asking to be screened?](#step-2--if-no-drug-was-named-is-it-asking-to-be-screened)
 - [Step 3 — If the code ran no screen, the model may add one](#step-3--if-the-code-ran-no-screen-the-model-may-add-one)
@@ -60,6 +61,32 @@ None of this runs unless the drug-reference feature is on:
 | `chartsearchai.drugSafety.readQuestionsWithTheModel` | `true` | Lets the model add a medication check the code did not run ([step 3](#step-3--if-the-code-ran-no-screen-the-model-may-add-one)). |
 | `chartsearchai.drugSafety.answerFromFindings` | `true` | Lets the module answer a question from its own findings, with no model call ([step 5](#step-5--answering-without-the-model)). |
 | `chartsearchai.drugSafety.derivedFindings` | `off` | `major` adds condition-mediated chains (two drugs linked through one condition); see [ADR Decision 111](adr.md#decision-111-drugs-linked-through-one-drug-disease-condition-are-stated-as-one-derived-finding-and-it-is-a-caution). |
+
+---
+
+## What the checks look for
+
+Every check is a lookup in reference data, made by `DrugSafetyValidator`. The routing in the steps
+below decides which of them run for a question; this section says what each one finds.
+
+| Check | What it finds | Data it reads |
+|---|---|---|
+| **Rated interactions** | a pair of drugs the knowledge base rates (Major, Moderate, Minor, unknown) | the knowledge base's interaction rows (`addInteractionWarnings`, and the two pairwise checks in step 1) |
+| **Duplicate therapy** | two drugs in the same ATC subgroup | ATC codes on the knowledge-base entries and on her orders (`classRelationships`) |
+| **Allergy contraindications** | a recorded allergy to the same substance, to a drug in the same ATC level-4 subgroup, or to a drug in the same curated cross-reactivity group (for example aspirin against an ibuprofen allergy) | her allergy records, ATC codes, and `cross-reactivity-groups.json` (`addAllergyContraindications`) |
+| **Curated contraindication rules** | a hand-authored rule whose allergy or condition token matches her records | the `contraindications` of a `json` dataset (`addContraindications`) |
+| **Her orders against her records** | one of her own active orders contraindicated by her allergies or conditions, scoped to what the response is about | the two contraindication checks above, run over her orders (`addActiveOrderContraindications`) |
+| **Orders sharing a substance** | two of her orders that carry the same substance ([ADR Decision 116](adr.md#decision-116-a-question-about-a-drug-states-which-of-her-orders-share-a-substance-too)) | her orders, resolved to substances (`addOrdersSharingASubstance`) |
+| **Dose excess** | a dose the answer states above the dataset's ceiling | the `ageBands` of a `json` dataset (`addOverdose`) |
+| **Condition-mediated chains** | two drugs linked through one condition, stated as a caution; off unless `derivedFindings` is `major` | the knowledge base's derived tier (`addConditionMediatedWarnings`) |
+
+**The default dataset does not run every check.** It is the bundled DDInter knowledge base
+(`sourceFormat=ddinter`), which carries interactions, ATC codes and the derived tier, but no dose
+ceilings and no hand-authored allergy or condition rules (`DdiDrugReferenceSource` javadoc, pinned by
+`ShippedDrugReferenceDefaultTest`). So on a default install the dose and curated-rule checks have
+nothing to fire on. The allergy checks still run, from ATC codes and the bundled
+`cross-reactivity-groups.json`. `GET /chartsearchai/drugreferencestatus` reports which checks the
+loaded dataset can serve.
 
 ---
 

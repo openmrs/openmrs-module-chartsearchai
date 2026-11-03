@@ -1179,12 +1179,8 @@ public class DrugReferenceInjector {
 			// Its bottom line (ADR Decision 517): a screen's, as composed; a proposal's "No"; or its cautions.
 			if (moduleAnswer != null) {
 				String first = moduleAnswer.split("\n", -1)[0];
-				if (questionDrugs.isEmpty()) {
-					summary = first.equals(screenSummary(stated, groupLines.size(), null)) ? first : null;
-				} else if ((first.startsWith(WITHHOLD_LEAD_OPENING) || first.startsWith(NEUTRAL_WITHHOLD_LEAD_OPENING)
-						|| CAUTION_SUMMARY.matcher(first).matches()) && moduleAnswer.contains("\n")) {
-					summary = first;
-				}
+				summary = !questionDrugs.isEmpty() ? proposalBottomLine(moduleAnswer)
+						: first.equals(screenSummary(stated, groupLines.size(), null)) ? first : null;
 			}
 			// The question named it as hers, and she is not on it — admitted here only so (ADR Decision 260), or named it so in a
 			// shape admitted anyway, "Does her ibuprofen interact with her other medications?" (ADR Decision 292); or asked
@@ -1438,6 +1434,8 @@ public class DrugReferenceInjector {
 					findingNumbers, orderRecordNumbers,
 					orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers,
 					pairExtent, mappings, matched, context, reading.states(), unidentified.size());
+			// Its bottom line as the drug asked alone records it (ADR Decision 561).
+			summary = moduleAnswer == null ? null : proposalBottomLine(moduleAnswer);
 		}
 		// Three or more drugs asked about together, hers or not: which she takes, what relates them, and each she does not take
 		// answered as its proposal (ADR Decision 309).
@@ -3861,35 +3859,6 @@ public class DrugReferenceInjector {
 		return String.join("; ", named);
 	}
 
-	/**
-	 * How the module's own answer opens on a proposal whose findings are all interaction cautions about the drug
-	 * proposed (ADR Decision 140): <em>"2 interaction cautions for Omeprazole:"</em> — the count, what kind of
-	 * finding they are, and the drug. Never "can be given" — the clearance {@link #answersFromFindings}' javadoc
-	 * refuses — nor that nothing else was found. "Interaction" is the scope the clinician needs: these are the
-	 * findings of an interaction check, not a review of whether the drug suits her.
-	 */
-	static String cautionLead(int count, String drug) {
-		return cautionLead(count, 0, drug);
-	}
-
-	/**
-	 * As above, with {@code chains} condition-mediated findings ({@link #isAChain}) counted apart, after the interaction
-	 * cautions and by their own name, since a chain is not an interaction the data rates (ADR Decision 559): <em>"3
-	 * interaction cautions and 1 condition-mediated caution for Metformin:"</em>; <em>"1 condition-mediated caution for
-	 * Metformin:"</em> where there is no interaction caution.
-	 */
-	static String cautionLead(int count, int chains, String drug) {
-		StringBuilder lead = new StringBuilder();
-		if (count > 0 || chains == 0) {
-			lead.append(count).append(count == 1 ? " interaction caution" : " interaction cautions");
-		}
-		if (chains > 0) {
-			lead.append(lead.length() > 0 ? " and " : "").append(chains)
-					.append(chains == 1 ? CHAIN_CAUTION : CHAIN_CAUTIONS);
-		}
-		return lead.append(" for ").append(drug).append(":").toString();
-	}
-
 	/** What a composed answer's count calls a condition-mediated finding, by the chip's own type name (ADR Decision
 	 *  559). */
 	private static final String CHAIN_CAUTION = " " + SafetyWarning.TYPE_CONDITION_MEDIATED + " caution";
@@ -4627,7 +4596,8 @@ public class DrugReferenceInjector {
 	 * strongest call a line licenses: Decision 108's "No" where a finding withholds the drug against one of her
 	 * orders; <em>"No if the patient is on Efavirenz — this module's drug-safety check found a reason to withhold Fluconazole
 	 * against it."</em> where every withholding finding is against a listed drug she does not hold, since her chart
-	 * does not say she is on it; else Decision 140's count of cautions.
+	 * does not say she is on it; else the sentence the drug asked alone opens with, {@link #cautionSummary} (ADR
+	 * Decision 561).
 	 *
 	 * <p>Fail-closed: the proposed rows are one substance, not hers; every finding about it is an INTERACTION
 	 * stating a proposal clause, and one that withholds is one the data RATES a reason to withhold
@@ -4738,18 +4708,9 @@ public class DrugReferenceInjector {
 			lines.add(0, "No if the patient is on " + joinedAsAlternatives(names) + " — this module's drug-safety check found "
 					+ "a reason to withhold " + drug + (names.size() == 1 ? " against it." : " against each."));
 		} else {
-			// Counted by PAIR, as a proposal asked alone counts its cautions (ADR Decisions 545, 548), and a chain apart, by
-			// chain (ADR Decision 559).
-			int pairs = 0;
-			int chains = 0;
-			for (Integer i : order) {
-				if (isAChain(findings.get(i))) {
-					chains++;
-				} else {
-					pairs += pairsOf(findings.get(i));
-				}
-			}
-			lines.add(0, cautionLead(pairs, chains, drug));
+			// The one sentence the drug asked alone opens with, so a client shows it alone and nothing under it says the
+			// count again (ADR Decision 561): counted by PAIR (ADR Decisions 545, 548), a chain apart (ADR Decision 559).
+			lines.add(0, cautionSummary(ordered, drug));
 		}
 		return String.join("\n", lines);
 	}
@@ -5213,7 +5174,7 @@ public class DrugReferenceInjector {
 	 *     one a question may be proposing in a presentation she does not take; the model answers such a
 	 *     question, as it did before issue #402.</li>
  * <li>The same proposal where every finding is an interaction CAUTION about that drug
- *     ({@link #cautionsOnlyAbout}, ADR Decision 140), answered under {@link #cautionLead} with each finding
+ *     ({@link #cautionsOnlyAbout}, ADR Decision 140), answered under {@link #cautionSummary} with each finding
  *     briefly. That is not the clearance this method refuses: it never says the drug can be given, nor that
  *     nothing else was found.</li>
 	 * <li>A request to screen her own medications against each other, admitted by
@@ -6312,6 +6273,17 @@ public class DrugReferenceInjector {
 	 *  naming none states; what {@link #screenSummary} and {@link #cautionSummary} both count. */
 	private static int pairsOf(SafetyWarning finding) {
 		return Math.max(1, finding.namedPartners().size());
+	}
+
+	/**
+	 * A proposal's bottom line, where its answer opens with one and says more under it (ADR Decision 517): its "No", or the
+	 * sentence of its cautions ({@link #cautionSummary}); else {@code null}. One rule for the drug asked alone and after a
+	 * list of her medications (ADR Decision 561).
+	 */
+	private static String proposalBottomLine(String answer) {
+		String first = answer.split("\n", -1)[0];
+		return (first.startsWith(WITHHOLD_LEAD_OPENING) || first.startsWith(NEUTRAL_WITHHOLD_LEAD_OPENING)
+				|| CAUTION_SUMMARY.matcher(first).matches()) && answer.contains("\n") ? first : null;
 	}
 
 	/** The shape of {@link #cautionSummary}'s sentence, as an answer's first line. */

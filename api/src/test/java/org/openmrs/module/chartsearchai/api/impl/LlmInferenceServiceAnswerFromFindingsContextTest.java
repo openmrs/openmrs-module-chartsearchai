@@ -1666,10 +1666,14 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 				+ "Ibuprofen interacts with Zidovudine, also named in the question — Moderate. [" + zidovudine.index
 				+ "]\n"
 				+ "The chart holds no active order for Zidovudine.", answer.getAnswer());
+		// Its "No" is its bottom line, as the drug asked alone's is (ADR Decisions 517, 561), the reasons under it.
+		assertEquals(DrugReferenceInjector.WITHHOLD_LEAD_OPENING + "Ibuprofen.", answer.getAnswerSummary());
+		assertEquals(answer.getAnswer().substring(answer.getAnswerSummary().length() + 1), answer.getAnswerDetails());
 	}
 
-	/** Cautions alone take Decision 140's lead, a caution against her own order before one against a listed drug (ADR
-	 *  Decision 150): amlodipine relates Moderate to her aspirin and to the listed efavirenz. */
+	/** Cautions alone open with the sentence the drug asked alone does (ADR Decision 561), a caution against her own order
+	 *  before one against a listed drug (ADR Decision 150): amlodipine relates Moderate to her aspirin and to the listed
+	 *  efavirenz. */
 	@Test
 	public void aListQuestionOfCautionsStatesHerOwnOrdersFirst() {
 		String question = "The patient is currently on Efavirenz, is it safe to give amlodipine?";
@@ -1680,7 +1684,7 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		ChartAnswer answer = serviceWith(provider, shipped()).search(patient, question);
 
 		assertEquals(0, provider.calls, "no model is asked: " + answer.getAnswer());
-		assertEquals("2 interaction cautions for Amlodipine:\n"
+		assertEquals("2 interaction cautions for Amlodipine — 2 Moderate.\n"
 				+ "Amlodipine interacts with active order Acetylsalicylic acid (aspirin) — Moderate. [" + aspirin.index
 				+ "] [" + recordOf(answer, ASPIRIN_ORDER_UUID) + "]\n"
 				+ "Amlodipine interacts with Efavirenz, also named in the question — Moderate. [" + efavirenz.index
@@ -2109,7 +2113,7 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		ChartAnswer answer = serviceWith(provider, shipped()).search(patient, question);
 
 		assertEquals(0, provider.calls, "no model is asked: " + answer.getAnswer());
-		assertEquals("1 interaction caution for Metformin:\n"
+		assertEquals("1 interaction caution for Metformin — Moderate.\n"
 				+ "Metformin interacts with Ibuprofen, also named in the question — Moderate. [" + ibuprofen.index + "]\n"
 				+ "The chart holds no active order for Ibuprofen.", answer.getAnswer());
 	}
@@ -2194,7 +2198,7 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		ChartAnswer answer = serviceWith(provider, shipped()).search(patient, question);
 
 		assertEquals(0, provider.calls, "no model is asked: " + answer.getAnswer());
-		assertTrue(answer.getAnswer().startsWith("1 interaction caution for Vorapaxar:\nVorapaxar "), answer.getAnswer());
+		assertTrue(answer.getAnswer().startsWith("1 interaction caution for Vorapaxar — no severity rated.\nVorapaxar "), answer.getAnswer());
 		assertTrue(answer.getAnswer().contains(" [" + aspirin.index + "]"), answer.getAnswer());
 		// Never that the check raised nothing about vorapaxar; the listed lamivudine it relates to nothing is named so (ADR
 		// Decision 389).

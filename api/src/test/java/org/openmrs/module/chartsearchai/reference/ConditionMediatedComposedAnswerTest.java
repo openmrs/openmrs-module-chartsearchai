@@ -73,7 +73,8 @@ public class ConditionMediatedComposedAnswerTest extends BaseModuleContextSensit
 		assertNotNull(listed, "the module answers");
 		assertChainLine(listed);
 		// Its one sentence counts the chain as the lead does, and never as a caution per order it names.
-		assertEquals("Metformin: no Major interactions; 2 cautions and 1 condition-mediated caution.",
+		assertEquals("2 interaction cautions for Metformin — 2 Moderate; and 1 condition-mediated caution, with no severity of "
+			+ "its own.",
 			ListedRegimenAnswerTest.injected(ListedRegimenAnswerTest.LOPINAVIR_RITONAVIR,
 				ListedRegimenAnswerTest.LISTING_HER_PROTEASE_INHIBITOR + "Metformin?").getModuleAnswerSummary());
 		// The finding's own record is numbered after what each question injected; its words and her orders' records are not.
@@ -91,7 +92,8 @@ public class ConditionMediatedComposedAnswerTest extends BaseModuleContextSensit
 			ListedRegimenAnswerTest.LISTING_DRUGS_SHE_IS_NOT_ON + "metformin?");
 
 		assertNotNull(answer, "the module answers");
-		assertEquals("3 interaction cautions and 1 condition-mediated caution for Metformin:", answer.split("\n")[0]);
+		assertEquals("3 interaction cautions for Metformin — 3 Moderate; and 1 condition-mediated caution, with no severity of "
+			+ "its own.", answer.split("\n")[0]);
 		assertChainLine(answer);
 	}
 

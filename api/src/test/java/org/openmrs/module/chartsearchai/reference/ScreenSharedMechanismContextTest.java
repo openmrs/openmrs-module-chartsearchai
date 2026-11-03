@@ -152,7 +152,7 @@ public class ScreenSharedMechanismContextTest extends BaseModuleContextSensitive
 				.getModuleAnswer();
 
 		assertNotNull(answer, "the module answers the proposal");
-		assertEquals("3 interaction cautions for Ibuprofen:", answer.split("\n")[0], "was: " + answer);
+		assertEquals("3 interaction cautions for Ibuprofen — 3 Moderate.", answer.split("\n")[0], "was: " + answer);
 		assertTrue(answer.contains("Prednisone") && answer.contains("Dexamethasone"), "each order still named: " + answer);
 	}
 

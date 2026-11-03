@@ -26213,3 +26213,71 @@ Five rounds of review by fresh agents refuted the earlier shapes in turn, and th
 It does not change what the summary says: the *"St; John's Wort"* join and the dropped bracketed names stand as they
 were. It does not touch `answer`. The injector's own `moduleAnswerDetailsStateLimits` stamp still describes the
 answer before the lines `LlmInferenceService` appends; the wire no longer reads it.
+## Decision 561: A proposal after a list opens with the sentence the drug asked alone does, and records it as its summary
+
+**Status: Accepted** (November 2026). Completes [Decision 517](#decision-517-the-bottom-line-a-client-shows-is-one-sentence-and-every-module-answer-that-can-say-one-opens-with-it)
+for the composer [Decision 150](#decision-150-a-proposal-after-a-list-is-answered-from-its-findings-about-the-drug-proposed)
+owns, which it left on Decision 140's heading, so that
+[Decision 556](#decision-556-a-question-listing-her-medications-is-answered-as-the-drug-asked-alone-is) holds for the
+summary as well as for the lines. Found on the demo replica on 2026-11-03.
+
+### Context
+
+Kamwara (dd74dc61) holds active orders for lamivudine, nevirapine and stavudine. Asked *"The patient is currently on
+Lamivudine, Nevirapine, Stavudine, is it safe to give Amlodipine?"*, the client showed *"Amlodipine: no Major
+interactions; 1 caution."* and, under "Show details", *"1 interaction caution for Amlodipine:"* — the same count twice.
+Asked *"Is it safe to give Amlodipine?"*, it showed *"1 interaction caution for Amlodipine — Moderate, with
+Nevirapine."* and only the finding under it.
+
+Decision 517 replaced Decision 140's heading with `cautionSummary` in `composeFromFindings` only. `composeListFindings`
+kept `cautionLead`'s *"1 interaction caution for Amlodipine:"*, and its call site recorded no summary. So
+`statedThenCounted` skipped the heading (a line ending in a colon states nothing) and counted the findings instead, and
+[Decision 560](#decision-560-show-details-shows-what-the-summary-did-not-say) left the whole answer under the toggle,
+since the summary stated none of its lines whole. Decision 559 described that summary for the list path as it stood; it
+did not choose it over Decision 517's sentence.
+
+### The decision
+
+- **`composeListFindings` opens a caution-only answer with `cautionSummary`**, over the findings it states, in the order
+  it states them: counted by pair (Decisions 545, 548) and a chain apart (Decision 559), as before. `cautionLead` is
+  removed; nothing else called it. Its other leads — Decision 108's "No", *"No if the patient is on …"*, and Decision
+  389's no-verdict lead — are unchanged.
+- **A proposal's bottom line is one rule, `proposalBottomLine`**, used by the drug asked alone and after a list alike: its
+  "No", or its cautions' sentence, where the answer says more under it. So after a list, a "No" against one of her own
+  orders is now its summary too, the reasons under it, as it already was for the drug asked alone.
+- **A caution against a listed drug she does not hold is not named in the summary.** `cautionSummary` names a finding's
+  `namedPartners`, which are her active orders: *"1 interaction caution for Metformin — Moderate."* over *"Metformin
+  interacts with Ibuprofen, also named in the question — Moderate."* The line under it says the drug is only named in
+  the question, and *"The chart holds no active order for Ibuprofen."* still follows.
+
+### Spec change
+
+These pinned Decision 140's heading or the counted summary on the list path, and now assert Decision 517's sentence:
+`LlmInferenceServiceAnswerFromFindingsContextTest.aListQuestionOfCautionsStatesHerOwnOrdersFirst`,
+`.aListQuestionWhoseProposalTheDataRatesAgainstAListedDrugStatesThatFinding`,
+`.aListQuestionWithAClassFindingAboutTheDrugProposedStatesIt`,
+`ScreenSharedMechanismContextTest.aProposalAfterAListOfHerOrdersCountsItsCautionsByPair`,
+`ConditionMediatedComposedAnswerTest.aListOfDrugsSheIsNotOnStatesTheChainUnderALeadCountingItApart` and
+`.aListOfHerMedicationsBeforeTheProposalStatesTheChainAsTheDrugAskedAloneDoes`.
+
+Pinned by `AnswerDetailsContextTest.aProposalAfterAListOfHerMedicationsIsSummarisedAsTheDrugAskedAlone` (Kamwara's
+three orders; the answer, summary and details equal the drug asked alone's, markers compared by position) and
+`LlmInferenceServiceAnswerFromFindingsContextTest.aListQuestionWithholdingAgainstHerOwnOrderIsAnsweredNo`. Dropping the
+summary recorded at `composeAfterAList`'s call site reddens both, and
+`ConditionMediatedComposedAnswerTest.aListOfHerMedicationsBeforeTheProposalStatesTheChainAsTheDrugAskedAloneDoes`.
+Restoring `cautionLead` reddens the first.
+
+### Measured
+
+On the demo replica, 2026-11-04: 5 patients of the external sheet (dd74dc61, dd5558ed, dd79194e, dd556a73, dd55aeac) × 12
+drugs, asked bare, after a list of her own orders, and after *"Lamivudine, Nevirapine, Stavudine"* — 168 questions, every
+one answered 200 on both builds, main (`668179672`) then this change.
+
+- **Repeated under the toggle** (the count heading, or a line the summary already states verbatim; the detector flags
+  Kamwara's listed amlodipine and not her bare one): **52** list answers on main, **0** with this change. No bare
+  answer repeated on either.
+- **What moved:** in those 52, the first line only, from the heading to `cautionSummary`'s sentence, now the summary. In
+  32 more the answer is unchanged word for word and the summary is its "No" lead rather than `statedThenCounted`'s
+  *"No — … ; 1 Major interaction — Amlodipine with Rifampin — plus 1 caution."*; 31 of those 32 now equal the bare
+  question's summary, and the other one has findings of its own after the list. The remaining 84 are identical, summary
+  included, and no answer moved between the module and the model.

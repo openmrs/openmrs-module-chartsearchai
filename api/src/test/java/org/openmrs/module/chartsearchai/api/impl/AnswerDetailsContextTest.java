@@ -28,6 +28,7 @@ import org.junit.jupiter.api.Test;
 import org.openmrs.Patient;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
 import org.openmrs.module.chartsearchai.api.impl.LlmProvider.LlmResponse;
 import org.openmrs.module.chartsearchai.reference.ChartReadStatus;
@@ -228,6 +229,42 @@ public class AnswerDetailsContextTest extends BaseModuleContextSensitiveTest {
 		assertEquals(1, early.size(), "precondition: one early answer");
 		assertEquals(answer.getAnswerDetails(), early.get(0).getAnswerDetails());
 		assertEquals(answer.answerDetailsStateLimits(), early.get(0).answerDetailsStateLimits());
+	}
+
+	/**
+	 * A proposal after a list of her own medications is summarised as the drug asked alone is (ADR Decision 561). On the
+	 * replica, Kamwara's <em>"The patient is currently on Lamivudine, Nevirapine, Stavudine, is it safe to give
+	 * Amlodipine?"</em> showed <em>"Amlodipine: no Major interactions; 1 caution."</em> and, under the toggle, <em>"1
+	 * interaction caution for Amlodipine:"</em> — the count twice — where <em>"Is it safe to give Amlodipine?"</em> showed
+	 * <em>"1 interaction caution for Amlodipine — Moderate, with Nevirapine."</em> and its finding under it.
+	 */
+	@Test
+	public void aProposalAfterAListOfHerMedicationsIsSummarisedAsTheDrugAskedAlone() {
+		ChartAnswer listed = overKamwarasOrders(
+			"The patient is currently on Lamivudine, Nevirapine, Stavudine, is it safe to give Amlodipine?");
+		ChartAnswer alone = overKamwarasOrders("Is it safe to give Amlodipine?");
+		assertTrue(listed.isAnsweredByTheModule() && alone.isAnsweredByTheModule(),
+			"precondition: the module answers both — " + listed.getAnswer() + " / " + alone.getAnswer());
+		assertEquals("1 interaction caution for Amlodipine — Moderate, with Nevirapine.", alone.getAnswerSummary(),
+			"precondition: " + alone.getAnswer());
+
+		// Each question numbers the finding's own record after what it injected, so a marker is compared by where it sits.
+		assertEquals(markersUnnumbered(alone.getAnswer()), markersUnnumbered(listed.getAnswer()),
+			"the list adds nothing the drug asked alone does not say");
+		assertEquals(alone.getAnswerSummary(), listed.getAnswerSummary());
+		assertEquals(markersUnnumbered(alone.getAnswerDetails()), markersUnnumbered(listed.getAnswerDetails()),
+			"nothing the summary states is under it again");
+		assertEquals(alone.answerDetailsStateLimits(), listed.answerDetailsStateLimits());
+	}
+
+	private static String markersUnnumbered(String text) {
+		return ChartSearchAiUtils.INLINE_CITATION.matcher(text).replaceAll("[#]");
+	}
+
+	/** {@code question} over the replica's Kamwara (dd74dc61): active orders for lamivudine, nevirapine and stavudine. */
+	private static ChartAnswer overKamwarasOrders(String question) {
+		return serviceOver(DrugReferenceTestSupport.injectedChartOverOrders(question, "Lamivudine", "Nevirapine", "Stavudine"),
+			"unused").search(aPatient(), question);
 	}
 
 	private static void answerFromFindings(boolean on) {

@@ -118,7 +118,7 @@ public class ChartSearchAiWithheldTypesTest {
 					Collections.<ChartSearchService.RecordReference> emptyList(), 0, 0, 0,
 					Collections.<SafetyWarning> emptyList(), null, null, null, null, null, null, null,
 					null, null, null, null, null, null, null, false, null, null, null, null, null, null,
-					DrugSafetyValidator.STATUS_UNAVAILABLE, Collections.emptyList(), null, false, null, false, withheld);
+					DrugSafetyValidator.STATUS_UNAVAILABLE, Collections.emptyList(), null, false, null, false, withheld, null);
 		}
 
 		@Override

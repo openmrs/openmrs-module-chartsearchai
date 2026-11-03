@@ -1736,8 +1736,10 @@ public class DrugReferenceInjector {
 		}
 		// A lead a question takes folds its limit into the bottom line, so the one sentence a client shows keeps it, and
 		// stays whole under it (ADR Decision 517).
+		// The lines the summary states whole, so a client is not shown them again under it (ADR Decision 560).
+		Set<String> linesStatedWhole = new LinkedHashSet<String>();
 		if (moduleAnswer != null && summary != null) {
-			String[] folded = withLeadsFoldedIntoTheBottomLine(moduleAnswer, summary);
+			String[] folded = withLeadsFoldedIntoTheBottomLine(moduleAnswer, summary, linesStatedWhole);
 			if (folded != null) {
 				moduleAnswer = folded[0];
 				summary = folded[1];
@@ -1831,13 +1833,14 @@ public class DrugReferenceInjector {
 					cited.add(findings.get(i));
 				}
 			}
-			summary = statedThenCounted(moduleAnswer, new HashSet<Integer>(findingNumbers), cited);
+			summary = statedThenCounted(moduleAnswer, new HashSet<Integer>(findingNumbers), cited, linesStatedWhole);
 			moduleAnswer = openedWithItsBottomLine(moduleAnswer, summary);
 		}
 		if (moduleAnswer != null) {
 			injected.markModuleAnswer(moduleAnswer);
 			if (summary != null) {
 				injected.markModuleAnswerSummary(summary);
+				injected.markModuleAnswerLinesStatedWhole(linesStatedWhole);
 				// What a client collapses under it: the rest where the answer opens with it, else the whole answer.
 				String details = moduleAnswer.startsWith(summary + "\n") ? moduleAnswer.substring(summary.length() + 1)
 						: moduleAnswer;
@@ -6320,22 +6323,30 @@ public class DrugReferenceInjector {
 	 * (ADR Decisions 517, 519): any statement it makes first before it, and each lead's limit — <em>"this check does not choose a medication to give this patient, and states none
 	 * as safe"</em> — as a bracket at its end, and the recorded allergies of the answer to which drugs to avoid before it;
 	 * the answer's own words unchanged, which a client collapses whole under it. {@code null} where a line above it is a
-	 * heading, which no sentence can carry.
+	 * heading, which no sentence can carry. Into {@code linesStatedWhole} it puts the bottom line and every lead it
+	 * states whole (ADR Decision 560): one sentence, no marker, no colon opening a detail it cuts, not a list of allergies it
+	 * rewords.
 	 *
 	 * @return the answer and its bottom line, or {@code null}
 	 */
-	private static String[] withLeadsFoldedIntoTheBottomLine(String answer, String summary) {
+	private static String[] withLeadsFoldedIntoTheBottomLine(String answer, String summary, Set<String> linesStatedWhole) {
 		List<String> lines = new ArrayList<String>(Arrays.asList(answer.split("\n", -1)));
 		int at = lines.indexOf(summary);
 		if (at < 0) {
 			return null;
 		}
 		if (at == 0) {
+			linesStatedWhole.add(summary);
 			return new String[] { answer, summary };
 		}
 		List<String> before = new ArrayList<String>();
 		List<String> limits = new ArrayList<String>();
+		List<String> leadsStatedWhole = new ArrayList<String>();
 		for (String lead : lines.subList(0, at)) {
+			if (ChartSearchAiUtils.SENTENCE_BOUNDARY.split(lead.trim()).length == 1 && !lead.contains(":")
+					&& !lead.startsWith(RECORDED_DRUG_ALLERGIES) && !ChartSearchAiUtils.INLINE_CITATION.matcher(lead).find()) {
+				leadsStatedWhole.add(lead);
+			}
 			for (String sentence : lead.split("(?<=\\.) ")) {
 				if (sentence.startsWith(THIS_CHECK_DOES_NOT)) {
 					int colon = sentence.indexOf(':');
@@ -6355,6 +6366,8 @@ public class DrugReferenceInjector {
 				}
 			}
 		}
+		linesStatedWhole.addAll(leadsStatedWhole);
+		linesStatedWhole.add(summary);
 		String body = summary.substring(0, summary.length() - 1);
 		if (!before.isEmpty()) {
 			body = String.join("; ", before) + "; " + (body.startsWith("No ") || body.startsWith("This ")
@@ -6376,10 +6389,16 @@ public class DrugReferenceInjector {
 
 	/** Whether {@code line} says what an answer did not check or cover (ADR Decisions 517, 519): its "Not checked" line, a
 	 *  scope line, a sentence saying something was not checked, or a lead or statement of what the check does not weigh. */
-	static boolean saysWhatWasNotChecked(String line) {
+	public static boolean saysWhatWasNotChecked(String line) {
 		String lower = line.toLowerCase(Locale.ROOT);
 		return lower.contains("not checked") || lower.contains("not covered") || line.startsWith(THIS_CHECK_DOES_NOT)
 				|| line.startsWith("This check did not ");
+	}
+
+	/** Whether {@code line} of a composed answer is a heading — it ends in a colon, opening the lines under it — which
+	 *  states nothing a summary can carry, and whose lines stay under it (ADR Decisions 529, 560). */
+	public static boolean isAHeading(String line) {
+		return line.trim().endsWith(":");
 	}
 
 	/**
@@ -6412,9 +6431,11 @@ public class DrugReferenceInjector {
 	 * answer's own words, cut where a colon opens the detail, without its markers or a bracketed aside: so the
 	 * direction a question asked for — that he takes the drug, that a switch is to one he already takes, that nothing was
 	 * found — is in view, and nothing in view is not in the answer. Sentences split on {@code
-	 * ChartSearchAiUtils.SENTENCE_BOUNDARY}, the module's one rule for where a sentence ends.
+	 * ChartSearchAiUtils.SENTENCE_BOUNDARY}, the module's one rule for where a sentence ends. A line the summary states
+	 * whole ({@link #statedWhole}) it states with its markers, and puts into {@code linesStatedWhole} (ADR Decision 560).
 	 */
-	static String statedThenCounted(String answer, Set<Integer> findingNumbers, List<SafetyWarning> cited) {
+	static String statedThenCounted(String answer, Set<Integer> findingNumbers, List<SafetyWarning> cited,
+			Set<String> linesStatedWhole) {
 		List<String> said = new ArrayList<String>();
 		boolean first = true;
 		for (String line : answer.split("\n", -1)) {
@@ -6426,7 +6447,13 @@ public class DrugReferenceInjector {
 				break;
 			}
 			first = false;
-			if (line.trim().isEmpty() || line.trim().endsWith(":") || saysWhatWasNotChecked(line)) {
+			if (line.trim().isEmpty() || isAHeading(line) || saysWhatWasNotChecked(line)) {
+				continue;
+			}
+			String whole = statedWhole(line);
+			if (whole != null) {
+				said.add(whole);
+				linesStatedWhole.add(line);
 				continue;
 			}
 			for (String sentence : ChartSearchAiUtils.SENTENCE_BOUNDARY.split(line.trim())) {
@@ -6451,6 +6478,47 @@ public class DrugReferenceInjector {
 		}
 		return sentence.append('.').toString();
 	}
+
+	/**
+	 * {@code line} as the summary states it whole, its markers after it, or {@code null} where the summary cannot state it
+	 * whole (ADR Decision 560): where it is more than one sentence to {@code ChartSearchAiUtils.SENTENCE_BOUNDARY}, which
+	 * the summary would join with a semicolon — right for two sentences and wrong for "St. John's Wort", and no test of
+	 * the words tells the two apart; where {@link #inShort} drops a word of it; or where a marker sits before one of its
+	 * words, citing one of the several things it names, which moved to its end would cite another. Markers set after its
+	 * full stop — "… to. [36]" — are its own.
+	 */
+	private static String statedWhole(String line) {
+		String sentence = line.trim();
+		String[] pieces = ChartSearchAiUtils.SENTENCE_BOUNDARY.split(sentence);
+		for (int i = 1; i < pieces.length; i++) {
+			if (!ChartSearchAiUtils.INLINE_CITATION.matcher(pieces[i]).replaceAll("").trim().isEmpty()) {
+				return null;
+			}
+		}
+		Matcher marker = ChartSearchAiUtils.INLINE_CITATION.matcher(sentence);
+		StringBuilder markers = new StringBuilder();
+		int firstMarker = -1;
+		while (marker.find()) {
+			firstMarker = firstMarker < 0 ? marker.start() : firstMarker;
+			markers.append(' ').append(marker.group());
+		}
+		if (firstMarker >= 0 && WORD.matcher(ChartSearchAiUtils.INLINE_CITATION.matcher(sentence.substring(firstMarker))
+				.replaceAll("")).find()) {
+			return null;
+		}
+		String words = MARKER_AND_ITS_SPACE.matcher(sentence).replaceAll("").trim();
+		while (words.endsWith(".") || words.endsWith(";") || words.endsWith(",")) {
+			words = words.substring(0, words.length() - 1).trim();
+		}
+		String inShort = inShort(sentence);
+		return inShort.isEmpty() || !inShort.equals(words) ? null : inShort + markers;
+	}
+
+	/** A marker with the space before it, as {@link #inShort} drops it, so the two read a line's words alike. */
+	private static final Pattern MARKER_AND_ITS_SPACE = Pattern.compile("\\s*" + ChartSearchAiUtils.INLINE_CITATION.pattern());
+
+	/** A letter or a digit: a word, where {@link #statedWhole} asks whether one follows a marker. */
+	private static final Pattern WORD = Pattern.compile("[\\p{L}\\p{N}]");
 
 	/** A sentence of an answer in short (ADR Decision 529): cut where a colon opens its detail, without its markers or a
 	 *  bracketed aside, and without its full stop; empty where it ends in a colon, which opens something it does not say. */

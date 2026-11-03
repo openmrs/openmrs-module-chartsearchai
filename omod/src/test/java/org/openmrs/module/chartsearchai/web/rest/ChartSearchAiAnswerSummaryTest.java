@@ -51,6 +51,9 @@ public class ChartSearchAiAnswerSummaryTest {
 
 	private static final String COMPOSED = SUMMARY + "\nWarfarin interacts with active order Aspirin — Major. [3]";
 
+	/** What the answer publishes under its summary (ADR Decision 560): the answer without the line it states whole. */
+	private static final String DETAILS = "Warfarin interacts with active order Aspirin — Major. [3]";
+
 	private ChartSearchAiRestController controller;
 
 	private ByteArrayOutputStream out;
@@ -61,10 +64,13 @@ public class ChartSearchAiAnswerSummaryTest {
 
 	private boolean limits;
 
+	private String details;
+
 	@BeforeEach
 	public void setUp() {
 		summary = SUMMARY;
 		limits = true;
+		details = DETAILS;
 		controller = new ChartSearchAiRestController();
 		controller.setAuditLogService(new StubAuditLogService());
 		controller.setChartSearchService(new ComposedAnswerStubService());
@@ -83,7 +89,7 @@ public class ChartSearchAiAnswerSummaryTest {
 				Collections.<ChartSearchService.RecordReference> emptyList(), 0, 0, 0,
 				Collections.<SafetyWarning> emptyList(), null, null, null, null, null, null, null, null,
 				null, null, null, null, null, null, true, null, null, null, null, null, null,
-				DrugSafetyValidator.STATUS_UNAVAILABLE, Collections.emptyList(), null, false, summary, limits, null);
+				DrugSafetyValidator.STATUS_UNAVAILABLE, Collections.emptyList(), null, false, summary, limits, null, details);
 	}
 
 	@SuppressWarnings("unchecked")
@@ -116,6 +122,25 @@ public class ChartSearchAiAnswerSummaryTest {
 		assertEquals(Boolean.FALSE, searchPayload().get("answerDetailsStateLimits"), "never without a summary");
 	}
 
+	/** ADR Decision 560: what a client shows under the summary, published as the answer states it, on every answer. */
+	@Test
+	public void theSearchResponseStatesTheDetails() {
+		assertEquals(DETAILS, searchPayload().get("answerDetails"));
+		summary = null;
+		details = null;
+		Map<String, Object> none = searchPayload();
+		assertTrue(none.containsKey("answerDetails"), "the key is present on every answer, beside answerSummary");
+		assertNull(none.get("answerDetails"));
+	}
+
+	@Test
+	public void theEarlyDoneAndTheGroundedEventStateTheDetails() throws Exception {
+		controller.streamAnswer(out, RestControllerContext.patient(), QUESTION, new User(3), true);
+		assertEquals(DETAILS, SseEvents.dataOfType(out, "done", MAPPER).get("answerDetails").asText(),
+				"the early done is what a streaming user sees");
+		assertEquals(DETAILS, SseEvents.dataOfType(out, "grounded", MAPPER).get("answerDetails").asText());
+	}
+
 	@Test
 	public void theEarlyDoneAndTheGroundedEventStateItToo() throws Exception {
 		controller.streamAnswer(out, RestControllerContext.patient(), QUESTION, new User(3), true);
@@ -142,6 +167,8 @@ public class ChartSearchAiAnswerSummaryTest {
 	public void theKeyIsWrittenInExactlyOnePlace() throws Exception {
 		assertEquals(1, ChartSearchAiStreamingTest.occurrences(ChartSearchAiStreamingTest.controllerSource(),
 				"\"answerDetailsStateLimits\""), "answerDetailsStateLimits must be written in exactly one place");
+		assertEquals(1, ChartSearchAiStreamingTest.occurrences(ChartSearchAiStreamingTest.controllerSource(),
+				"\"answerDetails\""), "answerDetails must be written in exactly one place, beside answerSummary");
 		int keys = ChartSearchAiStreamingTest.occurrences(ChartSearchAiStreamingTest.controllerSource(),
 				"\"answerSummary\"");
 		assertEquals(1, keys, "answerSummary must be written in exactly one place, beside answeredByTheModule. Found "

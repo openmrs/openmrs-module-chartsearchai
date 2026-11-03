@@ -316,7 +316,7 @@ public class ChartSearchAiConditionRuleCoverageTest {
 					Collections.<ChartSearchService.RecordReference> emptyList(), 0, 0, 0,
 					Collections.<SafetyWarning> emptyList(), null, null, null, null, null, null, null, null,
 					null, null, null, stated, null, null, false, null, null, null, doseStated, null, null,
-					"limited", safetyIssues, null, false, null, false, null);
+					"limited", safetyIssues, null, false, null, false, null, null);
 		}
 
 		@Override

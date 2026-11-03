@@ -1057,6 +1057,9 @@ public interface ChartSearchService {
 		/** @see #answerDetailsStateLimits() */
 		private final boolean answerDetailsStateLimits;
 
+		/** @see #getAnswerDetails() */
+		private final String answerDetails;
+
 		/** @see #getInteractionClaimPairs() */
 		private final InteractionClaimPairs interactionClaimPairs;
 
@@ -1127,7 +1130,8 @@ public interface ChartSearchService {
 			this(answer, references, inputTokens, outputTokens, cachedTokens, safetyWarnings, searchMode,
 					referenceSlice, pairChipExtent, unresolvedDrugClass, unfaithfullyRenderedCitations,
 					null, null, null, null, null, null, null, null, null, false, null, null, null, null, null, null,
-					DrugSafetyValidator.STATUS_UNAVAILABLE, java.util.Collections.emptyList(), null, false, null, false, null);
+					DrugSafetyValidator.STATUS_UNAVAILABLE, java.util.Collections.emptyList(), null, false, null, false, null,
+					null);
 		}
 
 		/**
@@ -1171,7 +1175,10 @@ public interface ChartSearchService {
 				List<String> unsupportedEndedOrderClaims,
 				List<Integer> unstatedSignificanceQualifiers, String safetyStatus, List<String> safetyIssues,
 				List<Integer> findingsStatedByTheModule, boolean asksWhetherSheHasTakenADrug,
-				String answerSummary, boolean answerDetailsStateLimits, java.util.Set<String> withheldTypes) {
+				String answerSummary, boolean answerDetailsStateLimits, java.util.Set<String> withheldTypes,
+				String answerDetails) {
+			// Nothing is under a summary there is not (ADR Decision 560).
+			this.answerDetails = answerSummary == null ? null : answerDetails;
 			// Null survives as null, the rule every list above shares: no chart behind the answer to say.
 			this.withheldTypes = withheldTypes == null ? null
 					: java.util.Collections.unmodifiableSet(new java.util.TreeSet<String>(withheldTypes));
@@ -1706,6 +1713,19 @@ public interface ChartSearchService {
 		 */
 		public boolean answerDetailsStateLimits() {
 			return answerDetailsStateLimits;
+		}
+
+		/**
+		 * What a client shows under {@link #getAnswerSummary()} — ADR Decision 560: the answer without the lines the summary
+		 * states whole, every word and every marker of them on the words it cited, so "Show details" does not say again what
+		 * the sentence above it said. Every other line stays, in the answer's order: a line under a heading, a line the
+		 * sentence splitter cuts, a line a marker inside a sentence cites one of several things of. A client renders it
+		 * where present and never re-derives it from {@link #getAnswer()} and the summary.
+		 *
+		 * @return those lines, empty where the summary states them all, or {@code null} exactly where there is no summary
+		 */
+		public String getAnswerDetails() {
+			return answerDetails;
 		}
 
 		/**

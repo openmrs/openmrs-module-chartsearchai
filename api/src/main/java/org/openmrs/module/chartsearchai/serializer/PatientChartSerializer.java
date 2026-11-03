@@ -746,6 +746,26 @@ public class PatientChartSerializer {
 			return moduleAnswerSummary;
 		}
 
+		/** @see #getModuleAnswerLinesStatedWhole() */
+		private java.util.Set<String> moduleAnswerLinesStatedWhole = java.util.Collections.emptySet();
+
+		/** Records the lines of the composed answer its summary states whole — ADR Decision 560, and {@code
+		 *  DrugReferenceInjector} is the only production caller. */
+		public void markModuleAnswerLinesStatedWhole(java.util.Set<String> lines) {
+			this.moduleAnswerLinesStatedWhole = java.util.Collections.unmodifiableSet(
+				new java.util.LinkedHashSet<String>(lines));
+		}
+
+		/**
+		 * The lines of the composed answer that {@link #getModuleAnswerSummary()} states whole — every word, and every marker
+		 * on the words it cited — so a client is not shown them again under it (ADR Decision 560). Written where the summary
+		 * is composed and never read back off its words: whether a line is stated whole is decided by the code that states
+		 * it. Empty where there is no summary, or it states no line whole.
+		 */
+		public java.util.Set<String> getModuleAnswerLinesStatedWhole() {
+			return moduleAnswerLinesStatedWhole;
+		}
+
 		/** @see #moduleAnswerDetailsStateLimits() */
 		private boolean moduleAnswerDetailsStateLimits;
 

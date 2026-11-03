@@ -297,7 +297,7 @@ public class ProviderRestContractTest {
 				Arrays.asList(3), Arrays.asList(new ChartSearchService.UnstatedFindingSeverity(2, "Major")),
 				null, new ChartSearchService.ActiveOrderClaims(2, 1), null, null,
 				DrugReferenceLoad.Coverage.PUBLISHED, null, null, false, null, null, null, null, null, null,
-				"checked", Collections.emptyList(), Arrays.asList(2), true, null, false, null);
+				"checked", Collections.emptyList(), Arrays.asList(2), true, null, false, null, null);
 		AnswerEnvelope envelope = AnswerEnvelope.fromPayload(answerPayload("Aspirin 81mg."), source);
 		provider.events = Arrays.asList(
 				TurnEvent.of(TurnEventType.TURN_STARTED, 0, "bundled"),

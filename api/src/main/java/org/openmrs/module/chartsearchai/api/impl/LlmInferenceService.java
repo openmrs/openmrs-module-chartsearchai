@@ -403,7 +403,10 @@ public class LlmInferenceService implements ChartSearchService {
 					OwnOrderFindingStatement.statedFindings(response.getAnswer(), cited, chart.getMappings(),
 							chart.getProposalOwnOrderFindingLines()), !chart.getHistoryQuestionDrugRows().isEmpty(),
 					// A list the model wrote is shown as its own heading and its count (ADR Decision 528).
-					ModelAnswerList.summaryOf(response.getAnswer()), false, chart.getWithheldTypes());
+					ModelAnswerList.summaryOf(response.getAnswer()), false, chart.getWithheldTypes(),
+					// Under it, the answer as published, the module's own sentences after the model's included.
+					detailsUnder(completedAnswer, ModelAnswerList.summaryOf(response.getAnswer()),
+							Collections.<String> emptySet()));
 			outcome = "ok";
 			return answer;
 		}
@@ -854,8 +857,7 @@ public class LlmInferenceService implements ChartSearchService {
 			// Fires regardless of whether grounding is enabled — see the interface contract.
 			// The listed-drug sentence (issue #515) is on this answer too: the chart stamped it before the
 			// model was asked, so unlike the ended-order sentence it owes the chips nothing.
-			ungroundedAnswerConsumer.accept(new ChartAnswer(
-					UncheckedWordStatement.withUncheckedWordStated(NameAsAskedStatement.withNamesAsAskedStated(
+			String earlyAnswer = UncheckedWordStatement.withUncheckedWordStated(NameAsAskedStatement.withNamesAsAskedStated(
 							DrugClassMembersStatement.withMembersStated(
 							DrugClassStatement.withDrugClassStated(DoseStatement.withDoseNotChecked(
 									ListedDrugStatement.withListedDrugsStated(OwnOrderFindingStatement
@@ -863,7 +865,8 @@ public class LlmInferenceService implements ChartSearchService {
 												chart.getProposalOwnOrderFindingLines()),
 										chart.getListedDrugsWithNoActiveOrder()), chart.statesADose(), doseCeilingCoverage),
 								unresolvedDrugClass, cited), chart.getNamedClassAtcGroup(), chart.getOrdersInTheNamedClass()),
-						chart.getNamedAsAsked()), chart.getUncheckedWordStatement()),
+						chart.getNamedAsAsked()), chart.getUncheckedWordStatement());
+			ungroundedAnswerConsumer.accept(new ChartAnswer(earlyAnswer,
 					// ADR Decision 170: the records the own-order statement cites, as the module's, on this answer too.
 					withReferencesTheModuleStated(cited, OwnOrderFindingStatement.citedRecords(response.getAnswer(), cited,
 							chart.getMappings(), chart.getProposalOwnOrderFindingLines()), chart.getMappings()),
@@ -875,7 +878,9 @@ public class LlmInferenceService implements ChartSearchService {
 					DrugSafetyValidator.STATUS_UNAVAILABLE, Collections.emptyList(),
 					OwnOrderFindingStatement.statedFindings(response.getAnswer(), cited, chart.getMappings(),
 							chart.getProposalOwnOrderFindingLines()), !chart.getHistoryQuestionDrugRows().isEmpty(),
-					ModelAnswerList.summaryOf(response.getAnswer()), false, chart.getWithheldTypes()));
+					ModelAnswerList.summaryOf(response.getAnswer()), false, chart.getWithheldTypes(),
+					detailsUnder(earlyAnswer, ModelAnswerList.summaryOf(response.getAnswer()),
+							Collections.<String> emptySet())));
 
 			// After the user-visible handoff, before grounding: the exact comparisons over what the
 			// answer did with the records it cites — the class-code defects a set-membership
@@ -1044,7 +1049,10 @@ public class LlmInferenceService implements ChartSearchService {
 					OwnOrderFindingStatement.statedFindings(response.getAnswer(), cited, chart.getMappings(),
 							chart.getProposalOwnOrderFindingLines()), !chart.getHistoryQuestionDrugRows().isEmpty(),
 					// A list the model wrote is shown as its own heading and its count (ADR Decision 528).
-					ModelAnswerList.summaryOf(response.getAnswer()), false, chart.getWithheldTypes());
+					ModelAnswerList.summaryOf(response.getAnswer()), false, chart.getWithheldTypes(),
+					// Under it, the answer as published, the module's own sentences after the model's included.
+					detailsUnder(completedAnswer, ModelAnswerList.summaryOf(response.getAnswer()),
+							Collections.<String> emptySet()));
 			outcome = "ok";
 			return answer;
 		}
@@ -1138,10 +1146,17 @@ public class LlmInferenceService implements ChartSearchService {
 		List<RecordReference> references = extractCitedReferences(answer, null, mappings);
 		List<ChartSearchService.OrderStopDate> orderStopDates =
 				ChartSearchAiUtils.orderStopDates(answer, references, mappings);
-		// The sentence a client shows, the rest collapsed under it (ADR Decisions 512, 517, 519): the composer's — its
-		// answer's own first line, or a sentence apart from its words under which a client collapses the whole answer.
+		// The sentence a client shows (ADR Decisions 512, 517, 519), and under it the FINAL answer without the lines it
+		// states whole (ADR Decision 560) — final, since the lines appended above are written after the summary was — and
+		// whether those details say what was not checked, read off the same text a client shows.
 		String summary = chart.getModuleAnswerSummary();
-		boolean detailsStateLimits = summary != null && chart.moduleAnswerDetailsStateLimits();
+		String details = detailsUnder(answer, summary, chart.getModuleAnswerLinesStatedWhole());
+		boolean detailsStateLimits = false;
+		if (details != null) {
+			for (String line : details.split("\n", -1)) {
+				detailsStateLimits |= DrugReferenceInjector.saysWhatWasNotChecked(line);
+			}
+		}
 		log.info("Answered from the module's own drug-safety check, no model call (issue #469) "
 				+ "patient={} findings={}", patient == null ? null : patient.getPatientId(),
 				ChartSearchAiUtils.safetyFindingMappings(mappings).size());
@@ -1152,12 +1167,37 @@ public class LlmInferenceService implements ChartSearchService {
 				unresolvedDrugClass, null, null, null, null, null, null, chartReadForSafety,
 				conditionRuleCoverage, orderStopDates, null, true, null, null, null, doseCeilingCoverage, null, null,
 				DrugSafetyValidator.STATUS_UNAVAILABLE, Collections.emptyList(), null,
-				!chart.getHistoryQuestionDrugRows().isEmpty(), summary, detailsStateLimits, chart.getWithheldTypes()));
+				!chart.getHistoryQuestionDrugRows().isEmpty(), summary, detailsStateLimits, chart.getWithheldTypes(),
+				details));
 		return new ChartAnswer(answer, references, 0, 0, 0, safetyWarnings, searchMode, referenceSlice,
 				pairExtent.stated(), unresolvedDrugClass, null, null, null, null, null, null,
 				chartReadForSafety, conditionRuleCoverage, orderStopDates, null, true, null, null, null,
 				doseCeilingCoverage, null, null, safetyResult.getStatus(), safetyResult.getIssues(), null,
-				!chart.getHistoryQuestionDrugRows().isEmpty(), summary, detailsStateLimits, chart.getWithheldTypes());
+				!chart.getHistoryQuestionDrugRows().isEmpty(), summary, detailsStateLimits, chart.getWithheldTypes(),
+				details);
+	}
+
+	/**
+	 * What a client shows under {@code summary} (ADR Decision 560): {@code answer}'s lines in order, without the summary's
+	 * own line and the lines it states whole, the composer's record of which those are — and only above the answer's first
+	 * heading, so no heading is shown without the lines under it. A model's answer has no such record, so under its
+	 * summary is all of it, or the rest where it opens with the summary.
+	 *
+	 * @return those lines, or {@code null} where there is no summary
+	 */
+	static String detailsUnder(String answer, String summary, Set<String> linesStatedWhole) {
+		if (summary == null || answer == null) {
+			return null;
+		}
+		List<String> kept = new ArrayList<String>();
+		boolean belowAHeading = false;
+		for (String line : answer.split("\n", -1)) {
+			belowAHeading |= DrugReferenceInjector.isAHeading(line);
+			if (belowAHeading || !(line.equals(summary) || linesStatedWhole.contains(line))) {
+				kept.add(line);
+			}
+		}
+		return String.join("\n", kept);
 	}
 
 	private static void requireActiveTurn(CancellationSignal cancellation) {

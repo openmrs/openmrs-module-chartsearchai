@@ -26129,3 +26129,87 @@ Pinned by `ConditionMediatedComposedAnswerTest`, over the sheet's own charts:
 `.aProposalWhoseCautionsIncludeAChainIsStillAnsweredByTheModel`, a spec change made here. That class's #555 cases now
 set `answerFromFindings` off, as `CitedFindingPartnerCompletionTest` does (Decision 131), because what they judge is the
 model's answer.
+
+## Decision 560: "Show details" shows what the summary did not say
+
+**Status: Accepted** (November 2026). Amends [Decision 519](#decision-519-every-answer-the-module-writes-collapses-under-one-sentence-and-says-whether-its-details-state-limits)
+and [Decision 529](#decision-529-an-answer-with-no-bottom-line-of-its-own-shows-what-it-states-in-short-before-it-counts),
+and returns to the goal [Decision 534](#decision-534-a-bottom-line-cut-from-the-first-sentence-opens-the-answer-and-is-not-repeated-under-it) tried
+and reverted, with the new evidence below. Found on the public demo on 2026-11-02.
+
+### Context
+
+*"Can I give him panadol?"* showed its summary, and under "Show details" the same sentence again. A client collapsed the
+rest of `answer` where it opens with `answerSummary`, and the whole of it where it does not (Decision 519). Over 669
+questions on 12 demo patients on the demo replica (8,028 answers; 7,113 with a summary), **3,735** repeated the summary
+under the toggle.
+
+Every shape was measured on that run before this one was chosen:
+
+- **A client-only swap.** 1,133 summaries carry clauses the answer does not state, so no client rule over the text can
+  tell which lines the summary states.
+- **The answer opening with its summary** (Decision 534). This was tried and reverted: the summary's joins and dropped
+  labels entered the answer's own words.
+- **No summary unless it is a prefix of the answer.** Decision 519's direction is a summary on every module answer.
+- **Dropping stated lines anywhere in the answer.** 57 headings were left with nothing under them.
+- **Dropping only the prefix run.** 695 repeats remained.
+- **Protecting a list of drug names from the sentence splitter.** It cannot be complete: a question's own spelling, a
+  slash label (*"St. John's wort/ibuprofen"*) and a name ending in a full stop each escaped it.
+
+### The decision
+
+The answer publishes `answerDetails`: what a client shows under the summary. It is `answer` without the lines the summary
+states whole, and nothing else.
+
+- **"Stated whole" is decided where the summary is composed**, never read back off the text. `statedThenCounted` and
+  `withLeadsFoldedIntoTheBottomLine` record each line they state whole (`PatientChart.getModuleAnswerLinesStatedWhole`).
+  A line is stated whole only where it is one sentence to `ChartSearchAiUtils.SENTENCE_BOUNDARY`, `inShort` drops no word
+  of it, and no marker sits before one of its words. Markers set after its full stop are its own. The summary then
+  carries that line's markers, so dropping the line loses none (this amends Decision 529's "without markers").
+- **One sentence, because no test of the words separates two sentences from "St. John's Wort".** The summary joins what
+  the splitter cuts with a semicolon. That is right for two sentences and garbles the name, so such a line stays under
+  the toggle: repeated at worst, never the only copy gone.
+- **A marker inside the sentence keeps the line.** It cites one of the several things the sentence names. On the
+  replica, carrying it to the summary's end put `[107] [73]` on the one order that neither marker cited.
+- **Only lines above the first heading leave**, so no heading is shown without the lines under it.
+- **Computed over the FINAL answer** in `LlmInferenceService`, after the lines it appends once the summary is chosen
+  (name as asked, dose, ended orders, listed drugs, unstated partners). `answerDetailsStateLimits` is read off the same
+  text, so the label covers the dose line it used to miss.
+- **A model's answer** has no such record, so under its summary (Decision 528) is all of it, or the rest where it opens
+  with the summary: Decision 519's rule, now applied by the server. "All of it" is the answer as published, with the
+  module's own sentences after the model's. The first measurement of this build took the model's words alone, and lost
+  those sentences from 2 answers.
+
+`answer` is unchanged, word for word, which is what Decision 534's attempt could not keep. A client renders
+`answerDetails` and hides the toggle where it is empty (README). The client must ship before the server, because a
+client rendering the summary as plain text would show the new markers as raw `[n]`.
+
+### Measured
+
+On the same 8,028 answers, plus 1,338 on the two demo patients with drug allergies, through this change's own build on the
+demo replica (2026-11-03):
+
+- **Repeats:** 545 of 7,115 answers still repeat a line under the toggle. Of those, 426 are a bracketed name such as
+  *"(aspirin)"*, which `inShort` drops (a wording question left open), 148 are lines of several sentences, 57 are lines
+  below a heading, and 2 are mid-sentence markers.
+- **Losses:** 0 words or markers lost, 0 markers moved, 0 headings left without their lines, 0 limits labels wrong, and
+  0 answers changed.
+- **The verbatim check:** every line left out appears verbatim in the summary. The check was calibrated against a build
+  that hid garbled lines; it flagged 198.
+
+Five rounds of review by fresh agents refuted the earlier shapes in turn, and the fifth found nothing.
+
+`AnswerDetailsContextTest` pins each rule, and each of its guards reddens a named case when mutated:
+- `.aSentenceTheSummaryStatesWholeIsNotRepeatedUnderIt`
+- `.aLineTheSentenceSplitterCutsStaysUnderTheSummary`
+- `.aLineWhoseMarkerCitesOneOfSeveralThingsStaysUnderTheSummary`
+- `.noHeadingLosesItsItems`
+- `.theLimitsFlagReadsTheDetailsAClientShows`
+
+`ChartSearchAiAnswerSummaryTest` pins the key on the wire.
+
+### What this does not do
+
+It does not change what the summary says: the *"St; John's Wort"* join and the dropped bracketed names stand as they
+were. It does not touch `answer`. The injector's own `moduleAnswerDetailsStateLimits` stamp still describes the
+answer before the lines `LlmInferenceService` appends; the wire no longer reads it.

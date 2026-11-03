@@ -2808,6 +2808,9 @@ public class ChartSearchAiRestController {
 		// ADR Decision 512: the lines a client shows of a module-composed answer, the rest collapsed under them.
 		// ChartAnswer.getAnswerSummary is canonical for what they are and when they are null.
 		target.put("answerSummary", answer.getAnswerSummary());
+		// ADR Decision 560: what a client shows under it — the answer without the lines it states whole. ChartAnswer.
+		// getAnswerDetails is canonical for what they are and when they are null.
+		target.put("answerDetails", answer.getAnswerDetails());
 		// ADR Decision 519: whether what a client collapses under it says what the check did not cover, so its label never
 		// promises a limit that is not there. ChartAnswer.answerDetailsStateLimits is canonical for it.
 		target.put("answerDetailsStateLimits", Boolean.valueOf(answer.answerDetailsStateLimits()));

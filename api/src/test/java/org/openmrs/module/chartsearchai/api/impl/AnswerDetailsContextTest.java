@@ -54,9 +54,6 @@ public class AnswerDetailsContextTest extends BaseModuleContextSensitiveTest {
 
 	private static final String PROPOSAL = "Can I give her ibuprofen?";
 
-	/** What the answer says where no drug-condition rule is loaded, as the data the module ships carries none. */
-	private static final String CONDITIONS_NOT_CHECKED = "Not checked: this patient's conditions (no drug-condition rules "
-			+ "are loaded).";
 
 	@BeforeEach
 	public void setUp() {
@@ -65,23 +62,52 @@ public class AnswerDetailsContextTest extends BaseModuleContextSensitiveTest {
 	}
 
 	/**
-	 * The demo's own shape: "Can I give him ibuprofen?" for a patient on no medication is one sentence and its limit. The
-	 * sentence is the summary, its marker with it on the words it cited, and under the toggle is the limit alone — not
-	 * the sentence again.
+	 * A drug the data relates to none of her orders, after a list naming one she does not hold, is two sentences the
+	 * module composes (ADR Decision 557) and the line it appends. The summary states both sentences, the first's marker
+	 * with it on the words it cited, and under the toggle is the appended line alone — not the sentences again.
 	 */
 	@Test
 	public void aSentenceTheSummaryStatesWholeIsNotRepeatedUnderIt() {
-		ChartAnswer answer = realService(new DrugReferenceService()).search(patient(6), PROPOSAL);
+		String question = "The patient is currently on Amoxicillin, is it safe to give ascorbic acid?";
+		ChartAnswer answer = serviceOver(DrugReferenceTestSupport.injectedChartOverOrders(question, "Lamivudine"), "unused")
+				.search(aPatient(), question);
 		String[] lines = answer.getAnswer().split("\n");
-		assertEquals(2, lines.length, "precondition: a sentence and its limit — " + answer.getAnswer());
-		Matcher sentence = Pattern.compile("(.* to)\\. (\\[\\d+\\])").matcher(lines[0]);
+		assertEquals(3, lines.length, "precondition: two sentences and the line appended — " + answer.getAnswer());
+		Matcher sentence = Pattern.compile("(.*)\\. (\\[\\d+\\])").matcher(lines[0]);
 		assertTrue(sentence.matches(), "precondition: one sentence, its marker after its full stop — " + lines[0]);
-		assertEquals(CONDITIONS_NOT_CHECKED, lines[1], "precondition");
+		assertTrue(lines[1].startsWith("The check of Ascorbic acid against Amoxicillin"), "precondition — " + lines[1]);
 
-		assertEquals(sentence.group(1) + " " + sentence.group(2) + ".", answer.getAnswerSummary(),
+		assertEquals(sentence.group(1) + " " + sentence.group(2) + "; t" + lines[1].substring(1), answer.getAnswerSummary(),
 			"the summary carries the sentence's marker on the sentence it cited");
-		assertEquals(CONDITIONS_NOT_CHECKED, answer.getAnswerDetails(), "the sentence is not said twice");
-		assertTrue(answer.answerDetailsStateLimits(), "what is under it says what was not checked");
+		assertEquals(lines[2], answer.getAnswerDetails(), "the sentences are not said twice");
+	}
+
+	/**
+	 * A one-line answer the module appends to — the dose said not checked (ADR Decision 322) — is more than one line, so it
+	 * has one sentence a client shows (ADR Decision 519): its own line, the appended lines under it. "Can I give him
+	 * ibuprofen?" for a patient on no medication is one sentence since the line about her conditions left the answer (ADR
+	 * Decision 562); stating a dose, it was shown whole.
+	 */
+	@Test
+	public void aOneLineAnswerTheModuleAppendsToIsSummarisedByItsOwnLine() {
+		ChartAnswer answer = realService(new DrugReferenceService()).search(patient(6), "Can I give her ibuprofen 400mg?");
+		String[] lines = answer.getAnswer().split("\n");
+		assertEquals(2, lines.length, "precondition: a sentence and the dose line — " + answer.getAnswer());
+		assertEquals(DoseStatement.NOT_CHECKED, lines[1], "precondition");
+
+		assertEquals(lines[0], answer.getAnswerSummary());
+		assertEquals(lines[1], answer.getAnswerDetails());
+		assertTrue(answer.answerDetailsStateLimits(), "the dose line says what was not checked");
+	}
+
+	/** And with nothing appended, one sentence is shown whole: no summary, nothing under one. */
+	@Test
+	public void aOneLineAnswerIsShownWhole() {
+		ChartAnswer answer = realService(new DrugReferenceService()).search(patient(6), PROPOSAL);
+		assertFalse(answer.getAnswer().contains("\n"), "precondition: one sentence — " + answer.getAnswer());
+
+		assertNull(answer.getAnswerSummary());
+		assertNull(answer.getAnswerDetails());
 	}
 
 	/**
@@ -92,7 +118,9 @@ public class AnswerDetailsContextTest extends BaseModuleContextSensitiveTest {
 	 */
 	@Test
 	public void aLineTheSentenceSplitterCutsStaysUnderTheSummary() {
-		ChartAnswer answer = realService(new DrugReferenceService()).search(patient(7), "Can I give her St. John's wort?");
+		String question = "The patient is currently on Efavirenz, is it safe to give St. John's wort?";
+		ChartAnswer answer = serviceOver(DrugReferenceTestSupport.injectedChartOverOrders(question, "Lamivudine"), "unused")
+				.search(aPatient(), question);
 		String[] lines = answer.getAnswer().split("\n");
 		assertTrue(lines[0].contains("St. John's Wort"), "precondition: the line names it — " + answer.getAnswer());
 		assertNotNull(answer.getAnswerSummary(), "precondition: the answer has a summary");
@@ -160,11 +188,11 @@ public class AnswerDetailsContextTest extends BaseModuleContextSensitiveTest {
 		ChartAnswer answer = realService(new DrugReferenceService()).search(patient(7),
 			"What should I monitor with her current medications?");
 		String[] lines = answer.getAnswer().split("\n");
-		assertEquals(3, lines.length, "precondition — " + answer.getAnswer());
+		assertEquals(2, lines.length, "precondition — " + answer.getAnswer());
 		assertTrue(lines[0].startsWith("This check does not say what to monitor:"), "precondition — " + lines[0]);
 		assertEquals(lines[1], answer.getAnswerSummary(), "precondition");
 
-		assertEquals(lines[0] + "\n" + lines[2], answer.getAnswerDetails());
+		assertEquals(lines[0], answer.getAnswerDetails());
 	}
 
 	/** A model's list carries a summary too (ADR Decision 528), so it publishes its details: never null beside one. */
@@ -222,10 +250,10 @@ public class AnswerDetailsContextTest extends BaseModuleContextSensitiveTest {
 	@Test
 	public void theEarlyAnswerCarriesTheSameDetails() {
 		List<ChartAnswer> early = new ArrayList<ChartAnswer>();
-		ChartAnswer answer = realService(new DrugReferenceService()).searchStreaming(patient(6), PROPOSAL, text -> { },
-			reasoning -> { }, citations -> { }, early::add);
+		ChartAnswer answer = realService(new DrugReferenceService()).searchStreaming(patient(6),
+			"Can I give her ibuprofen 400mg?", text -> { }, reasoning -> { }, citations -> { }, early::add);
 
-		assertEquals(CONDITIONS_NOT_CHECKED, answer.getAnswerDetails());
+		assertEquals(DoseStatement.NOT_CHECKED, answer.getAnswerDetails());
 		assertEquals(1, early.size(), "precondition: one early answer");
 		assertEquals(answer.getAnswerDetails(), early.get(0).getAnswerDetails());
 		assertEquals(answer.answerDetailsStateLimits(), early.get(0).answerDetailsStateLimits());

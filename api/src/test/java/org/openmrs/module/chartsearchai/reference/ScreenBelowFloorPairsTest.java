@@ -97,7 +97,7 @@ public class ScreenBelowFloorPairsTest extends BaseModuleContextSensitiveTest {
 	/** The demo's own chart: each drug ordered three times, so each raises a duplicate-therapy finding beside the screen,
 	 *  the three stated on one line (ADR Decision 493). */
 	@Test
-	public void theDemoPatientsThreeOrdersOfEachDrugAreAnsweredWithTheScreenTheDuplicatesAndHisConditions() {
+	public void theDemoPatientsThreeOrdersOfEachDrugAreAnsweredWithTheScreenAndTheDuplicates() {
 		List<PatientClinicalContext.ActiveDrugOrder> orders = new ArrayList<PatientClinicalContext.ActiveDrugOrder>();
 		for (int n = 1; n <= 3; n++) {
 			for (String drug : new String[] { "Lamivudine", "Nevirapine", "Stavudine" }) {
@@ -111,7 +111,8 @@ public class ScreenBelowFloorPairsTest extends BaseModuleContextSensitiveTest {
 
 		assertNotNull(answer, "the module answers");
 		String[] lines = answer.split("\n");
-		assertEquals(4, lines.length, "was: " + answer);
+		// Nothing about the data's drug-condition rules, the documentation's to state (ADR Decision 562).
+		assertEquals(3, lines.length, "was: " + answer);
 		// The bottom line first, the rest a client may collapse (ADR Decision 512).
 		assertEquals("No rated interactions; 3 possible duplicate therapies.", lines[0], "was: " + answer);
 		lines = java.util.Arrays.copyOfRange(lines, 1, lines.length);
@@ -122,7 +123,6 @@ public class ScreenBelowFloorPairsTest extends BaseModuleContextSensitiveTest {
 		// Her three drugs each in several orders, one line since ADR Decision 493.
 		assertTrue(lines[1].startsWith("Possible duplicate therapy — each in more than one of this patient's active orders: "
 				+ "Lamivudine; Nevirapine; Stavudine. ["), "was: " + answer);
-		assertEquals(DrugReferenceInjector.CONDITIONS_NOT_CHECKED, lines[2], "was: " + answer);
 	}
 
 	@Test
@@ -156,14 +156,12 @@ public class ScreenBelowFloorPairsTest extends BaseModuleContextSensitiveTest {
 	}
 
 	@Test
-	public void aScreenBeyondInteractionsSaysHisConditionsWereNotChecked() {
+	public void aScreenBeyondInteractionsDoesNotRepeatThatTheDataCarriesNoConditionRule() {
 		String answer = screen(CONTRAINDICATIONS, "Lamivudine", "Nevirapine", "Stavudine");
 
 		assertNotNull(answer, "the module answers");
-		String[] lines = answer.split("\n");
-		assertEquals(DrugReferenceInjector.CONDITIONS_NOT_CHECKED, lines[lines.length - 1], "was: " + answer);
-		assertEquals("Not checked: this patient's conditions (no drug-condition rules are loaded).",
-			DrugReferenceInjector.CONDITIONS_NOT_CHECKED);
+		assertFalse(answer.contains("drug-condition rule"), "was: " + answer);
+		assertFalse(answer.contains("this patient's conditions"), "was: " + answer);
 	}
 
 	@Test
@@ -171,7 +169,7 @@ public class ScreenBelowFloorPairsTest extends BaseModuleContextSensitiveTest {
 		String answer = screen(INTERACTIONS, "Lamivudine", "Nevirapine", "Stavudine");
 
 		assertNotNull(answer, "the module answers");
-		assertFalse(answer.contains(DrugReferenceInjector.CONDITIONS_NOT_CHECKED), "was: " + answer);
+		assertFalse(answer.contains("drug-condition rule"), "was: " + answer);
 	}
 
 	private static Set<String> set(String... members) {

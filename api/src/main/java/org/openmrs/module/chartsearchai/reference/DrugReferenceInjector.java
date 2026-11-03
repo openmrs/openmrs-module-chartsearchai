@@ -1784,10 +1784,10 @@ public class DrugReferenceInjector {
 				moduleAnswer = moduleAnswer + "\n" + notCheckedInTheProduct(word);
 			}
 		}
-		// A screen asked about more than interactions — "Does he have any drug contraindications?" — where the data carries no
-		// drug-condition rule weighed none of her conditions, and says so (ADR Decision 467).
-		// And a drug proposed, likewise: "Is it safe to start her on clarithromycin?" asks more than whether it interacts (ADR
-		// Decision 533).
+		// A screen asked about more than interactions — "Does he have any drug contraindications?" (ADR Decision 467) — or a
+		// drug proposed, "Is it safe to start her on clarithromycin?" (ADR Decision 533): where the data carries no
+		// drug-condition rule, the shapes whose closing line may say her contraindications were weighed, her allergies alone
+		// (ADR Decisions 544, 562). That the data carries none is the documentation's to say, never the answer's.
 		boolean conditionsUnchecked = moduleAnswer != null
 				&& (questionDrugs.isEmpty() && QueryScopeRouter.asksOnlyToScreenHerMedications(question)
 						&& !QueryScopeRouter.asksOnlyAboutInteractions(question)
@@ -1799,8 +1799,9 @@ public class DrugReferenceInjector {
 				&& drugSafetyValidator.conditionRuleCoverage() == DrugReferenceLoad.Coverage.ABSENT;
 		// What the closing line says was not covered is what this pass did not SCREEN, decided here for every composer
 		// alike, never what a composer did not FIND (ADR Decision 544). A pass that weighed her contraindications says so —
-		// where no drug-condition rule weighed her conditions, only beside the line saying they were not checked, which a
-		// question about interactions alone does not carry (ADR Decision 533), so there the narrower line stays. Any other
+		// where no drug-condition rule weighed her conditions, as her allergies alone (ADR Decision 562), and only for the
+		// shapes above: a question about interactions alone sets them apart (ADR Decision 190), so there the narrower line
+		// stays. Any other
 		// question whose answer closes on the narrower line takes that part into the line it widens, whatever its shape —
 		// two drugs proposed together, a switch — so an answer stating a contraindication never closes saying they were
 		// not covered (ADR Decision 547). It joins the line it widens and adds none.
@@ -1816,8 +1817,8 @@ public class DrugReferenceInjector {
 		boolean contraindicationsScreened = weighedHerContraindications && (conditionsUnchecked
 				|| drugSafetyValidator.conditionRuleCoverage() == DrugReferenceLoad.Coverage.PUBLISHED);
 		if (moduleAnswer != null) {
-			moduleAnswer = withWhatWasNotChecked(moduleAnswer, contraindicationsScreened, conditionsUnchecked,
-					unidentifiedOnAScreen);
+			moduleAnswer = withWhatWasNotChecked(moduleAnswer, contraindicationsScreened, drugSafetyValidator != null
+					&& drugSafetyValidator.conditionRuleCoverage() == DrugReferenceLoad.Coverage.ABSENT, unidentifiedOnAScreen);
 		}
 		// Every answer of more than one line has one sentence a client shows, the rest collapsed under it (ADR Decisions
 		// 519, 529). With no bottom line of its own: what the answer states before its findings, in short, then a count of
@@ -4165,70 +4166,52 @@ public class DrugReferenceInjector {
 		}
 	}
 
-	/** What closes a screen's answer to a question asking more than whether her medications interact, where the data
-	 *  loaded carries no drug-condition rule ({@link DrugSafetyValidator#conditionRuleCoverage()} answers {@code ABSENT}):
-	 *  her conditions were not weighed against her orders, and nothing else in the answer says so (ADR Decision 467). */
 	/**
-	 * {@code answer} saying what the check did not cover, on one line (ADR Decisions 467, 493, 496): where it closes a
-	 * screen's findings with its scope, that line becomes <em>"Not checked: interactions the data does not rate, anything
-	 * beyond drug interactions and contraindications, this patient's conditions (the drug data loaded carries no
-	 * drug-condition rules), and 10 active orders the drug data does not identify: Measles vaccination (2 orders); …"</em>,
-	 * each part only where it holds. The orders come last, after a colon: their names carry commas and semicolons of their
-	 * own. With no scope line — a screen note, an answer that no order was identified — her conditions and the orders keep
-	 * a line each, as before.
+	 * {@code answer} saying what the check did not cover, on one line (ADR Decisions 493, 496): where it closes a screen's
+	 * findings with its scope and some active orders are ones the drug data does not identify, that line becomes <em>"Not
+	 * checked: unrated interactions, anything beyond drug interactions and contraindications, and 10 active orders the drug
+	 * data does not identify: Measles vaccination (2 orders); …"</em>. The orders come last, after a colon: their names carry
+	 * commas and semicolons of their own. With no scope line — a screen note, an answer that no order was identified — the
+	 * orders keep a line of their own.
 	 *
-	 * <p>Where {@code contraindicationsScreened}, a {@link #BELOW_FLOOR_SCOPE} line becomes {@link #SCREEN_SCOPE} first: the
-	 * pass weighed her contraindications, so "anything beyond drug interactions" would be false of it (ADR Decision 544).
+	 * <p>Where {@code contraindicationsScreened}, a {@link #BELOW_FLOOR_SCOPE} line widens first: the pass weighed her
+	 * contraindications, so "anything beyond drug interactions" would be false of it (ADR Decision 544). Where
+	 * {@code conditionRulesAbsent}, no rule could weigh a condition, so a line never says "contraindications" were covered:
+	 * it names what the pass screened, {@link #ALLERGY_SCOPE}. That the data carries no condition rule is the knowledge
+	 * base's limit, stated in the module's documentation and never in an answer (ADR Decision 562).
 	 *
 	 * @param contraindicationsScreened {@link #screenedHerContraindications}'s answer for this pass
+	 * @param conditionRulesAbsent whether {@link DrugSafetyValidator#conditionRuleCoverage()} answers {@code ABSENT}
 	 * @param unidentified the orders the drug data does not identify, on a screen; {@code null} or empty where none
 	 */
-	static String withWhatWasNotChecked(String answer, boolean contraindicationsScreened, boolean conditionsUnchecked,
+	static String withWhatWasNotChecked(String answer, boolean contraindicationsScreened, boolean conditionRulesAbsent,
 			List<PatientClinicalContext.ActiveDrugOrder> unidentified) {
-		if (contraindicationsScreened) {
-			List<String> scoped = new ArrayList<String>(Arrays.asList(answer.split("\n", -1)));
-			for (int n = 0; n < scoped.size(); n++) {
-				if (BELOW_FLOOR_SCOPE.equals(scoped.get(n))) {
-					scoped.set(n, SCREEN_SCOPE);
-				}
-			}
-			answer = String.join("\n", scoped);
-		}
-		boolean orders = unidentified != null && !unidentified.isEmpty();
-		if (!conditionsUnchecked && !orders) {
-			return answer;
-		}
+		String covered = conditionRulesAbsent ? ALLERGY_SCOPE : SCREEN_SCOPE;
 		List<String> lines = new ArrayList<String>(Arrays.asList(answer.split("\n", -1)));
 		for (int n = 0; n < lines.size(); n++) {
+			if (contraindicationsScreened && BELOW_FLOOR_SCOPE.equals(lines.get(n))
+					|| SCREEN_SCOPE.equals(lines.get(n))) {
+				lines.set(n, covered);
+			}
+		}
+		if (unidentified == null || unidentified.isEmpty()) {
+			return String.join("\n", lines);
+		}
+		for (int n = 0; n < lines.size(); n++) {
 			String scope = SCREEN_SCOPE.equals(lines.get(n)) ? "anything beyond drug interactions and contraindications"
+					: ALLERGY_SCOPE.equals(lines.get(n)) ? "anything beyond drug interactions and this patient's recorded allergies"
 					: BELOW_FLOOR_SCOPE.equals(lines.get(n)) ? "anything beyond drug interactions" : null;
 			if (scope != null) {
-				List<String> parts = new ArrayList<String>();
-				// In fewer words than SCREEN_SCOPE's (ADR Decision 506).
-				parts.add("unrated interactions");
-				parts.add(scope);
-				if (conditionsUnchecked) {
-					parts.add(CONDITIONS_UNCHECKED_PART);
-				}
-				if (orders) {
-					int k = unidentified.size();
-					// Each name once: the count before them says how many orders (ADR Decision 509).
-					parts.add(k + (k == 1 ? " active order" : " active orders") + " the drug data does not identify: "
-							+ unidentifiedOrderNames(unidentified, false));
-				}
-				lines.set(n, "Not checked: " + String.join(", ", parts.subList(0, parts.size() - 1)) + ", and "
-						+ parts.get(parts.size() - 1) + ".");
+				int k = unidentified.size();
+				// In fewer words than the scope line's (ADR Decision 506); each name once, the count before them saying how
+				// many orders (ADR Decision 509).
+				lines.set(n, "Not checked: unrated interactions, " + scope + ", and " + k
+						+ (k == 1 ? " active order" : " active orders") + " the drug data does not identify: "
+						+ unidentifiedOrderNames(unidentified, false) + ".");
 				return String.join("\n", lines);
 			}
 		}
-		StringBuilder kept = new StringBuilder(answer);
-		if (orders) {
-			kept.append('\n').append(unidentifiedOrdersLine(unidentified, true));
-		}
-		if (conditionsUnchecked) {
-			kept.append('\n').append(CONDITIONS_NOT_CHECKED);
-		}
-		return kept.toString();
+		return String.join("\n", lines) + "\n" + unidentifiedOrdersLine(unidentified, true);
 	}
 
 	/**
@@ -4263,12 +4246,13 @@ public class DrugReferenceInjector {
 		return true;
 	}
 
-	/** Her conditions as one part of a screen's one "Not checked" line (ADR Decisions 493, 496): bracketed, so the line's
-	 *  commas stay its own. */
-	static final String CONDITIONS_UNCHECKED_PART = "this patient's conditions (no drug-condition rules are loaded)";
-
-	/** Her conditions not checked, as a line of its own where no scope line takes them (ADR Decisions 467, 509). */
-	static final String CONDITIONS_NOT_CHECKED = "Not checked: " + CONDITIONS_UNCHECKED_PART + ".";
+	/**
+	 * What a pass that weighed her allergies says it did not cover where the data loaded carries no drug-condition rule
+	 * (ADR Decision 562): her contraindications were screened against her allergy records alone, so it never says
+	 * "contraindications".
+	 */
+	static final String ALLERGY_SCOPE = "Interactions the data does not rate, and anything beyond drug interactions and "
+			+ "this patient's recorded allergies, are not covered.";
 
 	/** What a below-floor answer's bottom line does not cover, stated under it (ADR Decision 144). */
 	static final String BELOW_FLOOR_SCOPE =

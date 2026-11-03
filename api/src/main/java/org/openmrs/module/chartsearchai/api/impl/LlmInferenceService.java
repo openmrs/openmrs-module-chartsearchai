@@ -1150,6 +1150,11 @@ public class LlmInferenceService implements ChartSearchService {
 		// states whole (ADR Decision 560) — final, since the lines appended above are written after the summary was — and
 		// whether those details say what was not checked, read off the same text a client shows.
 		String summary = chart.getModuleAnswerSummary();
+		// One line composed and more appended above is an answer of more than one line, so it has one sentence a client
+		// shows (ADR Decisions 519, 562): the module's own line, what was appended under it.
+		if (summary == null && composed != null && !composed.contains("\n") && answer.startsWith(composed + "\n")) {
+			summary = composed;
+		}
 		String details = detailsUnder(answer, summary, chart.getModuleAnswerLinesStatedWhole());
 		boolean detailsStateLimits = false;
 		if (details != null) {

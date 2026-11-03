@@ -54,7 +54,9 @@ public class BottomLineOpensTheAnswerTest extends BaseModuleContextSensitiveTest
 		// His three drugs are nine orders: what is counted is his medications.
 		assertTrue(lines[1].startsWith("The data lists Ibuprofen against 3 of this patient's medications, none with a severity "
 				+ "or mechanism on file. ["), "the rest of the sentence, and not its first words again: " + answer);
-		assertTrue(lines[2].startsWith("Not checked: "), "was: " + answer);
+		// What the pass weighed, her allergies, and nothing about the data's drug-condition rules (ADR Decision 562).
+		assertEquals("Interactions the data does not rate, and anything beyond drug interactions and this patient's recorded "
+				+ "allergies, are not covered.", lines[2], "was: " + answer);
 		assertTrue(chart.moduleAnswerDetailsStateLimits(), "was: " + answer);
 	}
 

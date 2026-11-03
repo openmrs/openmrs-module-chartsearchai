@@ -100,9 +100,10 @@ public class BriefScreenAnswerTest extends BaseModuleContextSensitiveTest {
 			+ "active orders: Lamivudine; Stavudine; Sulfamethoxazole and Trimethoprim; Isoniazid and Rifampicin (rifampin). [";
 
 	/** What a screen of the demo patient did not check, on one line, the orders the data does not identify last, each name
-	 *  once (ADR Decisions 496, 506, 509). */
+	 *  once (ADR Decisions 496, 506, 509); her allergies weighed, and no drug-condition rule to weigh a condition (ADR
+	 *  Decision 562). */
 	private static final String NOT_CHECKED = "Not checked: unrated interactions, anything beyond drug interactions and "
-			+ "contraindications, this patient's conditions (no drug-condition rules are loaded), and 10 active orders the "
+			+ "this patient's recorded allergies, and 10 active orders the "
 			+ "drug data does not identify: Measles vaccination; Diphtheria tetanus and pertussis vaccination; Hepatitis B "
 			+ "vaccination; Polio vaccination, oral; Hemophilus influenza B vaccine.";
 

@@ -26281,3 +26281,128 @@ one answered 200 on both builds, main (`668179672`) then this change.
   *"No — … ; 1 Major interaction — Amlodipine with Rifampin — plus 1 caution."*; 31 of those 32 now equal the bare
   question's summary, and the other one has findings of its own after the list. The remaining 84 are identical, summary
   included, and no answer moved between the module and the model.
+
+## Decision 562: That the knowledge base carries no drug-condition rule is documented, never repeated in an answer
+
+**Status: Accepted** (November 2026), on the owner's direction ("docs only"). Supersedes
+[Decision 533](#decision-533-a-drug-proposed-says-her-conditions-were-not-checked-where-no-drug-condition-rule-is-loaded)
+and the conditions line of
+[Decision 467](#decision-467-a-screen-states-the-pairs-of-her-orders-it-relates-below-the-floor-and-says-when-her-conditions-were-not-checked).
+Amends [Decision 544](#decision-544-the-closing-line-says-what-the-pass-did-not-screen-never-what-it-did-not-find) and
+[Decision 547](#decision-547-an-answer-stating-a-contraindication-never-closes-saying-contraindications-were-not-covered)
+on what a widened closing line says, and applies
+[Decision 519](#decision-519-every-answer-the-module-writes-collapses-under-one-sentence-and-says-whether-its-details-state-limits)
+to an answer that becomes one line.
+
+### Context
+
+The owner asked why *"Not checked: this patient's conditions (no drug-condition rules are loaded)."* clutters every answer
+when it is a limit of the loaded knowledge base. The demo replica (`:8088`) was measured on main (`20477aed3`), 2026-11-04.
+The corpus was 207 questions over 7 demo patients: the 5 sheet patients, and dd8e507a and dd795bf4, who hold no drug orders.
+
+- All 207 answers report `conditionRuleCoverage: "absent"`. It is a fact about the install.
+- The line closed 150 of the 151 proposal and dose answers. In 122 it stood as its own line, word for word. In the other 28 it
+  was folded into the closing scope line.
+- In 22 answers it was the only line under the toggle. All 22 are the two patients with no orders.
+- In 95 more it was the only limit under the toggle. That count comes from
+  `DrugReferenceInjector.saysWhatWasNotChecked`, run from the built jar over each answer's `answerDetails` with the line
+  removed. The predicate agreed with the published `answerDetailsStateLimits` on all 122 answers that carried the line as
+  its own line. The 5 that kept the label also carry the dose line.
+
+The README already said the bundled DDInter data publishes no condition rules (the drug-reference paragraph). So does
+`/drugreferencestatus`, as `arms.conditionRules.coverage`.
+
+Shapes weighed before this one:
+
+- **A note shown once per panel**, driven by `conditionRuleCoverage`. A review agent found two defects in the first design:
+  - A server switch defaulting on would silently drop the limit for a client that does not render the key. Today's
+    reference client does not render it (README, "the reference frontend no longer draws … `conditionRuleCoverage`").
+  - Removing the conditions words would leave the widened scope line saying contraindications were covered. Decision 544
+    forbids that.
+
+  The owner then chose documentation alone. The module is installed nowhere yet, so no older client exists to protect.
+- **Keeping the line where the question itself asks about contraindications or her conditions.** The owner declined it:
+  the limit is the knowledge base's, whatever was asked.
+
+Decision 75's argument still stands: the person who needs to know is the clinician holding one answer. This decision
+leaves the key on every response for a client that wants to show it, and leaves it to the documentation and the operator
+otherwise.
+
+### The decision
+
+- **No answer says the data carries no drug-condition rule.** `withWhatWasNotChecked` no longer writes it, neither as
+  its own line nor as a part of the scope line. `CONDITIONS_NOT_CHECKED` and `CONDITIONS_UNCHECKED_PART` are removed.
+  `conditionRuleCoverage` is unchanged on every response. The README states the limit in the drug-reference section.
+- **No closing line says "contraindications" were covered where no condition rule could weigh one.** On such an install a
+  line that would have said so names what the pass weighed instead: `ALLERGY_SCOPE`, *"Interactions the data does not
+  rate, and anything beyond drug interactions and this patient's recorded allergies, are not covered."*
+  - This covers a `SCREEN_SCOPE` a composer wrote and a `BELOW_FLOOR_SCOPE` that Decision 544 widens.
+  - Which shapes widen is unchanged. `conditionsUnchecked` is still computed as before and still decides
+    `contraindicationsScreened`. A question about interactions only (Decision 190) keeps the narrow line.
+  - So Decision 544's rule (never send a clinician to check by hand the allergies the module checked) and Decision 547's
+    rule (an answer stating a contraindication never says contraindications were not covered) both hold, without the
+    sentence that made "contraindications" true.
+- **An answer the module composes as one line, and that `LlmInferenceService.answerFromTheModule` then appends to, is
+  summarised by its own line** (Decision 519). Examples of appended lines: the dose said not checked, the drug named
+  otherwise, the listed drugs she does not hold. Before this change the conditions line made such answers two lines at
+  composition. Without it they would have been shown whole, with no summary. A one-line answer with nothing appended is
+  still shown whole.
+
+### Measured
+
+The same 207 questions were run on this change's build on the replica, compared answer by answer with main. The
+comparison script was checked first by comparing main against itself: it flagged exactly the 150 answers that carry the
+line and passed the 42 that do not.
+
+- **Answers.** Every one of the 192 module answers equals main's with only these edits:
+  - the line or part removed,
+  - "contraindications" in a scope line becoming "this patient's recorded allergies",
+  - a scope line with only the conditions part to add staying its own sentence.
+
+  That is 150 changed and 42 identical. The 15 model answers were not compared. No question moved between the module and
+  the model.
+- **Summaries.** 25 answers are now one line, shown whole, with no toggle: 22 for the two patients with no orders, and 3
+  for dd55aeac's own isoniazid. 2 answers are summarised by their own first line, with the appended lines under it. No
+  other summary moved.
+- **Labels.** Of the module answers, 117 toggle labels lost "and limits", 45 kept it (a scope line or the dose line), and
+  30 had none before or after.
+- **Browser check.** On the chart page, Kamwara's *"The patient is currently on Lamivudine, Nevirapine, Stavudine, is it
+  safe to give Amlodipine?"* shows its caution sentence, and under *"Show details"* its finding alone.
+
+### Spec change
+
+These tests pinned the line, the folded part, or an answer shape it lengthened, and now assert this decision:
+
+- `ProposalSaysHerConditionsWereNotCheckedTest` is removed. It pinned Decision 533. Its proposal case is reversed in
+  `ConditionsLimitIsNotRepeatedInAnswersTest.aProposalIsItsCautionAndItsFindingAlone`. Its interaction-only case is
+  `ClosingLineScreenedCoverageTest.aQuestionOnlyWhetherItInteractsKeepsTheNarrowLineWhereNoConditionRuleIsLoaded`, whose
+  narrow closing line already excludes it.
+- `ClosingLineScreenedCoverageTest`'s `WIDENED`, and its two two-drug cases, renamed `…CloseSayingHerAllergiesWereCovered`.
+- `BriefScreenAnswerTest`'s `NOT_CHECKED`.
+- `ScreenBelowFloorPairsTest`'s demo-patient screen and its screen beyond interactions.
+- `ListedRegimenAnswerTest.aProposalAfterAListSaysNothingOfTheDatasConditionRulesAsTheDrugAskedAloneDoes`.
+- `BottomLineOpensTheAnswerTest`'s closing line.
+- In `AnswerDetailsContextTest`, three Decision 560 cases moved to answers that still have a second line, so their rules
+  stay exercised:
+  - `.aSentenceTheSummaryStatesWholeIsNotRepeatedUnderIt`
+  - `.aLineTheSentenceSplitterCutsStaysUnderTheSummary`
+  - `.aFoldedLeadStaysAndTheSummarysOwnLineLeaves`
+  
+  `.theEarlyAnswerCarriesTheSameDetails` now uses a dose question.
+
+Pinned by:
+
+- `ConditionsLimitIsNotRepeatedInAnswersTest`
+- `ClosingLineScreenedCoverageTest`
+- `AnswerDetailsContextTest.aOneLineAnswerTheModuleAppendsToIsSummarisedByItsOwnLine`
+- `AnswerDetailsContextTest.aOneLineAnswerIsShownWhole`
+
+What each mutation reddens:
+
+- **Leaving `SCREEN_SCOPE` in place of `ALLERGY_SCOPE`:**
+  - `ClosingLineScreenedCoverageTest`'s four widened cases
+  - `BriefScreenAnswerTest`'s two screen cases
+  - `ConditionsLimitIsNotRepeatedInAnswersTest.noAnswerRepeatsThatTheDataCarriesNoConditionRule`
+- **Dropping the appended-line summary:**
+  - `AnswerDetailsContextTest.aOneLineAnswerTheModuleAppendsToIsSummarisedByItsOwnLine`
+  - `AnswerDetailsContextTest.theEarlyAnswerCarriesTheSameDetails`

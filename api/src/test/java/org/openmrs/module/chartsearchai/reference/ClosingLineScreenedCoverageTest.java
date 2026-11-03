@@ -35,8 +35,10 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  */
 public class ClosingLineScreenedCoverageTest extends BaseModuleContextSensitiveTest {
 
-	private static final String WIDENED = "Not checked: unrated interactions, anything beyond drug interactions and "
-			+ "contraindications, and " + DrugReferenceInjector.CONDITIONS_UNCHECKED_PART + ".";
+	/** Her allergies weighed, and no drug-condition rule to weigh a condition: what the pass covered, named (ADR Decision
+	 *  562). */
+	private static final String WIDENED = "Interactions the data does not rate, and anything beyond drug interactions and "
+			+ "this patient's recorded allergies, are not covered.";
 
 	@BeforeEach
 	public void answerFromFindings() {
@@ -74,7 +76,7 @@ public class ClosingLineScreenedCoverageTest extends BaseModuleContextSensitiveT
 	 * conditions, and Decision 544 widened only beside one.
 	 */
 	@Test
-	public void twoDrugsProposedTogetherBesideAStatedContraindicationCloseSayingContraindicationsWereCovered() {
+	public void twoDrugsProposedTogetherBesideAStatedContraindicationCloseSayingHerAllergiesWereCovered() {
 		String answer = ask("Can I give her amoxicillin and ibuprofen together?", DrugReferenceTestSupport.set("penicillins"));
 
 		assertNotNull(answer, "the module answers");
@@ -86,7 +88,7 @@ public class ClosingLineScreenedCoverageTest extends BaseModuleContextSensitiveT
 
 	/** And with no finding at all: two drugs proposed together were each weighed against her allergy records. */
 	@Test
-	public void twoDrugsProposedTogetherWithNoFindingCloseSayingContraindicationsWereCovered() {
+	public void twoDrugsProposedTogetherWithNoFindingCloseSayingHerAllergiesWereCovered() {
 		String answer = ask("Can I give her amoxicillin and ibuprofen together?", Collections.<String> emptySet());
 
 		assertNotNull(answer, "the module answers");
@@ -107,7 +109,7 @@ public class ClosingLineScreenedCoverageTest extends BaseModuleContextSensitiveT
 		assertTrue(withoutTheStep.contains("Efavirenz is already one of this patient's active medications"),
 			"precondition: answered that she takes it; was: " + withoutTheStep);
 		assertFalse(withoutTheStep.contains("beyond drug interactions"), "precondition: no scope line; was: " + withoutTheStep);
-		assertFalse(withoutTheStep.contains(DrugReferenceInjector.CONDITIONS_UNCHECKED_PART), "was: " + withoutTheStep);
+		assertFalse(withoutTheStep.contains("recorded allergies"), "was: " + withoutTheStep);
 	}
 
 	/** With the contraindication arm switched off nothing weighed her allergies, and no answer may say it did. */

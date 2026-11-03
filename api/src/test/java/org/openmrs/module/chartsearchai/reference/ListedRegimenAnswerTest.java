@@ -226,18 +226,19 @@ public class ListedRegimenAnswerTest extends BaseModuleContextSensitiveTest {
 	}
 
 	@Test
-	public void aProposalAfterAListSaysHerConditionsWereNotCheckedAsTheDrugAskedAloneDoes() {
-		// The shipped data carries no drug-condition rule, so a proposal says her conditions were not checked (ADR Decision
-		// 533) — after a list as alone, whether the drug is hers or not.
+	public void aProposalAfterAListSaysNothingOfTheDatasConditionRulesAsTheDrugAskedAloneDoes() {
+		// The shipped data carries no drug-condition rule, a limit of the knowledge base its documentation states and no
+		// answer repeats (ADR Decision 562) — after a list as alone, whether the drug is hers or not.
 		DrugReferenceService shipped = new DrugReferenceService();
 		assertEquals(DrugReferenceLoad.Coverage.ABSENT, shipped.getLoadStatus().coverageOf(DrugReferenceLoad.Arm.CONDITION_RULES),
 			"premise: the shipped dataset, as installed, publishes no drug-condition rule");
 		for (String drug : Arrays.asList("Metformin", "Rifampicin")) {
 			String alone = ask(shipped, TWO_TB_COMBINATIONS, "Is it safe to give " + drug + "?");
 			String listed = ask(shipped, TWO_TB_COMBINATIONS, LISTING_HER_REGIMEN + drug + "?");
-			assertTrue(alone.contains(DrugReferenceInjector.CONDITIONS_UNCHECKED_PART),
-				"precondition: " + drug + " asked alone says so: " + alone);
-			assertTrue(listed.contains(DrugReferenceInjector.CONDITIONS_UNCHECKED_PART), drug + " after the list: " + listed);
+			assertNotNull(alone, "precondition: the module answers " + drug + " asked alone");
+			assertNotNull(listed, "precondition: the module answers " + drug + " after the list");
+			assertFalse(alone.contains("drug-condition rule"), drug + " asked alone: " + alone);
+			assertFalse(listed.contains("drug-condition rule"), drug + " after the list: " + listed);
 		}
 	}
 

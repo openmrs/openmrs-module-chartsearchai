@@ -93,7 +93,7 @@ chip covering all three of her NSAIDs, with `interactionPairs` `{found: 3}`.
 "Avoid" for a contraindication. None of the chips was a contraindication, yet arm C said "Avoid"
 4 times. Its verdicts followed the wording of the injected finding records instead: in 11 of 12
 cases with findings it made the same call as arm A. The findings reach the model already worded
-([step 3](ddi-question-routing.md#step-3--the-validator-runs-twice-behind-the-same-gate)), and the
+([step 4](ddi-question-routing.md#step-4--the-validator-runs-twice-behind-the-same-gate)), and the
 model followed that wording over the prompt's rules. Under arm C, one Major case (Aspirin) also got
 a caution rather than a refusal.
 

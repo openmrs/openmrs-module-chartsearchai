@@ -373,9 +373,45 @@ public class HubClinicalAnswerProviderTest {
 		assertFalse(descriptor.isReady());
 		assertNotNull(descriptor.getUnavailableReason());
 		assertTrue(descriptor.getCapabilities().contains(ProviderCapability.ANSWER));
-		assertFalse(descriptor.getCapabilities().contains(ProviderCapability.TOKEN_STREAMING));
+		assertTrue(descriptor.getCapabilities().contains(ProviderCapability.TOKEN_STREAMING));
 		assertTrue(descriptor.getCapabilities().contains(ProviderCapability.INDEPTH));
 		assertTrue(descriptor.getCapabilities().contains(ProviderCapability.ANSWER_REVIEW));
+	}
+
+	@Test
+	public void answerAndReasoningDeltasBeforeAnswerDoneRelayAsTokenStreamEvents() throws Exception {
+		ScriptedHubTransport transport = new ScriptedHubTransport();
+		Map<String, Object> answer = answerPayload("Aspirin 81mg.");
+		Map<String, Object> done = new LinkedHashMap<>(answer);
+		done.put("answerValidation", Collections.singletonMap("status", "checked"));
+		transport.events = Arrays.asList(
+				wire("reasoning_delta", Collections.singletonMap("delta", "Checking medication list. ")),
+				wire("answer_delta", Collections.singletonMap("delta", "Aspirin ")),
+				wire("answer_delta", Collections.singletonMap("delta", "81mg.")),
+				wire("answer_done", answer),
+				wire("answer_delta", Collections.singletonMap("delta", "late delta ignored")),
+				wire("done", done));
+
+		HubClinicalAnswerProvider provider = provider(transport,
+				"http://hub.example/v1/chat/completions");
+		CollectingSink sink = new CollectingSink();
+		TurnResult result = provider.execute(request("product-profile-a"), sink, CancellationSignal.NONE)
+				.toCompletableFuture().get();
+
+		assertEquals(Arrays.asList(
+				TurnEventType.TURN_STARTED,
+				TurnEventType.REASONING_DELTA,
+				TurnEventType.ANSWER_DELTA,
+				TurnEventType.ANSWER_DELTA,
+				TurnEventType.ANSWER_DONE,
+				TurnEventType.EVIDENCE_UPDATED,
+				TurnEventType.TURN_DONE), sink.types());
+		assertEquals("Checking medication list. ", sink.events.get(1).getTextDelta());
+		assertEquals("Aspirin ", sink.events.get(2).getTextDelta());
+		assertEquals("81mg.", sink.events.get(3).getTextDelta());
+		assertTrue(TurnLifecycleValidator
+				.violations(provider.descriptor().getCapabilities(), sink.types()).isEmpty());
+		assertEquals(TurnEventType.TURN_DONE, result.getTerminalState());
 	}
 
 	@Test

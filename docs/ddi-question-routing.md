@@ -34,6 +34,17 @@ Companion documents:
 - [ddi-system-prompt-evaluation.md](ddi-system-prompt-evaluation.md) records why a dedicated DDI
   system prompt made the answers worse.
 
+## Contents
+
+- [Prerequisites](#prerequisites)
+- [Step 1 — Does the question name a drug?](#step-1--does-the-question-name-a-drug)
+- [Step 2 — If no drug was named, is it asking to be screened?](#step-2--if-no-drug-was-named-is-it-asking-to-be-screened)
+- [Step 3 — If the code ran no screen, the model may add one](#step-3--if-the-code-ran-no-screen-the-model-may-add-one)
+- [Step 4 — The validator runs twice, behind the same gate](#step-4--the-validator-runs-twice-behind-the-same-gate)
+- [Step 5 — Answering without the model](#step-5--answering-without-the-model)
+- [What the model does](#what-the-model-does)
+- [Where to look in the code](#where-to-look-in-the-code)
+
 ---
 
 ## Prerequisites

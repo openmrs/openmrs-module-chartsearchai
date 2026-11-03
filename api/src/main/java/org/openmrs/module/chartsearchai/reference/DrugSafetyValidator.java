@@ -3608,18 +3608,24 @@ public class DrugSafetyValidator {
 		 */
 		private final Set<Object> proposed;
 
+		/** The substances the QUESTION names, never the answer's: {@link #stampAboutItsPartners} relates only a drug the
+		 *  question names to the drug it proposes, as README's definition of the flag has it (ADR Decision 556). */
+		private final Set<Object> namedByTheQuestion;
+
 		private EndedOrders(Map<Object, Date> substances, Map<Object, List<DrugReference>> rows,
-				Map<Object, List<DrugReference>> subjectRows, Set<Object> proposed) {
+				Map<Object, List<DrugReference>> subjectRows, Set<Object> proposed, Set<Object> namedByTheQuestion) {
 			this.substances = substances;
 			this.rows = rows;
 			this.subjectRows = subjectRows;
 			this.proposed = proposed;
+			this.namedByTheQuestion = namedByTheQuestion;
 		}
 
 		/** A pass holding no substance as ended, which still states each chip's subject rows and proposal. */
-		private static EndedOrders none(Map<Object, List<DrugReference>> subjectRows, Set<Object> proposed) {
+		private static EndedOrders none(Map<Object, List<DrugReference>> subjectRows, Set<Object> proposed,
+				Set<Object> namedByTheQuestion) {
 			return new EndedOrders(Collections.<Object, Date> emptyMap(),
-					Collections.<Object, List<DrugReference>> emptyMap(), subjectRows, proposed);
+					Collections.<Object, List<DrugReference>> emptyMap(), subjectRows, proposed, namedByTheQuestion);
 		}
 
 		/**
@@ -3640,8 +3646,12 @@ public class DrugSafetyValidator {
 				Map<Object, List<DrugReference>> resolvedRows, List<DrugReference> orderEntries,
 				List<RecordMapping> mappings, BridgedOrders bridgedOrders, PatientClinicalContext context,
 				Set<Object> proposed) {
+			Set<Object> questionSubstances = new HashSet<Object>();
+			for (DrugReference drug : questionDrugs) {
+				questionSubstances.add(drug.substanceGroupKey());
+			}
 			if (context == null || mappings == null || mappings.isEmpty() || inPlay.isEmpty()) {
-				return none(resolvedRows, proposed);
+				return none(resolvedRows, proposed, questionSubstances);
 			}
 			// ENDED is the chart builder's stamp saying FALSE — never re-derived, and never a type name,
 			// the stamp being FALSE only for a drug-order record. Everything else a drug-order record can
@@ -3650,7 +3660,7 @@ public class DrugSafetyValidator {
 			List<RecordMapping> notEnded = new ArrayList<RecordMapping>();
 			partitionOrderRecords(mappings, ended, notEnded);
 			if (ended.isEmpty()) {
-				return none(resolvedRows, proposed);
+				return none(resolvedRows, proposed, questionSubstances);
 			}
 			List<String> endedTexts = lowered(ended);
 			List<String> notEndedTexts = lowered(notEnded);
@@ -3695,9 +3705,9 @@ public class DrugSafetyValidator {
 			// The costlier question last, and only where there is a candidate to ask it for.
 			if (substances.isEmpty() || !context.activeDrugOrdersRead()
 					|| !everyActiveOrderResolves(context, orderEntries, bridgedOrders)) {
-				return none(resolvedRows, proposed);
+				return none(resolvedRows, proposed, questionSubstances);
 			}
-			return new EndedOrders(substances, substanceRows, resolvedRows, proposed);
+			return new EndedOrders(substances, substanceRows, resolvedRows, proposed, questionSubstances);
 		}
 
 		/**
@@ -3773,6 +3783,36 @@ public class DrugSafetyValidator {
 			// (ADR Decision 137); stampPair clears it for a pair whose partner is proposed.
 			return stated.withAboutADrugOtherThanTheOneProposed(
 					!proposed.isEmpty() && !proposed.contains(subject.substanceGroupKey()));
+		}
+
+		/**
+		 * {@code chip}, a drug-in-play finding against her orders, {@link #stamp stamped} for its {@code subject} — and
+		 * not about a drug other than the one proposed where the order it names carries the drug proposed, read off the
+		 * partner rows the arm resolved ({@link SafetyWarning#partnerRows()}), as {@link #stampPair} has it for a pair
+		 * whose partner is proposed (ADR Decisions 137, 556). <em>"Nevirapine interacts with active order Rifampin —
+		 * Major."</em>, after a list naming nevirapine and proposing rifampicin, her own drug, relates the drug proposed:
+		 * stamped as about another drug, it was withheld as a chip (ADR Decision 148) beside an answer stating it. Not for a
+		 * subject her orders establish ({@link SafetyWarning#isAboutACurrentMedication()}), whose pair the drug proposed's
+		 * own finding states. Its subject rows stay the subject's.
+		 */
+		SafetyWarning stampAboutItsPartners(DrugReference subject, SafetyWarning chip) {
+			SafetyWarning stated = stamp(subject, chip);
+			// Not where her own orders establish the subject: the drug proposed's own finding states that pair from its
+			// side, and a second chip would state it twice.
+			// Nor for a drug only the answer names, nor for a chip naming several partners, whose other partners are
+			// her orders the drug proposed is not: neither is a finding relating two drugs the question names.
+			if (!stated.isAboutADrugOtherThanTheOneProposed() || stated.isAboutACurrentMedication()
+					|| !namedByTheQuestion.contains(subject.substanceGroupKey()) || stated.namedPartners().size() != 1) {
+				return stated;
+			}
+			for (List<DrugReference> rows : stated.partnerRows().values()) {
+				for (DrugReference row : rows) {
+					if (proposed.contains(row.substanceGroupKey())) {
+						return stated.withAboutADrugOtherThanTheOneProposed(false);
+					}
+				}
+			}
+			return stated;
 		}
 
 		/** {@code chip}, a question-pair finding, {@link #stamp stamped} for its {@code subject} and then
@@ -5373,6 +5413,8 @@ public class DrugSafetyValidator {
 			chip = chip.withMatchedOrderNames(matchedNames).withPartnerRows(
 					Collections.singletonMap(partnerName, rowsOfSubstance(orderEntries, rule.partner)))
 					.withPartnerOrderCounts(partnerOrderCount(partnerName, partnerOrders,
+							rowsOfSubstance(orderEntries, rule.partner)))
+					.withPartnerOrdersUnderOtherNames(partnerOrdersUnderOtherNames(partnerName, partnerOrders,
 							rowsOfSubstance(orderEntries, rule.partner)));
 			// Emitted only if it says something this pass has not already said. Two rules about ONE
 			// prescription are two chips — bestRulePerPartner keys them on the partner ENTRY and keeps
@@ -5402,7 +5444,7 @@ public class DrugSafetyValidator {
 		// The referent is stated here, on the chips this arm hands over, and not before the collapse or
 		// the stated-chip ledger: it cannot change which chips exist (issue #472, see EndedOrders).
 		for (SafetyWarning chip : stated) {
-			warnings.add(endedOrders.stamp(ref, chip));
+			warnings.add(endedOrders.stampAboutItsPartners(ref, chip));
 		}
 		// After the rule chips and outside their sort: unrated, it would otherwise head the list above
 		// the rated findings a clinician asked about, the reason the class-only chips below trail too
@@ -9429,19 +9471,60 @@ public class DrugSafetyValidator {
 			return Collections.<String, Integer> emptyMap();
 		}
 		String name = partnerName.trim();
-		boolean substancesName = false;
-		for (DrugReference row : partnerRows) {
-			substancesName |= name.equalsIgnoreCase(row.displayLabel()) || name.equalsIgnoreCase(row.getName());
+		int spelling = spellingCount(name, orders);
+		int count = printsAnOrdersDisplay(name, spelling, partnerRows) ? spelling : orders.size();
+		return count > 1 ? Collections.singletonMap(name, Integer.valueOf(count))
+				: Collections.<String, Integer> emptyMap();
+	}
+
+	/**
+	 * Where {@link #partnerOrderCount} counts only the orders spelling {@code partnerName} — the chip prints the partner by
+	 * an order's own display — the displays of the rest of {@code orders}, each keyed to how many of them spell it, for
+	 * {@link SafetyWarning#withPartnerOrdersUnderOtherNames}; empty otherwise (ADR Decision 556). On the public demo a
+	 * patient on "Isoniazid / pyrazinamide / rifampin" and "Rifampicin isoniazid pyrazinamide and ethambutol" was told
+	 * "Metformin interacts with active order Isoniazid / pyrazinamide / rifampin (2 orders)", citing four prescriptions:
+	 * the second combination carries rifampicin too, and this arm let it witness the partner, but no word named it. An
+	 * order with no display is no name to state, and is left to the markers.
+	 */
+	private static Map<String, Integer> partnerOrdersUnderOtherNames(String partnerName,
+			Set<PatientClinicalContext.ActiveDrugOrder> orders, List<DrugReference> partnerRows) {
+		if (partnerName == null) {
+			return Collections.<String, Integer> emptyMap();
 		}
+		String name = partnerName.trim();
+		if (!printsAnOrdersDisplay(name, spellingCount(name, orders), partnerRows)) {
+			return Collections.<String, Integer> emptyMap();
+		}
+		Map<String, Integer> others = new LinkedHashMap<String, Integer>();
+		for (PatientClinicalContext.ActiveDrugOrder order : orders) {
+			String display = order.getDisplay() == null ? "" : order.getDisplay().trim();
+			if (!display.isEmpty() && !display.equalsIgnoreCase(name) && displayNamesADrug(order)) {
+				Integer seen = others.get(display);
+				others.put(display, Integer.valueOf(seen == null ? 1 : seen.intValue() + 1));
+			}
+		}
+		return others;
+	}
+
+	/** How many of {@code orders} are displayed {@code name}, ignoring case. */
+	private static int spellingCount(String name, Set<PatientClinicalContext.ActiveDrugOrder> orders) {
 		int spelling = 0;
 		for (PatientClinicalContext.ActiveDrugOrder order : orders) {
 			if (order.getDisplay() != null && order.getDisplay().trim().equalsIgnoreCase(name)) {
 				spelling++;
 			}
 		}
-		int count = spelling > 0 && !substancesName ? spelling : orders.size();
-		return count > 1 ? Collections.singletonMap(name, Integer.valueOf(count))
-				: Collections.<String, Integer> emptyMap();
+		return spelling;
+	}
+
+	/** Whether a chip printing {@code name} prints an order's own display rather than a name of {@code partnerRows}: some
+	 *  order spells it, and no row of the partner is named so (ADR Decision 555). */
+	private static boolean printsAnOrdersDisplay(String name, int spelling, List<DrugReference> partnerRows) {
+		boolean substancesName = false;
+		for (DrugReference row : partnerRows) {
+			substancesName |= name.equalsIgnoreCase(row.displayLabel()) || name.equalsIgnoreCase(row.getName());
+		}
+		return spelling > 0 && !substancesName;
 	}
 
 	/**
@@ -10289,6 +10372,8 @@ public class DrugSafetyValidator {
 							.withPartnerRows(Collections.singletonMap(chipPartnerName,
 									rowsOfSubstance(orderDrugs, partner)))
 							.withPartnerOrderCounts(partnerOrderCount(chipPartnerName, partnerOrders,
+									rowsOfSubstance(orderDrugs, partner)))
+							.withPartnerOrdersUnderOtherNames(partnerOrdersUnderOtherNames(chipPartnerName, partnerOrders,
 									rowsOfSubstance(orderDrugs, partner)));
 					// Before the candidate is collected rather than after the cap, so the extent this arm
 					// states counts what a clinician can tell apart: a restatement is not a pair that was

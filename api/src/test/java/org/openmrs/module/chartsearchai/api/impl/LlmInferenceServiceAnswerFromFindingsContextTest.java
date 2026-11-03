@@ -1721,11 +1721,59 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		assertTheModelIsAsked(question, curated);
 	}
 
-	/** A drug she already takes is not proposed, after a list as alone (ADR Decisions 108, 150): her warfarin. */
+	/**
+	 * A drug she already takes, asked after a list, is answered as it is asked alone — as her own medication (ADR Decision
+	 * 556, which superseded the model call this case pinned under Decision 150, from before Decision 193 answered the drug
+	 * asked alone): her warfarin, then the list's ibuprofen against it, with no verdict.
+	 */
 	@Test
-	public void aListQuestionProposingADrugSheAlreadyTakesStillAsksTheModel() throws Exception {
+	public void aListQuestionProposingADrugSheAlreadyTakesIsAnsweredAsHerOwnMedication() throws Exception {
 		executeDataSet(WARFARIN_ORDER);
-		assertTheModelIsAsked("The patient is currently on Ibuprofen, is it safe to give warfarin?");
+		answerFromFindings(true);
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider, DrugReferenceTestSupport.ddinterServiceWithGroups()).search(patient,
+			"The patient is currently on Ibuprofen, is it safe to give warfarin?");
+		assertEquals(0, provider.calls, "the module answers: " + answer.getAnswer());
+		assertTrue(answer.isAnsweredByTheModule());
+		String[] lines = answer.getAnswer().split("\n");
+		assertEquals("Warfarin is one of this patient's active medications (Warfarin [3]). 1 interaction with this patient's "
+				+ "other active medications:", lines[0], answer.getAnswer());
+		assertTrue(lines[1].startsWith("Warfarin interacts with active order Acetylsalicylic acid (aspirin) — Major. ["),
+			answer.getAnswer());
+		assertEquals(DrugReferenceInjector.LISTED_NOT_HERS_HEADING, lines[2], "not counted among hers: " + answer.getAnswer());
+		assertTrue(lines[3].startsWith("Ibuprofen interacts with active order Warfarin — Major. ["),
+			"the listed drug she is not on, against her warfarin: " + answer.getAnswer());
+		assertFalse(answer.getAnswer().contains("No —") || answer.getAnswer().contains("can be given"),
+			"no verdict on her own drug: " + answer.getAnswer());
+		// Its partner is the drug proposed, so the ibuprofen finding is about warfarin too (ADR Decisions 137, 556): its chip
+		// is published beside the answer citing it, never a Major cited with no chip behind it.
+		boolean published = false;
+		for (SafetyWarning chip : answer.getSafetyWarnings()) {
+			published |= chip.getDetail().startsWith("Ibuprofen interacts with active order Warfarin — Major")
+					&& lines[3].contains("[" + chip.getFindingCitation() + "]") && !chip.isAboutADrugOtherThanTheOneProposed();
+		}
+		assertTrue(published, "the chip of the finding the answer states: " + answer.getSafetyWarnings());
+	}
+
+	/**
+	 * A listed drug she DOES take states its pair with the drug proposed from the drug proposed's side, so the pair is one
+	 * chip: her aspirin's own finding against her warfarin stays withheld (ADR Decisions 148, 556).
+	 */
+	@Test
+	public void aListedDrugSheTakesPublishesItsPairWithTheDrugProposedOnce() throws Exception {
+		executeDataSet(WARFARIN_ORDER);
+		answerFromFindings(true);
+		ChartAnswer answer = serviceWith(new RecordingProvider(), DrugReferenceTestSupport.ddinterServiceWithGroups())
+			.search(patient, "The patient is currently on Aspirin, is it safe to give warfarin?");
+		int pair = 0;
+		for (SafetyWarning chip : answer.getSafetyWarnings()) {
+			String detail = chip.getDetail();
+			if (detail.startsWith("Warfarin interacts with active order Acetylsalicylic acid (aspirin)")
+					|| detail.startsWith("Acetylsalicylic acid (aspirin) interacts with active order Warfarin")) {
+				pair++;
+			}
+		}
+		assertEquals(1, pair, "one chip for her warfarin and her aspirin: " + answer.getSafetyWarnings());
 	}
 
 	/**

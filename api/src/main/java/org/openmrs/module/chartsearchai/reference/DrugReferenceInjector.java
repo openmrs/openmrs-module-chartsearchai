@@ -1123,6 +1123,11 @@ public class DrugReferenceInjector {
 								: orderRecordNumbers(findingRecords != null ? findingRecords : new DrugOrderRecords(mappings),
 										context),
 						orderEntries, context);
+		// A drug she already takes, asked after a list of medications: answered as that drug asked alone is, then what the
+		// list adds (ADR Decision 556). Unchanged for any other question.
+		HerOwnAfterAList afterAList = herOwnDrugAfterAList(question, questionDrugs, screenedSubstances);
+		List<DrugReference> herOwnAsked = afterAList == null ? questionDrugs : afterAList.drugs;
+		String herOwnQuestion = afterAList == null ? question : afterAList.question;
 		if (heldInPart != null) {
 			moduleAnswer = heldInPart;
 		} else if (continuingTwo != null) {
@@ -1190,25 +1195,25 @@ public class DrugReferenceInjector {
 						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
 						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS)
 				&& context.chartReadForSafety()
-				&& !aboutHerOwnMedication(question, questionDrugs, screenedSubstances, findings,
-						itsOwnOrderDisplays(questionDrugs, orderEntries, context),
-						companionsOfHerOwn(drugReferenceService, question, questionDrugs, orderEntries, context)).isEmpty()) {
+				&& !aboutHerOwnMedication(herOwnQuestion, herOwnAsked, screenedSubstances, findings,
+						itsOwnOrderDisplays(herOwnAsked, orderEntries, context),
+						companionsOfHerOwn(drugReferenceService, herOwnQuestion, herOwnAsked, orderEntries, context)).isEmpty()) {
 			// A safety question about a drug she already takes: its findings, counted and stated (ADR Decision 193), and those of
 			// the other substances of the combination order she takes it in (ADR Decision 292).
-			Set<String> itsOwnOrders = itsOwnOrderDisplays(questionDrugs, orderEntries, context);
-			List<DrugReference> companions = companionsOfHerOwn(drugReferenceService, question, questionDrugs, orderEntries,
+			Set<String> itsOwnOrders = itsOwnOrderDisplays(herOwnAsked, orderEntries, context);
+			List<DrugReference> companions = companionsOfHerOwn(drugReferenceService, herOwnQuestion, herOwnAsked, orderEntries,
 				context);
-			List<Integer> about = aboutHerOwnMedication(question, questionDrugs, screenedSubstances, findings, itsOwnOrders,
+			List<Integer> about = aboutHerOwnMedication(herOwnQuestion, herOwnAsked, screenedSubstances, findings, itsOwnOrders,
 				companions);
 			Map<String, Integer> herRecords = orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context)
 					: orderRecordNumbers;
 			// A product named whole — her combination order — is named as asked, with her orders of each of its substances
 			// (ADR Decision 372).
-			AskedDrug asProduct = namesOneProduct(question, questionDrugs) ? askedDrugs(question, questionDrugs, context, true)
+			AskedDrug asProduct = namesOneProduct(herOwnQuestion, herOwnAsked) ? askedDrugs(herOwnQuestion, herOwnAsked, context, true)
 					.get(0) : null;
 			boolean product = asProduct != null && asProduct.substances.size() > 1;
 			String herOrders = product ? herStartedOrdersOf(asProduct, orderEntries, context, herRecords)
-					: herStartedOrdersOf(questionDrugs.get(0), orderEntries, context, herRecords);
+					: herStartedOrdersOf(herOwnAsked.get(0), orderEntries, context, herRecords);
 			List<String> companionLabels = new ArrayList<String>();
 			for (DrugReference companion : companions) {
 				companionLabels.add(DrugSafetyValidator.interactionSubject(Collections.singletonList(companion), context)
@@ -1216,11 +1221,15 @@ public class DrugReferenceInjector {
 			}
 			moduleAnswer = composeAboutHerOwnMedication(findings, findingNumbers, about, orderRecordNumbers, herRecords,
 					itsOwnOrders, herOrders,
-					herOrders.isEmpty() ? herScheduledOrdersOf(questionDrugs.get(0), orderEntries, context, herRecords) : "",
+					herOrders.isEmpty() ? herScheduledOrdersOf(herOwnAsked.get(0), orderEntries, context, herRecords) : "",
 					product ? asProduct.label
-							: companions.isEmpty() ? null : DrugSafetyValidator.interactionSubject(questionDrugs, context)
+							: companions.isEmpty() ? null : DrugSafetyValidator.interactionSubject(herOwnAsked, context)
 									.displayLabel(),
 					companionLabels);
+			if (afterAList != null) {
+				moduleAnswer = withWhatTheListAdds(moduleAnswer, question, questionDrugs, herOwnAsked, screenedSubstances,
+						findings, findingNumbers, about, pairExtent.stated(), orderRecordNumbers, herRecords, context);
+			}
 		} else if (context != null
 				&& ChartSearchAiUtils.getBooleanGlobalProperty(
 						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
@@ -4607,6 +4616,13 @@ public class DrugReferenceInjector {
 		boolean withholdsAgainstHerOrders = false;
 		List<Object> withholdingListed = new ArrayList<Object>();
 		List<String> lines = new ArrayList<String>(order.size() + 1);
+		// Two findings about one combination order say which of its substances each is about, as the drug asked alone's lines
+		// do (ADR Decisions 288, 556): bare, they printed one line twice.
+		List<SafetyWarning> ordered = new ArrayList<SafetyWarning>(order.size());
+		for (Integer i : order) {
+			ordered.add(findings.get(i));
+		}
+		Map<SafetyWarning, String> substances = interactingSubstancesOfSharedOrders(ordered);
 		for (Integer i : order) {
 			SafetyWarning finding = findings.get(i);
 			if (STRENGTH_WITHHOLD.equals(moduleClause(finding)) && SafetyWarning.TYPE_INTERACTION.equals(finding.getType())) {
@@ -4619,9 +4635,9 @@ public class DrugReferenceInjector {
 					}
 				}
 			}
-			String line = findingBody(finding, withOrderCounts(briefDetail(finding), finding), orderRecordNumbers, true)
-					+ " [" + findingNumbers.get(i) + "]";
-			lines.add(line + orderRecordMarkers(finding, herOrderRecords, ChartSearchAiUtils.citedIndexes(line)));
+			// The one rendering the drug asked alone's lines take, so a finding reads alike after a list (ADR Decision 556).
+			lines.add(findingLine(finding, findingNumbers.get(i), orderRecordNumbers, herOrderRecords, true,
+					substances.get(finding)));
 		}
 		// The drug proposed, never the first finding's own subject: a finding about a listed drug her chart holds only as an
 		// ended order is stated from that drug (ADR Decision 428).
@@ -4663,6 +4679,184 @@ public class DrugReferenceInjector {
 		}
 		return String.join("\n", lines);
 	}
+
+	/**
+	 * The proposal a question makes after listing medications, where the drug it proposes is ONE substance her orders carry,
+	 * or {@code null} for every other question (ADR Decision 556). <em>"The patient is currently on Lamivudine / zidovudine,
+	 * Efavirenz, Trimethoprim and sulfamethoxazole is it safe to give Rifampicin?"</em>, asked of a patient on two rifampicin
+	 * combinations, put four substances in play, so {@link #aboutHerOwnMedication}, which answers one, declined; {@link
+	 * #composeListFindings}, which answers a drug she is not on, declined too; and the model answered "can be given" beside a
+	 * Major, never saying she takes it. The list is split off the question by {@link #listedBeforeTheProposal}'s own scan,
+	 * and the proposal is the question's own words from where that scan found it — never where folding changed the
+	 * question's length, since its position is read in the folded text.
+	 */
+	private static HerOwnAfterAList herOwnDrugAfterAList(String question, List<DrugReference> questionDrugs,
+			Set<Object> herSubstances) {
+		if (questionDrugs == null || questionDrugs.isEmpty()) {
+			return null;
+		}
+		ListedProposal found = listedProposal(question, questionDrugs);
+		if (found == null || found.listed.isEmpty() || DrugReference.foldedLower(question).length() != question.length()) {
+			return null;
+		}
+		Set<Object> listed = new HashSet<Object>();
+		for (DrugReference entry : found.listed) {
+			listed.add(entry.substanceGroupKey());
+		}
+		List<DrugReference> proposed = new ArrayList<DrugReference>();
+		Set<Object> asked = new HashSet<Object>();
+		for (DrugReference entry : questionDrugs) {
+			if (!listed.contains(entry.substanceGroupKey())) {
+				proposed.add(entry);
+				asked.add(entry.substanceGroupKey());
+			}
+		}
+		return asked.size() == 1 && herSubstances.containsAll(asked)
+				? new HerOwnAfterAList(question.substring(found.from), proposed) : null;
+	}
+
+	/** {@link #herOwnDrugAfterAList}'s answer: the proposal's own words, and the drug it proposes. */
+	private static final class HerOwnAfterAList {
+
+		final String question;
+
+		final List<DrugReference> drugs;
+
+		HerOwnAfterAList(String question, List<DrugReference> drugs) {
+			this.question = question;
+			this.drugs = drugs;
+		}
+	}
+
+	/**
+	 * {@code answer}, {@link #composeAboutHerOwnMedication}'s statement about a drug she takes asked after a list (ADR
+	 * Decision 556), with what the list adds, as {@link #composeListFindings} states it for a drug she is not on: a line for
+	 * each finding relating the drug to a listed drug her orders do not resolve to, from either side — <em>"Rifampicin
+	 * (rifampin) interacts with Nevirapine, also named in the question — Major."</em>, or <em>"Nevirapine interacts with
+	 * active order Rifampin — Major."</em> — strongest first under {@link #LISTED_NOT_HERS_HEADING}, since the lead counts
+	 * her other active medications; then that the check raised nothing against each other such listed drug — both before
+	 * the answer's scope line, so it still closes what it covers; then, after it, her own orders sharing a substance (ADR
+	 * Decision 165). Every other finding about a listed drug stays unstated, as after any list (ADR Decision 150).
+	 *
+	 * <p>{@code null}, so the model answers, where "raised no finding" could be a guess: the question-pair arm's cap
+	 * withheld a pair ({@code questionPairs}, Decision 150's guard), or a finding about a listed drug names a partner no arm
+	 * resolved to a substance.
+	 */
+	private static String withWhatTheListAdds(String answer, String question, List<DrugReference> questionDrugs,
+			List<DrugReference> proposed, Set<Object> herSubstances, List<SafetyWarning> findings, List<Integer> numbers,
+			List<Integer> about, PairChipExtent questionPairs, Map<String, Integer> orderRecordNumbers,
+			Map<String, Integer> herOrderRecords, PatientClinicalContext context) {
+		if (answer == null) {
+			return null;
+		}
+		Set<Object> asked = new HashSet<Object>();
+		for (DrugReference entry : proposed) {
+			asked.add(entry.substanceGroupKey());
+		}
+		Map<Object, List<DrugReference>> notHers = new LinkedHashMap<Object, List<DrugReference>>();
+		for (DrugReference entry : listedBeforeTheProposal(question, questionDrugs)) {
+			Object key = entry.substanceGroupKey();
+			if (!herSubstances.contains(key) && !asked.contains(key)) {
+				if (!notHers.containsKey(key)) {
+					notHers.put(key, new ArrayList<DrugReference>());
+				}
+				notHers.get(key).add(entry);
+			}
+		}
+		List<Integer> againstTheList = new ArrayList<Integer>();
+		List<SafetyWarning> sharing = new ArrayList<SafetyWarning>();
+		List<Integer> sharingNumbers = new ArrayList<Integer>();
+		Set<Object> related = new HashSet<Object>();
+		for (int i = 0; i < findings.size(); i++) {
+			SafetyWarning finding = findings.get(i);
+			if (about.contains(Integer.valueOf(i))) {
+				continue;
+			}
+			if (finding.statesOrdersSharingASubstance()) {
+				sharing.add(finding);
+				sharingNumbers.add(numbers.get(i));
+				continue;
+			}
+			if (!SafetyWarning.TYPE_INTERACTION.equals(finding.getType())) {
+				continue;
+			}
+			// A listed drug and the drug asked, on either side: the question's own pair ("… interacts with Nevirapine, also
+			// named in the question"), or the listed drug against her order of the drug asked ("Nevirapine interacts with
+			// active order Rifampin"), whose partner's rows say which substance of that order it is.
+			Set<Object> sides = new HashSet<Object>();
+			for (DrugReference row : finding.subjectRows()) {
+				sides.add(row.substanceGroupKey());
+			}
+			// The question-pair arm puts both drugs on the finding's subject rows and names no partner: both sides are
+			// known. A finding about ONE listed drug whose partner no arm resolved to a substance — a class-only
+			// relationship, which names no partner at all — may be about the drug asked: which, the module cannot say, so it
+			// says nothing rather than "raised no finding".
+			boolean aboutAListedDrug = !Collections.disjoint(sides, notHers.keySet());
+			if (aboutAListedDrug && sides.size() < 2 && finding.namedPartners().isEmpty()) {
+				return null;
+			}
+			for (String partner : finding.namedPartners()) {
+				List<DrugReference> rows = finding.rowsOfPartner(partner);
+				if (rows.isEmpty() && aboutAListedDrug) {
+					return null;
+				}
+				for (DrugReference row : rows) {
+					sides.add(row.substanceGroupKey());
+				}
+			}
+			Set<Object> listedPartners = new HashSet<Object>(notHers.keySet());
+			listedPartners.retainAll(sides);
+			if (!Collections.disjoint(sides, asked) && !listedPartners.isEmpty()) {
+				// A line with no chip beside it would leave the answer and the chips disagreeing: a finding still stamped as
+				// about another drug is one Decision 148 withholds, so the model answers instead.
+				if (finding.isAboutADrugOtherThanTheOneProposed() && !finding.isAboutAnotherOfHerMedications()) {
+					return null;
+				}
+				againstTheList.add(Integer.valueOf(i));
+				related.addAll(listedPartners);
+			}
+		}
+		final List<SafetyWarning> all = findings;
+		Collections.sort(againstTheList, Comparator.<Integer> comparingInt(i -> strengthRank(strengthClause(all.get(i)))));
+		List<String> added = new ArrayList<String>();
+		for (Integer i : againstTheList) {
+			added.add(findingLine(findings.get(i), numbers.get(i), orderRecordNumbers, herOrderRecords, true));
+		}
+		if (!added.isEmpty()) {
+			// Not among the lead's count of her other active medications: a heading of their own.
+			added.add(0, LISTED_NOT_HERS_HEADING);
+		}
+		List<String> nothingAgainst = new ArrayList<String>();
+		for (Map.Entry<Object, List<DrugReference>> rows : notHers.entrySet()) {
+			if (!related.contains(rows.getKey())) {
+				nothingAgainst.add(DrugSafetyValidator.interactionSubject(rows.getValue(), context).displayLabel());
+			}
+		}
+		// A pair the question-pair arm's cap withheld may be one of these, and would raise no finding (ADR Decision 150's
+		// guard): then nothing is said to be unrelated, and the model answers.
+		if (!nothingAgainst.isEmpty()
+				&& (questionPairs == null || questionPairs.getFound() != questionPairs.getReported())) {
+			return null;
+		}
+		if (!nothingAgainst.isEmpty()) {
+			added.add("The check of " + DrugSafetyValidator.interactionSubject(proposed, context).displayLabel()
+					+ " against " + joinedAsAList(nothingAgainst) + ", also named in the question, raised no finding.");
+		}
+		List<String> lines = new ArrayList<String>(Arrays.asList(answer.split("\n", -1)));
+		int at = lines.size();
+		String last = lines.get(lines.size() - 1);
+		if (BELOW_FLOOR_SCOPE.equals(last) || SCREEN_SCOPE.equals(last)) {
+			at--;
+		}
+		lines.addAll(at, added);
+		return withHerOwnOrdersSharingASubstance(String.join("\n", lines), sharing, sharingNumbers, orderRecordNumbers,
+				herOrderRecords);
+	}
+
+	/** What heads the lines {@link #withWhatTheListAdds} states about the drugs a question lists that her orders do not
+	 *  resolve to, so they are not read as counted under the lead's count of her other active medications. */
+	public static final String LISTED_NOT_HERS_HEADING = "Against the drugs the question names that this patient has no active "
+			+ "order for:";
 
 	/** {@code items} joined "A", "A or B", "A, B or C". */
 	private static String joinedAsAlternatives(List<String> items) {
@@ -5485,8 +5679,28 @@ public class DrugReferenceInjector {
 	 * every drug named there counts, the definition issue #515's decision gives.
 	 */
 	static List<DrugReference> listedBeforeTheProposal(String question, List<DrugReference> questionDrugs) {
+		ListedProposal found = listedProposal(question, questionDrugs);
+		return found == null ? Collections.<DrugReference> emptyList() : found.listed;
+	}
+
+	/** {@link #listedBeforeTheProposal}'s reading, with where the proposal it found starts. */
+	private static final class ListedProposal {
+
+		/** Where the proposal starts, in the question {@link DrugReference#foldedLower} folded. */
+		final int from;
+
+		final List<DrugReference> listed;
+
+		ListedProposal(int from, List<DrugReference> listed) {
+			this.from = from;
+			this.listed = listed;
+		}
+	}
+
+	/** {@link #listedBeforeTheProposal}'s one scan, or {@code null} where it lists nothing for want of a proposal. */
+	private static ListedProposal listedProposal(String question, List<DrugReference> questionDrugs) {
 		if (question == null || questionDrugs.size() < 2) {
-			return Collections.emptyList();
+			return null;
 		}
 		String folded = DrugReference.foldedLower(question);
 		boolean[] named = namedCharacters(folded, questionDrugs);
@@ -5527,9 +5741,9 @@ public class DrugReferenceInjector {
 					return firstNamed.get(a).compareTo(firstNamed.get(b));
 				}
 			});
-			return listed;
+			return new ListedProposal(from, listed);
 		}
-		return Collections.emptyList();
+		return null;
 	}
 
 	/**
@@ -6555,9 +6769,34 @@ public class DrugReferenceInjector {
 				orderRecordNumbers, true, onceForThis || severitySaidOnce || finding.isARecordedAllergyToItsOwnDrug())
 				+ (currentMedicationContraindication && !onceForThis ? COMPOSED_CURRENT_MEDICATION_REFERENT : "")
 				+ (interactingSubstance == null ? "" : INTERACTING_SUBSTANCE_OPENING + interactingSubstance + ".")
+				+ alsoInOtherOrders(finding)
 				+ " [" + number + "]";
 		return line + orderRecordMarkers(finding, herOrderRecords, ChartSearchAiUtils.citedIndexes(line));
 	}
+
+	/**
+	 * {@link #SAME_INTERACTION_OPENING} and the other orders standing behind the one partner {@code finding} names by an
+	 * order's own display ({@code SafetyWarning.partnerOrdersUnderOtherNames()}), each counted as Decision 555 counts the
+	 * one it names — <em>" The same interaction holds of active order Rifampicin isoniazid pyrazinamide and ethambutol (2
+	 * orders)."</em> — or nothing (ADR Decision 556). The line cites those orders' records already; this names them. A
+	 * finding naming several partners states nothing: which of them the orders stand behind would be a guess.
+	 */
+	private static String alsoInOtherOrders(SafetyWarning finding) {
+		if (finding.partnerOrdersUnderOtherNames().isEmpty() || finding.namedPartners().size() != 1) {
+			return "";
+		}
+		List<String> named = new ArrayList<String>();
+		for (Map.Entry<String, Integer> other : finding.partnerOrdersUnderOtherNames().entrySet()) {
+			named.add(other.getKey() + (other.getValue().intValue() > 1 ? " (" + other.getValue() + " orders)" : ""));
+		}
+		return SAME_INTERACTION_OPENING + DrugSafetyValidator.ACTIVE_ORDER_NOUN + (named.size() > 1 ? "s " : " ")
+				+ DrugSafetyValidator.joinPartners(named) + ".";
+	}
+
+	/** How a composed line names the other orders carrying the substance of the partner it names by one order's display
+	 *  — see {@link #alsoInOtherOrders}. Distinct from {@link #SAME_OF_FORMS_OPENING}, which {@link #withEachFormStatedOnce}
+	 *  reads. */
+	static final String SAME_INTERACTION_OPENING = " The same interaction holds of ";
 
 	/** How a composed line names the substance of a combination order it is about — see {@link
 	 *  #interactingSubstancesOfSharedOrders}. */
@@ -6875,7 +7114,15 @@ public class DrugReferenceInjector {
 		// Two findings about one combination order say which of its substances each is about, as a proposal's lines do:
 		// bare, "rifampicin interacts with active order Isoniazid / pyrazinamide / rifampin" twice read as the drug
 		// interacting with itself (ADR Decision 214).
-		Map<SafetyWarning, String> substances = interactingSubstancesOfSharedOrders(statedFindings);
+		// Over the findings relating a pair: that her orders carry the drug relates it to none of them (ADR Decision 206), and,
+		// grouped with them, left the substances of her combination unnamed (ADR Decision 556).
+		List<SafetyWarning> pairFindings = new ArrayList<SafetyWarning>();
+		for (SafetyWarning finding : statedFindings) {
+			if (!finding.statesOrdersSharingASubstance() && !namesOnlyItsOwnOrders(finding, itsOwnOrders)) {
+				pairFindings.add(finding);
+			}
+		}
+		Map<SafetyWarning, String> substances = interactingSubstancesOfSharedOrders(pairFindings);
 		for (Integer i : stated) {
 			SafetyWarning finding = findings.get(i);
 			lines.add(findingLine(finding, numbers.get(i), orderRecordNumbers, herOrderRecords, true,

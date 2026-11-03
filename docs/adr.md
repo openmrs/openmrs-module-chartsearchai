@@ -14140,7 +14140,9 @@ fresh run, after its restart, worded it differently. Every other rule held:
 Three guards refuse nothing on their own, each because another refuses first, and are kept as statements of what the
 composition requires. The INTERACTION-type test: a contraindication states the withholding clause, which it is not rated
 to license. The one-substance-not-hers test: a drug she takes raises a current-medication clause, which the clause test
-refuses (`.aListQuestionProposingADrugSheAlreadyTakesStillAsksTheModel` holds the outcome). And the sort key putting her
+refuses (`.aListQuestionProposingADrugSheAlreadyTakesStillAsksTheModel` held the outcome; superseded by
+[Decision 556](#decision-556-a-question-listing-her-medications-is-answered-as-the-drug-asked-alone-is), which answers that
+question as her own medication). And the sort key putting her
 own orders first within a strength: the drug-in-play arm's findings precede the question-pair arm's in the list it
 receives, so deleting the key moves no line today.
 
@@ -14149,7 +14151,8 @@ Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aListQuestionWithhol
 `.aListQuestionWhoseProposalTheDataRatesAgainstAListedDrugStatesThatFinding`, `.aListQuestionWithAClassFindingAboutTheDrugProposedStatesIt`,
 `.aWithholdingFindingAboutAListedDrugAloneDoesNotKeepTheModelCall`, `.aListQuestionWhoseFindingIsAnUnratedRuleStillAsksTheModel`
 (the rating test), `.aListQuestionWithAContraindicationAboutTheDrugProposedStillAsksTheModel` and
-`.aListQuestionProposingADrugSheAlreadyTakesStillAsksTheModel`.
+`.aListQuestionProposingADrugSheAlreadyTakesStillAsksTheModel` (since Decision 556,
+`.aListQuestionProposingADrugSheAlreadyTakesIsAnsweredAsHerOwnMedication`).
 
 ## Decision 151: A question whether she has ever taken a drug publishes no chip about giving it
 
@@ -25767,3 +25770,141 @@ review that ran it. A grid whose side printed after the phrase is the findings' 
 *"Itraconazole interacts with active order Lovastatin and Simvastatin"* does not say Itraconazole is two orders. A
 screen relating a drug to a second order of itself (*"Ketoconazole interacts with active order Ketoconazole"*) counts
 neither, both orders resolving the subject's own rows.
+
+## Decision 556: A question listing her medications is answered as the drug asked alone is
+
+**Status: Accepted** (November 2026). Extends [Decision 150](#decision-150-a-proposal-after-a-list-is-answered-from-its-findings-about-the-drug-proposed),
+[Decision 193](#decision-193-a-safety-question-about-a-drug-she-already-takes-is-answered-by-the-module-as-her-own-medication) and
+[Decision 555](#decision-555-a-composed-line-counts-the-orders-behind-the-partner-it-names). Found on the public demo on
+2026-11-03, re-running an external evaluation sheet.
+
+### Context
+
+The sheet asks the demo's three ARV patients *"The patient is currently on …, is it safe to give X?"* for metformin,
+amlodipine, rifampicin and fluconazole. On `main` @ `6655f965`, beside the bare *"Is it safe to give X?"* on the same
+charts:
+
+- **One line printed twice.** *"Amlodipine interacts with active order Lopinavir / ritonavir (2 orders) — Moderate."*
+  appeared twice, and so did the metformin and rifampicin lines about *"Isoniazid / pyrazinamide / rifampin"*.
+  `composeListFindings` built its lines without Decision 288's *"The interacting substance is …"*, which the bare
+  question's composer states.
+- **A drug she takes went to the model.** The list puts several substances in play, so `aboutHerOwnMedication`, which
+  answers one, declined, and `composeListFindings` declines a drug she is on. On dd556a73, who holds two rifampicin
+  combinations, the model answered *"Rifampicin can be given, with several cautions"* beside a Major chip, repeated
+  three findings, and never said she takes it (601 s). On dd5558ed it answered *"No — Rifampicin should not be
+  given"* over a nevirapine her chart does not hold (427 s). The bare question is composed in under a second:
+  *"Rifampicin (rifampin) is one of this patient's active medications …"*.
+- **A line cited an order it did not name.** *"Metformin interacts with active order Isoniazid / pyrazinamide / rifampin
+  (2 orders) — Moderate."* cited four prescriptions. Two of them were *"Rifampicin isoniazid pyrazinamide and
+  ethambutol"*, rifampicin too, which the drug-in-play arm lets witness the partner. Decision 555 counts only the orders
+  spelling the printed display, and no word named the other two.
+
+### The decision
+
+- **The list's lines take the one rendering.** `composeListFindings` states each finding through `findingLine`, with
+  `interactingSubstancesOfSharedOrders` over its findings, as `composeFromFindings` does.
+- **A drug she takes, asked after a list, is answered as the drug asked alone.** `herOwnDrugAfterAList` splits the
+  list off with `listedBeforeTheProposal`'s own scan (`listedProposal`, so there is one reading of where the
+  proposal starts). Where the drug proposed is one substance her orders carry, the her-own-medication branch runs over
+  that drug and the proposal's own words. Then `withWhatTheListAdds` states what the list adds, in the
+  vocabulary `composeListFindings` uses for a drug she is not on:
+  - Each finding joining the drug to a listed drug her orders do not resolve to, from either side, strongest first,
+    under `LISTED_NOT_HERS_HEADING`, since the lead counts her other active medications. That is the question's own
+    pair, or the listed drug against her order of it, read off `subjectRows` and `rowsOfPartner`.
+  - That the check raised nothing against each other such drug.
+  - After the scope line, her orders sharing a substance (Decision 165).
+
+  The first two go before the scope line. The words are read only where folding left the question's length unchanged,
+  since the position is found in the folded text.
+- **It fails closed where "raised no finding" could be a guess.** The model answers instead in two cases. One is where
+  the question-pair arm's cap withheld a pair (`found != reported`, Decision 150's own guard): a list of eight drugs
+  fills the cap with their pairs among themselves. The other is where a finding about one listed drug names no partner
+  that any arm resolved to a substance, such as a class-only relationship between two NRTIs. The question-pair arm's
+  finding is not that case: it carries both drugs on its subject rows.
+- **A listed drug's finding against her order of the drug proposed is about the drug proposed.** README defines
+  `aboutADrugOtherThanTheOneProposed` as a chip whose subject is not the drug proposed, "nor, for a finding relating
+  two drugs the question names, is its partner". The drug-in-play arm stamped *"Nevirapine interacts with active order
+  Rifampin — Major."* `true` all the same, so Decision 148 withheld it as a chip beside an answer that states it.
+  `EndedOrders.stampAboutItsPartners` clears the flag where a partner row the arm resolved is the drug proposed, as
+  `stampPair` already does for the question-pair arm. The chip is then published on Decision 148's own terms. It is
+  not cleared in three cases:
+  - a listed drug her orders establish (`isAboutACurrentMedication()`), because the drug proposed's own finding
+    states that pair and a second chip would state it twice;
+  - a drug only the answer names (`namedByTheQuestion`), because that is not two drugs the question names;
+  - a chip naming several partners, whose other partners are not the drug proposed.
+
+  README's sentence on chips about a listed drug says so. And `withWhatTheListAdds` fails closed on any line whose
+  finding stays stamped as about another drug, so the answer never states a finding whose chip is withheld.
+- **The substances of her combination are named over the findings that relate a pair.** In
+  `composeAboutHerOwnMedication`, the #477 finding that her orders carry the drug relates none of them (Decision 206).
+  Grouped with the pair findings, it left *"The interacting substance is Pyrazinamide."* unsaid.
+- **A line names the other orders behind the partner it prints by one order's display.**
+  `DrugSafetyValidator.partnerOrdersUnderOtherNames`, written beside `partnerOrderCount` by both active-order arms, keys
+  each other display of the orders the arm let witness the partner to its count. `findingLine` states them after the
+  line: *"… The interacting substance is Rifampicin. The same interaction holds of active order Rifampicin isoniazid
+  pyrazinamide and ethambutol (2 orders)."* These are words of its own, because `withEachFormStatedOnce` reads *"The
+  same holds of"*. A partner printed by the substance's own name already counts every order
+  of it (*"Rifampin (3 orders)"*), and states nothing.
+
+### What it does not change
+
+- The record the model reads: `partnerOrdersUnderOtherNames` is package-private and reaches no wire. The chips change
+  only as the bullet on the flag says, and only where the drug proposed is one of her orders, since the partner is
+  her order.
+- A question about a drug she is not on, after a list, still takes `composeListFindings` and its leads.
+- The verdict: a drug she takes gets none, as Decision 193 has it.
+
+### Spec change
+
+`LlmInferenceServiceAnswerFromFindingsContextTest.aListQuestionProposingADrugSheAlreadyTakesStillAsksTheModel` pinned
+the model call for *"The patient is currently on Ibuprofen, is it safe to give warfarin?"*, her warfarin, "after a list
+as alone". Decision 150 listed it among guards kept as statements of what the composition required. At the time, a
+drug she takes went to the model alone too. Decision 193 then answered the drug asked alone from the module, and left the
+list behind. The case is now `.aListQuestionProposingADrugSheAlreadyTakesIsAnsweredAsHerOwnMedication`, which expects
+the answer the bare question gets, plus the list's ibuprofen against her warfarin and that finding's chip.
+
+### What it gives up
+
+- A chip `collapseSharedMechanisms` merges does not carry the other displays, since which partner they belong to
+  would be a guess. Its line still cites them.
+- The list question puts her listed drugs in play (#513), so it can raise findings the bare question does not.
+  On dd556a73 it states that her two combinations both carry rifampicin, and the lead names them with their counts.
+  That is true, and the bare question does not say it.
+- `gridLine` and the shared-mechanism lines do not state the other displays.
+- A drug she takes whose only finding is against a listed drug, with none against her other orders, still goes to the
+  model: `aboutHerOwnMedication` admits it only with a finding about her own orders. The below-floor and no-pair
+  answers about her own drug still read the whole question, so after a list they decline as before.
+- Stating the list's lines through `findingLine` makes two changes the drug asked alone already makes. It drops *"No
+  severity is rated"* from an allergy to the drug's own substance, which is Decision 192's rule. And it adds the
+  current-medication sentence to a contraindication about a medication she already takes.
+- Not pinned:
+  - A finding about a listed drug that names a partner with no rows sends the answer to the model, as one naming no
+    partner does. No fixture here reaches a rule whose partner the dataset identifies by no entry.
+  - The question-pair arm's own finding against the drug asked is stated rather than sent to the model. On the shipped
+    knowledge base the pair is raised from the listed drug's side, so no fixture here reaches it; the demo's nevirapine
+    finding was of that side too.
+  - Two of `stampAboutItsPartners`' exclusions, a drug only the answer names and a chip naming several partners. Each
+    keeps a chip withheld that Decision 148 withheld before.
+- A listed drug she DOES take is not stated against the drug asked. It does not need to be on the shipped knowledge
+  base, whose rows are on both partners' entries (Decision 75), so the drug asked's own finding states that pair.
+  One-sided operator data could raise that pair only from the listed drug's side, and nothing would state it. Such a
+  chip is withheld, as any chip about a listed drug the answer does not cite.
+- Her two combinations both carrying rifampicin are stated twice: once as the drug asked being in both, and once, among
+  her orders sharing a substance, with isoniazid and pyrazinamide. Neither line is false, and the second says more.
+
+Pinned by `ListedRegimenAnswerTest` over the three demo charts' orders, each with its concept's ATC code, and the
+shipped knowledge base. The cases cover:
+- each finding about one combination on a line of its own;
+- the listed and bare questions stating the same finding lines, for metformin, amlodipine and fluconazole;
+- a withholding list answer;
+- the her-own answer after her own list;
+- the her-own answer after a list of drugs she is not on, with its nevirapine and stavudine lines;
+- the list's findings under their own heading;
+- a list whose question pairs the cap cut;
+- a class-only relationship that names no partner substance;
+- the other order named;
+- the substance-named partner naming none.
+
+And by `LlmInferenceServiceAnswerFromFindingsContextTest`: `.aListQuestionProposingADrugSheAlreadyTakesIsAnsweredAsHerOwnMedication`
+(the listed drug's chip, through the real service) and `.aListedDrugSheTakesPublishesItsPairWithTheDrugProposedOnce`
+(no second chip from a listed drug she takes).

@@ -55,9 +55,8 @@ public class ClosingLineScreenedCoverageTest extends BaseModuleContextSensitiveT
 
 		assertNotNull(answer, "the module answers");
 		assertNoScopeLine(answer);
-		// The bottom line and the data it rests on, one sentence and the whole answer: nothing under it to cut it from
-		// (ADR Decisions 519, 534).
-		assertTrue(answer.matches("The interaction data gives no rated reason to withhold Amoxicillin: the data lists Amoxicillin "
+		// The bottom line, then the data it rests on, and nothing after (ADR Decisions 534, 573, 574).
+		assertTrue(answer.matches("The interaction data gives no rated reason to withhold Amoxicillin\\.\nThe data lists Amoxicillin "
 				+ "against 2 of this patient's medications, none with a severity or mechanism on file\\. \\[\\d+\\]"),
 			"was: " + answer);
 	}

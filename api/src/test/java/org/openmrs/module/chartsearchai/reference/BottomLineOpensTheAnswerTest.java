@@ -47,14 +47,17 @@ public class BottomLineOpensTheAnswerTest extends BaseModuleContextSensitiveTest
 		String answer = chart.getModuleAnswer();
 
 		assertNotNull(answer, "the module answers");
-		// With nothing under it the answer is one sentence, its bottom line and the data it rests on, so there is no detail
-		// to collapse and no summary to cut from it (ADR Decisions 519, 573). His three drugs are nine orders: what is
-		// counted is his medications.
-		assertTrue(answer.matches("The interaction data gives no rated reason to withhold Ibuprofen: the data lists Ibuprofen "
-				+ "against 3 of this patient's medications, none with a severity or mechanism on file\\. \\[\\d+\\]"),
-			"was: " + answer);
-		assertNull(chart.getModuleAnswerSummary(), "one line states no summary of its own: " + answer);
-		assertFalse(chart.moduleAnswerDetailsStateLimits(), "was: " + answer);
+		String summary = chart.getModuleAnswerSummary();
+		assertEquals("The interaction data gives no rated reason to withhold Ibuprofen.", summary, "was: " + answer);
+		// A client splits the details off where the answer opens with the bottom line and a line break — with no scope line
+		// under it too (ADR Decisions 573, 574).
+		assertTrue(answer.startsWith(summary + "\n"), "the bottom line opens the answer: " + answer);
+		String[] lines = answer.split("\n");
+		assertEquals(2, lines.length, "was: " + answer);
+		// His three drugs are nine orders: what is counted is his medications.
+		assertTrue(lines[1].startsWith("The data lists Ibuprofen against 3 of this patient's medications, none with a severity "
+				+ "or mechanism on file. ["), "the rest of the sentence, and not its first words again: " + answer);
+		assertFalse(chart.moduleAnswerDetailsStateLimits(), "no line under it says what was not checked: " + answer);
 	}
 
 	private static PatientChart ask(String question) {

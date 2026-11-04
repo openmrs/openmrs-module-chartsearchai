@@ -1791,6 +1791,9 @@ public class DrugReferenceInjector {
 		}
 		// What was not covered for this patient — the orders the drug data does not identify — closes the answer; what kinds of
 		// finding the check does not cover never does (ADR Decision 573).
+		// Whether the answer closed on a scope line before it is dropped: that line made it more than one line, which is what
+		// gives an answer the sentence a client shows and "Show details" under it (ADR Decision 574).
+		boolean closedOnAScopeLine = moduleAnswer != null && closesOnAScopeLine(moduleAnswer);
 		if (moduleAnswer != null) {
 			moduleAnswer = withWhatWasNotChecked(moduleAnswer, unidentifiedOnAScreen);
 		}
@@ -1798,7 +1801,9 @@ public class DrugReferenceInjector {
 		// 519, 529). With no bottom line of its own: what the answer states before its findings, in short, then a count of
 		// the findings it cites, so none under it is out of view uncounted — apart from its words, which a client
 		// collapses whole under it.
-		if (moduleAnswer != null && summary == null && moduleAnswer.contains("\n")) {
+		// And an answer the scope line alone made more than one line keeps them (ADR Decision 574): "The interaction data
+		// gives no rated reason to withhold Ibuprofen." in view, the data it rests on under "Show details".
+		if (moduleAnswer != null && summary == null && (moduleAnswer.contains("\n") || closedOnAScopeLine)) {
 			List<SafetyWarning> cited = new ArrayList<SafetyWarning>();
 			Set<Integer> markers = ChartSearchAiUtils.citedIndexes(moduleAnswer);
 			for (int i = 0; i < findings.size(); i++) {
@@ -6282,6 +6287,17 @@ public class DrugReferenceInjector {
 	 * line — several statements, a count, a sentence it shortened otherwise — leaves the answer as it is: moving such a line
 	 * into the answer put its joins ("…?; Ask again") and its dropped labels into the answer's own words.
 	 */
+	/** Whether any line of {@code answer} is a scope line ({@link #isAScopeLine}), which {@link #withWhatWasNotChecked}
+	 *  drops (ADR Decisions 573, 574). */
+	static boolean closesOnAScopeLine(String answer) {
+		for (String line : answer.split("\n", -1)) {
+			if (isAScopeLine(line)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
 	static String openedWithItsBottomLine(String answer, String summary) {
 		if (summary == null || !summary.endsWith(".")) {
 			return answer;

@@ -26756,3 +26756,36 @@ composed. It describes the module's check, and it reads the same on every answer
 
 Pinned by `ClosingLineScreenedCoverageTest`, rewritten from Decisions 544 and 547's cases to assert that the line is
 absent, that the bottom line is one sentence, and that an order the data does not identify is still named.
+
+## Decision 574: A one-line answer that says more than its sentence in view keeps "Show details"
+
+**Status: Accepted** (November 2026), on the owner's direction ("restore it"). It amends
+[Decision 573](#decision-573-no-answer-closes-on-what-kinds-of-finding-the-check-does-not-cover) and
+[Decision 519](#decision-519-every-answer-the-module-writes-collapses-under-one-sentence-and-says-whether-its-details-state-limits).
+
+### Context
+
+Decision 519 gave a summary only to an answer of more than one line. The scope line Decision 573 dropped was, for some
+answers, all that made them more than one line. *"Is ibuprofen safe for her?"* for Kamwara had been answered *"The
+interaction data gives no rated reason to withhold Ibuprofen."*, with the data it rests on under "Show details". After 573
+it became one sentence of about 30 words, *"…withhold Ibuprofen: the data lists Ibuprofen against 3 of this patient's
+medications, none with a severity or mechanism on file. [113]"*. It had no summary and no toggle. The owner asked for the
+toggle back.
+
+### The decision
+
+An answer the dropped scope line alone made more than one line (`DrugReferenceInjector.closesOnAScopeLine`, asked before
+`withWhatWasNotChecked` drops it) gets the sentence a client shows, as it did before Decision 573.
+`openedWithItsBottomLine` then cuts the bottom line from its sentence, as Decision 534 does: *"…withhold Ibuprofen."* in
+view, *"The data lists Ibuprofen against 3…"* under it. Every other one-line answer is unchanged. That covers *"The
+interaction check relates Mebendazole to none of this patient's 2 active medications. [12]"* and *"Recorded drug allergies:
+dexamethasone; clarithromycin."*, whose `answerSummary` and `answerDetails` stay `null`.
+
+A first version gave a summary to any one-line answer that said more than its sentence in view. The full build caught it
+cutting *"Recorded drug allergies: dexamethasone; clarithromycin."* at its colon, hiding the list under the toggle. It also
+gave a pointless toggle to one-liners that differed from their summary only in where a marker stood. So the rule asks
+what 573 removed, not what the sentence looks like.
+
+Pinned by `BottomLineOpensTheAnswerTest.aBottomLineCutFromTheFirstSentenceOpensTheAnswerAndIsNotRepeatedUnderIt` and
+`ProposalBesideHerOwnConflictsTest.aProposalTheCheckRatesNothingAgainstIsSaidSoAndHerOwnConflictFollows`, which redden
+without the change.

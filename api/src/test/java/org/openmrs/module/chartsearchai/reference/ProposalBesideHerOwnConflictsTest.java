@@ -64,10 +64,11 @@ public class ProposalBesideHerOwnConflictsTest extends BaseModuleContextSensitiv
 
 		assertNotNull(answer, "the module answers");
 		String[] lines = answer.split("\n");
-		// One sentence, its bottom line and the data it rests on: nothing under it to cut it from (ADR Decision 573).
-		assertEquals("The interaction data gives no rated reason to withhold Omeprazole: the data lists Omeprazole against one of "
-				+ "this patient's medications, with no severity or mechanism on file. [3]", lines[0], "was: " + answer);
-		assertEquals(1, lines.length, "was: " + answer);
+		// The bottom line opens the answer, and the rest of its sentence follows it (ADR Decisions 534, 574).
+		assertEquals("The interaction data gives no rated reason to withhold Omeprazole.", lines[0], "was: " + answer);
+		assertEquals("The data lists Omeprazole against one of this patient's medications, with no severity or mechanism on "
+				+ "file. [3]", lines[1], "was: " + answer);
+		assertEquals(2, lines.length, "was: " + answer);
 		// Her dexamethasone allergy is about dexamethasone, which the question does not name (ADR Decision 387).
 		assertEquals(-1, Arrays.asList(lines).indexOf(APART), "nothing about her own conflict, was: " + answer);
 		assertEquals(false, answer.contains("recorded allergy"), "was: " + answer);

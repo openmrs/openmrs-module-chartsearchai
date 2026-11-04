@@ -782,13 +782,14 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		}
 		// Her order by its own display — the standard dataset's drug name, as the chart records it. DDInter says
 		// this row carries no mechanism, so the answer may say so (ADR Decision 144).
-		// One sentence, its bottom line and the data it rests on: nothing under it to cut it from (ADR Decision 573).
-		assertEquals("The interaction data gives no rated reason to withhold Clarithromycin: the data lists Clarithromycin "
+		// The bottom line, cut from its sentence, then the data it rests on (ADR Decisions 534, 573, 574).
+		assertEquals("The interaction data gives no rated reason to withhold Clarithromycin.\nThe data lists Clarithromycin "
 				+ "against one of this patient's medications, with no severity or mechanism on file. [" + reference + "]",
 				answer.getAnswer());
-		// One line: no summary is cut from it and nothing collapses under it (README, `answerSummary`; ADR Decision 573).
-		assertNull(answer.getAnswerSummary(), answer.getAnswer());
-		assertNull(answer.getAnswerDetails(), answer.getAnswer());
+		// The sentence in view is its bottom line, the data under "Show details" (ADR Decisions 529, 574).
+		assertEquals("The interaction data gives no rated reason to withhold Clarithromycin.", answer.getAnswerSummary());
+		assertEquals("The data lists Clarithromycin against one of this patient's medications, with no severity or mechanism on "
+				+ "file. [" + reference + "]", answer.getAnswerDetails());
 		assertCitesNoOrderOfHers(answer);
 	}
 
@@ -812,8 +813,8 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 				reference = ref.getIndex();
 			}
 		}
-		assertEquals("The interaction data gives no rated reason to withhold Omeprazole: the data lists Omeprazole against one of "
-				+ "this patient's medications, rated Minor, below the level this module reports as a finding. [" + reference
+		assertEquals("The interaction data gives no rated reason to withhold Omeprazole.\nThe data lists Omeprazole against one "
+				+ "of this patient's medications, rated Minor, below the level this module reports as a finding. [" + reference
 				+ "]", answer.getAnswer());
 	}
 
@@ -863,10 +864,12 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		ChartAnswer answer = serviceWith(provider).search(six, question);
 
 		assertEquals(0, provider.calls, "the module answers: " + answer.getAnswer());
-		// One sentence, the bottom line and the data it rests on, nothing under it (ADR Decision 573).
-		assertTrue(answer.getAnswer().matches("The interaction data gives no rated reason to withhold Clarithromycin: the data "
-				+ "lists Clarithromycin against one of this patient's medications, scheduled and not yet started, .*\\[\\d+\\]"),
-				answer.getAnswer());
+		// The bottom line opens the answer, and the rest of its sentence follows it (ADR Decisions 534, 574).
+		String[] lines = answer.getAnswer().split("\n");
+		assertEquals("The interaction data gives no rated reason to withhold Clarithromycin.", lines[0], answer.getAnswer());
+		assertTrue(lines[1].matches("The data lists Clarithromycin against one of this patient's medications, scheduled and "
+				+ "not yet started, .*\\[\\d+\\]"), answer.getAnswer());
+		assertEquals(2, lines.length, answer.getAnswer());
 	}
 
 	/**
@@ -1429,7 +1432,7 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 				cited = ref.getIndex();
 			}
 		}
-		assertEquals("The interaction data gives no rated reason to withhold Subfloran: the data lists Subfloran against one of "
+		assertEquals("The interaction data gives no rated reason to withhold Subfloran.\nThe data lists Subfloran against one of "
 				+ "this patient's medications, with no severity on file. [" + cited + "]", answer.getAnswer());
 		assertFalse(answer.getAnswer().contains("ATC"), "the code-only stand-in is counted, never printed");
 	}
@@ -2126,10 +2129,11 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 				"The patient is currently on Aspirin, Lamivudine, is it safe to give metformin?");
 
 		assertEquals(0, provider.calls, "no model is asked: " + all.getAnswer() + " / " + some.getAnswer());
-		// One sentence, nothing under it (ADR Decision 573); beside the list line below, the sentence stays whole too.
-		assertEquals("The interaction data gives no rated reason to withhold Metformin: the data lists Metformin against one of this "
-				+ "patient's medications, with no severity or mechanism on file. [" + referenceRecordOf(all, "metformin") + "]",
-				all.getAnswer());
+		// Its bottom line opens it, the rest of the sentence following (ADR Decisions 534, 574); beside the list line below,
+		// the bottom line is two statements, and the sentence stays whole.
+		assertEquals("The interaction data gives no rated reason to withhold Metformin.\nThe data lists Metformin against one of "
+				+ "this patient's medications, with no severity or mechanism on file. [" + referenceRecordOf(all, "metformin")
+				+ "]", all.getAnswer());
 		assertEquals("The interaction data gives no rated reason to withhold Metformin: the data lists Metformin against one of this "
 				+ "patient's medications, with no severity or mechanism on file. [" + referenceRecordOf(some, "metformin") + "]\n"
 				+ "The check of Metformin against Lamivudine, also named in the question, raised no finding.\n"

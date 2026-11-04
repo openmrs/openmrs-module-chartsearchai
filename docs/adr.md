@@ -26692,3 +26692,28 @@ medications?"* already (Decision 397).
 
 Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.askingWhichOfHerMedicationsIShouldStopIsAScreen`, whose new
 cases redden without the change, and whose with-food control is still the model's.
+
+## Decision 572: One group of her medications asked about alone is the screen, as two groups are
+
+**Status: Accepted** (November 2026). Found by a fourth sweep of 6 patients by 30 drug-safety questions on the demo
+replica on 2026-11-04. It extends
+[Decision 221](#decision-221-whether-two-groups-of-her-own-medications-interact-is-a-screen-of-her-medications).
+
+### Context
+
+Decision 221 answers *"Does her TB treatment interact with her ARVs?"* with the screen of her medications. That screen
+states every pair of hers, those between the two groups among them, and it never resolves a group to drugs. *"Any
+interactions with her TB treatment?"*, one group asked about alone, ran the screen (`isInteractionScreening`) but fitted no
+screen shape, so the model answered it (33–42 s). For dd7be4e2, on ethambutol/isoniazid, the answer was *"No interactions
+with her TB treatment are explicitly detailed in the provided records. Safety finding — Isoniazid: Isoniazid interacts with
+active order Lopinavir / ritonavir — Minor…"*. For dd662a04, on no TB drug, the model described his cotrimoxazole as his TB
+treatment.
+
+### The decision
+
+*"(Are there) any (drug) interactions with / involving / in her <group>"*, where the group is
+`QueryScopeRouter.HER_MEDICATION_GROUP`, is a `SCREEN_SHAPES` member, as Decision 221's two-group shape is. The answer is
+the same screen, word for word. *"Any interactions with her diet?"* names no medication group and is still the model's.
+
+Pinned by `MedicationGroupsScreenContextTest.aQuestionWhetherOneGroupOfHerMedicationsInteractsIsAnsweredByTheScreen`,
+which reddens without the change.

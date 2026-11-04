@@ -1347,6 +1347,9 @@ public final class QueryScopeRouter {
 
 	private static final List<Pattern> SCREEN_SHAPES = shapes(
 			TWO_OF_HER_MEDICATION_GROUPS_INTERACT, HER_MEDICATION_GROUP_SAFE_TOGETHER,
+			// "Any interactions with her TB treatment?", "Any interactions involving her ARVs?" — one group of hers, the screen
+			// of all of them as two groups are (ADR Decision 572)
+			"(?:(?:are|is) there )?any (?:drug )?interactions? (?:with|involving|in) " + HER_MEDICATION_GROUP,
 			// "Are there any drug interactions with her current medications?"
 			"(?:are|is) there (?:any )?(?:drug )?interactions? (?:with|between|among) " + POSSESSIVE + " " + MEDICATIONS,
 			// "What is the most serious interaction she has?", "What is the severity of her interactions?", "Any contraindicated

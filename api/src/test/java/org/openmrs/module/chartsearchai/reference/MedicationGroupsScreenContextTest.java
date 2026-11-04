@@ -9,6 +9,7 @@
  */
 package org.openmrs.module.chartsearchai.reference;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -49,6 +50,22 @@ public class MedicationGroupsScreenContextTest extends BaseModuleContextSensitiv
 			assertTrue(answer.matches("(?s)(.*\\n)?Nevirapine interacts with active order [^\\n]*[Rr]ifamp[^\\n]* — Major\\..*"),
 				question + " states the pair between the two groups: " + answer);
 		}
+	}
+
+	/**
+	 * One group asked about alone is the same screen (ADR Decision 572): on the demo replica "Any interactions with her TB
+	 * treatment?" went to the model, which answered "No interactions with her TB treatment are explicitly detailed" beside an
+	 * isoniazid finding, and for a patient on no TB drug called his cotrimoxazole his TB treatment.
+	 */
+	@Test
+	public void aQuestionWhetherOneGroupOfHerMedicationsInteractsIsAnsweredByTheScreen() {
+		String twoGroups = ask("Does her TB treatment interact with her ARVs?").getModuleAnswer();
+		assertNotNull(twoGroups, "precondition: the two-group question is the screen");
+		for (String question : Arrays.asList("Any interactions with her TB treatment?", "Any interactions with her ARVs?",
+			"Are there any drug interactions with her TB medications?", "Any interactions involving her antiretrovirals?")) {
+			assertEquals(twoGroups, ask(question).getModuleAnswer(), question);
+		}
+		assertNull(ask("Any interactions with her diet?").getModuleAnswer(), "her diet is no group of her medications");
 	}
 
 	@Test

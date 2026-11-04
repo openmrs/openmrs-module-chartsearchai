@@ -42,6 +42,7 @@ import org.openmrs.module.chartsearchai.api.impl.QueryScopeRouter;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
+import org.openmrs.module.chartsearchai.util.DateFormatUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -5051,7 +5052,7 @@ public class DrugReferenceInjector {
 
 	/** {@code date} as the calendar day the chart states it on, {@code yyyy-MM-dd} in the server's zone. */
 	private static String isoDay(java.util.Date date) {
-		return new java.text.SimpleDateFormat("yyyy-MM-dd").format(date);
+		return DateFormatUtil.formatDate(date);
 	}
 
 	/** The row the response names the substance of {@code record} by — {@link DrugSafetyValidator#interactionSubject}

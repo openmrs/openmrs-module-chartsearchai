@@ -23,6 +23,7 @@ import java.util.Arrays;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
+import java.util.TimeZone;
 import java.util.Set;
 
 import org.apache.logging.log4j.Level;
@@ -518,6 +519,34 @@ public class DrugOrderCurrencyMarkTest extends BaseModuleContextSensitiveTest {
 				"changing this changes what every chart says to the model; re-measure before editing");
 		assertEquals(". Order status: not in force", PatientChartSerializer.INACTIVE_ORDER_LABEL,
 				"changing this changes what every chart says to the model; re-measure before editing");
+	}
+
+	/**
+	 * The day a scheduled order starts is the day the chart records, on a server east of UTC too. OpenMRS stores a day
+	 * at midnight in the server's zone, and the demo replica runs at +03:00: spelled in UTC, its orders' days read one
+	 * earlier than the chart's own medication list shows them.
+	 */
+	@Test
+	public void aScheduledOrderSaysTheDayTheChartRecordsOnAServerEastOfUtc() {
+		TimeZone serverZone = TimeZone.getDefault();
+		TimeZone.setDefault(TimeZone.getTimeZone("Africa/Nairobi"));
+		try {
+			executeDataSet("ScheduledDrugOrderTestData.xml");
+			executeDataSet("ScheduledAtMidnightDrugOrderTestData.xml");
+			Patient dora = Context.getPatientService().getPatient(7);
+			Order scheduled = Context.getOrderService().getOrder(9555);
+			assertFalse(scheduled.isStarted(), "precondition: not started");
+			chartOf(drugOrderDoc(9555));
+
+			PatientChart chart = builder.build(dora, MEDICATIONS_QUESTION);
+
+			String line = lineFor(chart, scheduled.getUuid());
+			assertTrue(line.endsWith(". Order status: scheduled to start 2099-03-01"),
+					"the day the order is scheduled for, not the UTC day before it: " + line);
+		}
+		finally {
+			TimeZone.setDefault(serverZone);
+		}
 	}
 
 	@Test

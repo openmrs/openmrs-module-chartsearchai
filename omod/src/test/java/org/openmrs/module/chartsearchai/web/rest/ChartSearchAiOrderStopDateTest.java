@@ -16,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayOutputStream;
 import java.time.LocalDate;
-import java.time.ZoneOffset;
+import java.time.ZoneId;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
@@ -91,15 +91,16 @@ public class ChartSearchAiOrderStopDateTest {
 	 *  serializer writing the first entry's date onto every entry cannot stay green. */
 	private List<OrderStopDate> stated;
 
-	private static Date utc(String isoDate) {
-		return Date.from(LocalDate.parse(isoDate).atStartOfDay(ZoneOffset.UTC).toInstant());
+	/** {@code isoDate} at the server's midnight, as OpenMRS stores a day. */
+	private static Date day(String isoDate) {
+		return Date.from(LocalDate.parse(isoDate).atStartOfDay(ZoneId.systemDefault()).toInstant());
 	}
 
 	@BeforeEach
 	public void setUp() {
 		stated = Collections.unmodifiableList(Arrays.asList(
-				new OrderStopDate(1, utc("2026-08-24")),
-				new OrderStopDate(4, utc("2008-01-08"))));
+				new OrderStopDate(1, day("2026-08-24")),
+				new OrderStopDate(4, day("2008-01-08"))));
 		controller = new ChartSearchAiRestController();
 		controller.setAuditLogService(new StubAuditLogService());
 		controller.setChartSearchService(new OrderStopDateAnswerStubService());

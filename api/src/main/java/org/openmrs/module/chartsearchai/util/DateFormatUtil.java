@@ -11,12 +11,15 @@ package org.openmrs.module.chartsearchai.util;
 
 import java.time.LocalDate;
 import java.time.ZoneId;
-import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.Date;
 
 /**
- * Shared date formatting utility for clinical text serializers.
+ * Shared date formatting utility for clinical text serializers: a clinical date is the calendar day in the server's
+ * zone. OpenMRS stores a date and time without an offset, in the zone the server runs in, and a day entered as a date is
+ * stored at that zone's midnight; spelled in UTC, every such day read one earlier on a server east of UTC (the demo
+ * replica runs at +03:00) than the chart shows it. A {@code LocalDate} becomes a {@code Date} at the same zone's midnight,
+ * so the two methods round-trip a day whatever the zone.
  */
 public final class DateFormatUtil {
 
@@ -29,13 +32,13 @@ public final class DateFormatUtil {
 		if (date == null) {
 			return "unknown";
 		}
-		return date.toInstant().atZone(ZoneId.of("UTC")).toLocalDate().format(DATE_FORMAT);
+		return date.toInstant().atZone(ZoneId.systemDefault()).toLocalDate().format(DATE_FORMAT);
 	}
 
 	public static Date toLegacyDate(LocalDate date) {
 		if (date == null) {
 			return null;
 		}
-		return Date.from(date.atStartOfDay(ZoneOffset.UTC).toInstant());
+		return Date.from(date.atStartOfDay(ZoneId.systemDefault()).toInstant());
 	}
 }

@@ -1,0 +1,21 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!--
+  A drug order scheduled to start at MIDNIGHT, beside ScheduledDrugOrderTestData.xml's (load that first: this
+  order reuses its Rifampicin concept and drug, patient 7 and encounter 3).
+
+  ORDER 9555 — Rifampicin, urgency ON_SCHEDULED_DATE, scheduled_date 2099-03-01 00:00. OpenMRS stores a date
+  entered as a day at midnight in the server's zone, which is how the demo's own data is dated. On a server
+  east of UTC that midnight is the previous day in UTC, so a module spelling the day in UTC states the day
+  before the one the chart records — the case ScheduledDrugOrderTestData.xml's noon value steps around.
+-->
+<dataset>
+	<orders order_id="9555" order_type_id="1" order_number="ORD-9555" urgency="ON_SCHEDULED_DATE"
+	        scheduled_date="2099-03-01 00:00:00.0"
+	        order_action="NEW" concept_id="9554" orderer="1" instructions="1x daily"
+	        date_activated="2008-08-15 00:00:00.0" creator="1" date_created="2008-08-15 00:00:00.0"
+	        voided="false" patient_id="7" uuid="9555dddd-0000-4000-8000-00000009555a"
+	        care_setting="1" encounter_id="3" />
+	<drug_order order_id="9555" drug_inventory_id="9554" dose="1.0" dose_units="51" as_needed="false"
+	            frequency="1" dosing_type="org.openmrs.SimpleDosingInstructions" route="22"
+	            quantity="1.0" quantity_units="51" num_refills="0" dispense_as_written="0" />
+</dataset>

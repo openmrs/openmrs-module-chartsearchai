@@ -482,7 +482,7 @@ public class ActiveOrderCitationFidelityTest extends BaseModuleContextSensitiveT
 	 *  record's own prose, since reading it out of the text is the thing issue #317's rule forbids. */
 	private static final java.util.Date STOPPED_ORDER_END =
 			java.util.Date.from(java.time.LocalDate.parse("2026-01-04")
-					.atStartOfDay(java.time.ZoneOffset.UTC).toInstant());
+					.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant());
 
 	@Test
 	public void anOrderTheChartMarksAsNoLongerInForceIsReported() {

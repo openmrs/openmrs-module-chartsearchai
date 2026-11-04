@@ -186,9 +186,10 @@ public class OwnMedicationSafetyContextTest extends BaseModuleContextSensitiveTe
 		// Dora's "Is she on rifampicin?" opened "Rifampicin (rifampin) is one of this patient's active medications." of an
 		// order scheduled to start 2026-10-28, its own line saying so (ADR Decision 202): a drug none of her orders has
 		// started is not called one of her active medications.
-		// At UTC midnight, the zone every date this module publishes is spelled in (DateFormatUtil).
-		java.util.Date start = java.util.Date.from(java.time.LocalDate.of(2026, 10, 28).atStartOfDay(java.time.ZoneOffset.UTC)
-				.toInstant());
+		// At the server's midnight, as OpenMRS stores a day, in the zone every date this module publishes is spelled in
+		// (DateFormatUtil).
+		java.util.Date start = java.util.Date.from(java.time.LocalDate.of(2026, 10, 28)
+				.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant());
 		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
 			PatientClinicalContext.ActiveDrugOrder.named("order-ibuprofen", "Ibuprofen 400mg",
 				new LinkedHashSet<String>(Arrays.asList("Ibuprofen 400mg")), java.util.Collections.<String> emptySet(),

@@ -26406,3 +26406,69 @@ What each mutation reddens:
 - **Dropping the appended-line summary:**
   - `AnswerDetailsContextTest.aOneLineAnswerTheModuleAppendsToIsSummarisedByItsOwnLine`
   - `AnswerDetailsContextTest.theEarlyAnswerCarriesTheSameDetails`
+
+## Decision 563: A clinical date is the calendar day on the server's clock
+
+**Status: Accepted** (November 2026), on the owner's request. Takes the decision
+[Decision 98](#decision-98-the-module-states-when-a-cited-prescription-stopped-because-no-wording-of-the-prompt-will)
+deferred ("changing the conversion would move every date this module publishes, which is its own decision with its own
+compatibility question"), and lifts the residue
+[Decision 126](#decision-126-an-order-that-has-not-started-is-screened-and-stated-as-scheduled-with-its-date) recorded.
+Its record dates are querystore's, which takes the same rule in its ADR Decision 19.
+
+### Context
+
+*"The patient is currently on Lamivudine / zidovudine, Efavirenz, Trimethoprim and sulfamethoxazole is it safe to give
+Rifampicin?"* was asked for Kamwara (dd74dc61) on the demo replica, which runs at +03:00 as the demo's Kenyan data is.
+The answer cited his three nevirapine orders as dated 2006-05-29, 2006-04-18 and 2006-03-13. The orders were
+activated on 2006-05-30, 2006-04-19 and 2006-03-14 (`2006-05-30T00:00:00.000+0300`), and the chart's medication
+widget shows those days.
+
+OpenMRS stores a date and time with no offset, in the server's zone, and a day entered as a date is stored at that
+zone's midnight. Every date this module spells went through `DateFormatUtil.formatDate`, which takes the UTC calendar
+day. So on a server east of UTC each such day read one earlier. Decision 98 measured the west-of-UTC direction too: an
+evening reads as the next day.
+
+There are two paths, and both are fixed:
+- **A date this module spells from a core `Date`:** an order's stop date (`orderStopDates`, a chip's
+  `endedOrderStopDate`), and a scheduled order's *"scheduled to start"* date.
+- **A record's own date, a `LocalDate` querystore computes:** the citation's `date` and the record's date label in the
+  prompt. It is turned into a `Date` by `toLegacyDate` and spelled back. Querystore took the UTC day too. Its ADR records the question as open, and Decision 19 there now resolves it.
+
+The module is installed nowhere, so no client depends on the UTC spelling. That is the compatibility question
+Decision 98 left open.
+
+### The decision
+
+- **`DateFormatUtil.formatDate` spells the calendar day in `ZoneId.systemDefault()`**, and `toLegacyDate` turns a
+  `LocalDate` into that zone's midnight. The two round-trip a day in any zone. Changing one without the other would
+  move querystore's days one back on a server west of UTC.
+- **The injector's own `isoDay` calls `formatDate`.** It was a second spelling of the rule, already in the server's
+  zone.
+- **The README's `stopDate` contract** now says the server's calendar day, in place of the UTC window it documented.
+
+### Spec change
+
+Three test helpers built a stored date as UTC midnight and now build it at the server's midnight:
+- `ChartSearchAiOrderStopDateTest.day` (was `utc`)
+- `OwnMedicationSafetyContextTest`'s scheduled start, whose comment named the UTC convention
+- `ActiveOrderCitationFidelityTest.STOPPED_ORDER_END`
+
+Pinned by `DrugOrderCurrencyMarkTest.aScheduledOrderSaysTheDayTheChartRecordsOnAServerEastOfUtc`. It pins the JVM zone
+to Africa/Nairobi before loading a midnight-scheduled order (`ScheduledAtMidnightDrugOrderTestData.xml`), so it
+reddens on a UTC CI runner too. Against the UTC conversion it printed *"scheduled to start 2099-02-28"* for an order
+scheduled for 2099-03-01, and, on the same line, querystore's record date `(2008-08-14)` for an order activated
+2008-08-15.
+
+### Measured
+
+On the demo replica, 2026-11-04, with querystore's Decision 19 deployed beside this change and the patients projected
+again. The run was 20 answers: 5 sheet patients by 4 questions, the rifampicin question above among them. Each
+citation's `date` was compared with core's own day for the record, read over REST (`dateActivated`, or `scheduledDate`
+for a scheduled order).
+
+- **Before** (main, `460be625b`): all 237 dated citations were one day early.
+- **After:** all 237 match, over 72 distinct records.
+
+On the 207-question corpus of Decision 562, every one of the 192 module answers is word for word what it was. None of
+them spells a date in its text. The 15 model answers were not compared.

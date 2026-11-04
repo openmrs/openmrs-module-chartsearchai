@@ -88,6 +88,27 @@ public class AnswerDetailsContextTest extends BaseModuleContextSensitiveTest {
 	 * ibuprofen?" for a patient on no medication is one sentence since the line about her conditions left the answer (ADR
 	 * Decision 562); stating a dose, it was shown whole.
 	 */
+	/**
+	 * A drug's name in brackets — "Acetylsalicylic acid (aspirin)" — is part of the line the summary states, so the line
+	 * leaves the details (ADR Decision 575): on the demo replica "Can I give her fluconazole with her aspirin?" showed
+	 * "Fluconazole and Acetylsalicylic acid, asked about together; …" and, first under "Show details", "Fluconazole and
+	 * Acetylsalicylic acid (aspirin), asked about together; …" — the same line again.
+	 */
+	@Test
+	public void aLineWhoseNameCarriesABracketedNameIsNotRepeatedUnderTheSummary() {
+		String question = "Can I give her fluconazole and aspirin?";
+		ChartAnswer answer = serviceOver(DrugReferenceTestSupport.injectedChartOverOrders(question, "Nevirapine"), "unused")
+				.search(aPatient(), question);
+		String first = "Fluconazole and Acetylsalicylic acid (aspirin), asked about together; neither is one of this patient's "
+				+ "active medications.";
+		assertTrue(answer.getAnswer().startsWith(first + "\n"), "precondition: the line — " + answer.getAnswer());
+
+		assertTrue(answer.getAnswerSummary().startsWith(first.substring(0, first.length() - 1) + "; "),
+			"the summary states the line, its bracketed name with it: " + answer.getAnswerSummary());
+		assertFalse(answer.getAnswerDetails().contains(first), "not again under it: " + answer.getAnswerDetails());
+		assertTrue(answer.getAnswerDetails().startsWith("For Fluconazole:\n"), answer.getAnswerDetails());
+	}
+
 	@Test
 	public void aOneLineAnswerTheModuleAppendsToIsSummarisedByItsOwnLine() {
 		ChartAnswer answer = realService(new DrugReferenceService()).search(patient(6), "Can I give her ibuprofen 400mg?");

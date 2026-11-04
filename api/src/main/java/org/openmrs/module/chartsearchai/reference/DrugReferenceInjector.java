@@ -6316,7 +6316,7 @@ public class DrugReferenceInjector {
 	 * cites none, every statement it makes — each in short. <em>"Nevirapine is one of this patient's active medications; the
 	 * interaction data gives no rated reason to change it; no Major interactions; 1 unrated interaction."</em> A heading,
 	 * a sentence that ends in a colon, and a line saying what was not checked state nothing here. "In short" is the
-	 * answer's own words, cut where a colon opens the detail, without its markers or a bracketed aside: so the
+	 * answer's own words, cut where a colon opens the detail, without its markers or an aside that cites or counts: so the
 	 * direction a question asked for — that he takes the drug, that a switch is to one he already takes, that nothing was
 	 * found — is in view, and nothing in view is not in the answer. Sentences split on {@code
 	 * ChartSearchAiUtils.SENTENCE_BOUNDARY}, the module's one rule for where a sentence ends. A line the summary states
@@ -6409,7 +6409,8 @@ public class DrugReferenceInjector {
 	private static final Pattern WORD = Pattern.compile("[\\p{L}\\p{N}]");
 
 	/** A sentence of an answer in short (ADR Decision 529): cut where a colon opens its detail, without its markers or a
-	 *  bracketed aside, and without its full stop; empty where it ends in a colon, which opens something it does not say. */
+	 *  bracketed aside that cites or counts (a name in brackets stays, ADR Decision 575), and without its full stop; empty
+	 *  where it ends in a colon, which opens something it does not say. */
 	private static String inShort(String sentence) {
 		String s = sentence.trim();
 		if (s.endsWith(":")) {
@@ -6419,7 +6420,10 @@ public class DrugReferenceInjector {
 		if (colon > 0) {
 			s = s.substring(0, colon);
 		}
-		s = s.replaceAll("\\s*\\[\\d+\\]", "").replaceAll("\\s*\\([^()]*\\)", "").trim();
+		// A bracketed aside that cites or counts — "(Ibuprofen 400mg [2])", "(Efavirenz, 3 orders)", "(J05AG)" — is detail;
+		// one that is a name, "(aspirin)", is part of what the sentence says, kept so the summary states the line whole and
+		// "Show details" does not repeat it (ADR Decision 575). Asides first, while their markers still mark them.
+		s = s.replaceAll("\\s*\\([^()]*[\\[\\p{N}][^()]*\\)", "").replaceAll("\\s*\\[\\d+\\]", "").trim();
 		while (s.endsWith(".") || s.endsWith(";") || s.endsWith(",")) {
 			s = s.substring(0, s.length() - 1).trim();
 		}

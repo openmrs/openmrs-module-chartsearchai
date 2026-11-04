@@ -26789,3 +26789,33 @@ what 573 removed, not what the sentence looks like.
 Pinned by `BottomLineOpensTheAnswerTest.aBottomLineCutFromTheFirstSentenceOpensTheAnswerAndIsNotRepeatedUnderIt` and
 `ProposalBesideHerOwnConflictsTest.aProposalTheCheckRatesNothingAgainstIsSaidSoAndHerOwnConflictFollows`, which redden
 without the change.
+
+## Decision 575: A name in brackets is part of the sentence a client shows, so "Show details" does not repeat its line
+
+**Status: Accepted** (November 2026), on the owner's direction ("remove the duplicate"). It settles the residue
+[Decision 560](#decision-560-show-details-shows-what-the-summary-did-not-say) left as the owner's call, and narrows
+[Decision 529](#decision-529-an-answer-with-no-bottom-line-of-its-own-shows-what-it-states-in-short-before-it-counts)'s "in
+short".
+
+### Context
+
+*"Can I give her fluconazole with her aspirin?"* for Kamwara (dd74dc61) showed *"Fluconazole and Acetylsalicylic acid, asked
+about together; neither is one of this patient's active medications; no Major interactions; 1 caution."* Under "Show
+details", first: *"Fluconazole and Acetylsalicylic acid (aspirin), asked about together; neither is one of this patient's
+active medications."*, the same line again. `DrugReferenceInjector.inShort` dropped every bracketed aside. So the summary
+did not state the line whole (`statedWhole`), and Decision 560 kept it under the toggle. Decision 560's measurement found
+426 of the 545 answers that still repeated a line were of this kind: a bracketed name such as *"(aspirin)"*. It left the
+wording to the owner.
+
+### The decision
+
+`inShort` drops a bracketed aside only where it cites or counts: a marker or a digit inside it, as in *"(Ibuprofen 400mg
+[2])"*, *"(Efavirenz, 3 orders)"* or *"(J05AG)"*. Those are detail, and dropping them is what keeps the sentence in view
+short. A name in brackets, *"(aspirin)"* or *"(rifampin)"*, stays. The summary now states such a line whole, and
+`answerDetails` no longer repeats it.
+
+The other shape was declined: dropping the line from the details although the summary had shortened it. That would take
+*"(aspirin)"* out of view wherever the details do not name it again.
+
+Pinned by `AnswerDetailsContextTest.aLineWhoseNameCarriesABracketedNameIsNotRepeatedUnderTheSummary`, which reddens without
+the change. The rest of the suite passes unchanged.

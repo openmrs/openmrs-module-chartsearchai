@@ -431,6 +431,8 @@ public class LlmInferenceServiceModelReadQuestionContextTest extends BaseModuleC
 	@Test
 	public void severalWordsAskedOfWhereADrugWouldStandAreNotReadByTheModel() {
 		for (String question : new String[] { "Can i give him high blood pressure?", "Can i give him blood pressure?",
+				// however many words name it: on the demo replica this one was still answered with the screen (ADR Decision 565)
+				"Can i give him really high blood pressure?", "Can i give him very very high blood pressure?",
 				"Can I give her high cholesterol?", "Can I give her a bad headache?", "Is high blood pressure ok?",
 				"Can she take blood pressure?" }) {
 			RecordingProvider provider = new RecordingProvider("YES");

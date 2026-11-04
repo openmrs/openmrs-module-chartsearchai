@@ -26508,3 +26508,30 @@ ONE word in a drug's place, and a word it does not know as a name is not one. So
 
 Pinned by `LlmInferenceServiceModelReadQuestionContextTest.severalWordsAskedOfWhereADrugWouldStandAreNotReadByTheModel`.
 It reddens without the change, at the model's reading of the replica's own question.
+
+## Decision 565: The words asked of where a drug would stand are read whatever their number
+
+**Status: Accepted** (November 2026), on the owner's request. It lifts the cap of three that
+[Decision 564](#decision-564-several-words-asked-of-where-a-drug-would-stand-are-not-read-by-the-model-as-a-medication-check)
+set.
+
+### Context
+
+On the demo replica on 2026-11-04, with Decision 564 deployed, twelve conditions were asked in a drug's place for Kamwara
+(dd74dc61). *"Can i give him really high blood pressure?"* was still answered by the module with the screen of his
+orders: *"No rated interactions; 3 possible duplicate therapies."*, with three chips. Its span is four words, and
+Decision 564 tried two or three. The cap was a number chosen, not one measured. The rule that decides is each word's: it
+must name something.
+
+### The decision
+
+`UnrecognisedDrugName.asksOfSeveralWordsInADrugsPlace` tries every span from two words up to the whole question. Each
+word of a span is still held to Decision 564's test, so a span crossing a word the question is read by, a word standing
+for a drug or for her, a determiner or a medication group's word is refused, whatever its length.
+
+Left as found, for the owner: *"Can i give him TB?"* is still answered with the screen. *"TB"* is two letters and a
+medication group's word, so neither reading takes it.
+
+Pinned by the cases *"Can i give him really high blood pressure?"* and *"Can i give him very very high blood
+pressure?"* in `LlmInferenceServiceModelReadQuestionContextTest.severalWordsAskedOfWhereADrugWouldStandAreNotReadByTheModel`,
+whose first case reddens with the cap of three.

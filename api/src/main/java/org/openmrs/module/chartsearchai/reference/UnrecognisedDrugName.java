@@ -430,7 +430,7 @@ final class UnrecognisedDrugName {
 		"his", "their", "him", "you", "she", "he", "they", "all", "too", "else"));
 
 	/**
-	 * Whether two or three words, read together where a drug's name would stand, make {@code question} one of giving that
+	 * Whether two or more words, read together where a drug's name would stand, make {@code question} one of giving that
 	 * thing or of how it relates to her medications, as one word there does for {@link #asksOfOneThingInADrugsPlace} (ADR
 	 * Decision 564): "Can i give him high blood pressure?" was read by the model as YES and answered with the screen of his
 	 * orders. Each word must name something — none of them a word standing for a drug or for her, a determiner, a word
@@ -445,7 +445,9 @@ final class UnrecognisedDrugName {
 		if (!Collections.disjoint(words, NEGATIONS) || namesHerMedicationsAsAWhole(words)) {
 			return false;
 		}
-		for (int length = 2; length <= 3; length++) {
+		// Any number of words, never a cap: "really high blood pressure" was four, and a cap of three left it to the model
+		// (ADR Decision 565).
+		for (int length = 2; length <= words.size(); length++) {
 			for (int i = 0; i + length <= words.size(); i++) {
 				if (!namesSomethingElse(words.subList(i, i + length))) {
 					continue;

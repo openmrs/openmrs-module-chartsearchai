@@ -26583,3 +26583,35 @@ it.
 
 Pinned by `UnidentifiedActiveOrdersAnswerTest.anAnswerSayingNoCheckRanNamesNoOrderAsNotChecked`, which reddens without
 the change.
+
+## Decision 568: A switch between two drugs she already takes says both, never the model's reading
+
+**Status: Accepted** (November 2026). Found by a sweep of 9 patients by 34 drug-safety questions on the demo replica on
+2026-11-04. It narrows what
+[Decision 328](#decision-328-a-switch-whose-new-drug-only-a-contraindication-relates-to-her-is-answered-with-what-the-check-found)
+left to the model.
+
+### Context
+
+Decisions 219, 323 and 328 left one switch to the model: a switch to a drug she already takes, from one she also takes.
+On the replica that case came up for both patients who take nevirapine and efavirenz, and the model answered it wrongly
+both times. For dd808497: *"No — switching from nevirapine to efavirenz is a reason to change a medication this patient is
+already taking [195], [197], [201]."* For dd708fff: *"No — switching from nevirapine to efavirenz is not recommended:
+Nevirapine and efavirenz interact, resulting in increased toxicity…"* That rests on a Moderate finding, which
+[Decision 37](#decision-37-a-safety-answers-call-is-as-strong-as-the-findings-rating) grades a caution. And the interaction it names is the very
+one the switch stops, which was the defect
+[Decision 219](#decision-219-a-question-whether-to-switch-one-of-her-drugs-to-another-is-answered-for-the-new-drug-against-her-other-medications)
+was written to remove.
+
+### The decision
+
+`DrugReferenceInjector.composeSwitch` answers a switch whose two drugs are both hers, the new one with an order that has
+started, with the two facts. The first is *"Nevirapine is one of this patient's active medications, and this switch
+replaces it."* The second is *"Efavirenz is already one of this patient's active medications (Efavirenz [n])."*, citing
+her orders as
+[Decision 323](#decision-323-a-drug-asked-about-in-place-of-one-she-is-not-on-says-she-is-not-on-it-and-is-answered-as-its-proposal)'s
+sentence does. Taking a drug she already takes adds nothing for the interaction check to weigh. The findings between the
+two stay on the chips. A new drug with no order of hers that has started keeps the model call, as before.
+
+Pinned by `SwitchingHerDrugContextTest.aSwitchToADrugSheAlreadyTakesSaysBothAndOneFromADrugSheDoesNotSaysSo` and
+`.aDrugGivenInsteadOfOneHeDoesNotTakeSaysSo`. The first reddens without the change.

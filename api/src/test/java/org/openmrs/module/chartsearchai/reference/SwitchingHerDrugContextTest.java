@@ -110,11 +110,16 @@ public class SwitchingHerDrugContextTest extends BaseModuleContextSensitiveTest 
 				+ "Tenofovir alafenamide. ["), "was: " + answer);
 	}
 
-	/** A switch to a drug he already takes, from one he takes, is left to the model; one from a drug he does not take says
-	 *  so and answers the new drug as its proposal (ADR Decisions 323, 328). */
+	/** A switch to a drug he already takes, from one he takes, says both (ADR Decision 568: the model, left it by Decisions
+	 *  323 and 328, answered "No — switching from nevirapine to efavirenz is a reason to change a medication this patient is
+	 *  already taking" for two of two such patients on the demo replica); one from a drug he does not take says so and
+	 *  answers the new drug as its proposal (ADR Decisions 323, 328). */
 	@Test
-	public void aSwitchToADrugSheAlreadyTakesIsLeftToTheModelAndOneFromADrugSheDoesNotSaysSo() {
-		assertNull(ask("Can I switch his lamivudine to nevirapine?").getModuleAnswer(), "the new drug is already his");
+	public void aSwitchToADrugSheAlreadyTakesSaysBothAndOneFromADrugSheDoesNotSaysSo() {
+		String both = ask("Can I switch his lamivudine to nevirapine?").getModuleAnswer();
+		assertTrue(both != null && both.matches("Lamivudine is one of this patient's active medications, and this switch "
+				+ "replaces it\\.\nNevirapine is already one of this patient's active medications \\(Nevirapine \\[\\d+\\]\\)\\."),
+			"the new drug is already his, its order cited: " + both);
 		String answer = ask("Can I switch his rifampicin to efavirenz?").getModuleAnswer();
 		assertTrue(answer != null && answer.startsWith("Rifampicin (rifampin) is not one of this patient's active medications, "
 				+ "so this switch replaces no order of it.\n" + DrugReferenceInjector.FOUND_LEAD_OPENING + "Efavirenz:\n"),
@@ -142,7 +147,8 @@ public class SwitchingHerDrugContextTest extends BaseModuleContextSensitiveTest 
 	public void aDrugGivenInsteadOfOneHeDoesNotTakeSaysSo() {
 		assertEquals(ask("Can I switch his rifampicin to efavirenz?").getModuleAnswer(),
 			ask("Can I give him efavirenz instead of rifampicin?").getModuleAnswer(), "the old drug is not his (ADR Decision 323)");
-		assertNull(ask("Can I give him nevirapine instead of lamivudine?").getModuleAnswer(), "the new drug is already his");
+		assertEquals(ask("Can I switch his lamivudine to nevirapine?").getModuleAnswer(),
+			ask("Can I give him nevirapine instead of lamivudine?").getModuleAnswer(), "the new drug is already his (ADR Decision 568)");
 	}
 
 	private static PatientChart ask(String question) {

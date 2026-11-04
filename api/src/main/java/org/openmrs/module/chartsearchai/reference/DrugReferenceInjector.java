@@ -7816,6 +7816,16 @@ public class DrugReferenceInjector {
 					+ composeAboutHerOwnMedication(findings, numbers, about, orderRecordNumbers, herOrderRecords, itsOwnOrders,
 						"", scheduled, null, Collections.<String> emptyList());
 		}
+		// Both drugs are hers already: there is nothing new to check, and both are said, as Decision 323 says both where only
+		// the new drug is hers (ADR Decision 568). The model, asked instead, answered "No — switching … is a reason to change a
+		// medication this patient is already taking".
+		if (to.isHers(herSubstances) && from.isHers(herSubstances)) {
+			String herOrders = herStartedOrdersOf(to, orderEntries, context, herOrderRecords);
+			if (!herOrders.isEmpty()) {
+				return from.label + OWN_MEDICATION_LEAD + ", and this switch replaces it.\n" + to.label
+						+ " is already one of this patient's active medications" + herOrders + ".";
+			}
+		}
 		if (!Collections.disjoint(to.substances, herSubstances)) {
 			return null;
 		}

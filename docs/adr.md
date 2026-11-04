@@ -26819,3 +26819,29 @@ The other shape was declined: dropping the line from the details although the su
 
 Pinned by `AnswerDetailsContextTest.aLineWhoseNameCarriesABracketedNameIsNotRepeatedUnderTheSummary`, which reddens without
 the change. The rest of the suite passes unchanged.
+
+## Decision 576: Two drugs proposed together state what the data lists between them, rated or not
+
+**Status: Accepted** (November 2026), on the owner's go-ahead. It extends
+[Decision 222](#decision-222-two-drugs-proposed-together-neither-hers-are-each-answered-as-their-own-proposal) with
+[Decision 329](#decision-329-two-drugs-the-data-lists-against-each-other-only-below-the-severity-floor-are-answered-with-that-listing)'s
+sentence.
+
+### Context
+
+*"Can I give her fluconazole with her aspirin?"* for Kamwara (dd74dc61), who takes neither, answered each drug against his
+medications, fluconazole with a Moderate caution against his nevirapine. It said nothing of fluconazole with aspirin, which
+is the pair the question asks about. *"Does fluconazole interact with aspirin?"* answers *"The interaction data lists
+Fluconazole against Acetylsalicylic acid (aspirin), with no severity or mechanism on file. [114] [113]"*. Decision 222's
+composer (`composeTwoProposalsTogether`) stated the pair under *"Between them:"* only from a finding, which needs a rating at
+or above the floor. An unrated pair raises none, so it went unsaid.
+
+### The decision
+
+Where no finding relates the two drugs and the data lists them against each other, `composeTwoProposalsTogether` states
+that listing under *"Between them:"*. The sentence is the one Decision 329 writes, now spelled in one place,
+`DrugReferenceInjector.listingLine`, and it cites both drugs' reference records (`referenceRecordOf`). A question about
+either of two drugs (Decision 393) still says nothing of the pair, since it asks about each alone.
+
+Pinned by `TwoDrugsListedBelowTheFloorTest.twoDrugsProposedTogetherStateTheirListingBetweenThem`, which reddens without
+the change.

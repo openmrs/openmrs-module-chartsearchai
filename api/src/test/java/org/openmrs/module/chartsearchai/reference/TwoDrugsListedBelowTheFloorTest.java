@@ -61,6 +61,27 @@ public class TwoDrugsListedBelowTheFloorTest extends BaseModuleContextSensitiveT
 		assertTrue(!both.contains("Yes —") && !both.contains("No —"), "neither Yes nor No: " + both);
 	}
 
+	/**
+	 * Two drugs proposed together that the data lists against each other only below the floor state that listing between
+	 * them, as the question whether they interact does (ADR Decision 576): on the demo replica "Can I give her fluconazole
+	 * with her aspirin?" answered each drug against her orders and said nothing of the pair asked about.
+	 */
+	@Test
+	public void twoDrugsProposedTogetherStateTheirListingBetweenThem() {
+		PatientClinicalContext.ActiveDrugOrder metronidazole = DrugReferenceTestSupport.activeOrder("order-mtz", "Metronidazole",
+			"Metronidazole");
+		for (String question : Arrays.asList("Can I give her nevirapine and stavudine?",
+				"Can I give her nevirapine with stavudine?")) {
+			String answer = ask(question, metronidazole);
+			assertNotNull(answer, question + " — the module answers");
+			String[] lines = mask(answer).split("\n");
+			assertTrue(lines[0].endsWith(", asked about together; neither is one of this patient's active medications."),
+				question + " — " + answer);
+			assertEquals("Between them:", lines[1], question + " — " + answer);
+			assertEquals(LISTED, lines[2], question + " — the pair, in the words its own question gets: " + answer);
+		}
+	}
+
 	private static String mask(String answer) {
 		return answer == null ? null : answer.replaceAll("\\[\\d+\\]", "[n]");
 	}

@@ -106,7 +106,10 @@ public class AnswerDetailsContextTest extends BaseModuleContextSensitiveTest {
 		assertTrue(answer.getAnswerSummary().startsWith(first.substring(0, first.length() - 1) + "; "),
 			"the summary states the line, its bracketed name with it: " + answer.getAnswerSummary());
 		assertFalse(answer.getAnswerDetails().contains(first), "not again under it: " + answer.getAnswerDetails());
-		assertTrue(answer.getAnswerDetails().startsWith("For Fluconazole:\n"), answer.getAnswerDetails());
+		// Under it, what the data lists between the two (ADR Decision 576), then each drug.
+		assertTrue(answer.getAnswerDetails().startsWith("Between them:\nThe interaction data lists Fluconazole against "
+				+ "Acetylsalicylic acid (aspirin), "), answer.getAnswerDetails());
+		assertTrue(answer.getAnswerDetails().contains("\nFor Fluconazole:\n"), answer.getAnswerDetails());
 	}
 
 	@Test

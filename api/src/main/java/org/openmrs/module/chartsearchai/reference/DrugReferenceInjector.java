@@ -1377,7 +1377,7 @@ public class DrugReferenceInjector {
 				&& (twoProposalsAnswer = composeTwoProposalsTogether(question, questionDrugs, screenedSubstances, findings,
 						findingNumbers, orderRecordNumbers,
 						orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers,
-						pairExtent.stated(), orderEntries, context)) != null) {
+						pairExtent.stated(), mappings, orderEntries, context)) != null) {
 			// Two drugs proposed together, neither hers: each answered as its own proposal (ADR Decision 222).
 			moduleAnswer = twoProposalsAnswer;
 		} else if (onlyHerOwnOrdersSharingASubstance(findings) && context != null
@@ -7830,6 +7830,42 @@ public class DrugReferenceInjector {
 			herOrderRecords);
 	}
 
+	/**
+	 * The sentence stating what the interaction data lists between two drugs asked about where no finding was raised from it
+	 * — every row rated below the severity floor (ADR Decision 329): <em>"The interaction data lists Fluconazole against
+	 * Acetylsalicylic acid (aspirin), with no severity or mechanism on file. [114] [113]"</em>, citing both drugs' reference
+	 * records. One spelling for every answer that states such a pair (ADR Decision 576).
+	 */
+	private static String listingLine(AskedDrug first, AskedDrug second, List<DrugReference.Interaction> listed,
+			Integer firstRecord, Integer secondRecord) {
+		Set<String> ratings = new LinkedHashSet<String>();
+		boolean allUnknown = true;
+		boolean noMechanism = true;
+		for (DrugReference.Interaction rule : listed) {
+			String severity = ChartSearchAiUtils.isBlank(rule.getSeverity()) ? "Unknown" : rule.getSeverity().trim();
+			ratings.add(severity);
+			allUnknown &= "unknown".equalsIgnoreCase(severity);
+			noMechanism &= Boolean.FALSE.equals(rule.mechanismOnFile());
+		}
+		return "The interaction data lists " + first.label + " against " + second.label + ", "
+				+ (allUnknown ? "with no severity" + (noMechanism ? " or mechanism" : "") + " on file"
+						: "rated " + joinedAsAList(new ArrayList<String>(ratings))
+								+ ", below the level this module reports as a finding")
+				+ ". [" + firstRecord + "] [" + secondRecord + "]";
+	}
+
+	/** The index of {@code drug}'s injected reference record in {@code mappings}, or {@code null} where the chart holds none. */
+	private static Integer referenceRecordOf(AskedDrug drug, List<RecordMapping> mappings) {
+		List<String> ids = rowIds(drug.rows);
+		for (RecordMapping mapping : mappings) {
+			if (ChartSearchAiConstants.RESOURCE_TYPE_DRUG_REFERENCE.equals(mapping.getResourceType())
+					&& ids.contains(mapping.getResourceUuid())) {
+				return mapping.getIndex();
+			}
+		}
+		return null;
+	}
+
 	/** What closes an answer saying the data relates two drugs in no way (ADR Decision 302): what that does not compare. */
 	static final String SHARED_CLASS_NOT_COMPARED = "This check compares individual substances: a relationship resting only"
 			+ " on the two sharing a drug class is not part of it.";
@@ -7870,15 +7906,7 @@ public class DrugReferenceInjector {
 			for (DrugReference row : drug.rows) {
 				carries |= !row.getInteractions().isEmpty();
 			}
-			Integer record = null;
-			List<String> ids = rowIds(drug.rows);
-			for (RecordMapping mapping : mappings) {
-				if (ChartSearchAiConstants.RESOURCE_TYPE_DRUG_REFERENCE.equals(mapping.getResourceType())
-						&& ids.contains(mapping.getResourceUuid())) {
-					record = mapping.getIndex();
-					break;
-				}
-			}
+			Integer record = referenceRecordOf(drug, mappings);
 			if (!carries || record == null) {
 				return null;
 			}
@@ -7966,20 +7994,7 @@ public class DrugReferenceInjector {
 			lines.add("The interaction data lists no interaction between " + asked.get(0).label + " and " + asked.get(1).label
 					+ " at any rating. [" + cited.get(0) + "] [" + cited.get(1) + "]");
 		} else {
-			Set<String> ratings = new LinkedHashSet<String>();
-			boolean allUnknown = true;
-			boolean noMechanism = true;
-			for (DrugReference.Interaction rule : listed) {
-				String severity = ChartSearchAiUtils.isBlank(rule.getSeverity()) ? "Unknown" : rule.getSeverity().trim();
-				ratings.add(severity);
-				allUnknown &= "unknown".equalsIgnoreCase(severity);
-				noMechanism &= Boolean.FALSE.equals(rule.mechanismOnFile());
-			}
-			lines.add("The interaction data lists " + asked.get(0).label + " against " + asked.get(1).label + ", "
-					+ (allUnknown ? "with no severity" + (noMechanism ? " or mechanism" : "") + " on file"
-							: "rated " + joinedAsAList(new ArrayList<String>(ratings))
-									+ ", below the level this module reports as a finding")
-					+ ". [" + cited.get(0) + "] [" + cited.get(1) + "]");
+			lines.add(listingLine(asked.get(0), asked.get(1), listed, cited.get(0), cited.get(1)));
 		}
 		if (!notHersLines.isEmpty()) {
 			lines.add("Against this patient's active medications:");
@@ -8128,7 +8143,7 @@ public class DrugReferenceInjector {
 	private String composeTwoProposalsTogether(String question, List<DrugReference> questionDrugs,
 			Set<Object> herSubstances, List<SafetyWarning> findings, List<Integer> numbers,
 			Map<String, Integer> orderRecordNumbers, Map<String, Integer> herOrderRecords, PairChipExtent pairs,
-			List<DrugReference> orderEntries, PatientClinicalContext context) {
+			List<RecordMapping> mappings, List<DrugReference> orderEntries, PatientClinicalContext context) {
 		// Or either of the two, each proposed alone, nothing said of the pair; or which of them to choose, which no finding makes
 		// (ADR Decision 393).
 		boolean either = !questionDrugs.isEmpty()
@@ -8241,6 +8256,16 @@ public class DrugReferenceInjector {
 			if (carried != null) {
 				lines.add(carried);
 				takenInPart.add(drug);
+			}
+		}
+		// Where no finding relates the pair, what the data lists between them below the floor, as the question whether they
+		// interact states it (ADR Decisions 329, 576): the pair is what the question asked about.
+		if (!either && pairLines.isEmpty()) {
+			List<DrugReference.Interaction> listed = DrugSafetyValidator.rulesBetween(rowOf.get(0).rows, rowOf.get(1).rows);
+			Integer firstRecord = referenceRecordOf(rowOf.get(0), mappings);
+			Integer secondRecord = referenceRecordOf(rowOf.get(1), mappings);
+			if (!listed.isEmpty() && firstRecord != null && secondRecord != null) {
+				pairLines.add(listingLine(rowOf.get(0), rowOf.get(1), listed, firstRecord, secondRecord));
 			}
 		}
 		if (!pairLines.isEmpty()) {

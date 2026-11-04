@@ -1584,9 +1584,12 @@ public class DrugReferenceInjector {
 		// A word with no near name in the data may be no drug at all — "Can I give her oranges?" — so the question takes the
 		// chart answer, and the statement follows it (ADR Decision 384); a near name keeps the module's "Did you mean".
 		String uncheckedWord = null;
+		// Whether the answer is that no interaction check was run, which names no order as not checked (ADR Decision 567).
+		boolean noCheckWasRun = false;
 		if (moduleAnswer == null && unrecognised != null) {
 			if (unrecognised.hasSuggestions()) {
 				moduleAnswer = unrecognised.statement();
+				noCheckWasRun = true;
 			} else {
 				uncheckedWord = unrecognised.statement();
 			}
@@ -1623,7 +1626,8 @@ public class DrugReferenceInjector {
 		// which, and that it was not checked. History questions are answered below under their own gate, unchanged.
 		// On a screen, stated with what else it did not check, on one line, below (ADR Decision 496).
 		List<PatientClinicalContext.ActiveDrugOrder> unidentifiedOnAScreen = null;
-		if (moduleAnswer != null && !unidentified.isEmpty()) {
+		// Not where no check was run at all: a list of orders not checked reads as though the rest were (ADR Decision 567).
+		if (moduleAnswer != null && !unidentified.isEmpty() && !noCheckWasRun) {
 			if (questionDrugs.isEmpty()) {
 				unidentifiedOnAScreen = unidentified;
 			} else {

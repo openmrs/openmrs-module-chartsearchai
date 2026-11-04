@@ -26558,3 +26558,28 @@ old wording as it was when they were taken.
 Pinned by `DuplicateTherapyQuestionTest.aQuestionWhetherSheIsOnDuplicateTherapyIsAnsweredWithTheDuplicatesTheScreenFound`
 and `ClinicianWordingsTest.aProposalWithAStatementARouteOrADurationIsTheProposalSayingWhatWasNotWeighed`, which spell
 both lines as literals. Both redden with the old wording.
+
+## Decision 567: An answer saying no interaction check was run names no order as not checked
+
+**Status: Accepted** (November 2026). Found by a sweep of 9 patients by 34 drug-safety questions on the demo replica on
+2026-11-04.
+
+### Context
+
+For a child on antiretrovirals, vaccines and infant formula (dd88589e), *"Can I give her rifampicine?"* was answered:
+*"No interaction check was run: "rifampicine" is not a drug name the interaction data recognises. Did you mean
+Rifampicin (rifampin)? Ask again with the name it carries."*, then *"Not checked: 9 active orders the drug data does not
+identify — Infant formula; Diphtheria tetanus and pertussis vaccination (2 orders); …"*. *"Can I give her a fever?"* closed
+the same way. Nothing was checked, so naming nine orders as not checked reads as though her other orders were.
+[Decision 161](#decision-161-orders-the-drug-data-does-not-identify-are-named-rather-than-giving-the-question-up)'s line
+says which orders a check could not reach. Where no check ran, there is no such check.
+
+### The decision
+
+Where the module's answer is
+[Decision 183](#decision-183-a-drug-name-the-data-does-not-recognise-is-said-to-be-unrecognised-with-the-names-it-carries-and-never-guessed)'s
+statement with its suggestions, `DrugReferenceInjector` appends no unidentified-orders line. Every other answer keeps
+it.
+
+Pinned by `UnidentifiedActiveOrdersAnswerTest.anAnswerSayingNoCheckRanNamesNoOrderAsNotChecked`, which reddens without
+the change.

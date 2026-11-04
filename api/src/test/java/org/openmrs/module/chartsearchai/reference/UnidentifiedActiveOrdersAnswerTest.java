@@ -190,4 +190,27 @@ public class UnidentifiedActiveOrdersAnswerTest extends BaseModuleContextSensiti
 				+ "Polio vaccination, oral; an order recorded only by its codes. Whether one of them is the drug asked "
 				+ "about is not established.", lines[lines.length - 1]);
 	}
+
+	/**
+	 * An answer saying no interaction check was run names no order as not checked (ADR Decision 567): nothing was checked,
+	 * so a list of orders that were not reads as though the rest were. On the demo replica on 2026-11-04 "Can I give her
+	 * rifampicine?", asked of a child on vaccines and antiretrovirals, closed "Not checked: 9 active orders the drug data
+	 * does not identify — Infant formula; …" after "No interaction check was run".
+	 */
+	@Test
+	public void anAnswerSayingNoCheckRanNamesNoOrderAsNotChecked() {
+		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
+				new PatientClinicalContext.ActiveDrugOrder("order-aspirin", "Aspirin", DrugReferenceTestSupport.set("Aspirin"),
+						DrugReferenceTestSupport.set("B01AC06")),
+				new PatientClinicalContext.ActiveDrugOrder("order-formula-1", "Infant formula",
+						DrugReferenceTestSupport.set("Infant formula")));
+		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(shipped()).injectRecords(
+				DrugReferenceTestSupport.oneRecordChart(),
+				DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set("Aspirin"),
+						DrugReferenceTestSupport.set("B01AC06"), null, null, orders),
+				"Can I give her rifampicine?");
+
+		assertEquals("No interaction check was run: \"rifampicine\" is not a drug name the interaction data recognises. "
+				+ "Did you mean Rifampicin (rifampin)? Ask again with the name it carries.", chart.getModuleAnswer());
+	}
 }

@@ -423,6 +423,32 @@ public class LlmInferenceServiceModelReadQuestionContextTest extends BaseModuleC
 	}
 
 	/**
+	 * Several words standing where a drug would, none of them a drug's name — "blood pressure" — ask of that thing as one
+	 * word there does (ADR Decision 564): on the demo replica on 2026-11-04 the model read "Can i give him high blood
+	 * pressure?" as YES, and the screen of his three antiretrovirals answered "No rated interactions; 3 possible duplicate
+	 * therapies.", no word of it about his blood pressure.
+	 */
+	@Test
+	public void severalWordsAskedOfWhereADrugWouldStandAreNotReadByTheModel() {
+		for (String question : new String[] { "Can i give him high blood pressure?", "Can i give him blood pressure?",
+				"Can I give her high cholesterol?", "Can I give her a bad headache?", "Is high blood pressure ok?",
+				"Can she take blood pressure?" }) {
+			RecordingProvider provider = new RecordingProvider("YES");
+			ChartAnswer answer = serviceWith(provider).search(patient, question);
+
+			assertEquals(0, provider.engine.readings, question + " is not read by the model");
+			assertFalse(answer.isAnsweredByTheModule(), question + " is not answered with the screen: " + answer.getAnswer());
+			assertTrue(answer.getSafetyWarnings().isEmpty(), question + " carries no chip: " + answer.getSafetyWarnings());
+		}
+		// Her medications as a whole, or what not to give her, are still read, however many words stand there.
+		for (String question : new String[] { "Any drugs that I should not give her?", "Are any of her meds a bad combination?" }) {
+			RecordingProvider provider = new RecordingProvider("YES");
+			serviceWith(provider).search(patient, question);
+			assertEquals(1, provider.engine.readings, question + " is still read by the model");
+		}
+	}
+
+	/**
 	 * Something else asked beside her medications with an article before it — "a flu shot" — is something else still (ADR
 	 * Decision 518): on the 3.7.1 standalone "Can she have a flu shot with her meds?" was answered with the screen of her
 	 * orders, every chip of it, on all 15 patients.

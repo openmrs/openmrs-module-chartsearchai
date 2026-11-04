@@ -26472,3 +26472,39 @@ for a scheduled order).
 
 On the 207-question corpus of Decision 562, every one of the 192 module answers is word for word what it was. None of
 them spells a date in its text. The 15 model answers were not compared.
+
+## Decision 564: Several words asked of where a drug would stand are not read by the model as a medication check
+
+**Status: Accepted** (November 2026), on the owner's request. It widens
+[Decision 514](#decision-514-one-thing-asked-of-where-a-drug-would-stand-is-not-read-by-the-model-as-a-medication-check)
+from one word to two or three.
+
+### Context
+
+*"Can i give him high blood pressure?"* was asked for Kamwara (dd74dc61) on the demo replica on 2026-11-04. The module
+answered alone with the screen of his orders: *"No rated interactions; 3 possible duplicate therapies."*, then three
+chips for his lamivudine, nevirapine and stavudine, each in three orders. No word of the answer was about his blood
+pressure. *"Can i give him blood pressure?"* was answered the same way. *"Can i give him hypertension?"* and *"Can I
+give him diabetes?"* took the chart answer, with the unchecked statement of
+[Decision 384](#decision-384-a-word-in-a-drug-questions-place-that-the-drug-data-has-no-near-name-for-takes-the-chart-answer-with-the-unchecked-statement-after-it).
+
+No predicate of `QueryScopeRouter` reads a screen in the question, so the injector composed nothing. *"blood"* and
+*"pressure"* are both in `UnrecognisedDrugName.NOT_A_NAME`, so no unchecked statement stood. Decision 514's test asks of
+ONE word in a drug's place, and a word it does not know as a name is not one. So the question reached
+`LlmInferenceService.readForDrugSafety`, which asked the model whether it asks about her medications' safety (Decision
+489). The model read YES, and the screen answered.
+
+### The decision
+
+- `UnrecognisedDrugName.asksOfOneThingInADrugsPlace` also answers true where two or three words, read together in a
+  drug's place, make the question one of giving that thing or of how it relates to her medications. Then the model is
+  not asked to read it, no screen runs, and the question takes the chart answer.
+- Each word of the span must name something. None may be a word standing for a drug or for her (`STANDS_FOR_A_DRUG`:
+  *"the drug"*, *"something"*, *"another one"*), a determiner, a possessive, a word the question is read by, or a
+  medication group's word. So *"Is the drug ok with her meds?"* is still read. Decision 514's two exclusions still
+  hold: what not to give her, and her medications as a whole.
+- The word `UnrecognisedDrugName.in` offers suggestions for stays one word (Decision 526). The span adds no unchecked
+  statement and no *"Did you mean"*.
+
+Pinned by `LlmInferenceServiceModelReadQuestionContextTest.severalWordsAskedOfWhereADrugWouldStandAreNotReadByTheModel`.
+It reddens without the change, at the model's reading of the replica's own question.

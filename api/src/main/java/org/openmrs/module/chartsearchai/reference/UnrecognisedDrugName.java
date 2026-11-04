@@ -419,7 +419,72 @@ final class UnrecognisedDrugName {
 	 * whole.
 	 */
 	static boolean asksOfOneThingInADrugsPlace(String question) {
-		return oneThingInADrugsPlace(question) != null;
+		return oneThingInADrugsPlace(question) != null || asksOfSeveralWordsInADrugsPlace(question);
+	}
+
+	/** The words that stand for a drug, or for her, in a drug's place without naming anything else: "the drug", "something",
+	 *  "another one" (ADR Decision 564). */
+	private static final Set<String> STANDS_FOR_A_DRUG = new HashSet<String>(Arrays.asList("this", "that", "these", "those",
+		"the", "a", "an", "it", "them", "drug", "drugs", "medication", "medications", "medicine", "medicines", "med", "meds",
+		"something", "anything", "everything", "nothing", "another", "other", "same", "new", "one", "some", "any", "more", "her",
+		"his", "their", "him", "you", "she", "he", "they", "all", "too", "else"));
+
+	/**
+	 * Whether two or three words, read together where a drug's name would stand, make {@code question} one of giving that
+	 * thing or of how it relates to her medications, as one word there does for {@link #asksOfOneThingInADrugsPlace} (ADR
+	 * Decision 564): "Can i give him high blood pressure?" was read by the model as YES and answered with the screen of his
+	 * orders. Each word must name something — none of them a word standing for a drug or for her, a determiner, a word
+	 * the question is read by, or a medication group's — so "Is the drug ok with her meds?" is still
+	 * read. Never the word {@link #in} offers suggestions for, which stays one word (ADR Decision 526).
+	 */
+	private static boolean asksOfSeveralWordsInADrugsPlace(String question) {
+		if (question == null) {
+			return false;
+		}
+		List<String> words = QueryScopeRouter.words(question);
+		if (!Collections.disjoint(words, NEGATIONS) || namesHerMedicationsAsAWhole(words)) {
+			return false;
+		}
+		for (int length = 2; length <= 3; length++) {
+			for (int i = 0; i + length <= words.size(); i++) {
+				if (!namesSomethingElse(words.subList(i, i + length))) {
+					continue;
+				}
+				List<String> marked = new ArrayList<String>(words.subList(0, i));
+				marked.add(QueryScopeRouter.DRUG_NAME);
+				marked.addAll(words.subList(i + length, words.size()));
+				if (QueryScopeRouter.asksWhetherToGiveADrug(marked)
+						|| QueryScopeRouter.asksWhetherADrugInteractsWithHerMedications(marked)) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	/** Whether {@code words} name her medications as a whole, which a question then asks of: "Are any of her meds a bad
+	 *  combination?" (ADR Decisions 514, 564). */
+	private static boolean namesHerMedicationsAsAWhole(List<String> words) {
+		for (int i = 0; i + 1 < words.size(); i++) {
+			if (("her".equals(words.get(i)) || POSSESSIVES.contains(words.get(i)))
+					&& QueryScopeRouter.namesAMedicationGroup(words.get(i + 1))) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/** Whether every word of {@code span} names something other than a drug asked of or her: see {@link
+	 *  #asksOfSeveralWordsInADrugsPlace}. */
+	private static boolean namesSomethingElse(List<String> span) {
+		for (String w : span) {
+			if (!w.matches("\\p{L}[\\p{L}\\-]*") || STANDS_FOR_A_DRUG.contains(w) || DETERMINERS.contains(w)
+					|| POSSESSIVES.contains(w) || QueryScopeRouter.isAWordOfTheQuestion(w)
+					|| QueryScopeRouter.namesAMedicationGroup(w)) {
+				return false;
+			}
+		}
+		return true;
 	}
 
 	/** The word {@link #asksOfOneThingInADrugsPlace} reads in a drug's place, or {@code null} (ADR Decisions 514, 526). */
@@ -431,12 +496,8 @@ final class UnrecognisedDrugName {
 		if (words.size() < 2 || !Collections.disjoint(words, NEGATIONS)) {
 			return null;
 		}
-		// Nor one naming her medications as a whole, which asks of them: "Are any of her meds a bad combination?".
-		for (int i = 0; i + 1 < words.size(); i++) {
-			if (("her".equals(words.get(i)) || POSSESSIVES.contains(words.get(i)))
-					&& QueryScopeRouter.namesAMedicationGroup(words.get(i + 1))) {
-				return null;
-			}
+		if (namesHerMedicationsAsAWhole(words)) {
+			return null;
 		}
 		for (int i = 0; i < words.size(); i++) {
 			List<String> span = words.subList(i, i + 1);

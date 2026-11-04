@@ -151,13 +151,13 @@ programs_db() {
      CREATE TABLE program_workflow_state (program_workflow_state_id INT PRIMARY KEY, program_workflow_id INT, concept_id INT);
      INSERT INTO program_workflow_state VALUES (1,1,12),(2,1,99002),(3,9,99003),(4,10,99004),(7,1,99007);
      CREATE TABLE concept_state_conversion (concept_state_conversion_id INT PRIMARY KEY, program_workflow_id INT, program_workflow_state_id INT);
-     CREATE TABLE patient_program (patient_program_id INT PRIMARY KEY, program_id INT);
-     INSERT INTO patient_program VALUES (1,1),(2,6);
+     CREATE TABLE patient_program (patient_program_id INT PRIMARY KEY, program_id INT, date_enrolled DATETIME, date_completed DATETIME, date_created DATETIME);
+     INSERT INTO patient_program VALUES (1,1,'2006-01-01',NULL,'2006-09-28'),(2,6,NULL,NULL,'2006-09-28'),(3,1,NULL,'2006-05-01','2006-09-28');
      CREATE TABLE patient_state (patient_state_id INT PRIMARY KEY, state INT);
      INSERT INTO patient_state VALUES (1,1),(2,7);"
 }
 
-echo "== programs naming a missing concept are removed from the demo dataset, unless a patient's data uses them"
+echo "== programs naming a missing concept are removed from the demo dataset, unless a patient's data uses them, and enrollments get a date"
 programs_db demo_seed_t_programs
 q "INSERT INTO global_property VALUES ('chartsearchai.demo.seededDataset','t-2026',UUID())"
 repair_demo_programs >/dev/null 2>&1
@@ -165,7 +165,10 @@ check "the valid program, workflow and state stay" "$(q 'SELECT COUNT(*) FROM pr
 check "broken states no patient is in are removed" "$(q 'SELECT GROUP_CONCAT(program_workflow_state_id ORDER BY 1) FROM program_workflow_state')" 1,7
 check "broken workflows left without states are removed" "$(q 'SELECT GROUP_CONCAT(program_workflow_id ORDER BY 1) FROM program_workflow')" 1
 check "a broken program with no enrollment and no workflow is removed; an enrolled one stays" "$(q 'SELECT GROUP_CONCAT(program_id ORDER BY 1) FROM program')" 1,6
-check "every patient enrollment and state stays" "$(q 'SELECT COUNT(*) FROM patient_program')$(q 'SELECT COUNT(*) FROM patient_state')" 22
+check "every patient enrollment and state stays" "$(q 'SELECT COUNT(*) FROM patient_program')$(q 'SELECT COUNT(*) FROM patient_state')" 32
+check "a recorded enrollment date stays" "$(q 'SELECT DATE(date_enrolled) FROM patient_program WHERE patient_program_id=1')" 2006-01-01
+check "an enrollment with no date takes the date it was recorded" "$(q 'SELECT DATE(date_enrolled) FROM patient_program WHERE patient_program_id=2')" 2006-09-28
+check "or its completion date, when that is earlier" "$(q 'SELECT DATE(date_enrolled) FROM patient_program WHERE patient_program_id=3')" 2006-05-01
 repair_demo_programs >/dev/null 2>&1
 check "a second run changes nothing" "$(q 'SELECT COUNT(*) FROM program')$(q 'SELECT COUNT(*) FROM program_workflow')$(q 'SELECT COUNT(*) FROM program_workflow_state')" 212
 
@@ -174,6 +177,7 @@ programs_db demo_seed_t_programs_other
 q "INSERT INTO global_property VALUES ('chartsearchai.demo.seededDataset','some-other-tag',UUID())"
 repair_demo_programs >/dev/null 2>&1
 check "its programs, workflows and states all stay" "$(q 'SELECT COUNT(*) FROM program')$(q 'SELECT COUNT(*) FROM program_workflow')$(q 'SELECT COUNT(*) FROM program_workflow_state')" 335
+check "its enrollments with no date keep none" "$(q 'SELECT COUNT(*) FROM patient_program WHERE date_enrolled IS NULL')" 2
 
 for db in seeded existing empty lookup snapshot backup killed programs programs_other; do seed_sql -e "DROP DATABASE IF EXISTS demo_seed_t_$db"; done
 [ "$FAILED" = 0 ] && echo "all cases pass" || echo "SOME CASES FAILED"

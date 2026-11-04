@@ -174,6 +174,11 @@ SQL
 # back, finds nothing the second time, and only on the demo dataset (the seed tag), so a database this
 # image meets that is not the demo's is left alone. A row a patient's data does refer to stays, and the
 # count of them is logged.
+#
+# It also dates the 763 enrollments (702 of the 827 in the diabetes program) the dump carries with no
+# date_enrolled. Core allows that, but the omnibar's /enroll formats the date and fails on the whole
+# list for such a patient (Mogan Zavai Kamwara, 2026-11-05). The date given is the one the enrollment
+# was recorded on, or its completion date when that is earlier, so no enrollment starts after it ended.
 repair_demo_programs() {
   command -v mariadb >/dev/null 2>&1 || return 0
   [ "$(seed_sql -N "$DB_NAME" -e "SELECT property_value FROM global_property WHERE property='chartsearchai.demo.seededDataset'" 2>/dev/null)" = "$DEMO_SEED_TAG" ] || return 0
@@ -193,6 +198,9 @@ DELETE p FROM program p
  WHERE $_p
    AND NOT EXISTS (SELECT 1 FROM patient_program pp WHERE pp.program_id = p.program_id)
    AND NOT EXISTS (SELECT 1 FROM program_workflow w WHERE w.program_id = p.program_id);
+UPDATE patient_program
+   SET date_enrolled = CASE WHEN date_completed < date_created THEN date_completed ELSE date_created END
+ WHERE date_enrolled IS NULL;
 SQL
   then
     echo "[demo-seed] program repair failed; programs may still name missing concepts."; return 0

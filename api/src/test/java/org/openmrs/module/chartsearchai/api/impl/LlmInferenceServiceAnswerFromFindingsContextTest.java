@@ -2974,7 +2974,10 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 				"Any interactions among the medicines she takes?", "Are there significant drug interactions?", "Any major interactions?",
 				"Is anything she takes interacting?", "Drug interaction screen", "Any adverse drug interactions?",
 				"Check her prescriptions for interactions", "Are there interactions with her current treatment?",
-				"What are her drug interactions?" }) {
+				"What are her drug interactions?",
+				// A rating asked about, as "Any major interactions?" is (ADR Decision 570)
+				"Does she have any major interactions?", "Does she have any serious drug interactions?",
+				"Does she have any clinically significant interactions?" }) {
 			RecordingProvider provider = new RecordingProvider();
 			ChartAnswer answer = serviceWith(provider).search(patient, question);
 

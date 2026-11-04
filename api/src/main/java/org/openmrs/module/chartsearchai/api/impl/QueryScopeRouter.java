@@ -1382,7 +1382,7 @@ public final class QueryScopeRouter {
 			"(?:are|do) (?:any of )?" + POSSESSIVE + " " + MEDICATIONS + " (?:interact|interacting)"
 					+ "(?: with (?:each other|one another))?",
 			// "Does she have any drug interactions I should know about?"
-			"(?:does|do) (?:she|he|they|the patient|this patient) have any (?:drug )?(?:interactions?|ddis?)"
+			"(?:does|do) (?:she|he|they|the patient|this patient) have any " + QUALIFIER + "(?:drug )?(?:interactions?|ddis?)"
 					+ "(?: (?:between|among) " + POSSESSIVE + " " + MEDICATIONS + ")?" + KNOW_ABOUT,
 			// "Any DDIs?", "Any drug interactions I should worry about?", "Any DDIs with her current medications?", "Any
 			// clinically significant interactions?", "drug interactions?"

@@ -26642,3 +26642,26 @@ The unit test's synthetic chart does not reproduce that case, so the test pins o
 
 Pinned by `OwnMedicationSafetyContextTest.whetherHerOwnDrugIsSafeOrWhatInteractsWithItIsAnsweredAsHers`, whose
 *"which"* cases redden without the change.
+
+## Decision 570: "Does she have any major interactions?" asks for the screen
+
+**Status: Accepted** (November 2026). Found by a second sweep of 6 patients by 30 drug-safety questions on the demo replica
+on 2026-11-04.
+
+### Context
+
+*"Any major interactions?"* and *"What serious interactions does she have?"* ask for the screen of her medications, which
+states its Major interactions first. *"Does she have any major interactions?"* fitted no shape. The screen shape *"Does she
+have any drug interactions…"* takes no rating word, while its sibling shapes take `QueryScopeRouter.QUALIFIER`. So the
+question went to the model on all 6 patients, taking 6.8 s to 63 s. For dd8e64d8, whose only finding is that his
+isoniazid is in three orders, the model answered *"No — the patient has a reason to change a medication due to Isoniazid
+being in active orders for possible duplicate therapy"*. That answer says "No" and then cites a reason to change.
+
+### The decision
+
+The screen shape *"Does she have any … interactions"* takes `QUALIFIER` (*major*, *serious*, *significant*, *clinically
+significant* and the rest), as the other screen shapes do. The screen's answer then opens with its count of Major
+interactions, or *"No Major interactions; …"*.
+
+Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.everyWayOfAskingForAScreenIsAnsweredWithTheScreensCount`,
+whose new cases redden without the change.

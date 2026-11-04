@@ -44,7 +44,7 @@ public class DuplicateTherapyQuestionTest extends BaseModuleContextSensitiveTest
 			String bottomLine = "Yes — 1 possible duplicate therapy: Ibuprofen, Diclofenac and Celecoxib (NSAID).";
 			assertEquals(bottomLine + "\nIbuprofen, Diclofenac "
 					+ "and Celecoxib are in one drug group (NSAID) — possible duplicate therapy. [2] [3] [4]\nThis check "
-					+ "compares the substances in her orders and the drug groups this module carries (NSAID and "
+					+ "compares the substances in this patient's orders and the drug groups this module carries (NSAID and "
 					+ "Penicillins); other drug classes are not covered.", chart.getModuleAnswer(), question);
 			assertEquals(bottomLine, chart.getModuleAnswerSummary(), question);
 		}

@@ -494,6 +494,9 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 			ask("She has HIV and TB. Can I give her warfarin?"));
 		assertEquals(give + "\n" + DrugReferenceInjector.STATEMENT_NOT_WEIGHED_OPENING + "She is pregnant).",
 			ask("She is pregnant, can I give her warfarin?"));
+		// Its words name no sex, whoever the patient is (ADR Decision 566): it said "states about her" of a man too.
+		assertEquals(ask("Can I give him warfarin?") + "\nThis check weighs only this patient's chart, not what the question "
+				+ "states (He has HIV and TB).", ask("He has HIV and TB. Can I give him warfarin?"));
 		String safe = ask("Is warfarin safe?");
 		assertNotNull(safe, "precondition: the module answers it");
 		assertEquals(safe + "\n" + DrugReferenceInjector.STATEMENT_NOT_WEIGHED_OPENING + "Patient is on ART).",

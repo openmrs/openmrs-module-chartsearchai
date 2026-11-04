@@ -9256,7 +9256,7 @@ public class DrugReferenceInjector {
 			return noDuplicateFound(context, screened, unidentified, groupNames);
 		}
 		return duplicatesFound(findings, groupLines) + "\n" + String.join("\n", lines)
-				+ "\nThis check compares the substances in her orders and the drug groups this module carries ("
+				+ "\nThis check compares the substances in this patient's orders and the drug groups this module carries ("
 				+ joinedAsAList(groupNames) + "); other drug classes are not covered.";
 	}
 
@@ -9956,9 +9956,10 @@ public class DrugReferenceInjector {
 	public static final String DURATION_NOT_WEIGHED = "This check did not weigh how long the drug would be given.";
 
 	/** What opens the line closing an answer to a question opened by a statement about her, the statement and ")." after it
-	 *  (ADR Decision 419): the check weighs her chart, not what the question states. */
+	 *  (ADR Decision 419): the check weighs her chart, not what the question states. Its words name no sex, whoever the patient
+	 *  is (ADR Decision 566). */
 	public static final String STATEMENT_NOT_WEIGHED_OPENING = "This check weighs only this patient's chart, not what the question"
-			+ " states about her (";
+			+ " states (";
 
 	/** What closes an answer to a proposal saying when the drug would be given (ADR Decision 394): no finding weighs it. */
 	static final String TIMING_NOT_WEIGHED = "This check did not weigh when the drug would be given.";

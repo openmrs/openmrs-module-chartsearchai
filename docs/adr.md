@@ -26535,3 +26535,26 @@ medication group's word, so neither reading takes it.
 Pinned by the cases *"Can i give him really high blood pressure?"* and *"Can i give him very very high blood
 pressure?"* in `LlmInferenceServiceModelReadQuestionContextTest.severalWordsAskedOfWhereADrugWouldStandAreNotReadByTheModel`,
 whose first case reddens with the cap of three.
+
+## Decision 566: The module's own sentences name no sex
+
+**Status: Accepted** (November 2026). Found by a sweep of 9 patients by 34 drug-safety questions on the demo replica on
+2026-11-04.
+
+### Context
+
+*"Any duplicate therapy?"* for Kamwara (dd74dc61), a man, closed with *"This check compares the substances in her orders
+and the drug groups this module carries (NSAID and Penicillins); other drug classes are not covered."* A question opened
+by a statement, *"He has HIV and TB. Can I give him warfarin?"*, closed with *"… not what the question states about her
+(He has HIV and TB)."* Every other sentence the module writes says *"this patient"*. These two were the only answer
+strings in the module's production source that used a gendered pronoun.
+
+### The decision
+
+The duplicate-therapy closing line reads *"… the substances in this patient's orders …"*. Decision 419's closing line
+reads *"This check weighs only this patient's chart, not what the question states (…)."* Earlier decisions quote the
+old wording as it was when they were taken.
+
+Pinned by `DuplicateTherapyQuestionTest.aQuestionWhetherSheIsOnDuplicateTherapyIsAnsweredWithTheDuplicatesTheScreenFound`
+and `ClinicianWordingsTest.aProposalWithAStatementARouteOrADurationIsTheProposalSayingWhatWasNotWeighed`, which spell
+both lines as literals. Both redden with the old wording.

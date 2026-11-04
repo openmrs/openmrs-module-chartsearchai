@@ -3828,6 +3828,10 @@ public final class QueryScopeRouter {
 
 	private static final String CHANGED = "(?:adjusted|changed|stopped|modified|reviewed|adjusting|changing|stopping)";
 
+	/** Her medications as a whole, or her treatment: "her regimen", "his current treatment" (ADR Decision 571). */
+	private static final String HER_MEDICATIONS_OR_TREATMENT = POSSESSIVE + " (?:current |active )?(?:medications|meds|"
+			+ "medicines|prescriptions|drugs|regimen|treatment)";
+
 	private static final List<Pattern> NEED_CHANGING_SHAPES = shapes(
 			// "Does she need any of her medications adjusted?"
 			"(?:does|do) " + SUBJECT + " need any of " + HER_MEDICATIONS + " " + CHANGED,
@@ -3839,7 +3843,13 @@ public final class QueryScopeRouter {
 			// "Do any of her drugs need dose adjustment?", "Should any of her medicines be stopped?" (ADR Decision 416)
 			"(?:do|does) any of " + HER_MEDICATIONS + " need (?:a )?dos(?:e|ing) (?:adjustments?|changes?)",
 			"should any of " + HER_MEDICATIONS + " be " + CHANGED,
-			"should (?:i|we) stop any of " + HER_MEDICATIONS);
+			"should (?:i|we) stop any of " + HER_MEDICATIONS,
+			// "Should I change her regimen?", "Do I need to adjust her medications?", "Should I stop her medications?", "Does her
+			// regimen need changing?" — the model answered "No — the patient's regimen should be changed" (ADR Decision 571)
+			"(?:should|do|must|can) (?:i|we) (?:need to )?(?:change|adjust|modify|review|stop|discontinue) "
+					+ HER_MEDICATIONS_OR_TREATMENT,
+			"(?:does|do) " + HER_MEDICATIONS_OR_TREATMENT + " need (?:to be )?" + CHANGED);
+
 
 	/**
 	 * Whether a question asks which drugs to avoid in her, and nothing else — <em>"What drugs should I avoid in this

@@ -3444,7 +3444,10 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 				"Which of her meds should we change?", "Which medications should I discontinue?",
 				"Which of her medications should be stopped?",
 				// ADR Decision 300: Brian Lopez was told "No — Diazepam should be changed".
-				"Does she need any of her medications adjusted?", "Do any of her medications need to be changed?" }) {
+				"Does she need any of her medications adjusted?", "Do any of her medications need to be changed?",
+				// ADR Decision 571: two replica patients were told "No — the patient's regimen should be changed because …"
+				"Should I change her regimen?", "Do I need to adjust her medications?", "Should we modify her treatment?",
+				"Does her regimen need changing?", "Should I stop her medications?" }) {
 			RecordingProvider provider = new RecordingProvider();
 			ChartAnswer answer = serviceWith(provider).search(patient, question);
 

@@ -26665,3 +26665,30 @@ interactions, or *"No Major interactions; …"*.
 
 Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.everyWayOfAskingForAScreenIsAnsweredWithTheScreensCount`,
 whose new cases redden without the change.
+
+## Decision 571: "Should I change her regimen?" asks for the screen
+
+**Status: Accepted** (November 2026). Found by a third sweep of 5 patients by 20 drug-safety questions on the demo replica
+on 2026-11-04.
+
+### Context
+
+[Decision 300](#decision-300-four-more-wordings-of-questions-the-module-answers-reach-those-answers) answers
+whether any of her medications need changing with the screen of them. It does so for *"Does she need any of her
+medications adjusted?"*, *"Should any of her medicines be stopped?"* and others. *"Should I change his regimen?"* fitted
+none of those shapes and went to the model, which answered with a lead that contradicts itself. To Kamwara (dd74dc61):
+*"No — the patient's regimen should be changed because Lamivudine is in active orders, which is a reason to change a
+medication…"*. To dd708fff, after 66.8 s: *"No — there are reasons to change a medication this patient is already
+taking…"*.
+
+### The decision
+
+`NEED_CHANGING_SHAPES` also reads *"should / do / must / can I (need to) change / adjust / modify / review / stop /
+discontinue her medications / regimen / treatment"* and *"does her regimen / treatment need (to be) changed"*. *"Should I
+stop his medications?"* was first left out, as a question about stopping all of them. On the replica the model answered
+it on 4 of 5 patients in the same self-contradicting way (*"No — stop the Isoniazid medication because …"*). The screen
+states the reasons to change one of them and gives no "Yes" or "No", and it answers *"Should I stop any of her
+medications?"* already (Decision 397).
+
+Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.askingWhichOfHerMedicationsIShouldStopIsAScreen`, whose new
+cases redden without the change, and whose with-food control is still the model's.

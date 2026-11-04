@@ -51,13 +51,13 @@ public class ScreenSharedMechanismContextTest extends BaseModuleContextSensitive
 		// Five pairs, every one a Moderate caution: since ADR Decision 506 a screen says on one line, citing every
 		// finding, that its cautions are in the safety warnings, the grid (ADR Decision 191) still counting both NSAIDs
 		// against both corticosteroids as four pairs and citing both its findings. The question asks only about
-		// interactions, so the scope says the answer covers those (ADR Decision 190). Her two NSAIDs are said once as one
+		// interactions, and no scope line closes it (ADR Decision 573). Her two NSAIDs are said once as one
 		// drug group (ADR Decision 197).
 		assertEquals("No Major interactions; 1 possible duplicate therapy and 5 cautions.\n"
 				+ "Ibuprofen and Celecoxib are in one drug group (NSAID) — possible duplicate therapy. [2] [3]\n"
 				+ "Also in the safety warnings beside this answer: 5 interactions, each a caution (5 Moderate)"
-				+ " — Ibuprofen with Prednisone, Dexamethasone, Celecoxib; Celecoxib with Prednisone, Dexamethasone. [6] [8] [7]\n"
-				+ DrugReferenceInjector.BELOW_FLOOR_SCOPE, answer);
+				+ " — Ibuprofen with Prednisone, Dexamethasone, Celecoxib; Celecoxib with Prednisone, Dexamethasone. [6] [8] [7]",
+				answer);
 	}
 
 	@Test
@@ -71,8 +71,7 @@ public class ScreenSharedMechanismContextTest extends BaseModuleContextSensitive
 		assertEquals("No Major interactions; 1 possible duplicate therapy and 4 cautions.\n"
 				+ "Ibuprofen and Celecoxib are in one drug group (NSAID) — possible duplicate therapy. [2] [3]\n"
 				+ "Also in the safety warnings beside this answer: 4 interactions, each a caution (4 Moderate)"
-				+ " — Ibuprofen with Prednisone, Dexamethasone, Celecoxib; Celecoxib with Prednisone. [6] [7] [8]\n"
-				+ DrugReferenceInjector.BELOW_FLOOR_SCOPE, answer);
+				+ " — Ibuprofen with Prednisone, Dexamethasone, Celecoxib; Celecoxib with Prednisone. [6] [7] [8]", answer);
 	}
 
 	@Test

@@ -51,8 +51,9 @@ public class CombinationProposalNoFindingTest extends BaseModuleContextSensitive
 			"was: " + answer);
 		assertTrue(lines[1].matches("The data lists Trimethoprim-sulfamethoxazole against one of this patient's medications, with no "
 				+ "severity( or mechanism)? on file\\. \\[\\d+\\] \\[\\d+\\]"), "was: " + answer);
-		assertEquals(DrugReferenceInjector.BELOW_FLOOR_SCOPE, lines[2], "was: " + answer);
-		assertEquals("This check did not weigh what the drug is for (her UTI).", lines[lines.length - 1], "was: " + answer);
+		// What was not weighed for this question follows it, and no scope line does (ADR Decision 573).
+		assertEquals("This check did not weigh what the drug is for (her UTI).", lines[2], "was: " + answer);
+		assertEquals(3, lines.length, "was: " + answer);
 	}
 
 	@Test

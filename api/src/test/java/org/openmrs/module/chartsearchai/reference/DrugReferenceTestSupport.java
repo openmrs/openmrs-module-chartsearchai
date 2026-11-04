@@ -10,6 +10,7 @@
 package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -2373,6 +2374,20 @@ public final class DrugReferenceTestSupport {
 		assertNotNull(section,
 				"precondition: the record must carry the section " + lead + ", was: " + record);
 		return new ArrayList<String>(Arrays.asList(section.split("; ")));
+	}
+
+	/**
+	 * Asserts {@code answer} carries no closing line on what kinds of finding the check does not cover, in any of the words it
+	 * had (ADR Decision 573) — {@code DrugReferenceInjector.isAScopeLine}, and the folded "Not checked: unrated …" of
+	 * Decision 496.
+	 */
+	public static void assertNoScopeLine(String answer) {
+		assertNotNull(answer, "the module answers");
+		for (String line : answer.split("\n")) {
+			assertFalse(DrugReferenceInjector.isAScopeLine(line), "no scope line (ADR Decision 573); was: " + answer);
+		}
+		assertFalse(answer.contains("Interactions the data does not rate"), "no scope line; was: " + answer);
+		assertFalse(answer.contains("Not checked: unrated interactions"), "no scope line; was: " + answer);
 	}
 
 	/** A one-record chart to inject into; the injected reference must append as record [2]. */

@@ -49,7 +49,7 @@ public class TwoDrugsListedBelowTheFloorTest extends BaseModuleContextSensitiveT
 		String[] lines = mask(neither).split("\n");
 		assertEquals("Neither Nevirapine nor Stavudine is one of this patient's active medications.", lines[0], neither);
 		assertEquals(LISTED, lines[1], neither);
-		assertEquals(DrugReferenceInjector.BELOW_FLOOR_SCOPE, lines[lines.length - 1], neither);
+		DrugReferenceTestSupport.assertNoScopeLine(neither);
 
 		String both = ask("Do her nevirapine and stavudine interact?",
 			DrugReferenceTestSupport.activeOrder("order-nvp", "Nevirapine 200mg", "Nevirapine"),
@@ -88,7 +88,7 @@ public class TwoDrugsListedBelowTheFloorTest extends BaseModuleContextSensitiveT
 		assertEquals(twoLines[1], lines[1], "was: " + answer);
 		assertEquals(DrugReferenceInjector.ABOUT_HER_OTHER_MEDICATIONS_LEAD, lines[2], "was: " + answer);
 		assertTrue(lines[3].contains("Stavudine"), "the finding relating lamivudine to stavudine: " + answer);
-		assertEquals(DrugReferenceInjector.BELOW_FLOOR_SCOPE, lines[lines.length - 1], "was: " + answer);
+		DrugReferenceTestSupport.assertNoScopeLine(answer);
 	}
 
 	/**
@@ -112,7 +112,7 @@ public class TwoDrugsListedBelowTheFloorTest extends BaseModuleContextSensitiveT
 		assertEquals(plainLines[1], lines[1], "was: " + answer);
 		int lead = Arrays.asList(lines).indexOf(DrugReferenceInjector.ABOUT_THE_DRUGS_ASKED_ABOUT_LEAD);
 		assertTrue(lead > 1 && lines[lead + 1].startsWith("Amoxicillin"), "the allergy finding apart: " + answer);
-		assertEquals(DrugReferenceInjector.BELOW_FLOOR_SCOPE, lines[lines.length - 1], "was: " + answer);
+		DrugReferenceTestSupport.assertNoScopeLine(answer);
 	}
 
 	private static String askAllergic(String question, java.util.Set<String> allergies,

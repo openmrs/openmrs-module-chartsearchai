@@ -88,7 +88,7 @@ public class WhichOfHerMedicationsInteractTest extends BaseModuleContextSensitiv
 		for (String question : Arrays.asList("Which of her medications interact with rifampicin?",
 				"Does rifampicin interact with her medications?", "Is she on any drugs that interact with rifampicin?")) {
 			assertEquals("The interaction data lists Rifampicin (rifampin) against one of this patient's medications, Aspirin 81mg, "
-					+ "with no severity or mechanism on file. [n]\n" + DrugReferenceInjector.BELOW_FLOOR_SCOPE,
+					+ "with no severity or mechanism on file. [n]",
 				mask(ask(question, aspirin)), question);
 			assertEquals("This patient has no active medication orders, so the interaction check had none to relate Rifampicin "
 					+ "(rifampin) to. [n]", mask(ask(question, Arrays.<PatientClinicalContext.ActiveDrugOrder> asList())),

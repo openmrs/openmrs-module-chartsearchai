@@ -81,8 +81,9 @@ public class EitherOfTwoDrugsTest extends BaseModuleContextSensitiveTest {
 			answer);
 		assertTrue(answer.contains("\nFor Ibuprofen:\nWhat this module's drug-safety check found about Ibuprofen:\n"
 				+ "The patient has a recorded allergy to Ibuprofen."), answer);
-		assertTrue(answer.contains("\nFor Acetaminophen:\nThe interaction check raised no finding about Acetaminophen "
-				+ "against this patient's other active medications.\n"), answer);
+		// It closes on that line: no scope line follows it (ADR Decision 573).
+		assertTrue(answer.endsWith("\nFor Acetaminophen:\nThe interaction check raised no finding about Acetaminophen "
+				+ "against this patient's other active medications."), answer);
 		assertTrue(!answer.substring(lines[0].length()).toLowerCase().contains("safer"), "neither is chosen: " + answer);
 	}
 

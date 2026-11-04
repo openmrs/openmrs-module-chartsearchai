@@ -60,7 +60,7 @@ public class ScreenBesideHerOwnConflictsTest extends BaseModuleContextSensitiveT
 		assertNotNull(answer, "the module answers");
 		String[] lines = answer.split("\n");
 		// No count introduces them (ADR Decision 506): each line says for itself that its drug is one he already takes.
-		assertEquals(5, lines.length, "was: " + answer);
+		assertEquals(4, lines.length, "no scope line (ADR Decision 573); was: " + answer);
 		assertEquals(BOTTOM_LINE, lines[0], "the bottom line (ADR Decision 512): " + answer);
 		assertEquals(true, lines[1].startsWith(DEXAMETHASONE_PREDNISONE_SCREEN),
 			"was: " + answer);
@@ -68,7 +68,7 @@ public class ScreenBesideHerOwnConflictsTest extends BaseModuleContextSensitiveT
 			"was: " + answer);
 		assertEquals(true, lines[3].startsWith("Prednisone is in the same ATC class (H02AB) as the patient's allergy to "
 				+ "Dexamethasone — possible cross-reactivity.") && lines[3].contains(" This finding is about a medication this patient is already taking. ["), "was: " + answer);
-		assertEquals(DrugReferenceInjector.SCREEN_SCOPE, lines[4], "was: " + answer);
+		DrugReferenceTestSupport.assertNoScopeLine(answer);
 	}
 
 	/** A screen asked in words of no medication cue — "his treatment" — states his own conflicts as any screen does (ADR
@@ -161,7 +161,7 @@ public class ScreenBesideHerOwnConflictsTest extends BaseModuleContextSensitiveT
 				+ "medication to check it against.", lines[0], "was: " + answer);
 		assertEquals(true, lines[1].startsWith("The patient has a recorded allergy to Clarithromycin. This finding is about a medication this patient is already taking. ["),
 			"was: " + answer);
-		assertEquals(DrugReferenceInjector.SCREEN_SCOPE, lines[lines.length - 1], "was: " + answer);
+		DrugReferenceTestSupport.assertNoScopeLine(answer);
 	}
 
 	private static String screen(String question, String allergen, PatientClinicalContext.ActiveDrugOrder... orders) {

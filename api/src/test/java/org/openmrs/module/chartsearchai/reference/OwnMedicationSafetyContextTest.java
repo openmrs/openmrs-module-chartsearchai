@@ -48,13 +48,13 @@ public class OwnMedicationSafetyContextTest extends BaseModuleContextSensitiveTe
 
 		assertNotNull(answer, "the module answers");
 		String[] lines = answer.split("\n");
-		assertEquals(4, lines.length, "the lead, two lines and the scope: " + answer);
+		assertEquals(3, lines.length, "the lead and two lines, and no scope line (ADR Decision 573): " + answer);
 		assertTrue(lines[0].matches("Ibuprofen is one of this patient's active medications \\(Ibuprofen 400mg \\[\\d+\\]\\)\\. "
 				+ "3 interactions with this patient's other active medications:"), "was: " + answer);
 		assertTrue(lines[1].matches("Ibuprofen interacts with active order Prednisone and Dexamethasone — Moderate\\. \\[\\d+\\].*"),
 			"was: " + answer);
 		assertTrue(lines[2].matches("Ibuprofen interacts with active order Celecoxib — Moderate\\. \\[\\d+\\].*"), "was: " + answer);
-		assertEquals(DrugReferenceInjector.BELOW_FLOOR_SCOPE, lines[3]);
+		DrugReferenceTestSupport.assertNoScopeLine(answer);
 		assertTrue(!answer.contains("adding it") && !answer.contains("withhold") && !answer.contains("safe"),
 			"no proposal wording and no verdict: " + answer);
 	}
@@ -69,7 +69,7 @@ public class OwnMedicationSafetyContextTest extends BaseModuleContextSensitiveTe
 		// The lead has said it is her medication, so the line does not say it again.
 		assertTrue(answer.matches("(?s).*\nThe patient has a recorded allergy to Ibuprofen\\. \\[\\d+\\]\n.*"),
 			"was: " + answer);
-		assertTrue(answer.endsWith("\n" + DrugReferenceInjector.SCREEN_SCOPE), "it covers contraindications: " + answer);
+		DrugReferenceTestSupport.assertNoScopeLine(answer);
 	}
 
 	@Test
@@ -99,8 +99,7 @@ public class OwnMedicationSafetyContextTest extends BaseModuleContextSensitiveTe
 		assertTrue(lines[0].matches("Ibuprofen is one of this patient's active medications \\(Ibuprofen 400mg \\[\\d+\\]\\)\\. "
 				+ "1 contraindication, with no severity rated:"), "was: " + answer);
 		assertTrue(lines[1].matches("The patient has a recorded allergy to Ibuprofen\\. \\[\\d+\\]"), "was: " + answer);
-		assertEquals(DrugReferenceInjector.SCREEN_SCOPE, lines[2], "was: " + answer);
-		assertEquals(3, lines.length, "was: " + answer);
+		assertEquals(2, lines.length, "the lead and the allergy, and no scope line (ADR Decision 573): " + answer);
 	}
 
 	@Test
@@ -131,7 +130,7 @@ public class OwnMedicationSafetyContextTest extends BaseModuleContextSensitiveTe
 			String[] lines = answer.split("\n");
 			assertTrue(lines[0].matches("Ibuprofen is one of this patient's active medications \\(Ibuprofen 400mg \\[\\d+\\]\\)\\. "
 					+ "3 interactions with this patient's other active medications:"), question + " was: " + answer);
-			assertEquals(DrugReferenceInjector.BELOW_FLOOR_SCOPE, lines[lines.length - 1], question + " was: " + answer);
+			DrugReferenceTestSupport.assertNoScopeLine(answer);
 		}
 	}
 
@@ -254,7 +253,7 @@ public class OwnMedicationSafetyContextTest extends BaseModuleContextSensitiveTe
 
 			assertEquals("Ibuprofen is one of this patient's active medications (Ibuprofen 400mg [2]). The interaction data "
 					+ "gives no rated reason to change it: the data lists Ibuprofen against one of this patient's other medications, rated "
-					+ "Moderate, below the level this module reports as a finding. [4]\n" + DrugReferenceInjector.BELOW_FLOOR_SCOPE,
+					+ "Moderate, below the level this module reports as a finding. [4]",
 				answer, question);
 		}
 	}
@@ -289,7 +288,7 @@ public class OwnMedicationSafetyContextTest extends BaseModuleContextSensitiveTe
 			// Its own two orders are stated once: by the lead ("2 orders"), and as a line where the question did not propose it.
 			// Her prednisone in two orders is about prednisone, which the question does not name (ADR Decision 387).
 			assertTrue(!answer.contains("Prednisone is in active orders"), question + " was: " + answer);
-			assertEquals(DrugReferenceInjector.BELOW_FLOOR_SCOPE, lines[lines.length - 1], question + " was: " + answer);
+			DrugReferenceTestSupport.assertNoScopeLine(answer);
 		}
 	}
 
@@ -448,8 +447,8 @@ public class OwnMedicationSafetyContextTest extends BaseModuleContextSensitiveTe
 			// The point a clinician needs: two NSAIDs (ADR Decision 197's group, which carries celecoxib for this alone).
 			assertTrue(lines[2].matches("Ibuprofen and Celecoxib are in one drug group \\(NSAID\\) — possible duplicate therapy\\."
 					+ " \\[\\d+\\] \\[\\d+\\]"), question + " was: " + answer);
-			assertEquals(4, lines.length, question + " was: " + answer);
-			assertEquals(DrugReferenceInjector.BELOW_FLOOR_SCOPE, lines[lines.length - 1], question + " was: " + answer);
+			assertEquals(3, lines.length, question + " — no scope line (ADR Decision 573); was: " + answer);
+			DrugReferenceTestSupport.assertNoScopeLine(answer);
 			assertTrue(!answer.contains("can be") && !answer.contains("Celecoxib interacts with active order Ibuprofen"),
 				"no clearance, and the pair once: " + answer);
 		}

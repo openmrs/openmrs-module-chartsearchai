@@ -90,8 +90,8 @@ public class OrdersSharingASubstanceModuleAnswerContextTest extends BaseModuleCo
 		String answer = chart.getModuleAnswer();
 		assertNotNull(answer, "a pair was related, so the module answers: " + chart.getText());
 		List<String> lines = Arrays.asList(answer.split("\n"));
-		assertEquals(5, lines.size(), "the bottom line, three findings and the scope (ADR Decisions 171, 506, 512), was: "
-				+ answer);
+		assertEquals(4, lines.size(), "the bottom line and three findings, and no scope line (ADR Decisions 171, 506, 512, "
+				+ "573), was: " + answer);
 		assertEquals("1 Major interaction — Pyrazinamide with Rifampicin (rifampin) — plus 1 possible duplicate therapy "
 				+ "and 1 caution.", lines.get(0), "was: " + answer);
 		assertTrue(lines.get(1).startsWith("Pyrazinamide interacts with active order Rifampicin (rifampin) — Major."),
@@ -119,7 +119,7 @@ public class OrdersSharingASubstanceModuleAnswerContextTest extends BaseModuleCo
 		assertTrue(lines.get(1).startsWith("Pyrazinamide interacts with active order Rifampicin (rifampin) — Major."),
 			"under the bottom line, the Major is the pair listed: " + answer);
 		// No count opens a screen's answer (ADR Decision 506), so a line says how many the cap left out.
-		assertEquals("1 more interaction, rated no higher, is not shown.", lines.get(lines.size() - 2),
+		assertEquals("1 more interaction, rated no higher, is not shown.", lines.get(lines.size() - 1),
 			"the answer says how many the cap left out: " + answer);
 		assertTrue(!answer.contains(" — Minor."), "the withheld Minor is not listed: " + answer);
 	}

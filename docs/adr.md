@@ -26717,3 +26717,42 @@ the same screen, word for word. *"Any interactions with her diet?"* names no med
 
 Pinned by `MedicationGroupsScreenContextTest.aQuestionWhetherOneGroupOfHerMedicationsInteractsIsAnsweredByTheScreen`,
 which reddens without the change.
+
+## Decision 573: No answer closes on what kinds of finding the check does not cover
+
+**Status: Accepted** (November 2026), on the owner's direction ("drop it entirely"). It removes the closing scope line
+that [Decision 144](#decision-144-a-below-floor-answer-states-a-bottom-line-scoped-to-the-interaction-data) introduced and
+Decisions 171, 493, [496](#decision-496-the-answer-to-which-drugs-to-avoid-states-her-allergies-in-its-lead-and-a-screen-says-what-it-did-not-check-on-one-line),
+[544](#decision-544-the-closing-line-says-what-the-pass-did-not-screen-never-what-it-did-not-find),
+[547](#decision-547-an-answer-stating-a-contraindication-never-closes-saying-contraindications-were-not-covered) and 562 then
+worded. It applies to that line the reasoning
+[Decision 562](#decision-562-that-the-knowledge-base-carries-no-drug-condition-rule-is-documented-never-repeated-in-an-answer)
+applied to the condition-rules line.
+
+### Context
+
+*"Is ibuprofen safe for her?"* for Kamwara (dd74dc61) was answered with the bottom line and the data it rests on, then
+*"Interactions the data does not rate, and anything beyond drug interactions and this patient's recorded allergies, are not
+covered."* That line, or one of its two other wordings, closed most proposal, screen and own-medication answers the module
+composed. It describes the module's check, and it reads the same on every answer. The owner asked to drop it, as Decision
+562 had dropped the line about missing condition rules.
+
+### The decision
+
+- `DrugReferenceInjector.withWhatWasNotChecked`, the one exit every composed answer passes through, removes the scope line
+  (`isAScopeLine`: `BELOW_FLOOR_SCOPE` or `SCREEN_SCOPE`). The composers still write it, and some use it as a position
+  marker, so it is removed at that exit and nowhere else.
+- What was not covered for this patient is still said. Active orders the drug data does not identify keep
+  [Decision 161](#decision-161-orders-the-drug-data-does-not-identify-are-named-rather-than-giving-the-question-up)'s line,
+  *"Not checked: N active orders the drug data does not identify — …"*. Before, Decision 496 folded them into the scope
+  line. A recorded allergy the data does not identify keeps Decision 223's line.
+- The wording machinery is gone with the line. That means Decision 544's `screenedHerContraindications`, Decision 547's
+  widening and Decision 562's `ALLERGY_SCOPE`: each chose that line's words and nothing else.
+- The limit is stated in the README instead, beside Decision 562's: what a module-composed answer weighs, and that
+  unrated interactions and anything beyond them are not covered.
+- An answer whose only line under the bottom line was the scope line is now one sentence. The bottom line is no longer cut
+  from the data it rests on (Decisions 519, 534): *"The interaction data gives no rated reason to withhold Ibuprofen: the
+  data lists Ibuprofen against 3 of this patient's medications, none with a severity or mechanism on file. [113]"*.
+
+Pinned by `ClosingLineScreenedCoverageTest`, rewritten from Decisions 544 and 547's cases to assert that the line is
+absent, that the bottom line is one sentence, and that an order the data does not identify is still named.

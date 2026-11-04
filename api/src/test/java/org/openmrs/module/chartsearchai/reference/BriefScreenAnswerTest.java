@@ -99,13 +99,11 @@ public class BriefScreenAnswerTest extends BaseModuleContextSensitiveTest {
 	private static final String SHARED_SUBSTANCES = "Possible duplicate therapy — each in more than one of this patient's "
 			+ "active orders: Lamivudine; Stavudine; Sulfamethoxazole and Trimethoprim; Isoniazid and Rifampicin (rifampin). [";
 
-	/** What a screen of the demo patient did not check, on one line, the orders the data does not identify last, each name
-	 *  once (ADR Decisions 496, 506, 509); her allergies weighed, and no drug-condition rule to weigh a condition (ADR
-	 *  Decision 562). */
-	private static final String NOT_CHECKED = "Not checked: unrated interactions, anything beyond drug interactions and "
-			+ "this patient's recorded allergies, and 10 active orders the "
-			+ "drug data does not identify: Measles vaccination; Diphtheria tetanus and pertussis vaccination; Hepatitis B "
-			+ "vaccination; Polio vaccination, oral; Hemophilus influenza B vaccine.";
+	/** What a screen of the demo patient did not check for her: the orders the data does not identify, on their own line
+	 *  (ADR Decisions 161, 573), with no line on what kinds of finding the check does not cover. */
+	private static final String NOT_CHECKED = "Not checked: 10 active orders the drug data does not identify — Measles "
+			+ "vaccination (2 orders); Diphtheria tetanus and pertussis vaccination (2 orders); Hepatitis B vaccination (2 orders); "
+			+ "Polio vaccination, oral (2 orders); Hemophilus influenza B vaccine (2 orders).";
 
 	/** Every finding the screen raised is cited by some line, so the chips pass publishes every one of them. */
 	@Test

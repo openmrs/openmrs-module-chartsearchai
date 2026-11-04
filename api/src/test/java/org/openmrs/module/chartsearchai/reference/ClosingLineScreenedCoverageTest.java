@@ -27,18 +27,20 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Patien
 import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 
 /**
- * What a composed answer's closing line says was not covered is what the pass did not SCREEN, never what it did not FIND
- * (ADR Decision 544). On the public demo, patient dd74dc61 — no allergy recorded, on Lamivudine, Nevirapine and Stavudine,
- * three orders each — asked "Can I give her amoxicillin?" was told "Not checked: unrated interactions, anything beyond drug
- * interactions, and this patient's conditions …": his allergy records had been read and weighed against amoxicillin, and
- * the line sent the clinician to check them by hand. Over the shipped data, as the demo runs it.
+ * A composed answer carries no closing line saying what kinds of finding were not covered (ADR Decision 573, the owner's
+ * direction): "Interactions the data does not rate, and anything beyond drug interactions … are not covered." describes the
+ * module's check, the same on every answer, and is the documentation's to state, as Decision 562 made the knowledge base's
+ * lack of condition rules. What was not covered for THIS patient — a recorded allergy or an active order the drug data
+ * does not identify — is still said. The cases below were Decisions 544 and 547's, which chose that line's words; each
+ * now asserts the line is absent. Over the shipped data, as the demo runs it, for patient dd74dc61's three orders each of
+ * lamivudine, nevirapine and stavudine.
  */
 public class ClosingLineScreenedCoverageTest extends BaseModuleContextSensitiveTest {
 
-	/** Her allergies weighed, and no drug-condition rule to weigh a condition: what the pass covered, named (ADR Decision
-	 *  562). */
-	private static final String WIDENED = "Interactions the data does not rate, and anything beyond drug interactions and "
-			+ "this patient's recorded allergies, are not covered.";
+	private static void assertNoScopeLine(String answer) {
+		DrugReferenceTestSupport.assertNoScopeLine(answer);
+		assertFalse(answer.contains("anything beyond drug interactions"), "no scope line; was: " + answer);
+	}
 
 	@BeforeEach
 	public void answerFromFindings() {
@@ -48,57 +50,50 @@ public class ClosingLineScreenedCoverageTest extends BaseModuleContextSensitiveT
 	}
 
 	@Test
-	public void aProposalWhoseContraindicationsWereScreenedDoesNotCallThemUnchecked() {
+	public void aProposalClosesOnNoScopeLine() {
 		String answer = ask("Can I give her amoxicillin?", Collections.<String> emptySet());
 
 		assertNotNull(answer, "the module answers");
-		assertTrue(answer.startsWith("The interaction data gives no rated reason to withhold Amoxicillin."),
-			"precondition: no finding, the rows below the floor stated; was: " + answer);
-		String[] lines = answer.split("\n");
-		assertEquals(WIDENED, lines[lines.length - 1], "was: " + answer);
+		assertNoScopeLine(answer);
+		// The bottom line and the data it rests on, one sentence and the whole answer: nothing under it to cut it from
+		// (ADR Decisions 519, 534).
+		assertTrue(answer.matches("The interaction data gives no rated reason to withhold Amoxicillin: the data lists Amoxicillin "
+				+ "against 2 of this patient's medications, none with a severity or mechanism on file\\. \\[\\d+\\]"),
+			"was: " + answer);
 	}
 
-	/** Two wordings of one question about one drug close alike: what was screened does not depend on the wording. */
+	/** Another wording of the same proposal closes alike. */
 	@Test
 	public void anotherWordingOfTheSameProposalClosesAlike() {
 		String answer = ask("Is it safe to start her on amoxicillin?", Collections.<String> emptySet());
 
-		assertNotNull(answer, "the module answers");
-		String[] lines = answer.split("\n");
-		assertEquals(WIDENED, lines[lines.length - 1], "was: " + answer);
+		assertEquals(ask("Can I give her amoxicillin?", Collections.<String> emptySet()), answer);
+		assertNoScopeLine(answer);
 	}
 
 	/**
-	 * An answer stating a contraindication must not close saying contraindications were not covered (ADR Decision 547). On
-	 * the demo's data, a patient recorded allergic to "Penicillins" asked "Can I give her amoxicillin and ibuprofen
-	 * together?" was told amoxicillin is in the penicillin group she is allergic to, and then "Interactions the data does not
-	 * rate, and anything beyond drug interactions, are not covered." — a two-drug proposal carries no line about her
-	 * conditions, and Decision 544 widened only beside one.
+	 * An answer stating a contraindication closes on no scope line either: Decision 547's case, "Can I give her amoxicillin
+	 * and ibuprofen together?" for a patient recorded allergic to "Penicillins".
 	 */
 	@Test
-	public void twoDrugsProposedTogetherBesideAStatedContraindicationCloseSayingHerAllergiesWereCovered() {
+	public void twoDrugsProposedTogetherBesideAStatedContraindicationCloseOnNoScopeLine() {
 		String answer = ask("Can I give her amoxicillin and ibuprofen together?", DrugReferenceTestSupport.set("penicillins"));
 
 		assertNotNull(answer, "the module answers");
 		assertTrue(answer.contains("Amoxicillin is in the drug group (Penicillins) the patient has a recorded allergy to."),
 			"precondition: the contraindication is stated; was: " + answer);
-		String[] lines = answer.split("\n");
-		assertEquals(WIDENED, lines[lines.length - 1], "was: " + answer);
+		assertNoScopeLine(answer);
 	}
 
-	/** And with no finding at all: two drugs proposed together were each weighed against her allergy records. */
+	/** And with no finding at all. */
 	@Test
-	public void twoDrugsProposedTogetherWithNoFindingCloseSayingHerAllergiesWereCovered() {
-		String answer = ask("Can I give her amoxicillin and ibuprofen together?", Collections.<String> emptySet());
-
-		assertNotNull(answer, "the module answers");
-		String[] lines = answer.split("\n");
-		assertEquals(WIDENED, lines[lines.length - 1], "was: " + answer);
+	public void twoDrugsProposedTogetherWithNoFindingCloseOnNoScopeLine() {
+		assertNoScopeLine(ask("Can I give her amoxicillin and ibuprofen together?", Collections.<String> emptySet()));
 	}
 
 	/**
-	 * Widening joins the line it widens and adds none (ADR Decision 547): an answer closing on no scope line — a switch from a
-	 * drug she does not take to one she does, answered so — gains no line about her conditions from it.
+	 * An answer that never closed on a scope line — a switch from a drug she does not take to one she does — gains no line
+	 * about what was covered.
 	 */
 	@Test
 	public void anAnswerClosingOnNoScopeLineGainsNoLine() {
@@ -138,16 +133,22 @@ public class ClosingLineScreenedCoverageTest extends BaseModuleContextSensitiveT
 	}
 
 	/**
-	 * A question only whether the drug interacts states no line about her conditions (ADR Decision 533), and with no
-	 * drug-condition rule loaded the line cannot say her contraindications were covered without it: it stays narrow.
+	 * A question only whether the drug interacts closes on no scope line either.
 	 */
 	@Test
-	public void aQuestionOnlyWhetherItInteractsKeepsTheNarrowLineWhereNoConditionRuleIsLoaded() {
-		String answer = ask("Does amoxicillin interact with her medications?", Collections.<String> emptySet());
+	public void aQuestionOnlyWhetherItInteractsClosesOnNoScopeLine() {
+		assertNoScopeLine(ask("Does amoxicillin interact with her medications?", Collections.<String> emptySet()));
+	}
 
-		assertNotNull(answer, "the module answers");
-		String[] lines = answer.split("\n");
-		assertEquals(DrugReferenceInjector.BELOW_FLOOR_SCOPE, lines[lines.length - 1], "was: " + answer);
+	/** An active order the drug data does not identify is still named as not checked, on a line of its own (ADR Decision
+	 *  161), where it was folded into the scope line (ADR Decision 496). */
+	@Test
+	public void anOrderTheDataDoesNotIdentifyIsStillNamedAsNotChecked() {
+		String answer = ask("Any drug interactions?", Collections.<String> emptySet(), "Infant formula");
+
+		assertNoScopeLine(answer);
+		assertTrue(answer.endsWith("\nNot checked: 1 active order the drug data does not identify — Infant formula."),
+			"was: " + answer);
 	}
 
 	private static String ask(String question, Set<String> allergies, String... moreOrders) {

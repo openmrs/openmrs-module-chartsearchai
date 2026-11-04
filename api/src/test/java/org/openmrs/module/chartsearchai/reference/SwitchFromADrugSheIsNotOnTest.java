@@ -51,7 +51,7 @@ public class SwitchFromADrugSheIsNotOnTest extends BaseModuleContextSensitiveTes
 				"Can I give him efavirenz instead of nevirapine?")) {
 			String answer = ask(question, lisinopril);
 			assertNotNull(answer, question + " — the module answers");
-			assertEquals(mask(LEAD + "\n" + plain + "\n" + DrugReferenceInjector.BELOW_FLOOR_SCOPE), mask(answer), question);
+			assertEquals(mask(LEAD + "\n" + plain), mask(answer), question);
 			assertTrue(!answer.contains("can be given"), question + " — never a clearance: " + answer);
 		}
 	}
@@ -60,7 +60,7 @@ public class SwitchFromADrugSheIsNotOnTest extends BaseModuleContextSensitiveTes
 	public void withNoActiveOrderItSaysThereIsNoneToRelateTheNewDrugTo() {
 		String answer = ask("Can I give her efavirenz instead of nevirapine?");
 		assertEquals(LEAD + "\nThis patient has no active medication orders, so the interaction check had none to relate "
-				+ "Efavirenz to.\n" + DrugReferenceInjector.BELOW_FLOOR_SCOPE, answer);
+				+ "Efavirenz to.", answer);
 	}
 
 	/** Where she already takes the drug asked about and not the one it would replace, both are said: there is nothing to

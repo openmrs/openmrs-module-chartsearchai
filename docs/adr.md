@@ -26615,3 +26615,30 @@ two stay on the chips. A new drug with no order of hers that has started keeps t
 
 Pinned by `SwitchingHerDrugContextTest.aSwitchToADrugSheAlreadyTakesSaysBothAndOneFromADrugSheDoesNotSaysSo` and
 `.aDrugGivenInsteadOfOneHeDoesNotTakeSaysSo`. The first reddens without the change.
+
+## Decision 569: "Which drug interacts with her X?" is "What interacts with her X?"
+
+**Status: Accepted** (November 2026). Found by a second sweep of 6 patients by 30 drug-safety questions on the demo replica
+on 2026-11-04.
+
+### Context
+
+*"What interacts with her X?"* and *"What drugs interact with her X?"* are answered by the module where X is hers
+([Decision 301](#decision-301-whether-her-own-drug-is-safe-and-what-interacts-with-it-is-answered-as-her-own-medication)). The same
+question asked as *"Which drug interacts with her X?"*, *"Which drugs interact with her X?"* or *"Which medication
+interacts with her X?"* fitted no shape and went to the model, so one question got two answers and two latencies. On the
+replica a question of this wording took 36.7 s.
+
+### The decision
+
+The three shape lists that read *"what … interacts with her X"* (`QueryScopeRouter`'s
+`WHICH_OF_HER_MEDICATIONS_INTERACT_SHAPES`, `HER_NAMED_DRUG_SHAPES` and `BESIDE_HER_MEDICATIONS_SHAPES`) read
+*"which"* as *"what"*, and a singular drug noun as a plural one. All three use the same pattern, so the question reaches
+the same answer whichever list asks it.
+
+On the replica, a patient not on the drug is answered the same way: *"Which drug interacts with her rifampicin?"* for
+dd664c34 opens *"Rifampicin (rifampin) is not one of this patient's active medications."*, as the *"what"* form does.
+The unit test's synthetic chart does not reproduce that case, so the test pins only her own drug.
+
+Pinned by `OwnMedicationSafetyContextTest.whetherHerOwnDrugIsSafeOrWhatInteractsWithItIsAnsweredAsHers`, whose
+*"which"* cases redden without the change.

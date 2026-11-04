@@ -1006,7 +1006,7 @@ public final class QueryScopeRouter {
 			"(?:what|which) are (?:the )?(?:drug )?interactions (?:of|for|with) " + D,
 			// "What interacts with her lamivudine?" — which of hers interact with it, of a drug named as hers (ADR Decision
 			// 369)
-			"what (?:drugs |medications |medicines |meds )?(?:interacts?|interferes?) with " + POSSESSIVE + " " + D);
+			"(?:what|which) (?:drugs? |medications? |medicines? |meds? )?(?:interacts?|interferes?) with " + POSSESSIVE + " " + D);
 
 	/** Whether a question asks which of her medications interact with its one drug — {@link
 	 *  #WHICH_OF_HER_MEDICATIONS_INTERACT_SHAPES} (ADR Decision 319). Fail-CLOSED as {@link #asksWhetherToGiveADrug} is. */
@@ -1493,7 +1493,7 @@ public final class QueryScopeRouter {
 	private static final List<Pattern> HER_NAMED_DRUG_SHAPES = shapes(
 			"is " + POSSESSIVE + " " + D + " (?:safe|ok|okay|appropriate)(?: for " + PATIENT + ")?(?: to (?:continue|keep"
 					+ " taking|take|use))?(?: now)?",
-			"what (?:drugs |medications |medicines |meds )?(?:interacts?|interferes?) with " + POSSESSIVE + " " + D);
+			"(?:what|which) (?:drugs? |medications? |medicines? |meds? )?(?:interacts?|interferes?) with " + POSSESSIVE + " " + D);
 
 	/** "Is lidocaine safe with her other medications?", "Is ibuprofen okay with her current meds?" */
 	private static final String SAFE_WITH_HER_MEDICATIONS = "is " + HER_D + " (?:safe|ok|okay|appropriate) (?:with|alongside|"
@@ -1678,7 +1678,7 @@ public final class QueryScopeRouter {
 			// "Can I continue her Advil?", "Is it okay to continue her aspirin?", "Can she keep taking her aspirin?" — what "Is
 			// her aspirin safe to continue?" asks (ADR Decision 341)
 			CONTINUE_HER_D, CONTINUE_HER_D_AS_I, CONTINUE_HER_D_AS_SHE,
-			"what (?:drugs |medications |medicines |meds )?(?:interacts?|interferes?) with " + POSSESSIVE + " " + D,
+			"(?:what|which) (?:drugs? |medications? |medicines? |meds? )?(?:interacts?|interferes?) with " + POSSESSIVE + " " + D,
 			// "Which of her medications interact with lopinavir/ritonavir?", "What other meds of hers interact with X?"
 			"(?:which|what) (?:of )?" + POSSESSIVE + " (?:other )?" + MEDICATIONS + " (?:interact|interacts) with " + D,
 			// "Is rifampicin causing any interactions with her other drugs?", "Is X interacting with any of her medications?",

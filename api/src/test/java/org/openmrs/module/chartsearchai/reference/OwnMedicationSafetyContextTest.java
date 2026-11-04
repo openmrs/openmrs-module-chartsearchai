@@ -385,7 +385,10 @@ public class OwnMedicationSafetyContextTest extends BaseModuleContextSensitiveTe
 		assertNotNull(expected, "precondition: the module answers the shape Decision 202 admits");
 		for (String question : Arrays.asList("Is her ibuprofen safe?", "Is her ibuprofen safe for her?",
 			"Is her ibuprofen safe to continue?", "What interacts with her ibuprofen?",
-			"What drugs interact with her ibuprofen?")) {
+			"What drugs interact with her ibuprofen?",
+			// "which" as "what", and one drug as several (ADR Decision 569)
+			"Which drug interacts with her ibuprofen?", "Which drugs interact with her ibuprofen?",
+			"Which medication interacts with her ibuprofen?")) {
 			assertEquals(expected, answer(question, null, orders), question);
 		}
 	}

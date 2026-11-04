@@ -56,6 +56,44 @@ RUN yarn install --immutable
 RUN node /stamp-esm-version.mjs
 RUN yarn build && yarn pack
 
+# Build the patient chart from Veronica Muthee's omnibar commands branch, so the community can try
+# /visit, /order, /pending and /enroll on the demo (talk.openmrs.org/t/openmrs-omnibar-prototype/50353/7).
+# The branch is not published to npm. It is pinned to a commit rather than tracking the branch, because
+# this is a fork's code on the public demo; bump PATIENT_CHART_SHA to take her later pushes.
+#
+# The WHOLE monorepo is built and every chart app the demo serves is taken from it, not only the five
+# apps her branch touches. Her branch also changes @openmrs/esm-patient-common-lib, which every chart
+# app declares as a peerDependency and so shares as one module-federation singleton at runtime. With
+# the other chart apps left on npm's `next`, which copy of the library is loaded would depend on the
+# versions involved, not on her branch. Built from one checkout, every chart app carries the same one.
+# The branch is 0 commits behind openmrs-esm-patient-chart main at the pinned commit, so the other
+# apps are main's code.
+FROM esm-builder AS patient-chart-esm
+
+ARG CACHE_BUST
+ARG PATIENT_CHART_REPO=https://github.com/VeronicaMuthee/openmrs-esm-patient-chart.git
+ARG PATIENT_CHART_SHA=965993f6c460fbd2586805daab1fcbd79e42ad96
+RUN git init -q /esm && cd /esm \
+    && git fetch -q --depth 1 "$PATIENT_CHART_REPO" "$PATIENT_CHART_SHA" \
+    && git checkout -q FETCH_HEAD
+
+WORKDIR /esm
+RUN git rev-parse HEAD > /esm/ESM_SHA
+RUN yarn install --immutable
+# Each app gets its own build's stamp, for the CDN reason the chartsearchai-esm stage gives. The
+# shared library is not stamped: it is not served at a path of its own, only bundled into the apps.
+RUN set -e; for d in packages/*/; do \
+      [ "$(basename "$d")" = esm-patient-common-lib ] && continue; \
+      (cd "$d" && cp /esm/ESM_SHA ESM_SHA && node /stamp-esm-version.mjs && rm ESM_SHA); \
+    done
+# Two at a time: each rspack production build holds over a gigabyte, and turbo's default of ten
+# concurrent builds exhausts a GitHub runner.
+RUN yarn turbo run build --concurrency=2
+RUN set -e; mkdir /out; for d in packages/*/; do \
+      [ "$(basename "$d")" = esm-patient-common-lib ] && continue; \
+      (cd "$d" && yarn pack --out "/out/$(basename "$d").tgz"); \
+    done
+
 FROM --platform=$BUILDPLATFORM node:24-alpine AS build-spa
 
 RUN npm install --legacy-peer-deps --global openmrs@next
@@ -63,6 +101,7 @@ RUN npm install --legacy-peer-deps --global openmrs@next
 COPY spa-build-config.json /app/spa-build-config.json
 COPY --from=chartsearchai-esm /esm/package.tgz /chartsearch/package.tgz
 COPY --from=omnibar-esm /esm/package.tgz /omnibar/package.tgz
+COPY --from=patient-chart-esm /out /patient-chart
 WORKDIR /app
 
 RUN openmrs assemble --mode config --config spa-build-config.json
@@ -191,13 +230,17 @@ ENV SPA_CONFIG_URLS=/openmrs/spa/config-chartsearchai.json
 # This fails the build on the shape described above: against the image
 # published before this commit, both greps exit 1. The omnibar is held to the
 # same two files; against the image published before it was added, its greps
-# exit 1.
+# exit 1. So are the five omnibar providers the patient-chart-esm stage exists
+# for, which npm's `next` chart apps do not register.
 RUN set -eux; \
     cd /usr/share/nginx/html; \
     gzip -cd importmap.json.gz | grep -q '@openmrs/esm-chartsearchai-app'; \
     gzip -cd routes.registry.json.gz | grep -q 'chartsearchai'; \
     gzip -cd importmap.json.gz | grep -q '@openmrs/esm-omnibar-app'; \
     gzip -cd routes.registry.json.gz | grep -q '@openmrs/esm-omnibar-app'; \
+    for p in visit-actions drug-order lab-order pending-labs enroll; do \
+      gzip -cd routes.registry.json.gz | grep -q "\"$p-omnibar-provider\""; \
+    done; \
     for f in importmap.json routes.registry.json; do \
       test -f "$f.br"; \
       test "$(stat -c %Y "$f.br")" = "$(stat -c %Y "$f")"; \

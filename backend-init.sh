@@ -318,6 +318,9 @@ DB_NAME="${OMRS_DB_NAME:-${OMRS_CONFIG_CONNECTION_DATABASE:-$(printf %s "$_url" 
 . /usr/local/bin/demo-seed.sh
 
 maybe_seed_demo_data || echo "[demo-seed] seed step errored; continuing to start OpenMRS."
+# Every boot, after the seed: the demo dataset's programs name concepts its dump never carried, and
+# every REST read of a program answers 400 until they go. The function's comment says what it removes.
+repair_demo_programs || echo "[demo-seed] program repair errored; continuing to start OpenMRS."
 
 # ---- does this database already carry an OpenMRS schema? --------------------
 # The three steps below all need to tell a virgin database from one this

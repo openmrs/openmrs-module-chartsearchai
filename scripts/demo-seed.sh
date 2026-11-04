@@ -160,3 +160,43 @@ SQL
   seed_status "done: $_count patients"
   echo "[demo-seed] done. patients now: $_count"
 }
+
+# The demo dataset's program tables name concepts the dump never carried: they came with its legacy
+# patient data (MDR-TB, the 2010-era ...-11df-a781-001e378eb67e and ...-15f5-102d-96e4-000c29c2a5d7
+# uuids), and its concept table stops at 59270 while they name 991377-992842. Measured on the dump
+# 2026-11-05: program 5, workflows 4, 9 and 10, and 82 of the 85 states. Hibernate cannot load such a
+# row, so every REST read of a program answers 400 ("No row with the given identifier exists:
+# [org.openmrs.Concept#...]") — the Programs widget and the omnibar's /enroll among them.
+#
+# Removes each such row that nothing a patient owns refers to: states no patient_state is in, then
+# workflows with no state left, then programs with no enrollment and no workflow left. The predicate is
+# "its concept does not exist", never an id. It runs on every boot because a re-seed brings the rows
+# back, finds nothing the second time, and only on the demo dataset (the seed tag), so a database this
+# image meets that is not the demo's is left alone. A row a patient's data does refer to stays, and the
+# count of them is logged.
+repair_demo_programs() {
+  command -v mariadb >/dev/null 2>&1 || return 0
+  [ "$(seed_sql -N "$DB_NAME" -e "SELECT property_value FROM global_property WHERE property='chartsearchai.demo.seededDataset'" 2>/dev/null)" = "$DEMO_SEED_TAG" ] || return 0
+  _s='NOT EXISTS (SELECT 1 FROM concept c WHERE c.concept_id = s.concept_id)'
+  _w='NOT EXISTS (SELECT 1 FROM concept c WHERE c.concept_id = w.concept_id)'
+  _p='NOT EXISTS (SELECT 1 FROM concept c WHERE c.concept_id = p.concept_id)'
+  if ! seed_sql "$DB_NAME" <<SQL
+DELETE s FROM program_workflow_state s
+ WHERE $_s
+   AND NOT EXISTS (SELECT 1 FROM patient_state ps WHERE ps.state = s.program_workflow_state_id)
+   AND NOT EXISTS (SELECT 1 FROM concept_state_conversion x WHERE x.program_workflow_state_id = s.program_workflow_state_id);
+DELETE w FROM program_workflow w
+ WHERE $_w
+   AND NOT EXISTS (SELECT 1 FROM program_workflow_state s WHERE s.program_workflow_id = w.program_workflow_id)
+   AND NOT EXISTS (SELECT 1 FROM concept_state_conversion x WHERE x.program_workflow_id = w.program_workflow_id);
+DELETE p FROM program p
+ WHERE $_p
+   AND NOT EXISTS (SELECT 1 FROM patient_program pp WHERE pp.program_id = p.program_id)
+   AND NOT EXISTS (SELECT 1 FROM program_workflow w WHERE w.program_id = p.program_id);
+SQL
+  then
+    echo "[demo-seed] program repair failed; programs may still name missing concepts."; return 0
+  fi
+  _left=$(seed_sql -N "$DB_NAME" -e "SELECT (SELECT COUNT(*) FROM program_workflow_state s WHERE $_s) + (SELECT COUNT(*) FROM program_workflow w WHERE $_w) + (SELECT COUNT(*) FROM program p WHERE $_p)" 2>/dev/null)
+  echo "[demo-seed] program repair done; rows still naming a missing concept (kept, a patient's data uses them): ${_left:-unknown}"
+}

@@ -241,6 +241,24 @@ public class AnswerDetailsContextTest extends BaseModuleContextSensitiveTest {
 			"the details are the findings under the lead and the bottom line");
 	}
 
+	/**
+	 * A pair the question names both drugs of is named whole in the summary (ADR Decision 578): on the 8089 rig "Can I give
+	 * her warfarin and ibuprofen together?" read "3 Major interactions — Warfarin with Acetylsalicylic acid (aspirin);
+	 * Ibuprofen with Acetylsalicylic acid (aspirin); Warfarin." — the pair asked about cut to its first drug, its finding
+	 * naming no order of hers.
+	 */
+	@Test
+	public void aPairTheQuestionNamesIsNamedWholeInTheSummary() {
+		String question = "Can I give her warfarin and ibuprofen together?";
+		ChartAnswer answer = serviceOver(DrugReferenceTestSupport.injectedChartOverOrders(question, "Aspirin"), "unused")
+				.search(aPatient(), question);
+		assertTrue(answer.getAnswer().contains("Warfarin interacts with Ibuprofen, also named in the question — Major."),
+			"precondition: the pair's finding — " + answer.getAnswer());
+
+		assertTrue(answer.getAnswerSummary().contains("Warfarin with Ibuprofen"), "was: " + answer.getAnswerSummary());
+		assertFalse(answer.getAnswerSummary().matches(".*; Warfarin\\.$"), "was: " + answer.getAnswerSummary());
+	}
+
 	/** A model's list carries a summary too (ADR Decision 528), so it publishes its details: never null beside one. */
 	@Test
 	public void aModelsListPublishesItsDetails() {

@@ -8159,6 +8159,13 @@ public class DrugSafetyValidator {
 	 * built from — which a LATER entry pair of the same clinical pair is compared against, so that the
 	 * survivor is the best rule rather than the first one reached (issue #189).
 	 */
+	/**
+	 * What closes the subject and partner of a question-pair finding — <em>"Warfarin interacts with Ibuprofen, also named in
+	 * the question"</em> — spelled once, so the bottom line that names the pair reads the partner off the one sentence that
+	 * writes it ({@code DrugReferenceInjector.screenSummary}, ADR Decision 578).
+	 */
+	static final String ALSO_NAMED_IN_THE_QUESTION = ", also named in the question";
+
 	private static final class PairFinding {
 
 		final SafetyWarning warning;
@@ -8302,7 +8309,7 @@ public class DrugSafetyValidator {
 		// medications wrongly is the defect in #86.
 		String detail = subject.displayLabel() + " interacts with "
 				+ ChartSearchAiUtils.firstNonBlank(partner.displayLabel(), rule.getToken(), rule.getAtc())
-				+ ", also named in the question";
+				+ ALSO_NAMED_IN_THE_QUESTION;
 		if (rule.getNote() != null && !rule.getNote().isEmpty()) {
 			detail += " — " + rule.getNote();
 		}

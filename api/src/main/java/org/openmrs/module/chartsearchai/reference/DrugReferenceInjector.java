@@ -6017,6 +6017,22 @@ public class DrugReferenceInjector {
 	 * @param opener what to say where nothing is rated a reason to withhold, without its full stop, {@code null} for
 	 *            "No Major interactions", or the empty string for the counts alone
 	 */
+	/**
+	 * The drug a question-pair finding relates its subject to — both named by the question, so no order of hers is its
+	 * partner and {@link SafetyWarning#namedPartners()} is empty — as the finding's own sentence names it, or {@code null}
+	 * for any other finding (ADR Decision 578): <em>"Warfarin interacts with Ibuprofen, also named in the question"</em> is
+	 * the pair Warfarin with Ibuprofen.
+	 */
+	static String askedPartnerOf(SafetyWarning finding) {
+		String detail = finding.getDetail();
+		String opening = finding.getDrug() + " interacts with ";
+		if (detail == null || !finding.namedPartners().isEmpty() || !detail.startsWith(opening)) {
+			return null;
+		}
+		int end = detail.indexOf(DrugSafetyValidator.ALSO_NAMED_IN_THE_QUESTION, opening.length());
+		return end > opening.length() ? detail.substring(opening.length(), end) : null;
+	}
+
 	static String screenSummary(List<SafetyWarning> findings, int drugGroups, String opener) {
 		Map<String, List<String>> rated = new LinkedHashMap<String, List<String>>();
 		Map<String, Integer> ratedPairs = new LinkedHashMap<String, Integer>();
@@ -6045,8 +6061,10 @@ public class DrugReferenceInjector {
 					rated.put(rating, labels);
 					ratedPairs.put(rating, 0);
 				}
-				String label = finding.getDrug() + (finding.namedPartners().isEmpty() ? ""
-						: " with " + joinedAsAList(new ArrayList<String>(finding.namedPartners())));
+				String asked = askedPartnerOf(finding);
+				String label = finding.getDrug() + (!finding.namedPartners().isEmpty()
+						? " with " + joinedAsAList(new ArrayList<String>(finding.namedPartners()))
+						: asked != null ? " with " + asked : "");
 				if (!labels.contains(label)) {
 					labels.add(label);
 				}

@@ -26870,3 +26870,26 @@ A lead carrying a citation marker stays, because the summary carries none of its
 in is unaffected, for example the monitoring answer's in `aFoldedLeadStaysAndTheSummarysOwnLineLeaves`.
 
 Pinned by `AnswerDetailsContextTest.aLeadTheSummaryFoldsInIsNotRepeatedUnderIt`, which reddens without the change.
+
+## Decision 578: The bottom line names a pair the question named both drugs of
+
+**Status: Accepted** (November 2026). Found while re-asking `docs/ddi-tested-questions.md` on the 8089 DDI rig on
+2026-11-05.
+
+### Context
+
+The screen's bottom line names each pair rated a reason to withhold as *"X with Y"*, `Y` being the patient's orders the
+finding names (`SafetyWarning.namedPartners()`). A pair the question names both drugs of names no order of hers, so the
+list is empty, and the pair was named by its first drug alone. Agnes Adams, *"Can I give her warfarin and ibuprofen
+together?"*: *"3 Major interactions — Warfarin with Acetylsalicylic acid (aspirin); Ibuprofen with Acetylsalicylic acid
+(aspirin); Warfarin."* Amina Wekesa, *"Will ibuprofen raise her lithium levels?"*: *"1 Major interaction — Ibuprofen —
+plus 1 caution."*
+
+### The decision
+
+`DrugReferenceInjector.askedPartnerOf` reads the other drug off the finding's own sentence, the one place it is named:
+*"Warfarin interacts with Ibuprofen, also named in the question"*. The closing words are
+`DrugSafetyValidator.ALSO_NAMED_IN_THE_QUESTION`, spelled once for the writer and the reader. `namedPartners()` keeps its
+meaning, the patient's orders, and is not widened.
+
+Pinned by `AnswerDetailsContextTest.aPairTheQuestionNamesIsNamedWholeInTheSummary`, which reddens without the change.

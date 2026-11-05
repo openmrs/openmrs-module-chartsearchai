@@ -1349,6 +1349,12 @@ public class LlmInferenceService implements ChartSearchService {
 		if (!asksAboutDrugSafety(question, chart) || chart.getUncheckedWordStatement() != null) {
 			return new ArrayList<SafetyWarning>();
 		}
+		// Nor where the model answers a question naming a factor the findings do not weigh — her eyes, her kidneys, her
+		// pregnancy, a dose (ADR Decision 588, the owner's direction): the findings beside "The records do not address eye
+		// medication risks." read as the check of what was asked, which they are not.
+		if (chart.getModuleAnswer() == null && QueryScopeRouter.namesAFactorTheFindingsDoNotWeigh(question)) {
+			return new ArrayList<SafetyWarning>();
+		}
 		boolean allergyToOneThing = QueryScopeRouter.asksWhetherAllergicToOneNamedThing(question);
 		List<SafetyWarning> published = new ArrayList<SafetyWarning>(chips.size());
 		for (SafetyWarning chip : chips) {

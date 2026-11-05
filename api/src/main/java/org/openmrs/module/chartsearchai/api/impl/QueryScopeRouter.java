@@ -2639,6 +2639,12 @@ public final class QueryScopeRouter {
 						.matcher(String.join(" ", wordsWithTheDrugMarked)).find());
 	}
 
+	/** Whether {@code question} names a factor the findings do not weigh — her kidneys, her pregnancy, a dose, an organ
+	 *  ({@link #OTHER_FACTOR}) — which keeps the model where the module would otherwise answer (ADR Decisions 182, 587). */
+	public static boolean namesAFactorTheFindingsDoNotWeigh(String question) {
+		return question != null && OTHER_FACTOR.matcher(question.toLowerCase(Locale.ROOT)).find();
+	}
+
 	/** Whether {@code question} names the QT interval — "Are there any QT prolonging drugs in her list?" — whose
 	 *  prolongation no finding weighs (ADR Decision 587). */
 	public static boolean namesTheQtInterval(String question) {

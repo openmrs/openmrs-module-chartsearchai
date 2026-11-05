@@ -3083,6 +3083,27 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	}
 
 	/**
+	 * A question the model answers because it names a factor the findings do not weigh publishes no chips (ADR Decision
+	 * 588, the owner's direction): beside "The records do not address eye medication risks." the screen's duplicate
+	 * therapies read as the check of his eyes, and for her kidneys or her pregnancy alike. A screen the module answers keeps
+	 * its chips.
+	 */
+	@Test
+	public void aQuestionTheModelAnswersForAFactorTheFindingsDoNotWeighPublishesNoChips() throws Exception {
+		executeDataSet(WARFARIN_ORDER);
+		ChartAnswer screen = serviceWith(new RecordingProvider()).search(patient, "Does she have any drug interactions?");
+		assertFalse(screen.getSafetyWarnings().isEmpty(), "precondition: her screen raises chips — " + screen.getAnswer());
+		for (String question : new String[] { "does she have any eye medication risks?",
+				"Are her medications safe for her kidneys?", "Are her medications safe in pregnancy?",
+				"Is her medication dose safe?" }) {
+			RecordingProvider provider = new RecordingProvider();
+			ChartAnswer answer = serviceWith(provider).search(patient, question);
+			assertEquals(1, provider.calls, "precondition: the model answers " + question);
+			assertTrue(answer.getSafetyWarnings().isEmpty(), question + " — no chips: " + answer.getSafetyWarnings());
+		}
+	}
+
+	/**
 	 * A drug name the interaction data does not recognise, in the place a question names the drug it asks about (ADR
 	 * Decision 183). <em>"Can I give her rifampcin?"</em> resolved nothing, the model answered <em>"The records do not
 	 * address Rifampicin."</em>, and the post-answer pass, reading the model's corrected spelling, raised a Major

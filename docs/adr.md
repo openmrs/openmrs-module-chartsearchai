@@ -27171,3 +27171,35 @@ They named eyes, skin, lungs, and groups like her ARVs or blood pressure medicat
 
 Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aScreenRequestNamingAnOrganTheScreenDoesNotWeigh_keepsTheModel`
 and that `ClinicianWordingsTest` case, each of which reddens without the change.
+
+## Decision 588: A question the model answers for a factor the findings do not weigh publishes no chips
+
+**Status**: Accepted (2026-11-05), on the owner's direction ("no chips when we go to the model").
+
+### Context
+
+After Decision 587, *"does he have any eye medication risks?"* got the model's *"The records do not address eye medication
+risks."*. It still came with three duplicate-therapy chips. The screen arm runs on `QueryScopeRouter.isInteractionScreening`,
+which reads "medication risks" and not the factor. So the chips read as the check of his eyes. *"Are his medications safe
+for his kidneys?"* and *"… in pregnancy?"* behaved the same.
+
+### The decision
+
+`LlmInferenceService.aboutTheDrugAsked`, the one place chips are filtered before they are published, publishes none where
+the model answers (`PatientChart.getModuleAnswer()` is null) a question naming a factor the findings do not weigh
+(`QueryScopeRouter.namesAFactorTheFindingsDoNotWeigh`, over `OTHER_FACTOR`). That covers kidneys, pregnancy, dose, alcohol,
+food and the organs Decision 587 added. A question the module answers keeps its chips. The pre-answer findings still
+reach the model's prompt. `interactionPairs` is stated as before, as Decision 479's emptied chips leave it.
+
+**The cost, accepted by the owner:** these questions lose the safety net. On the test fixture, *"does she have any eye
+medication risks?"* no longer shows the Major interaction between her aspirin and her warfarin. It is shown only where the
+model's answer mentions it.
+
+The full build showed the same rule hides a recorded allergy to one of her own active orders: her aspirin, on *"Are any of
+her medications unsafe for her kidneys?"*. Asked about that explicitly, the owner chose to hide it too. The two
+`AllergyQuestionConflictingOrderContextTest` cases that used that question to test a chip beside a model's answer now ask
+*"What medications is she on and do any interact?"*. Decision 182 pins that question as going to the model, and it names
+no such factor. A spec change made on the owner's direction; every assertion of the two cases is unchanged.
+
+Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aQuestionTheModelAnswersForAFactorTheFindingsDoNotWeighPublishesNoChips`,
+which reddens without the change.

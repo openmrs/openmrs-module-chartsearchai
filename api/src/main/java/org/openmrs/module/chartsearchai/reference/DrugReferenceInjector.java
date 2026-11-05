@@ -6200,9 +6200,9 @@ public class DrugReferenceInjector {
 	 * (ADR Decisions 517, 519): any statement it makes first before it, and each lead's limit — <em>"this check does not choose a medication to give this patient, and states none
 	 * as safe"</em> — as a bracket at its end, and the recorded allergies of the answer to which drugs to avoid before it;
 	 * the answer's own words unchanged, which a client collapses whole under it. {@code null} where a line above it is a
-	 * heading, which no sentence can carry. Into {@code linesStatedWhole} it puts the bottom line and every lead it
-	 * states whole (ADR Decision 560): one sentence, no marker, no colon opening a detail it cuts, not a list of allergies it
-	 * rewords.
+	 * heading, which no sentence can carry. Into {@code linesStatedWhole} it puts the bottom line and every lead it folds
+	 * (ADR Decisions 560, 577): every lead carrying no marker, the detail a limit's colon opens and an allergy list it
+	 * rewords included.
 	 *
 	 * @return the answer and its bottom line, or {@code null}
 	 */
@@ -6220,8 +6220,10 @@ public class DrugReferenceInjector {
 		List<String> limits = new ArrayList<String>();
 		List<String> leadsStatedWhole = new ArrayList<String>();
 		for (String lead : lines.subList(0, at)) {
-			if (ChartSearchAiUtils.SENTENCE_BOUNDARY.split(lead.trim()).length == 1 && !lead.contains(":")
-					&& !lead.startsWith(RECORDED_DRUG_ALLERGIES) && !ChartSearchAiUtils.INLINE_CITATION.matcher(lead).find()) {
+			// Every sentence of a lead goes into the summary below — a statement before the bottom line, a limit in its
+			// bracket, her allergies — so the lead leaves the details (ADR Decision 577): what a limit's colon opened is
+			// dropped with it, on the owner's direction. A lead carrying a marker stays: the summary carries none of its.
+			if (!ChartSearchAiUtils.INLINE_CITATION.matcher(lead).find()) {
 				leadsStatedWhole.add(lead);
 			}
 			for (String sentence : lead.split("(?<=\\.) ")) {

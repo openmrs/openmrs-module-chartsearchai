@@ -219,6 +219,28 @@ public class AnswerDetailsContextTest extends BaseModuleContextSensitiveTest {
 		assertEquals(lines[0], answer.getAnswerDetails());
 	}
 
+	/**
+	 * A lead the summary folds in — its limit as a bracket at the summary's end — leaves the details too (ADR Decision 577):
+	 * on the demo replica "Which of her medications are high risk?" showed "… (this check does not rate a medication's
+	 * risk)." and then, first under "Show details", "This check does not rate a medication's risk: it states what it found
+	 * among the medications this patient is already taking."
+	 */
+	@Test
+	public void aLeadTheSummaryFoldsInIsNotRepeatedUnderIt() {
+		String question = "Which of her medications are high risk?";
+		ChartAnswer answer = serviceOver(DrugReferenceTestSupport.injectedChartOverOrders(question, "Warfarin", "Aspirin"),
+			"unused").search(aPatient(), question);
+		String[] lines = answer.getAnswer().split("\n");
+		assertTrue(lines[0].startsWith("This check does not rate a medication's risk:"), "precondition — " + answer.getAnswer());
+		assertTrue(answer.getAnswerSummary().endsWith("(this check does not rate a medication's risk)."),
+			"precondition: the summary carries its limit — " + answer.getAnswerSummary());
+
+		assertFalse(answer.getAnswerDetails().contains("This check does not rate a medication's risk"),
+			"not again under it: " + answer.getAnswerDetails());
+		assertEquals(answer.getAnswer().substring(lines[0].length() + lines[1].length() + 2), answer.getAnswerDetails(),
+			"the details are the findings under the lead and the bottom line");
+	}
+
 	/** A model's list carries a summary too (ADR Decision 528), so it publishes its details: never null beside one. */
 	@Test
 	public void aModelsListPublishesItsDetails() {

@@ -26845,3 +26845,28 @@ either of two drugs (Decision 393) still says nothing of the pair, since it asks
 
 Pinned by `TwoDrugsListedBelowTheFloorTest.twoDrugsProposedTogetherStateTheirListingBetweenThem`, which reddens without
 the change.
+
+## Decision 577: A lead the summary folds in leaves "Show details"
+
+**Status: Accepted** (November 2026), on the owner's direction ("drop the lead from the details"). It amends
+[Decision 560](#decision-560-show-details-shows-what-the-summary-did-not-say) for the leads
+[Decision 517](#decision-517-the-bottom-line-a-client-shows-is-one-sentence-and-every-module-answer-that-can-say-one-opens-with-it)
+folds into the bottom line.
+
+### Context
+
+*"Which of her medications are high risk?"* for Kamwara (dd74dc61) showed *"No rated interactions; 3 possible duplicate
+therapies (this check does not rate a medication's risk)."*. Under "Show details", first, it showed *"This check does not
+rate a medication's risk: it states what it found among the medications this patient is already taking."*, the lead again
+in full. Decision 560 kept a lead whose colon opens a detail the summary cuts, and a lead listing allergies the summary
+rewords, because each says a little more than the summary does. The owner chose to drop it.
+
+### The decision
+
+`DrugReferenceInjector.withLeadsFoldedIntoTheBottomLine` records as stated every lead it folds into the summary, as a
+statement before the bottom line, a limit in its bracket, or her allergies. `answerDetails` then leaves them out. What a
+limit's colon opened (*"it states what it found among the medications this patient is already taking"*) is dropped with it.
+A lead carrying a citation marker stays, because the summary carries none of its markers. A lead the summary does not fold
+in is unaffected, for example the monitoring answer's in `aFoldedLeadStaysAndTheSummarysOwnLineLeaves`.
+
+Pinned by `AnswerDetailsContextTest.aLeadTheSummaryFoldsInIsNotRepeatedUnderIt`, which reddens without the change.

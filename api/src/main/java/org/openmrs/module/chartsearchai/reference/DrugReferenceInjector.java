@@ -670,6 +670,9 @@ public class DrugReferenceInjector {
 			return asked;
 		}
 		List<DrugReference> questionDrugs = drugReferenceService.findImpliedByQuestion(question, orderEntries);
+		// Her orders the question names by their own names beside a drug the data names, each one drug asked about (ADR
+		// Decision 583).
+		List<AskedDrug> ownNamed = herOrdersAskedByTheirOwnNames(question, questionDrugs, orderEntries, context);
 		// A question naming a drug only to ask of its record in her chart is handed the model as a question asking nothing of
 		// drug safety is: the pass runs as for one naming no drug and asking nothing — her orders' records reconciled, no
 		// reference record, no finding about the drug (ADR Decision 399).
@@ -1339,9 +1342,10 @@ public class DrugReferenceInjector {
 						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
 						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS)
 				&& context.chartReadForSafety()
-				&& theOneOfTwoDrugsNotHers(question, questionDrugs, screenedSubstances, findings) != null) {
+				&& theOneOfTwoDrugsNotHers(question, questionDrugs, ownNamed, screenedSubstances, findings) != null) {
 			// Two drugs asked about together, one hers: the other is the proposal (ADR Decision 196).
-			moduleAnswer = composeTogetherWithHerOwn(question, questionDrugs, screenedSubstances, findings, findingNumbers,
+			moduleAnswer = composeTogetherWithHerOwn(question, questionDrugs, ownNamed, screenedSubstances, findings,
+					findingNumbers,
 					orderRecordNumbers,
 					orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers,
 					pairExtent.stated(), context);
@@ -7677,10 +7681,11 @@ public class DrugReferenceInjector {
 	 * Decision 196).
 	 */
 	private static AskedDrug theOneOfTwoDrugsNotHers(String question, List<DrugReference> questionDrugs,
-			Set<Object> herSubstances, List<SafetyWarning> findings) {
-		// Each drug as the question names it — a combination's name one drug (ADR Decision 272).
-		List<AskedDrug> asked = askedDrugs(question, questionDrugs, null, false);
-		List<String> words = wordsBesideItsNames(question, questionDrugs);
+			List<AskedDrug> ownNamed, Set<Object> herSubstances, List<SafetyWarning> findings) {
+		// Each drug as the question names it — a combination's name one drug (ADR Decision 272) — and one of her orders
+		// named by its own name (ADR Decision 583).
+		List<AskedDrug> asked = withOwnNamed(askedDrugs(question, questionDrugs, null, false), ownNamed);
+		List<String> words = wordsBesideItsNames(question, questionDrugs, ownNamed);
 		boolean interact = QueryScopeRouter.asksWhetherTwoDrugsInteract(words);
 		boolean changes = QueryScopeRouter.asksWhetherOneDrugChangesTheOther(words);
 		// Two, or one beside several of hers — "with her nevirapine and lopinavir" (ADR Decision 263).
@@ -8671,15 +8676,15 @@ public class DrugReferenceInjector {
 	 * lines; the validator draws their chips apart.
 	 */
 	private static String composeTogetherWithHerOwn(String question, List<DrugReference> questionDrugs,
-			Set<Object> herSubstances, List<SafetyWarning> findings, List<Integer> numbers,
+			List<AskedDrug> ownNamed, Set<Object> herSubstances, List<SafetyWarning> findings, List<Integer> numbers,
 			Map<String, Integer> orderRecordNumbers, Map<String, Integer> herOrderRecords, PairChipExtent pairs,
 			PatientClinicalContext context) {
-		AskedDrug proposed = theOneOfTwoDrugsNotHers(question, questionDrugs, herSubstances, findings);
+		AskedDrug proposed = theOneOfTwoDrugsNotHers(question, questionDrugs, ownNamed, herSubstances, findings);
 		List<DrugReference> proposedRows = proposed.rows;
 		// Each of hers once, in the question's order (ADR Decision 263): "Nevirapine and Lopinavir are among …".
 		List<String> herLabels = new ArrayList<String>();
 		AskedDrug named = null;
-		for (AskedDrug drug : askedDrugs(question, questionDrugs, context, false)) {
+		for (AskedDrug drug : withOwnNamed(askedDrugs(question, questionDrugs, context, false), ownNamed)) {
 			if (drug.substances.equals(proposed.substances)) {
 				named = drug;
 			} else {
@@ -8704,7 +8709,7 @@ public class DrugReferenceInjector {
 		// Whether the two interact is a question about the pair, answered "Yes" (ADR Decision 218); the gate admitted it only
 		// where a finding relates them. Whether one changes an effect of the other is answered with neither (ADR Decision
 		// 249): the data relates the pair, never the effect asked about.
-		List<String> words = wordsBesideItsNames(question, questionDrugs);
+		List<String> words = wordsBesideItsNames(question, questionDrugs, ownNamed);
 		Lead lead = QueryScopeRouter.asksWhetherTwoDrugsInteract(words) ? Lead.INTERACTS
 				: QueryScopeRouter.asksWhetherOneDrugChangesTheOther(words) ? Lead.NOT_GIVE : Lead.of(question, proposedRows);
 		String composed = composeFromFindings(ofIt, ofItNumbers, orderRecordNumbers, herOrderRecords, true, pairs,
@@ -8765,6 +8770,76 @@ public class DrugReferenceInjector {
 			inOrder.put(order, named.get(order));
 		}
 		return inOrder;
+	}
+
+	/**
+	 * Each of her orders {@code question} names by its own name ({@link #herOrdersNamedIn}) as one drug asked about — its
+	 * substances those of the order entries that carry it, its label the question's name for it — where the question also
+	 * names a drug the data carries; none otherwise (ADR Decision 583). So a drug proposed beside "his klarizom" is answered
+	 * as it is beside "his clarithromycin", and not by the model.
+	 */
+	private List<AskedDrug> herOrdersAskedByTheirOwnNames(String question, List<DrugReference> questionDrugs,
+			List<DrugReference> orderEntries, PatientClinicalContext context) {
+		if (questionDrugs.isEmpty() || orderEntries == null || context == null) {
+			return Collections.emptyList();
+		}
+		String folded = DrugReference.foldedLower(question);
+		// A word the data's own names already mark is theirs: "her tenofovir" of a patient on tenofovir disoproxil.
+		boolean[] theirs = namedCharacters(folded, questionDrugs);
+		List<AskedDrug> asked = new ArrayList<AskedDrug>();
+		for (Map.Entry<PatientClinicalContext.ActiveDrugOrder, String> named : herOrdersNamedIn(question, context,
+			drugReferenceService).entrySet()) {
+			int start = DrugReference.wordIndex(folded, DrugReference.foldedLower(named.getValue()), 0);
+			boolean marked = start < 0;
+			for (int k = Math.max(start, 0); !marked && k < start + DrugReference.foldedLower(named.getValue()).length()
+					&& k < theirs.length; k++) {
+				marked = theirs[k];
+			}
+			if (marked) {
+				continue;
+			}
+			Set<Object> substances = new LinkedHashSet<Object>();
+			List<DrugReference> rows = new ArrayList<DrugReference>();
+			for (DrugReference entry : orderEntries) {
+				if (DrugSafetyValidator.ordersOfSubstance(drugReferenceService, entry, orderEntries, context)
+						.contains(named.getKey()) && substances.add(entry.substanceGroupKey())) {
+					rows.add(entry);
+				}
+			}
+			if (rows.isEmpty()) {
+				continue;
+			}
+			String stem = named.getValue();
+			asked.add(new AskedDrug(substances, rows, rows.get(0), Character.toUpperCase(stem.charAt(0)) + stem.substring(1),
+					start, stem));
+		}
+		return asked;
+	}
+
+	/** {@code asked} with {@code ownNamed} among them, in the order the question names them; one it names nowhere last. */
+	private static List<AskedDrug> withOwnNamed(List<AskedDrug> asked, List<AskedDrug> ownNamed) {
+		if (ownNamed.isEmpty()) {
+			return asked;
+		}
+		List<AskedDrug> all = new ArrayList<AskedDrug>(asked);
+		all.addAll(ownNamed);
+		Collections.sort(all, Comparator.comparingInt(drug -> drug.start < 0 ? Integer.MAX_VALUE : drug.start));
+		return all;
+	}
+
+	/** {@link #wordsBesideItsNames(String, List)}, with the name of each of {@code ownNamed} marked a drug's name too. */
+	static List<String> wordsBesideItsNames(String question, List<DrugReference> entries, List<AskedDrug> ownNamed) {
+		String folded = DrugReference.foldedLower(question);
+		boolean[] named = namedCharacters(folded, entries);
+		for (AskedDrug drug : ownNamed) {
+			if (drug.start >= 0 && drug.written != null) {
+				for (int k = drug.start; k < drug.start + DrugReference.foldedLower(drug.written).length() && k < named.length;
+						k++) {
+					named[k] = true;
+				}
+			}
+		}
+		return markedWordsFrom(folded, named, 0);
 	}
 
 	/** {@code name} up to its first word carrying a digit — "Cotrimoxazole 960mg" is "Cotrimoxazole" — trimmed. */

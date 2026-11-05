@@ -26990,3 +26990,46 @@ withholding interaction rated below Major fell through to the unrated count.
 Acetylsalicylic acid (aspirin)."*, the form a Major takes Cautions are counted as before, and so are interactions that are truly unrated.
 
 Pinned by `AlwaysCollapsedAnswerTest.aRatedInteractionIsNotCountedAsUnrated`, which reddens without the change.
+
+## Decision 583: A drug proposed beside one of her orders named by its own name is answered as its proposal
+
+**Status: Accepted** (November 2026). Found while re-asking `docs/ddi-tested-questions.md` on the 8089 DDI rig on
+2026-11-05. It extends
+[Decision 196](#decision-196-two-drugs-asked-about-together-one-of-them-hers-are-answered-for-the-other-and-her-drugs-other-findings-are-drawn-apart)
+to the names
+[Decision 273](#decision-273-one-of-her-orders-named-alone-by-its-own-name-is-answered-as-her-medication) reads, and
+takes up the case
+[Decision 308](#decision-308-a-name-called-hers-that-none-of-her-orders-carries-and-the-data-does-not-recognise-is-said-so)
+left *"as before"*.
+
+### Context
+
+Michael Turner takes simvastatin and Klarizom, his brand of clarithromycin, which the data does not carry. *"Can I give
+him fluconazole with his klarizom?"* went to the model, which answered *"Fluconazole can be given, with one caution: …
+a Minor problem"*. The screen beside that answer held a Major chip: fluconazole with his simvastatin. Kevin Brown, *"Can I
+give him fluconazole with his clarithromycine?"*, got the model's *"Fluconazole can be given, with one caution"* as
+well. The same question naming a drug the data carries, *"… with her nevirapine"*, is answered by the module: that the
+drug is hers, then the proposal's own answer. The brand is resolved for the same question asked alone (Decision 273),
+but the two-drug gate counted only the names the data carries, so it saw one drug and stood down.
+
+Decision 308 left a name one of her orders carries to the model. That stood on the model answering such a question as
+the module would, and the rig shows it does not.
+
+### The decision
+
+`DrugReferenceInjector.herOrdersAskedByTheirOwnNames` turns each of her orders that the question names by its own name
+(`herOrdersNamedIn`) into one drug asked about, but only where the question also names a drug the data carries. The
+drug's substances are those of the order entries carrying that order, and its label is the question's word for it.
+`theOneOfTwoDrugsNotHers` and `composeTogetherWithHerOwn` read these drugs beside the ones the data names
+(`withOwnNamed`), and the question's words with both marked (`wordsBesideItsNames(question, entries, ownNamed)`). So
+the gate and the composer are the ones Decision 196 already uses, and the proposal's answer comes from the same rules.
+*"Klarizom is one of this patient's active medications."*, then *"No — this module's drug-safety check found a reason
+to withhold Fluconazole."* over the Major.
+
+A word the data's own names already mark is never one of these, even where `herOrdersNamedIn` admits it. *"her
+tenofovir"*, of a patient on *"Tenofovir disoproxil fumarate 300mg"*, is the data's tenofovir, which
+`MoietyAskedAboutTest.herTenofovirIsTheFormSheIsOn` pins. A question naming none of her orders by its own name gets an
+empty list, and every caller reads exactly what it read before.
+
+Pinned by `HerOrdersNamedByTheirOwnNamesTest.aDrugProposedBesideOneOfHisOrdersNamedByItsOwnNameIsAnsweredAsItsProposal`,
+which reddens without the change.

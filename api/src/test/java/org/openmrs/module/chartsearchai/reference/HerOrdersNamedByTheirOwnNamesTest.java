@@ -112,6 +112,23 @@ public class HerOrdersNamedByTheirOwnNamesTest extends BaseModuleContextSensitiv
 		}
 	}
 
+	/**
+	 * A drug proposed beside one of his orders named by its own name is answered as it is beside a name the data carries
+	 * (ADR Decision 583): that the order is his, then the proposal's own answer. On the 8089 DDI rig "Can I give him
+	 * fluconazole with his klarizom?" went to the model, which answered "Fluconazole can be given, with one caution" over
+	 * a Major interaction with his simvastatin.
+	 */
+	@Test
+	public void aDrugProposedBesideOneOfHisOrdersNamedByItsOwnNameIsAnsweredAsItsProposal() {
+		String answer = ask("Can I give him fluconazole with his klarizom?").getModuleAnswer();
+
+		assertNotNull(answer, "the module answers");
+		assertTrue(answer.startsWith("Klarizom" + DrugReferenceInjector.OWN_MEDICATION_LEAD + ".\n"
+				+ DrugReferenceInjector.WITHHOLD_LEAD_OPENING + "Fluconazole."), "was: " + answer);
+		assertTrue(answer.contains("\nFluconazole interacts with active order Simvastatin — Major."), "was: " + answer);
+		assertTrue(!answer.contains("can be given"), "was: " + answer);
+	}
+
 	private static PatientChart ask(String question) {
 		return DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.shippedServiceWithGroups()).injectRecords(
 			DrugReferenceTestSupport.oneRecordChart(), DrugReferenceTestSupport.ctx(60, null,

@@ -27203,3 +27203,44 @@ no such factor. A spec change made on the owner's direction; every assertion of 
 
 Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aQuestionTheModelAnswersForAFactorTheFindingsDoNotWeighPublishesNoChips`,
 which reddens without the change.
+
+## Decision 589: A screen names the pairs it lists below the floor, and cites the orders of those pairs and of her duplicates
+
+**Status**: Accepted (2026-11-06), on the owner's direction.
+
+### Context
+
+For the demo patient dd74dc61, on lamivudine, nevirapine and stavudine (three orders each), *"Does she have any drug
+interactions I should know about?"* said *"the data lists 3 pairs of them with no severity or mechanism on file"*. Nothing
+a clinician sees said which three pairs:
+- the answer counted them, and Decision 467 chose "counted, never named" with no reason recorded;
+- the screen note it cites counts them too;
+- the reference frontend renders no `interactionPairs.belowFloor`.
+
+The duplicate line, *"each in more than one of this patient's active orders: Lamivudine; Nevirapine; Stavudine"*, cited
+the three findings and none of the nine orders. Decision 493 had folded the per-drug lines into that one line for fewer
+words, and their order citations went with them.
+
+### The decision
+
+- **The screen's answer names its below-floor pairs and cites their orders**: *"…the data lists 3 pairs of them with no
+  severity or mechanism on file — Lamivudine with Nevirapine, Lamivudine with Stavudine and Nevirapine with Stavudine. [2]
+  [3] … Drug-class relationships were not checked. [14]"*.
+  - Each order is cited once, by the record numbering every composed line uses (`DrugReferenceInjector.belowFloorPairsNamed`,
+    `belowFloorPairOrderMarkers`).
+  - A screen's `BelowFloorPair` carries the displays of the orders on both sides (`drugOrders()`, `partnerOrders()`,
+    package-private, never on the wire). The validator's screen arm sets them from her whole list
+    (`DrugSafetyValidator.displaysOfOrdersOf`). `herOrders()` stays the proposal walk's, which Decision 142's answer reads.
+  - Where the screen raised no finding, the order-record index is built for it, since without it nothing could be cited.
+  - The screen note record keeps its own words, which still count the pairs.
+- **The duplicate line cites each substance's orders after its name**: *"Lamivudine [2] [5] [8]; Nevirapine [3] [6] [9];
+  Stavudine [4] [7] [10]. [11] [12] [13]"*. Each substance cites every order it is in, so a combination order is cited under
+  each of its substances; otherwise *"each in more than one"* would show one order for the second. No word is added.
+
+Spec changes made on the owner's direction, to the wording these tests pinned:
+- `ScreenBelowFloorPairsTest` (three cases);
+- `LlmInferenceServiceAnswerFromFindingsContextTest` (three cases, through `SCREEN_NOTE_WORDS`);
+- `BriefScreenAnswerTest`, `ScreenBesideHerOwnConflictsTest`, `OrdersSharingASubstanceModuleAnswerContextTest`.
+
+Pinned by `ScreenBelowFloorPairsTest.theDemoPatientsThreeOrdersOfEachDrugAreAnsweredWithTheScreenAndTheDuplicates`, which
+reddens without the change and asserts that each line cites every one of his nine orders.

@@ -90,7 +90,7 @@ public class ScreenBelowFloorPairsTest extends BaseModuleContextSensitiveTest {
 		// (ADR Decision 512).
 		assertTrue(answer.split("\n")[1].startsWith("No interaction at or above the configured severity level was found "
 				+ "among the 3 substances in this patient's active medications; the data lists 3 pairs of them with no severity or "
-				+ "mechanism on file. Drug-class relationships were not checked."),
+				+ "mechanism on file — Lamivudine with Nevirapine, Lamivudine with Stavudine and Nevirapine with Stavudine. ["),
 			"was: " + answer);
 	}
 
@@ -116,13 +116,21 @@ public class ScreenBelowFloorPairsTest extends BaseModuleContextSensitiveTest {
 		// The bottom line first, the rest a client may collapse (ADR Decision 512).
 		assertEquals("No rated interactions; 3 possible duplicate therapies.", lines[0], "was: " + answer);
 		lines = java.util.Arrays.copyOfRange(lines, 1, lines.length);
+		// Each pair named, and each of his nine orders cited once (ADR Decision 589).
 		assertTrue(lines[0].matches(java.util.regex.Pattern.quote("No interaction at or above the configured severity level "
 				+ "was found among the 3 substances in this patient's active medications; the data lists 3 pairs of them with no severity or "
-				+ "mechanism on file. Drug-class relationships were not checked.") + " \\[\\d+\\]"),
-			"was: " + answer);
-		// Her three drugs each in several orders, one line since ADR Decision 493.
-		assertTrue(lines[1].startsWith("Possible duplicate therapy — each in more than one of this patient's active orders: "
-				+ "Lamivudine; Nevirapine; Stavudine. ["), "was: " + answer);
+				+ "mechanism on file — Lamivudine with Nevirapine, Lamivudine with Stavudine and Nevirapine with Stavudine.")
+				+ "( \\[\\d+\\]){9}" + java.util.regex.Pattern.quote(" Drug-class relationships were not checked.")
+				+ " \\[\\d+\\]"), "was: " + answer);
+		assertEquals(10, org.openmrs.module.chartsearchai.ChartSearchAiUtils.citedIndexes(lines[0]).size(),
+			"his nine orders and the screen note, each once: " + answer);
+		// Her three drugs each in several orders, one line since ADR Decision 493, each with its orders' records (ADR
+		// Decision 589).
+		assertTrue(lines[1].matches(java.util.regex.Pattern.quote("Possible duplicate therapy — each in more than one of this "
+				+ "patient's active orders: Lamivudine") + "( \\[\\d+\\]){3}; Nevirapine( \\[\\d+\\]){3}; Stavudine( \\[\\d+\\]){3}\\."
+				+ "( \\[\\d+\\]){3}"), "was: " + answer);
+		assertEquals(12, org.openmrs.module.chartsearchai.ChartSearchAiUtils.citedIndexes(lines[1]).size(),
+			"his nine orders and the three findings, each once: " + answer);
 	}
 
 	@Test
@@ -150,8 +158,8 @@ public class ScreenBelowFloorPairsTest extends BaseModuleContextSensitiveTest {
 		assertNotNull(answer, "the module answers");
 		assertTrue(answer.split("\n")[1].startsWith("No interaction at or above the configured severity level was found "
 				+ "among the 3 substances in this patient's active medications; the data lists 2 pairs of them: one only "
-				+ "below that level, rated Minor, and one with no severity or mechanism on file. Drug-class relationships "
-				+ "were not checked. ["),
+				+ "below that level, rated Minor, and one with no severity or mechanism on file — Abacavir with Amoxicillin and "
+				+ "Abacavir with Isoniazid. ["),
 			"was: " + answer);
 	}
 

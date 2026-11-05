@@ -281,6 +281,10 @@ public final class PairChipExtent {
 
 		/** Whether the row stated carries a mechanism — see {@link #mechanismOnFile()}. */
 		private final Boolean mechanismOnFile;
+		/** The displays of her orders carrying the pair's drug — see {@link #drugOrders()}. */
+		private final List<String> drugOrders;
+		/** The displays of her orders carrying the pair's partner — see {@link #partnerOrders()}. */
+		private final List<String> partnerOrders;
 
 		public BelowFloorPair(String drug, String partner, String severity) {
 			this(drug, partner, severity, Collections.<String> emptyList(), false, null);
@@ -288,6 +292,13 @@ public final class PairChipExtent {
 
 		BelowFloorPair(String drug, String partner, String severity, List<String> herOrders,
 				boolean onStartedOrdersOnly, Boolean mechanismOnFile) {
+			this(drug, partner, severity, herOrders, onStartedOrdersOnly, mechanismOnFile, Collections.<String> emptyList(),
+				Collections.<String> emptyList());
+		}
+		private BelowFloorPair(String drug, String partner, String severity, List<String> herOrders,
+				boolean onStartedOrdersOnly, Boolean mechanismOnFile, List<String> drugOrders, List<String> partnerOrders) {
+			this.drugOrders = Collections.unmodifiableList(new ArrayList<String>(drugOrders));
+			this.partnerOrders = Collections.unmodifiableList(new ArrayList<String>(partnerOrders));
 			this.drug = drug;
 			this.partner = partner;
 			this.severity = severity;
@@ -319,6 +330,32 @@ public final class PairChipExtent {
 			return onStartedOrdersOnly;
 		}
 
+		/**
+		 * On a screen of her orders, the displays of her active orders carrying the pair's DRUG, in chart order, so a
+		 * module-composed answer cites the pair's orders (ADR Decision 589). Empty where no arm stated them. Never on the
+		 * wire, for {@link #herOrders()}'s reason.
+		 */
+		List<String> drugOrders() {
+			return drugOrders;
+		}
+		/**
+		 * On a screen of her orders, the displays of her active orders carrying the pair's PARTNER, as {@link #drugOrders()}
+		 * the drug's (ADR Decision 589). Apart from {@link #herOrders()}, which the proposal walk fills and a screen leaves
+		 * empty, and which Decision 142's answer reads. Never on the wire.
+		 */
+		List<String> partnerOrders() {
+			return partnerOrders;
+		}
+		/** This pair, carrying {@code orders} as {@link #drugOrders()}. */
+		BelowFloorPair withDrugOrders(List<String> orders) {
+			return new BelowFloorPair(drug, partner, severity, herOrders, onStartedOrdersOnly, mechanismOnFile, orders,
+				partnerOrders);
+		}
+		/** This pair, carrying {@code orders} as {@link #partnerOrders()}. */
+		BelowFloorPair withPartnerOrders(List<String> orders) {
+			return new BelowFloorPair(drug, partner, severity, herOrders, onStartedOrdersOnly, mechanismOnFile, drugOrders,
+				orders);
+		}
 		public String getDrug() {
 			return drug;
 		}

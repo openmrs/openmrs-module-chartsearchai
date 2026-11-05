@@ -40,7 +40,7 @@ public class ScreenBesideHerOwnConflictsTest extends BaseModuleContextSensitiveT
 	 *  counts it rather than saying no interactions were found (ADR Decision 467). */
 	private static final String DEXAMETHASONE_PREDNISONE_SCREEN = "No interaction at or above the configured severity level "
 			+ "was found among the 2 substances in this patient's active medications; the data lists one pair of them "
-			+ "with no severity or mechanism on file. Drug-class relationships were not checked. [";
+			+ "with no severity or mechanism on file — Dexamethasone with Prednisone. [";
 
 	/** The bottom line over that screen (ADR Decision 512): his two conflicts with his own orders, counted. */
 	private static final String BOTTOM_LINE = "No rated interactions; 2 contraindications.";

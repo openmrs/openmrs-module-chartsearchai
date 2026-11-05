@@ -1583,7 +1583,10 @@ public class DrugReferenceInjector {
 			moduleAnswer = composeFromAScreenThatRelatedNothing(question, screenNoteIndex, screenedSubstances.size(),
 					pairExtent.stated(), findings,
 					findingNumbers, orderRecordNumbers,
-					orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers,
+					// A screen that raised no finding still cites the orders of the pairs it names (ADR Decision 589), so
+					// the index the findings would have built is built for it.
+					orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords != null ? findingRecords
+							: new DrugOrderRecords(mappings), context) : orderRecordNumbers,
 					context, unidentified.size());
 			// Opened by the screen note, it opens with its bottom line (ADR Decisions 512, 517).
 			String noPair = screenSummary(findings, 0, noPairOpener(pairExtent.stated()));
@@ -6007,7 +6010,7 @@ public class DrugReferenceInjector {
 			// A screen opens with its reasons to change a medication, stated whole; the rest of what it found is one line
 			// saying it is in the safety warnings beside the answer, citing each finding so its chip is published in full;
 			// and it closes with what it does not cover (ADR Decisions 171, 493, 506).
-			lines = briefScreenLines(findings, numbers, clauses, lines, lineFindings, groupLines, pairs);
+			lines = briefScreenLines(findings, numbers, clauses, lines, lineFindings, groupLines, pairs, herOrderRecords);
 			lines.add(screenScope);
 			if (summarize) {
 				lines.add(0, screenSummary(findings, groupLines.size(), null));
@@ -6561,7 +6564,8 @@ public class DrugReferenceInjector {
 	 * marked stated.
 	 */
 	private static List<String> briefScreenLines(List<SafetyWarning> findings, List<Integer> numbers, String[] clauses,
-			List<String> lines, List<List<Integer>> lineFindings, List<String> groupLines, PairChipExtent pairs) {
+			List<String> lines, List<List<Integer>> lineFindings, List<String> groupLines, PairChipExtent pairs,
+			Map<String, Integer> herOrderRecords) {
 		List<String> whole = new ArrayList<String>();
 		List<Integer> sharing = new ArrayList<Integer>();
 		List<String> sharingLines = new ArrayList<String>();
@@ -6589,7 +6593,7 @@ public class DrugReferenceInjector {
 		if (sharing.size() == 1) {
 			brief.addAll(sharingLines);
 		} else if (!sharing.isEmpty()) {
-			brief.add(sharedSubstancesLine(findings, numbers, sharing));
+			brief.add(sharedSubstancesLine(findings, numbers, sharing, herOrderRecords));
 		}
 		if (brief.isEmpty() && cautionLines.size() == 1) {
 			brief.addAll(cautionLines);
@@ -6604,13 +6608,26 @@ public class DrugReferenceInjector {
 	}
 
 	/** Several of her orders sharing a substance, as one line (ADR Decision 493): <em>"Possible duplicate therapy — each in
-	 *  more than one of this patient's active orders: Lamivudine; Stavudine. [117] [118]"</em>. Semicolons, because a
-	 *  combination's name carries "and" of its own. */
-	static String sharedSubstancesLine(List<SafetyWarning> findings, List<Integer> numbers, List<Integer> sharing) {
+	 *  more than one of this patient's active orders: Lamivudine [3] [35]; Stavudine [4] [36]. [117] [118]"</em>, each
+	 *  substance followed by the records of the orders it is in (ADR Decision 589), as a finding's own line cites them.
+	 *  Semicolons, because a combination's name carries "and" of its own. */
+	static String sharedSubstancesLine(List<SafetyWarning> findings, List<Integer> numbers, List<Integer> sharing,
+			Map<String, Integer> herOrderRecords) {
 		List<String> names = new ArrayList<String>(sharing.size());
 		StringBuilder markers = new StringBuilder();
 		for (Integer i : sharing) {
-			names.add(findings.get(i).getDrug());
+			SafetyWarning finding = findings.get(i);
+			// Every order each substance is in, a combination cited under each of its substances: "each in more than one"
+			// is then seen of each.
+			Set<Integer> orders = orderRecordsOf(finding, herOrderRecords);
+			for (String display : finding.namedPartners()) {
+				orders.addAll(everyRecordOf(herOrderRecords, display == null ? null : display.trim()));
+			}
+			StringBuilder name = new StringBuilder(finding.getDrug());
+			for (Integer order : orders) {
+				name.append(" [").append(order).append(']');
+			}
+			names.add(name.toString());
 			markers.append(" [").append(numbers.get(i)).append(']');
 		}
 		return SHARED_SUBSTANCES_LEAD + String.join("; ", names) + "." + markers;
@@ -6795,14 +6812,14 @@ public class DrugReferenceInjector {
 			List<Integer> findingNumbers, Map<String, Integer> orderRecordNumbers, Map<String, Integer> herOrderRecords,
 			PatientClinicalContext context, int unidentified) {
 		if (screenNoteIndex != null && onlyHerOwnOrdersSharingASubstance(findings)) {
-			String note = screenNoteAnswerWords(screened, screen) + " [" + screenNoteIndex + "]";
+			String note = screenNoteAnswerWords(screened, screen, herOrderRecords) + " [" + screenNoteIndex + "]";
 			// Several, as one line, as a screen that related pairs states them (ADR Decision 493).
 			if (findings.size() > 1) {
 				List<Integer> all = new ArrayList<Integer>(findings.size());
 				for (int i = 0; i < findings.size(); i++) {
 					all.add(Integer.valueOf(i));
 				}
-				return note + "\n" + sharedSubstancesLine(findings, findingNumbers, all);
+				return note + "\n" + sharedSubstancesLine(findings, findingNumbers, all, herOrderRecords);
 			}
 			return withHerOwnOrdersSharingASubstance(note, findings, findingNumbers, orderRecordNumbers, herOrderRecords);
 		}
@@ -10939,14 +10956,54 @@ public class DrugReferenceInjector {
 	 * as in the note, and the class limit is what keeps the answer from being read as a patient with no interactions. The
 	 * cited record keeps the note's own words.
 	 */
-	private static String screenNoteAnswerWords(int screened, PairChipExtent screen) {
+	private static String screenNoteAnswerWords(int screened, PairChipExtent screen, Map<String, Integer> herOrderRecords) {
 		List<PairChipExtent.BelowFloorPair> below = screen == null || screen.getBelowFloor() == null
 				? Collections.<PairChipExtent.BelowFloorPair> emptyList() : screen.getBelowFloor();
 		return "No interaction at or above the configured severity level was found among the " + screened
 				+ " substances in this patient's active medications"
 				+ (below.isEmpty() ? ""
-						: "; the data lists " + belowFloorPairs(below))
-				+ ". Drug-class relationships were not checked.";
+						: "; the data lists " + belowFloorPairs(below) + " — " + belowFloorPairsNamed(below)
+								+ "." + belowFloorPairOrderMarkers(below, herOrderRecords))
+				+ (below.isEmpty() ? "." : "") + " Drug-class relationships were not checked.";
+	}
+
+	/**
+	 * The screen's below-floor pairs, named (ADR Decision 589): <em>"Lamivudine with Nevirapine, Lamivudine with Stavudine and
+	 * Nevirapine with Stavudine"</em> — each pair's drug, and its partner by the displays of her orders it was matched
+	 * against ({@code BelowFloorPair.herOrders()}), else by its label. Decision 467 counted them and never named them, and
+	 * nothing a client renders named them either.
+	 */
+	private static String belowFloorPairsNamed(List<PairChipExtent.BelowFloorPair> below) {
+		List<String> named = new ArrayList<String>(below.size());
+		for (PairChipExtent.BelowFloorPair pair : below) {
+			String partner = pair.herOrders().isEmpty() ? capitalised(pair.getPartner())
+					: joinedAsAList(new ArrayList<String>(new LinkedHashSet<String>(pair.herOrders())));
+			named.add(pair.getDrug() + " with " + partner);
+		}
+		return joinedAsAList(named);
+	}
+
+	/** {@code label} with its first letter upper case, as a pair's partner label opens a name in a sentence. */
+	private static String capitalised(String label) {
+		return label == null || label.isEmpty() ? label : Character.toUpperCase(label.charAt(0)) + label.substring(1);
+	}
+
+	/** The records of the orders on both sides of the screen's below-floor pairs, each once, ascending (ADR Decision 589). */
+	private static String belowFloorPairOrderMarkers(List<PairChipExtent.BelowFloorPair> below,
+			Map<String, Integer> herOrderRecords) {
+		Set<Integer> numbers = new TreeSet<Integer>();
+		for (PairChipExtent.BelowFloorPair pair : below) {
+			for (List<String> side : Arrays.asList(pair.drugOrders(), pair.partnerOrders(), pair.herOrders())) {
+				for (String display : side) {
+					numbers.addAll(everyRecordOf(herOrderRecords, display == null ? null : display.trim()));
+				}
+			}
+		}
+		StringBuilder markers = new StringBuilder();
+		for (Integer number : numbers) {
+			markers.append(" [").append(number).append(']');
+		}
+		return markers.toString();
 	}
 
 	/** {@link #SCREEN_NOTE_FINDING_LEAD} where the screen related pairs of her orders below the floor (ADR Decision 467). */

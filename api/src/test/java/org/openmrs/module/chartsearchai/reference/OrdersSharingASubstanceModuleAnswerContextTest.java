@@ -74,8 +74,9 @@ public class OrdersSharingASubstanceModuleAnswerContextTest extends BaseModuleCo
 		}
 		assertTrue(cautions >= 0, "precondition: the pairs are counted in the answer: " + answer);
 		assertTrue(shared >= 0 && shared < cautions, "the reasons to change lead the cautions: " + answer);
-		assertTrue(lines.get(shared).startsWith(DrugReferenceInjector.SHARED_SUBSTANCES_LEAD + "Ethambutol; Isoniazid. "),
-			"was: " + answer);
+		// Each with the records of the orders it is in, the combination's under both (ADR Decision 589).
+		assertTrue(lines.get(shared).matches(java.util.regex.Pattern.quote(DrugReferenceInjector.SHARED_SUBSTANCES_LEAD
+				+ "Ethambutol") + "( \\[\\d+\\]){2}; Isoniazid( \\[\\d+\\]){2}\\. .*"), "was: " + answer);
 	}
 
 	@Test

@@ -3616,7 +3616,8 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 
 		assertEquals(0, provider.calls, "the module answers: " + answer.getAnswer());
 		assertTrue(answer.isAnsweredByTheModule());
-		assertEquals(NO_PAIR_BOTTOM_LINE + "\n" + SCREEN_NOTE_WORDS + " [" + note + "]", answer.getAnswer());
+		assertTrue(answer.getAnswer().matches(java.util.regex.Pattern.quote(NO_PAIR_BOTTOM_LINE + "\n") + screenNoteLine(note)),
+			answer.getAnswer());
 	}
 
 	/** The same beside an order the data cannot identify: the note's words, then the order named as not screened
@@ -3631,8 +3632,9 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		ChartAnswer answer = serviceWith(provider).search(patient, SCREEN);
 
 		assertEquals(0, provider.calls, "the module answers: " + answer.getAnswer());
-		assertEquals(NO_PAIR_BOTTOM_LINE + "\n" + SCREEN_NOTE_WORDS + " [" + note + "]\n"
-				+ "Not checked: 1 active order the drug data does not identify — Marevan.", answer.getAnswer());
+		assertTrue(answer.getAnswer().matches(java.util.regex.Pattern.quote(NO_PAIR_BOTTOM_LINE + "\n") + screenNoteLine(note)
+				+ java.util.regex.Pattern.quote("\nNot checked: 1 active order the drug data does not identify — Marevan.")),
+			answer.getAnswer());
 	}
 
 	/** A screen for a patient with no active medication orders says so (ADR Decision 162): there are none to check
@@ -3683,9 +3685,16 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	/** The bottom line over that screen (ADR Decision 512): the one pair below the floor is rated Unknown. */
 	private static final String NO_PAIR_BOTTOM_LINE = "No rated interactions.";
 
+	/** The screen's words up to its pair, named (ADR Decision 589); the records of the pair's two orders follow it. */
 	private static final String SCREEN_NOTE_WORDS = "No interaction at or above the configured severity level was found "
 			+ "among the 2 substances in this patient's active medications; the data lists one pair of them with no "
-			+ "severity or mechanism on file. Drug-class relationships were not checked.";
+			+ "severity or mechanism on file — Acetylsalicylic acid (aspirin) with Metformin.";
+
+	/** The screen's line citing {@code note}: its words, the records of her two orders, then its class limit. */
+	private static String screenNoteLine(int note) {
+		return java.util.regex.Pattern.quote(SCREEN_NOTE_WORDS) + "( \\[\\d+\\]){2}"
+				+ java.util.regex.Pattern.quote(" Drug-class relationships were not checked. [" + note + "]");
+	}
 
 	/** With the property off, the screen's prompt: the note is injected, and its record number. */
 	private int screenNoteIndex() {

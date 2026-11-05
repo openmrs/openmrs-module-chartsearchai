@@ -7717,7 +7717,7 @@ public class DrugSafetyValidator {
 	static List<PairChipExtent.BelowFloorPair> belowFloorPairs(List<DrugReference> rows,
 			SubstanceSubjects subjects, PatientClinicalContext context, int severityFloor,
 			List<DrugReference> orderEntries, BridgedOrders bridgedOrders) {
-		return belowFloorPairs(rows, subjects, context, severityFloor, orderEntries, bridgedOrders, null, null);
+		return belowFloorPairs(rows, subjects, context, severityFloor, orderEntries, bridgedOrders, null, null, null);
 	}
 
 	/**
@@ -7729,7 +7729,7 @@ public class DrugSafetyValidator {
 	private static List<PairChipExtent.BelowFloorPair> belowFloorPairs(List<DrugReference> rows,
 			SubstanceSubjects subjects, PatientClinicalContext context, int severityFloor,
 			List<DrugReference> orderEntries, BridgedOrders bridgedOrders, Map<DrugReference, String> keyNames,
-			Set<List<String>> seenPairs) {
+			Set<List<String>> seenPairs, PatientClinicalContext ordersContext) {
 		if (context == null || rows.isEmpty()) {
 			return Collections.emptyList();
 		}
@@ -7789,11 +7789,33 @@ public class DrugSafetyValidator {
 					started &= order.hasStarted();
 				}
 			}
-			pairs.add(new PairChipExtent.BelowFloorPair(drug, partnerLabel(i),
+			PairChipExtent.BelowFloorPair stated = new PairChipExtent.BelowFloorPair(drug, partnerLabel(i),
 					ChartSearchAiUtils.firstNonBlank(i.getSeverity()), herOrders, started && !herOrders.isEmpty(),
-					i.mechanismOnFile()));
+					i.mechanismOnFile());
+			// On a screen, the displays of her orders carrying the partner, so the answer cites them (ADR Decision 589) —
+			// over her whole list, {@code context} here being the orders other than the subject reduced to what they name.
+			DrugReference partnerEntry = ordersContext == null ? null : activeOrderEntryFor(orderEntries, ref, i);
+			if (partnerEntry != null) {
+				stated = stated.withPartnerOrders(displaysOfOrdersOf(rowsOfSubstance(orderEntries, partnerEntry),
+					ordersContext, bridgedOrders));
+			}
+			pairs.add(stated);
 		}
 		return pairs;
+	}
+
+	/** The displays of {@code context}'s active orders that resolve from one of {@code rows}, each once, in chart order —
+	 *  the orders {@link #ordersOtherThan} leaves out (ADR Decision 589). */
+	private static List<String> displaysOfOrdersOf(List<DrugReference> rows, PatientClinicalContext context,
+			BridgedOrders bridged) {
+		List<String> displays = new ArrayList<String>();
+		for (PatientClinicalContext.ActiveDrugOrder order : context.getActiveDrugOrders()) {
+			String display = order.getDisplay() == null ? null : order.getDisplay().trim();
+			if (display != null && !displays.contains(display) && resolvesFromAny(rows, order, bridged)) {
+				displays.add(display);
+			}
+		}
+		return displays;
 	}
 
 	private static Collection<SubjectRule> bestRulePerPartner(List<DrugReference> subjects,
@@ -10281,8 +10303,13 @@ public class DrugSafetyValidator {
 				// Whether the subject has STARTED (issue #553), over every order as the bridge asks it — per
 				// SUBSTANCE, beside the witnesses it mirrors, rather than once per pair.
 				Date subjectStart = scheduledStartOf(substance, context.getActiveDrugOrders(), bridgedOrders);
-				belowFloor.addAll(belowFloorPairs(substance, subjects, others, severityFloor, orderDrugs, bridgedOrders,
-						keyNames, seenBelowFloor));
+				// Each with the displays of her orders carrying the subject, so the answer cites the pair's orders (ADR
+				// Decision 589).
+				List<String> subjectOrders = displaysOfOrdersOf(substance, context, bridgedOrders);
+				for (PairChipExtent.BelowFloorPair pair : belowFloorPairs(substance, subjects, others, severityFloor,
+						orderDrugs, bridgedOrders, keyNames, seenBelowFloor, context)) {
+					belowFloor.add(pair.withDrugOrders(subjectOrders));
+				}
 				// This subject's chips, collapsed by mechanism before the cap as the drug-in-play arm's are (ADR
 				// Decisions 99, 190): the cap then counts what a clinician reads, and the extent still counts pairs.
 				List<MechanismStatement> statements = new ArrayList<MechanismStatement>();

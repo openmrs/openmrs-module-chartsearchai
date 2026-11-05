@@ -59,7 +59,7 @@ public class BriefScreenAnswerTest extends BaseModuleContextSensitiveTest {
 		assertEquals(BOTTOM_LINE, lines[0], "was: " + answer);
 		assertEquals(BOTTOM_LINE, chart.getModuleAnswerSummary(), "the line a client shows, the rest collapsed");
 		assertTrue(lines[1].startsWith("Nelfinavir interacts with active order Rifampin (2 orders) — Major. ["), "was: " + answer);
-		assertTrue(lines[2].startsWith(SHARED_SUBSTANCES), "was: " + answer);
+		assertTrue(lines[2].matches(SHARED_SUBSTANCES), "was: " + answer);
 		assertTrue(lines[3].startsWith("Also in the safety warnings beside this answer: 12 interactions, each a caution (8 "
 				+ "Moderate, 4 Minor) — Efavirenz with Lamivudine, Stavudine, Sulfamethoxazole, Rifampicin and isoniazid, "
 				+ "Rifampin, Nelfinavir, Trimethoprim; Stavudine with Rifampicin and isoniazid; Sulfamethoxazole with Rifampin; "
@@ -95,9 +95,12 @@ public class BriefScreenAnswerTest extends BaseModuleContextSensitiveTest {
 	private static final String BOTTOM_LINE = "1 Major interaction — Nelfinavir with Rifampin — plus 4 possible duplicate "
 			+ "therapies and 12 cautions.";
 
-	/** Her orders sharing a substance, a reason to change one of them, named on one line (ADR Decisions 493, 506). */
-	private static final String SHARED_SUBSTANCES = "Possible duplicate therapy — each in more than one of this patient's "
-			+ "active orders: Lamivudine; Stavudine; Sulfamethoxazole and Trimethoprim; Isoniazid and Rifampicin (rifampin). [";
+	/** Her orders sharing a substance, a reason to change one of them, named on one line (ADR Decisions 493, 506), each
+	 *  with its orders' records (ADR Decision 589). */
+	private static final String SHARED_SUBSTANCES = java.util.regex.Pattern.quote("Possible duplicate therapy — each in "
+			+ "more than one of this patient's active orders: Lamivudine") + "( \\[\\d+\\]){2}; Stavudine( \\[\\d+\\]){2}; "
+			+ java.util.regex.Pattern.quote("Sulfamethoxazole and Trimethoprim") + "( \\[\\d+\\]){2}; "
+			+ java.util.regex.Pattern.quote("Isoniazid and Rifampicin (rifampin)") + "( \\[\\d+\\]){2}\\. \\[.*";
 
 	/** What a screen of the demo patient did not check for her: the orders the data does not identify, on their own line
 	 *  (ADR Decisions 161, 573), with no line on what kinds of finding the check does not cover. */

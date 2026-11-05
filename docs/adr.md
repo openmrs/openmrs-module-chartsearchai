@@ -26967,3 +26967,26 @@ two, the question-pair arm's, is kept. A finding dropped here is still excluded 
 medications:"*, so it does not come back under that heading.
 
 Pinned by `AlwaysCollapsedAnswerTest.aPairRatedFromBothSidesIsStatedOnce`, which reddens without the change.
+
+## Decision 582: A rated interaction is counted under its rating, never as unrated
+
+**Status: Accepted** (November 2026). Found while re-asking `docs/ddi-tested-questions.md` on the 8089 DDI rig on
+2026-11-05.
+
+### Context
+
+David Williams takes aspirin. *"Is naproxen safe for him?"* stated *"Naproxen interacts with active order
+Acetylsalicylic acid (aspirin) — Moderate. Naproxen is in the same cross-reactivity group (NSAID) …"*, and the summary
+above it read *"Naproxen: no Major interactions; 1 unrated interaction."* The shared NSAID group says what the two drugs
+are, so it makes the finding a reason to withhold rather than a caution
+([Decision 283](#decision-283-a-folded-class-relationship-withholds-only-where-it-says-what-the-two-drugs-are)).
+`screenSummary` counted an interaction under its rating only where the rating itself withholds, which is Major. A
+withholding interaction rated below Major fell through to the unrated count.
+
+### The decision
+
+`screenSummary` counts an interaction under its rating where the rating is one an answer states
+(`DrugSafetyValidator.statableRating`) and its clause is not a caution: *"1 Moderate interaction — Naproxen with
+Acetylsalicylic acid (aspirin)."*, the form a Major takes Cautions are counted as before, and so are interactions that are truly unrated.
+
+Pinned by `AlwaysCollapsedAnswerTest.aRatedInteractionIsNotCountedAsUnrated`, which reddens without the change.

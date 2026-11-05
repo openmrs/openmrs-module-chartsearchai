@@ -146,6 +146,23 @@ public class AlwaysCollapsedAnswerTest extends BaseModuleContextSensitiveTest {
 				+ "Nevirapine.", chart.getModuleAnswerSummary(), "was: " + chart.getModuleAnswer());
 	}
 
+	/** A rated interaction is counted under its rating, whatever the clause it carries: on the DDI rig "Is naproxen
+	 *  safe for him?" beside his aspirin showed "Naproxen: no Major interactions; 1 unrated interaction." over a
+	 *  finding rated Moderate, whose shared NSAID group made it a reason to withhold rather than a caution. */
+	@Test
+	public void aRatedInteractionIsNotCountedAsUnrated() {
+		List<PatientClinicalContext.ActiveDrugOrder> orders = new ArrayList<PatientClinicalContext.ActiveDrugOrder>();
+		orders.add(DrugReferenceTestSupport.activeOrder("order-asa", "Aspirin 81mg", "Aspirin"));
+		PatientChart chart = ask("Is naproxen safe for him?", null, orders);
+		String answer = chart.getModuleAnswer();
+
+		assertNotNull(answer, "the module answers");
+		assertTrue(answer.contains("Naproxen interacts with active order Acetylsalicylic acid (aspirin) — Moderate."),
+			"precondition: the finding is rated Moderate — " + answer);
+		assertEquals("1 Moderate interaction — Naproxen with Acetylsalicylic acid (aspirin).",
+			chart.getModuleAnswerSummary(), "was: " + answer);
+	}
+
 	/** A pair the data rates from both sides is stated once, from the side the question names first, however the
 	 *  question asks about it: on the DDI rig "How severe is the interaction between her rifampicin and nevirapine?"
 	 *  stated the one pair twice, once from each drug, and counted "2 Major interactions". */

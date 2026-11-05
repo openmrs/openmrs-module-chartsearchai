@@ -6053,7 +6053,11 @@ public class DrugReferenceInjector {
 			} else if (SafetyWarning.TYPE_CONTRAINDICATION.equals(finding.getType())) {
 				contraindications++;
 			} else if (SafetyWarning.TYPE_INTERACTION.equals(finding.getType())
-					&& DrugSafetyValidator.ratedAReasonToWithhold(finding.getSeverity())) {
+					&& (DrugSafetyValidator.ratedAReasonToWithhold(finding.getSeverity())
+							|| DrugSafetyValidator.statableRating(finding.getSeverity()) != null
+									&& !STRENGTH_CAUTION.equals(clause) && !STRENGTH_CAUTION_CURRENT_MEDICATION.equals(clause))) {
+				// Under its rating, whatever made it more than a caution: a Moderate pair whose shared group withholds was
+				// counted "1 unrated interaction" (ADR Decision 582).
 				String rating = finding.getSeverity().trim();
 				List<String> labels = rated.get(rating);
 				if (labels == null) {

@@ -146,6 +146,26 @@ public class AlwaysCollapsedAnswerTest extends BaseModuleContextSensitiveTest {
 				+ "Nevirapine.", chart.getModuleAnswerSummary(), "was: " + chart.getModuleAnswer());
 	}
 
+	/** A pair the data rates from both sides is stated once, from the side the question names first, however the
+	 *  question asks about it: on the DDI rig "How severe is the interaction between her rifampicin and nevirapine?"
+	 *  stated the one pair twice, once from each drug, and counted "2 Major interactions". */
+	@Test
+	public void aPairRatedFromBothSidesIsStatedOnce() {
+		List<PatientClinicalContext.ActiveDrugOrder> orders = new ArrayList<PatientClinicalContext.ActiveDrugOrder>();
+		orders.add(DrugReferenceTestSupport.activeOrder("order-nvp", "Nevirapine 200mg", "Nevirapine"));
+		orders.add(DrugReferenceTestSupport.activeOrder("order-rif", "Rifampicin 150mg", "Rifampicin"));
+		PatientChart chart = ask("How severe is the interaction between his rifampicin and nevirapine?", null, orders);
+		String answer = chart.getModuleAnswer();
+
+		assertNotNull(answer, "the module answers");
+		int stated = answer.split("interacts with active order", -1).length - 1;
+		assertEquals(1, stated, "the pair once: " + answer);
+		assertTrue(answer.contains("Rifampicin (rifampin) interacts with active order Nevirapine — Major."),
+			"from the drug named first: " + answer);
+		assertTrue(chart.getModuleAnswerSummary().endsWith("1 Major interaction — Rifampicin (rifampin) with Nevirapine."),
+			"was: " + chart.getModuleAnswerSummary());
+	}
+
 	private static List<PatientClinicalContext.ActiveDrugOrder> demoOrders() {
 		List<PatientClinicalContext.ActiveDrugOrder> orders = new ArrayList<PatientClinicalContext.ActiveDrugOrder>();
 		for (int n = 1; n <= 3; n++) {

@@ -26938,3 +26938,32 @@ Pinned by `EitherOfTwoDrugsTest`, `ClinicianWordingsTest.whichOfTwoIsSaferWhenSh
 `TwoProposalsNeutralFindingsTest` and
 `ProductHeldInPartAskedWithAnotherDrugTest.proposedTogetherTheCombinationSheTakesInPartIsGivenNoVerdict`, which redden
 without the change.
+
+## Decision 581: A pair asked about is stated from one side, however the question asks
+
+**Status: Accepted** (November 2026). Found while re-asking `docs/ddi-tested-questions.md` on the 8089 DDI rig on
+2026-11-05. It extends
+[Decision 264](#decision-264-what-the-interaction-between-two-drugs-is-is-answered-with-the-findings-relating-them-whole)
+with the rule
+[Decision 203](#decision-203-two-drugs-she-already-takes-asked-about-together-are-answered-with-what-relates-them--never-that-they-may-be-combined)
+already applies.
+
+### Context
+
+The data rates rifampicin with nevirapine from both drugs, so the screen raises a finding from each side. Dora DdiControl,
+*"Is there an interaction between her rifampicin and nevirapine?"*, went to `composeTwoOfHerOwn`, which states each pair
+from one side and showed one line. *"How severe is the interaction between her rifampicin and nevirapine?"* went to
+`composeAboutThePair`, which stated both findings: *"Nevirapine interacts with active order Rifampicin (rifampin) —
+Major. …"* and then *"Rifampicin (rifampin) interacts with active order Nevirapine — Major. …"*, with the same mechanism
+sentence twice. The summary counted *"2 Major interactions — Nevirapine with Rifampicin (rifampin); Rifampicin (rifampin)
+with Nevirapine."*
+
+### The decision
+
+`composeAboutThePair` states the findings `DrugReferenceInjector.statedFromOneSide` keeps. Each pair of substances is
+stated from the drug the question names first where a finding states it from there, otherwise from the other drug, as
+`twoOfHerOwnAskedTogether` does. Both read the pairs through `pairsAcross`. A finding that relates no pair across the
+two, the question-pair arm's, is kept. A finding dropped here is still excluded from *"Against this patient's active
+medications:"*, so it does not come back under that heading.
+
+Pinned by `AlwaysCollapsedAnswerTest.aPairRatedFromBothSidesIsStatedOnce`, which reddens without the change.

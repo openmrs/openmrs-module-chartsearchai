@@ -7533,14 +7533,7 @@ public class DrugReferenceInjector {
 						|| !isAbout(finding, sides.get(s))) {
 					continue;
 				}
-				Set<Set<Object>> pairs = new HashSet<Set<Object>>();
-				for (Object subject : subjectSubstances(finding)) {
-					for (Object partner : partnerSubstances(finding)) {
-						if (sides.get(1 - s).contains(partner)) {
-							pairs.add(new HashSet<Object>(Arrays.asList(subject, partner)));
-						}
-					}
-				}
+				Set<Set<Object>> pairs = pairsAcross(finding, sides.get(1 - s));
 				if (pairs.isEmpty() || s == 1 && statedFromTheFirst.containsAll(pairs)) {
 					continue;
 				}
@@ -7551,6 +7544,46 @@ public class DrugReferenceInjector {
 			}
 		}
 		return relating;
+	}
+
+	/** Each pair of substances {@code finding} relates, its subject's with a partner of {@code other}'s. */
+	private static Set<Set<Object>> pairsAcross(SafetyWarning finding, Set<Object> other) {
+		Set<Set<Object>> pairs = new HashSet<Set<Object>>();
+		for (Object subject : subjectSubstances(finding)) {
+			for (Object partner : partnerSubstances(finding)) {
+				if (other.contains(partner)) {
+					pairs.add(new HashSet<Object>(Arrays.asList(subject, partner)));
+				}
+			}
+		}
+		return pairs;
+	}
+
+	/**
+	 * Of {@code relating}, each pair of substances stated from ONE side — the drug the question names first, {@code
+	 * sides.get(0)}, where a finding states the pair from there — as {@link #twoOfHerOwnAskedTogether} states it (ADR
+	 * Decision 581). A finding relating no pair across the two, the question-pair arm's, is kept as it is.
+	 */
+	private static List<Integer> statedFromOneSide(List<SafetyWarning> findings, List<Integer> relating,
+			List<Set<Object>> sides) {
+		Set<Set<Object>> statedFromTheFirst = new HashSet<Set<Object>>();
+		for (int i : relating) {
+			if (isAbout(findings.get(i), sides.get(0))) {
+				statedFromTheFirst.addAll(pairsAcross(findings.get(i), sides.get(1)));
+			}
+		}
+		List<Integer> kept = new ArrayList<Integer>();
+		for (int i : relating) {
+			SafetyWarning finding = findings.get(i);
+			if (!isAbout(finding, sides.get(0)) && isAbout(finding, sides.get(1))) {
+				Set<Set<Object>> pairs = pairsAcross(finding, sides.get(0));
+				if (!pairs.isEmpty() && statedFromTheFirst.containsAll(pairs)) {
+					continue;
+				}
+			}
+			kept.add(i);
+		}
+		return kept;
 	}
 
 	/** The substances of her started orders that carry {@code drug}, its own among them — the drug as the orders she takes
@@ -9177,8 +9210,10 @@ public class DrugReferenceInjector {
 		if (relating.isEmpty()) {
 			return null;
 		}
-		List<String> lines = withEachFormStatedOnce(findings, numbers, relating,
-				findingLines(findings, numbers, relating, orderRecordNumbers, herOrderRecords, false), formsOf(pair));
+		// Rated from both sides, the pair was stated twice and counted "2 Major interactions" (ADR Decision 581).
+		List<Integer> stated = statedFromOneSide(findings, relating, sides);
+		List<String> lines = withEachFormStatedOnce(findings, numbers, stated,
+				findingLines(findings, numbers, stated, orderRecordNumbers, herOrderRecords, false), formsOf(pair));
 		// A drug of the two that is not hers is one being weighed for her: its findings against her active medications are
 		// what the check found of it, stated as ADR Decision 220's answer states them (ADR Decision 425).
 		List<Integer> notHers = new ArrayList<Integer>();

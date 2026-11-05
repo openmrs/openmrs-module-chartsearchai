@@ -1086,7 +1086,9 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		assertTrue(answer.startsWith(DrugReferenceInjector.COMPARES_NO_DRUGS_LEAD + "\nFluconazole or Clarithromycin, each "
 				+ "checked beside Warfarin; none of the three is one of this patient's active medications.\nBetween them:\n"),
 			answer);
-		assertTrue(answer.contains("\n" + DrugReferenceInjector.FOUND_LEAD_OPENING + "Warfarin:\n"), answer);
+		// What was found about the third, under its own "For" heading and no second one (ADR Decision 580).
+		assertTrue(answer.contains("\nFor Warfarin:\n"), answer);
+		assertFalse(answer.contains(DrugReferenceInjector.FOUND_LEAD_OPENING + "Warfarin:"), answer);
 		assertTrue(answer.contains("\nFor Fluconazole:\nNo — this module's drug-safety check found a reason to withhold "
 				+ "Fluconazole.\n"), answer);
 		assertFalse(answer.contains("withhold Warfarin"), answer);
@@ -1104,16 +1106,17 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		assertNotNull(one);
 		assertTrue(one.startsWith(DrugReferenceInjector.COMPARES_NO_DRUGS_LEAD + "\nDiclofenac is one of this patient's active "
 				+ "medications; Fluconazole and Warfarin are not.\n"), one);
-		assertTrue(one.contains("\nFor Diclofenac:\n" + DrugReferenceInjector.FOUND_LEAD_OPENING + "Diclofenac:\n"), one);
+		assertTrue(one.contains("\nFor Diclofenac:\n"), one);
 		assertTrue(one.contains("\nFor Fluconazole:\nNo — this module's drug-safety check found a reason to withhold "
 				+ "Fluconazole.\n"), one);
 		String both = ask("Is diclofenac safer than ibuprofen with her warfarin?");
 		assertNotNull(both);
 		assertTrue(both.startsWith(DrugReferenceInjector.COMPARES_NO_DRUGS_LEAD + "\nDiclofenac and Ibuprofen are among this "
-				+ "patient's active medications; Warfarin is not.\nFor Diclofenac:\n" + DrugReferenceInjector.FOUND_LEAD_OPENING
-				+ "Diclofenac:\n"), both);
-		assertTrue(both.contains("\nFor Ibuprofen:\n" + DrugReferenceInjector.FOUND_LEAD_OPENING + "Ibuprofen:\n"), both);
+				+ "patient's active medications; Warfarin is not.\nFor Diclofenac:\n"), both);
+		assertTrue(both.contains("\nFor Ibuprofen:\n"), both);
 		assertFalse(both.contains("withhold"), both);
+		// Under "For X:" the drug is not named again by a heading of its own (ADR Decision 580).
+		assertFalse(both.contains(":\n" + DrugReferenceInjector.FOUND_LEAD_OPENING), both);
 	}
 
 	/**
@@ -1128,9 +1131,8 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 			assertNotNull(answer, question);
 			assertTrue(answer.startsWith(DrugReferenceInjector.COMPARES_NO_DRUGS_LEAD + "\nDiclofenac or Ibuprofen, each checked "
 					+ "on its own.\nDiclofenac is one of this patient's active medications (Diclofenac 50mg [n]).\nIbuprofen is one "
-					+ "of this patient's active medications (Ibuprofen 400mg [n]).\nFor Diclofenac:\n"
-					+ DrugReferenceInjector.FOUND_LEAD_OPENING + "Diclofenac:\n"), answer);
-			assertTrue(answer.contains("\nFor Ibuprofen:\n" + DrugReferenceInjector.FOUND_LEAD_OPENING + "Ibuprofen:\n"), answer);
+					+ "of this patient's active medications (Ibuprofen 400mg [n]).\nFor Diclofenac:\n"), answer);
+			assertTrue(answer.contains("\nFor Ibuprofen:\n"), answer);
 			assertFalse(answer.contains("withhold"), answer);
 		}
 	}

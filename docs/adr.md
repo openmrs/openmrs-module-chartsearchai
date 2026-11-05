@@ -26915,3 +26915,26 @@ level"*. A question whether something raises or lowers a level fits none of them
 
 Pinned by `AllergyQuestionConflictingOrderContextTest.search_aMeasuredLevelOfHerDrugIsAQuestionAboutHerRecord`, which
 reddens without the change, and whose *"Will ibuprofen raise her aspirin levels?"* control is still handed the findings.
+
+## Decision 580: Under "For X:" the drug is not named again by a heading of its own
+
+**Status: Accepted** (November 2026). Found while re-asking `docs/ddi-tested-questions.md` on the 8089 DDI rig on
+2026-11-05, as a repeat of the kind the owner has asked to be removed (Decisions 575, 577).
+
+### Context
+
+An answer about two or more drugs heads each drug's findings *"For Ibuprofen:"*. Where those findings make no verdict, the
+composer also wrote *"What this module's drug-safety check found about Ibuprofen:"* under that heading (Decisions 305,
+309, 442). Betty Williams, *"Can I give her warfarin and ibuprofen together?"*, read *"For Ibuprofen:\nWhat this module's
+drug-safety check found about Ibuprofen:\nIbuprofen is in the same cross-reactivity group …"*: two headings, one drug.
+
+### The decision
+
+`composeTwoProposalsTogether` and `composeSeveralDrugsTogether` state such findings directly under *"For X:"*. The
+answer's lead about one drug alone keeps *"What this module's drug-safety check found about X:"*, since no other heading
+names the drug there.
+
+Pinned by `EitherOfTwoDrugsTest`, `ClinicianWordingsTest.whichOfTwoIsSaferWhenSheTakesOneOfThemStatesHersWithNoVerdict`,
+`TwoProposalsNeutralFindingsTest` and
+`ProductHeldInPartAskedWithAnotherDrugTest.proposedTogetherTheCombinationSheTakesInPartIsGivenNoVerdict`, which redden
+without the change.

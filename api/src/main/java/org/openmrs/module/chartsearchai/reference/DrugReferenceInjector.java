@@ -8309,8 +8309,8 @@ public class DrugReferenceInjector {
 					|| !withholds && !cautionsOnlyAbout(drug.substances, its)) {
 				// Findings that make no verdict — a contraindication, a reason to withhold no rating makes: what the check
 				// found, every one, and no verdict, as Decision 257 answers one drug (ADR Decision 305). The model answered
-				// "can be given" and left a cross-reactivity out.
-				lines.add(FOUND_LEAD_OPENING + drug.label + ":");
+				// "can be given" and left a cross-reactivity out. Under "For X:", which already names the drug, with no heading of
+				// their own (ADR Decision 580).
 				for (int f = 0; f < its.size(); f++) {
 					lines.add(findingLine(its.get(f), numbersOfEach.get(drug).get(f), orderRecordNumbers, herOrderRecords,
 							true));
@@ -8460,7 +8460,7 @@ public class DrugReferenceInjector {
 			// was found, with no verdict.
 			if (choosing && (drug == asked.get(2) || hers.contains(drug))
 					|| !withholds && !cautionsOnlyAbout(drug.substances, its)) {
-				lines.add(FOUND_LEAD_OPENING + drug.label + ":");
+				// Under "For X:", with no heading of their own (ADR Decision 580).
 				for (int f = 0; f < its.size(); f++) {
 					lines.add(findingLine(its.get(f), itsNumbers.get(f), orderRecordNumbers, herOrderRecords, true));
 				}

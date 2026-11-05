@@ -79,7 +79,7 @@ public class EitherOfTwoDrugsTest extends BaseModuleContextSensitiveTest {
 		assertEquals("Ibuprofen or Acetaminophen, each checked on its own.", lines[1], answer);
 		assertTrue(lines[2].startsWith("Acetaminophen is one of this patient's active medications (Acetaminophen 500mg"),
 			answer);
-		assertTrue(answer.contains("\nFor Ibuprofen:\nWhat this module's drug-safety check found about Ibuprofen:\n"
+		assertTrue(answer.contains("\nFor Ibuprofen:\n"
 				+ "The patient has a recorded allergy to Ibuprofen."), answer);
 		// It closes on that line: no scope line follows it (ADR Decision 573).
 		assertTrue(answer.endsWith("\nFor Acetaminophen:\nThe interaction check raised no finding about Acetaminophen "
@@ -97,7 +97,7 @@ public class EitherOfTwoDrugsTest extends BaseModuleContextSensitiveTest {
 		String[] lines = answer.split("\n");
 		assertEquals("Ibuprofen or Acetaminophen, each checked on its own.", lines[0], answer);
 		assertTrue(lines[1].startsWith("Ibuprofen is one of this patient's active medications (Advil 400mg"), answer);
-		assertTrue(answer.contains("\nFor Ibuprofen:\nWhat this module's drug-safety check found about Ibuprofen:\n"
+		assertTrue(answer.contains("\nFor Ibuprofen:\n"
 				+ "Ibuprofen interacts with active order Methotrexate"), answer);
 		assertTrue(answer.contains("\nFor Acetaminophen:\n"), answer);
 		assertTrue(!answer.contains("neither is one of"), answer);

@@ -10,6 +10,7 @@
 package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -49,7 +50,10 @@ public class TwoProposalsNeutralFindingsTest extends BaseModuleContextSensitiveT
 				+ "medications.", lines.get(0), "was: " + answer);
 		int azithromycin = lines.indexOf("For Azithromycin:");
 		assertTrue(azithromycin > 0, "was: " + answer);
-		assertEquals(DrugReferenceInjector.FOUND_LEAD_OPENING + "Azithromycin:", lines.get(azithromycin + 1), "was: " + answer);
+		// Under "For Azithromycin:" what was found, with no second heading naming the drug (ADR Decision 580).
+		assertTrue(lines.get(azithromycin + 1).startsWith("Azithromycin is in the same ATC class (J01FA) as the patient's "
+				+ "allergy to Clarithromycin"), "was: " + answer);
+		assertFalse(answer.contains(DrugReferenceInjector.FOUND_LEAD_OPENING), "was: " + answer);
 		assertTrue(answer.contains("Azithromycin is in the same ATC class (J01FA) as the patient's allergy to Clarithromycin"),
 			"the cross-reactivity is stated, was: " + answer);
 		assertTrue(!answer.contains("can be given"), "no clearance, was: " + answer);

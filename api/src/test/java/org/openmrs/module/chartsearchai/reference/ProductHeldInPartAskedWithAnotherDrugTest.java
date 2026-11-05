@@ -89,9 +89,10 @@ public class ProductHeldInPartAskedWithAnotherDrugTest extends BaseModuleContext
 		int its = answer.indexOf("\nFor Isoniazid / pyrazinamide / rifampin:\n");
 		assertTrue(its > 0, answer);
 		String tail = answer.substring(its);
-		assertTrue(tail.contains("\n" + DrugReferenceInjector.FOUND_LEAD_OPENING + "Isoniazid / pyrazinamide / rifampin:\n"),
-			"what the check found, listed: " + answer);
-		assertTrue(tail.contains("\nRifampicin (rifampin) interacts with active order Isoniazid — Minor."), answer);
+		// Listed directly under "For …:", with no second heading naming the drug (ADR Decision 580).
+		assertTrue(tail.startsWith("\nFor Isoniazid / pyrazinamide / rifampin:\nRifampicin (rifampin) interacts with active "
+				+ "order Isoniazid — Minor."), "what the check found, listed: " + answer);
+		assertTrue(!tail.contains(DrugReferenceInjector.FOUND_LEAD_OPENING), answer);
 		assertTrue(!tail.contains("can be given") && !tail.contains("should not be given"),
 			"no verdict on a combination that would duplicate what she takes: " + answer);
 	}

@@ -271,6 +271,37 @@ public class AllergyQuestionConflictingOrderContextTest extends BaseModuleContex
 	}
 
 	/**
+	 * A measured level of her drug, asked as a fact, is a result in her chart (ADR Decision 579): on the 8089 rig "What was
+	 * her last lithium level?" was answered from her chart and carried lithium's interaction chip beside it. A question whether
+	 * a drug raises or lowers a level keeps the findings — "Will ibuprofen raise her lithium levels?" asks of an interaction.
+	 */
+	@Test
+	public void search_aMeasuredLevelOfHerDrugIsAQuestionAboutHerRecord() throws IOException {
+		int number = theAspirinOrderRecordNumber(SLICE);
+		String modelAnswer = "No aspirin level is recorded for her aspirin [" + number + "].";
+		Recorder unrelated = new Recorder(modelAnswer);
+		TestableService plain = serviceAnswering(modelAnswer);
+		plain.setLlmProvider(unrelated);
+		plain.search(patient, "Summarize her chart.");
+		for (String question : Arrays.asList("What was her last aspirin level?", "What is her aspirin level?",
+				"When was her aspirin level checked?", "What was her most recent aspirin level?")) {
+			Recorder recorder = new Recorder(modelAnswer);
+			TestableService service = serviceAnswering(modelAnswer);
+			service.setLlmProvider(recorder);
+			ChartAnswer answer = service.search(patient, question);
+			assertEquals(modelAnswer, answer.getAnswer(), question + " — the model's answer, as it wrote it");
+			assertTrue(answer.getSafetyWarnings().isEmpty(), question + " — no chip: " + answer.getSafetyWarnings());
+			assertEquals(unrelated.records, recorder.records, question + " — handed what a question asking nothing of drug "
+					+ "safety is handed");
+		}
+		Recorder recorder = new Recorder(modelAnswer);
+		TestableService service = serviceAnswering(modelAnswer);
+		service.setLlmProvider(recorder);
+		service.search(patient, "Will ibuprofen raise her aspirin levels?");
+		assertTrue(!unrelated.records.equals(recorder.records), "precondition: a question of what raises a level is handed more");
+	}
+
+	/**
 	 * The dose she is on is a fact of her record too (ADR Decision 401): "What dose of efavirenz is she on?" was answered "The
 	 * dose of Efavirenz is not recorded. The records address Efavirenz through safety findings: …". A dose asked of a drug
 	 * proposed keeps them (Decision 394).

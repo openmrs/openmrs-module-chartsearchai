@@ -3028,6 +3028,11 @@ public final class QueryScopeRouter {
 		if (fitsAShape(wordsWithTheDrugMarked, HOW_TO_TAKE_A_DRUG_SHAPES)) {
 			return true;
 		}
+		// Nor a measured level of her drug asked as a fact — "What was her last lithium level?" — a result in her chart, which
+		// "level", a stem of what raises or lowers one, would otherwise refuse (ADR Decision 579).
+		if (fitsAShape(wordsWithTheDrugMarked, A_MEASURED_LEVEL_SHAPES)) {
+			return true;
+		}
 		if (!RECORD_OPENERS.contains(wordsWithTheDrugMarked.get(0)) || "about".equals(wordsWithTheDrugMarked.get(1))) {
 			return false;
 		}
@@ -3067,6 +3072,13 @@ public final class QueryScopeRouter {
 		}
 		return !fitsAOneDrugShape(wordsWithTheDrugMarked) && residualReading(wordsWithTheDrugMarked) == Residual.NONE;
 	}
+
+	/** A measured level of her drug, asked as a fact: "What was her last lithium level?", "When was her digoxin level
+	 *  checked?" (ADR Decision 579). Never what changes one: "Will ibuprofen raise her lithium levels?". */
+	private static final List<Pattern> A_MEASURED_LEVEL_SHAPES = shapes(
+			"(?:what|when) (?:was|is|were|are) " + POSSESSIVE + " (?:(?:last|latest|most recent|current|previous|recent) )?" + D
+					+ " (?:levels?|concentrations?|results?)(?: (?:checked|measured|done|taken|drawn))?",
+			POSSESSIVE + " (?:(?:last|latest|most recent|current) )?" + D + " (?:levels?|concentrations?)");
 
 	/** When to take a drug, with food or without, and how — "When should she take her efavirenz?", "Should rifampicin be taken
 	 *  on an empty stomach?", "Can she crush her tablets of X?" (ADR Decision 450): how it is taken, which no finding weighs. */

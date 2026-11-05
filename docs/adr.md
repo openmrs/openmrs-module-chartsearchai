@@ -26893,3 +26893,25 @@ plus 1 caution."*
 meaning, the patient's orders, and is not widened.
 
 Pinned by `AnswerDetailsContextTest.aPairTheQuestionNamesIsNamedWholeInTheSummary`, which reddens without the change.
+
+## Decision 579: A measured level of her drug, asked as a fact, is a question about her record
+
+**Status: Accepted** (November 2026). Found while re-asking `docs/ddi-tested-questions.md` on the 8089 DDI rig on
+2026-11-05. It extends
+[Decision 399](#decision-399-a-question-naming-a-drug-only-to-ask-of-its-record-in-her-chart-is-handed-the-model-with-no-drug-safety-material-and-carries-no-chip).
+
+### Context
+
+*"What was her last lithium level?"* for Amina Wekesa was answered from her chart, *"No lithium level is recorded."*, with
+lithium's interaction chip against her cotrimoxazole beside it. The question asks for a result in her chart. *"level"* is
+one of `QueryScopeRouter`'s safety stems, because *"Will ibuprofen raise her lithium levels?"* asks of an interaction. So
+Decision 399's reading of a question about a drug's record refused it, and the drug's findings and chips came with it.
+
+### The decision
+
+`QueryScopeRouter.A_MEASURED_LEVEL_SHAPES` are read as a question about the drug's record before the safety stems are
+asked: *"What was her (last / latest / most recent / current) X level?"*, *"When was her X level checked?"*, *"her X
+level"*. A question whether something raises or lowers a level fits none of them and keeps its findings.
+
+Pinned by `AllergyQuestionConflictingOrderContextTest.search_aMeasuredLevelOfHerDrugIsAQuestionAboutHerRecord`, which
+reddens without the change, and whose *"Will ibuprofen raise her aspirin levels?"* control is still handed the findings.

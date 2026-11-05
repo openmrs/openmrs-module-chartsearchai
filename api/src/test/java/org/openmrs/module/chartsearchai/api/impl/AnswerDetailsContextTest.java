@@ -259,6 +259,26 @@ public class AnswerDetailsContextTest extends BaseModuleContextSensitiveTest {
 		assertFalse(answer.getAnswerSummary().matches(".*; Warfarin\\.$"), "was: " + answer.getAnswerSummary());
 	}
 
+	/**
+	 * An order whose display has brackets of its own is dropped from the summary with the citing aside it sits in (ADR
+	 * Decision 586): on the 8089 rig Richard Jones's "Does his dexamethasone interact with his hydrocortisone?" was summed
+	 * up as "Dexamethasone and Hydrocortisone (topical) (Hydrocortisone (topical)) are both among …" — of the aside
+	 * "(Hydrocortisone (topical) [3])" only its marker was dropped, where "(Dexamethasone [2])" went whole.
+	 */
+	@Test
+	public void anOrderWhoseDisplayHasBracketsIsDroppedWithItsAside() {
+		String question = "Does her dexamethasone interact with her hydrocortisone?";
+		ChartAnswer answer = serviceOver(DrugReferenceTestSupport.injectedChartOverOrders(question, "Dexamethasone",
+			"Hydrocortisone (topical)"), "unused").search(aPatient(), question);
+		assertTrue(answer.isAnsweredByTheModule(), "precondition: the module answers — " + answer.getAnswer());
+		assertTrue(answer.getAnswer().contains(" (Hydrocortisone (topical) ["),
+			"precondition: the order's aside nests its own brackets — " + answer.getAnswer());
+
+		assertTrue(answer.getAnswerSummary().startsWith(
+			"Dexamethasone and Hydrocortisone (topical) are both among this patient's active medications"),
+			"was: " + answer.getAnswerSummary());
+	}
+
 	/** A model's list carries a summary too (ADR Decision 528), so it publishes its details: never null beside one. */
 	@Test
 	public void aModelsListPublishesItsDetails() {

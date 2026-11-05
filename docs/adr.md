@@ -27097,3 +27097,26 @@ the summary is set after that step, and only where nothing else set one. The ans
 
 Pinned by `DrugClassProposalTest.aClassProposedIsSummedUpByHerOrdersAndAllergiesInIt`, which reddens without the
 change.
+
+## Decision 586: A cited aside is dropped from the summary whole, a name in brackets inside it included
+
+**Status**: Accepted (2026-11-05)
+
+### Context
+
+On the 8089 rig, Richard Jones's *"Does his dexamethasone interact with his hydrocortisone?"* opens *"Dexamethasone
+(Dexamethasone [2]) and Hydrocortisone (topical) (Hydrocortisone (topical) [3]) are both among this patient's active
+medications."* It was summed up as *"Dexamethasone and Hydrocortisone (topical) (Hydrocortisone (topical)) are both
+among …"*. `inShort` drops a bracketed aside that cites or counts (Decision 575). Its pattern matched only an aside with
+no bracket inside it. So the aside naming his order *"Hydrocortisone (topical)"* lost its marker and kept the rest,
+while *"(Dexamethasone [2])"* went whole.
+
+### The decision
+
+`DrugReferenceInjector.withoutCitingAsides` judges each aside on its own words, innermost first. An aside that cites
+nothing is set aside under a mark carrying no digit, so the aside around it is asked of its own words. One that cites or
+counts is dropped whole, with whatever it holds. An aside citing nothing stays as written, nested or not: *"(aspirin)"*,
+*"(Rifampicin (rifampin))"*. An aside with no bracket inside it is judged as before.
+
+Pinned by `AnswerDetailsContextTest.anOrderWhoseDisplayHasBracketsIsDroppedWithItsAside`, which reddens without the
+change.

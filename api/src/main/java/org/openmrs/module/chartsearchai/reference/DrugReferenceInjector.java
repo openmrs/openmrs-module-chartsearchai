@@ -6457,12 +6457,52 @@ public class DrugReferenceInjector {
 		}
 		// A bracketed aside that cites or counts — "(Ibuprofen 400mg [2])", "(Efavirenz, 3 orders)", "(J05AG)" — is detail;
 		// one that is a name, "(aspirin)", is part of what the sentence says, kept so the summary states the line whole and
-		// "Show details" does not repeat it (ADR Decision 575). Asides first, while their markers still mark them.
-		s = s.replaceAll("\\s*\\([^()]*[\\[\\p{N}][^()]*\\)", "").replaceAll("\\s*\\[\\d+\\]", "").trim();
+		// "Show details" does not repeat it (ADR Decision 575). Asides first, while their markers still mark them, each
+		// judged on its own words where it holds a name in brackets (ADR Decision 586).
+		s = withoutCitingAsides(s).replaceAll("\\s*\\[\\d+\\]", "").trim();
 		while (s.endsWith(".") || s.endsWith(";") || s.endsWith(",")) {
 			s = s.substring(0, s.length() - 1).trim();
 		}
 		return s;
+	}
+
+	/** One bracketed aside with no bracket inside it, and the space before it. */
+	private static final Pattern INNERMOST_ASIDE = Pattern.compile("\\s*\\(([^()]*)\\)");
+
+	/** What makes an aside one that cites or counts: a marker's bracket, or a number. */
+	private static final Pattern CITES_OR_COUNTS = Pattern.compile("[\\[\\p{N}]");
+
+	/**
+	 * {@code s} without the bracketed asides that cite or count, each judged on its own words and not on a name in brackets
+	 * inside it (ADR Decision 586): <em>"(Hydrocortisone (topical) [3])"</em> is an order cited, dropped whole, where
+	 * matching only bracket-free asides kept <em>"(Hydrocortisone (topical))"</em> once its marker was gone. An aside citing
+	 * nothing, nested or not — <em>"(aspirin)"</em>, <em>"(Rifampicin (rifampin))"</em> — stays as written. Innermost
+	 * first: one that stays is set aside under a mark carrying no digit, so the aside around it is asked of its own words.
+	 */
+	private static String withoutCitingAsides(String s) {
+		List<String> kept = new ArrayList<String>();
+		String text = s;
+		while (true) {
+			Matcher aside = INNERMOST_ASIDE.matcher(text);
+			if (!aside.find()) {
+				break;
+			}
+			StringBuffer out = new StringBuffer();
+			do {
+				String replacement = "";
+				if (!CITES_OR_COUNTS.matcher(aside.group(1)).find()) {
+					replacement = "\uE000" + (char) (0xE100 + kept.size());
+					kept.add(aside.group());
+				}
+				aside.appendReplacement(out, Matcher.quoteReplacement(replacement));
+			} while (aside.find());
+			aside.appendTail(out);
+			text = out.toString();
+		}
+		for (int i = kept.size() - 1; i >= 0; i--) {
+			text = text.replace("\uE000" + (char) (0xE100 + i), kept.get(i));
+		}
+		return text;
 	}
 
 	/** Whether any of {@code cited} is an interaction, so a count of them says what is rated a reason to withhold. */

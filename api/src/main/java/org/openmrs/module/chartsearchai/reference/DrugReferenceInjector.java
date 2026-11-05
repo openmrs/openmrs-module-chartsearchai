@@ -1036,6 +1036,9 @@ public class DrugReferenceInjector {
 		String moduleAnswer = null;
 		// The one sentence the answer opens with that a client shows, the rest collapsed under it (ADR Decision 517).
 		String summary = null;
+		// A class proposed is summed up by what her chart holds in it, a sentence that is no one line of the answer, so it is
+		// set after the leads are folded into a bottom line that is (ADR Decision 585).
+		String classBottomLine = null;
 		// Decision 204's and 206's answers, assigned where their branches decide them, so each is composed once.
 		String belowFloorAboutHerOwn;
 		String noPairAboutHerOwn;
@@ -1544,6 +1547,7 @@ public class DrugReferenceInjector {
 				&& QueryScopeRouter.proposesADrugClass(question,
 					DrugClassTerms.termsOf(namedClass, drugReferenceService.getCrossReactivityGroups()))) {
 			moduleAnswer = composeClassProposal(namedClass, askedGroup, orderEntries, context, false);
+			classBottomLine = moduleAnswer == null ? null : classProposalBottomLine(moduleAnswer);
 		}
 		// Whether she is allergic to a class: her recorded drug allergies in it (ADR Decision 367).
 		if (moduleAnswer == null && namedClass != null && questionDrugs.isEmpty() && context != null
@@ -1753,6 +1757,9 @@ public class DrugReferenceInjector {
 			} else {
 				summary = null;
 			}
+		}
+		if (moduleAnswer != null && summary == null && classBottomLine != null) {
+			summary = classBottomLine;
 		}
 		// And when the drug would be given, or a condition the question names, which no finding weighs (ADR Decision 394).
 		if (moduleAnswer != null && QueryScopeRouter.statesATiming(question)) {
@@ -9992,6 +9999,21 @@ public class DrugReferenceInjector {
 	 * model told a patient on metronidazole "No — Omeprazole / sodium bicarbonate should not be given". {@code null} where
 	 * her orders were not all read.
 	 */
+	/**
+	 * The one sentence a client shows of {@link #composeClassProposal}'s answer, or {@code null} where it is the note alone
+	 * (ADR Decision 585): her orders in the class, then her drug allergies in it with their names — what this patient's
+	 * chart holds in it. The note that the class was not resolved stays under it: joined in, its explanation and its request
+	 * to ask about a drug by name read as the answer, and the allergy line, cut at its colon, lost the allergies it names.
+	 */
+	static String classProposalBottomLine(String answer) {
+		String[] lines = answer.split("\n", -1);
+		if (lines.length != 3 || !lines[1].endsWith(".") || lines[2].isEmpty()) {
+			return null;
+		}
+		return lines[1].substring(0, lines[1].length() - 1) + "; " + Character.toLowerCase(lines[2].charAt(0))
+				+ lines[2].substring(1);
+	}
+
 	private String composeClassProposal(String namedClass, CrossReactivityGroup group, List<DrugReference> orderEntries,
 			PatientClinicalContext context, boolean allergiesAlone) {
 		String atc = DrugClassTerms.atcGroupOf(namedClass);

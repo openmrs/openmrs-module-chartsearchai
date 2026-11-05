@@ -23,6 +23,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 
 /**
@@ -195,7 +196,33 @@ public class DrugClassProposalTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/**
+	 * A class proposed is summed up by what this patient's chart holds in it — her orders in it, and her drug allergies in
+	 * it by name — and not by the note that the class was not resolved (ADR Decision 585). On the 8089 rig "Can I give him
+	 * penicillins?" was summed up as "The question names the drug class "Penicillins"; Reference entries are indexed by
+	 * individual substance name, …; Ask about a specific drug by name; none of this patient's active medication orders is
+	 * …; Recorded drug allergies in the drug group this module carries as Penicillins." — the note's words and its request
+	 * joined into one sentence, and his allergy to Penicillin G cut off at its colon.
+	 */
+	@Test
+	public void aClassProposedIsSummedUpByHerOrdersAndAllergiesInIt() {
+		PatientChart chart = askChart("Can I give him penicillins?", DrugReferenceTestSupport.set("penicillin g"),
+			DrugReferenceTestSupport.activeOrder("order-nvp", "Nevirapine 200mg", "Nevirapine"));
+		String answer = chart.getModuleAnswer();
+		assertNotNull(answer, "the module answers");
+		assertEquals("None of this patient's active medication orders is in the drug group this module carries as "
+				+ "Penicillins; recorded drug allergies in the drug group this module carries as Penicillins: penicillin g.",
+			chart.getModuleAnswerSummary(), "was: " + answer);
+		assertTrue(answer.startsWith("The question names the drug class \"Penicillins\"."),
+			"the note stays in the answer: " + answer);
+	}
+
 	private static String ask(String question, Set<String> allergies, PatientClinicalContext.ActiveDrugOrder... given) {
+		return askChart(question, allergies, given).getModuleAnswer();
+	}
+
+	private static PatientChart askChart(String question, Set<String> allergies,
+			PatientClinicalContext.ActiveDrugOrder... given) {
 		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(given);
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : orders) {
@@ -203,6 +230,6 @@ public class DrugClassProposalTest extends BaseModuleContextSensitiveTest {
 		}
 		return DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.shippedServiceWithGroups()).injectRecords(
 			DrugReferenceTestSupport.oneRecordChart(), DrugReferenceTestSupport.ctx(45, null, names, null, allergies, null,
-				orders), question).getModuleAnswer();
+				orders), question);
 	}
 }

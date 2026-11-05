@@ -27072,3 +27072,28 @@ lists nothing between the two, `SHARED_CLASS_NOT_COMPARED` is not said beside a 
 
 Pinned by `TwoDrugsListedBelowTheFloorTest.aSharedClassBetweenTwoOfHersIsStatedOnceAsTheirs`, which reddens without
 the change.
+
+## Decision 585: A drug class proposed is summed up by what her chart holds in it
+
+**Status**: Accepted (2026-11-05)
+
+### Context
+
+*"Can I give him penicillins?"* (Decision 347's answer) has three lines. The first is the note that the class was not
+resolved, then her orders in the class, then her drug allergies in it. With no bottom line of its own, its summary was
+every sentence joined (Decision 529): *"The question names the drug class "Penicillins"; Reference entries are indexed by
+individual substance name, so the class was not resolved to any substance; Ask about a specific drug by name; none of
+this patient's active medication orders is …; Recorded drug allergies in the drug group this module carries as
+Penicillins."* The note's explanation and its request became the answer. The allergy line was cut at its colon, which
+dropped the allergy it names: his Penicillin G.
+
+### The decision
+
+`DrugReferenceInjector.classProposalBottomLine` sums the answer up by its two lines about her chart, whole: *"None of
+this patient's active medication orders is in the drug group this module carries as Penicillins; recorded drug allergies
+in the drug group this module carries as Penicillins: Penicillin G."* The note stays in the answer under it.
+`withLeadsFoldedIntoTheBottomLine` only takes a bottom line that is one of the answer's lines, and this one is not. So
+the summary is set after that step, and only where nothing else set one. The answer's own words are unchanged.
+
+Pinned by `DrugClassProposalTest.aClassProposedIsSummedUpByHerOrdersAndAllergiesInIt`, which reddens without the
+change.

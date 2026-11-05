@@ -1500,7 +1500,8 @@ public class EntrypointRetrievalWiringTest {
 	/**
 	 * A stand-in for the {@code mariadb} client, understanding only the statements this wiring
 	 * issues: the reachability and schema probes, the two global-property reads, the
-	 * insert-if-blank, and the update that turns the sweep off. Anything else is recorded and
+	 * insert-if-blank, the update that turns the sweep off, and the demo seed's program repair with
+	 * the count that follows it. Anything else is recorded and
 	 * refused — a stand-in that accepted a statement it did not understand would let a case pass for
 	 * a reason nobody checked.
 	 *
@@ -1527,10 +1528,15 @@ public class EntrypointRetrievalWiringTest {
 				"#!/bin/sh",
 				"_sql=''",
 				"_want=no",
+				"_inline=no",
 				"for _arg in \"$@\"; do",
 				"\tif [ \"$_want\" = yes ]; then _sql=$_arg; _want=no; fi",
-				"\tif [ \"$_arg\" = '-e' ]; then _want=yes; fi",
+				"\tif [ \"$_arg\" = '-e' ]; then _want=yes; _inline=yes; fi",
 				"done",
+				// A batch the client is handed on stdin, as the demo seed's program repair is,
+				// rather than with -e. Read only where no -e was given, so a statement passed
+				// inline never waits on a stdin nobody writes to.
+				"[ \"$_inline\" = yes ] || _sql=$(cat)",
 				"_sql=$(printf '%s' \"$_sql\" | tr '\\n' ' ')",
 				"printf '%s\\n' \"$_sql\" >> \"$MARIADB_STAND_IN_LOG\"",
 				"if [ -n \"$MARIADB_STAND_IN_UNREACHABLE\" ]; then",
@@ -1588,6 +1594,13 @@ public class EntrypointRetrievalWiringTest {
 				"\t\t\t*)",
 				"\t\t\t\tprintf '%s' \"$_value\" > \"$MARIADB_STAND_IN_STORE/$_property\" ;;",
 				"\t\tesac ;;",
+				// The demo seed's program repair and the count it reports after it. This stand-in
+				// carries no program tables, so the repair has nothing to delete or date, and the
+				// count of rows still naming a missing concept is none.
+				"\t'DELETE s FROM program_workflow_state s'*)",
+				"\t\t: ;;",
+				"\t'SELECT (SELECT COUNT(*) FROM program_workflow_state'*)",
+				"\t\techo 0 ;;",
 				"\t'UPDATE global_property SET property_value='*)",
 				"\t\t_value=$(printf '%s' \"$_sql\" \\",
 				"\t\t\t| sed -n \"s/^UPDATE global_property SET property_value='\\\\([^']*\\\\)'.*/\\\\1/p\")",

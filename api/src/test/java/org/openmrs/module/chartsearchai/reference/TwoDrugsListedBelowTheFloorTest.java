@@ -82,6 +82,37 @@ public class TwoDrugsListedBelowTheFloorTest extends BaseModuleContextSensitiveT
 		}
 	}
 
+	/**
+	 * Two of hers that share a drug class and are related by nothing else are related by that finding, stated once (ADR
+	 * Decision 584): on the 8089 rig "Does her abacavir interact with her didanosine?" said the data lists the two with no
+	 * severity, then put "Abacavir is in the same ATC class (J05AF) as active order Didanosine" and "Didanosine is in the
+	 * same ATC class (J05AF) as active order Abacavir" under "about this patient's other medications" — the pair asked
+	 * about, from both sides, as if it were about neither.
+	 */
+	@Test
+	public void aSharedClassBetweenTwoOfHersIsStatedOnceAsTheirs() {
+		for (String question : Arrays.asList("Does her abacavir interact with her didanosine?",
+				"Is abacavir safe with didanosine?")) {
+			String answer = ask(question,
+				DrugReferenceTestSupport.activeOrder("order-abc", "Abacavir 300mg", "Abacavir"),
+				DrugReferenceTestSupport.activeOrder("order-ddi", "Didanosine 400mg", "Didanosine"));
+			assertNotNull(answer, question + " — the module answers");
+			int fromAbacavir = count(answer, "Abacavir is in the same ATC class (J05AF) as active order Didanosine");
+			int fromDidanosine = count(answer, "Didanosine is in the same ATC class (J05AF) as active order Abacavir");
+			assertEquals(1, fromAbacavir + fromDidanosine, question + " — the shared class stated once: " + answer);
+			assertTrue(!answer.contains(DrugReferenceInjector.ABOUT_HER_OTHER_MEDICATIONS_LEAD),
+				question + " — the pair asked about is not her other medications: " + answer);
+		}
+	}
+
+	private static int count(String text, String part) {
+		int n = 0;
+		for (int at = text.indexOf(part); at >= 0; at = text.indexOf(part, at + 1)) {
+			n++;
+		}
+		return n;
+	}
+
 	private static String mask(String answer) {
 		return answer == null ? null : answer.replaceAll("\\[\\d+\\]", "[n]");
 	}

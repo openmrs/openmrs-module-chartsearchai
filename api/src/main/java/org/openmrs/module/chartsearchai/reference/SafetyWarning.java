@@ -213,6 +213,9 @@ public class SafetyWarning {
 	/** @see #partnerOrderCounts() */
 	private final Map<String, Integer> partnerOrderCounts;
 
+	/** @see #classPartnerRows() */
+	private final List<DrugReference> classPartnerRows;
+
 	/** @see #partnerOrdersUnderOtherNames() */
 	private final Map<String, Integer> partnerOrdersUnderOtherNames;
 
@@ -518,6 +521,34 @@ public class SafetyWarning {
 			boolean aboutADrugOtherThanTheOneProposed, Integer findingCitation, AllergyToItsDrug allergyToItsDrug,
 			boolean crossReactivityBesideHerStatedConflicts, Map<String, Integer> partnerOrderCounts,
 			Map<String, Integer> partnerOrdersUnderOtherNames) {
+		this(type, drug, detail, severity, unratedRelationship, uncorroboratedChartMatch, reconciledRule,
+				reconciledNoteName, chartOrderBridges, aboutACurrentMedication, chartRecords,
+				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
+				endedOrderRows, ordersSharingASubstance, matchedOrderNames, subjectRows, currentMedicationOrders,
+				currentOrderDisplays, statedInTheAnswer, partnerRows, partnerScheduledStarts, orderScheduledStart,
+				alreadyOrdered, aboutAnotherOfHerMedications, aboutADrugOtherThanTheOneProposed, findingCitation,
+				allergyToItsDrug, crossReactivityBesideHerStatedConflicts, partnerOrderCounts, partnerOrdersUnderOtherNames,
+				Collections.<DrugReference> emptyList());
+	}
+
+	private SafetyWarning(String type, String drug, String detail, String severity,
+			FoldedRelationship unratedRelationship, boolean uncorroboratedChartMatch,
+			DrugReference.Interaction reconciledRule, String reconciledNoteName,
+			List<ChartOrderBridge> chartOrderBridges, boolean aboutACurrentMedication,
+			Collection<String> chartRecords, boolean restsOnSharedClassificationAlone,
+			List<String> namedPartners, boolean aboutAnEndedOrder, String endedOrderStopDate,
+			List<DrugReference> endedOrderRows, boolean ordersSharingASubstance,
+			Collection<String> matchedOrderNames, List<DrugReference> subjectRows,
+			List<CurrentMedicationOrder> currentMedicationOrders, Map<String, String> currentOrderDisplays,
+			boolean statedInTheAnswer, Map<String, List<DrugReference>> partnerRows,
+			Map<String, String> partnerScheduledStarts, String orderScheduledStart,
+			PatientChartSerializer.AlreadyOrderedDrug alreadyOrdered, boolean aboutAnotherOfHerMedications,
+			boolean aboutADrugOtherThanTheOneProposed, Integer findingCitation, AllergyToItsDrug allergyToItsDrug,
+			boolean crossReactivityBesideHerStatedConflicts, Map<String, Integer> partnerOrderCounts,
+			Map<String, Integer> partnerOrdersUnderOtherNames, List<DrugReference> classPartnerRows) {
+		this.classPartnerRows = classPartnerRows == null || classPartnerRows.isEmpty()
+				? Collections.<DrugReference> emptyList()
+				: Collections.unmodifiableList(new ArrayList<DrugReference>(classPartnerRows));
 		this.partnerOrderCounts = partnerOrderCounts == null || partnerOrderCounts.isEmpty()
 				? Collections.<String, Integer> emptyMap()
 				: Collections.unmodifiableMap(new LinkedHashMap<String, Integer>(partnerOrderCounts));
@@ -1297,7 +1328,7 @@ public class SafetyWarning {
 				stopDate == null ? null : DateFormatUtil.formatDate(stopDate), rows, ordersSharingASubstance,
 				matchedOrderNames, subjectRows, currentMedicationOrders, currentOrderDisplays, statedInTheAnswer,
 				partnerRows, partnerScheduledStarts, orderScheduledStart, alreadyOrdered, aboutAnotherOfHerMedications,
-				aboutADrugOtherThanTheOneProposed, findingCitation, allergyToItsDrug, crossReactivityBesideHerStatedConflicts, partnerOrderCounts, partnerOrdersUnderOtherNames);
+				aboutADrugOtherThanTheOneProposed, findingCitation, allergyToItsDrug, crossReactivityBesideHerStatedConflicts, partnerOrderCounts, partnerOrdersUnderOtherNames, classPartnerRows);
 	}
 
 	/**
@@ -1313,7 +1344,7 @@ public class SafetyWarning {
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
 				endedOrderRows, ordersSharingASubstance, names, subjectRows, currentMedicationOrders, currentOrderDisplays,
 				statedInTheAnswer, partnerRows, partnerScheduledStarts, orderScheduledStart, alreadyOrdered, aboutAnotherOfHerMedications,
-				aboutADrugOtherThanTheOneProposed, findingCitation, allergyToItsDrug, crossReactivityBesideHerStatedConflicts, partnerOrderCounts, partnerOrdersUnderOtherNames);
+				aboutADrugOtherThanTheOneProposed, findingCitation, allergyToItsDrug, crossReactivityBesideHerStatedConflicts, partnerOrderCounts, partnerOrdersUnderOtherNames, classPartnerRows);
 	}
 
 	/** @return the names {@link #withMatchedOrderNames} set, never null */
@@ -1360,7 +1391,7 @@ public class SafetyWarning {
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
 				endedOrderRows, ordersSharingASubstance, matchedOrderNames, subjectRows, orders, displays,
 				statedInTheAnswer, partnerRows, partnerScheduledStarts, orderScheduledStart, alreadyOrdered, aboutAnotherOfHerMedications,
-				aboutADrugOtherThanTheOneProposed, findingCitation, allergyToItsDrug, crossReactivityBesideHerStatedConflicts, partnerOrderCounts, partnerOrdersUnderOtherNames);
+				aboutADrugOtherThanTheOneProposed, findingCitation, allergyToItsDrug, crossReactivityBesideHerStatedConflicts, partnerOrderCounts, partnerOrdersUnderOtherNames, classPartnerRows);
 	}
 
 	/**
@@ -1433,7 +1464,7 @@ public class SafetyWarning {
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
 				endedOrderRows, ordersSharingASubstance, matchedOrderNames, subjectRows, currentMedicationOrders,
 				currentOrderDisplays, statedInTheAnswer, partnerRows, spelled, orderScheduledStart, alreadyOrdered, aboutAnotherOfHerMedications,
-				aboutADrugOtherThanTheOneProposed, findingCitation, allergyToItsDrug, crossReactivityBesideHerStatedConflicts, partnerOrderCounts, partnerOrdersUnderOtherNames);
+				aboutADrugOtherThanTheOneProposed, findingCitation, allergyToItsDrug, crossReactivityBesideHerStatedConflicts, partnerOrderCounts, partnerOrdersUnderOtherNames, classPartnerRows);
 	}
 
 	/**
@@ -1463,7 +1494,7 @@ public class SafetyWarning {
 				endedOrderRows, ordersSharingASubstance, matchedOrderNames, subjectRows, currentMedicationOrders,
 				currentOrderDisplays, statedInTheAnswer, partnerRows, partnerScheduledStarts, orderScheduledStart,
 				alreadyOrdered, aboutAnotherOfHerMedications, aboutADrugOtherThanTheOneProposed, findingCitation,
-				allergyToItsDrug, crossReactivityBesideHerStatedConflicts, counts, partnerOrdersUnderOtherNames);
+				allergyToItsDrug, crossReactivityBesideHerStatedConflicts, counts, partnerOrdersUnderOtherNames, classPartnerRows);
 	}
 
 	/**
@@ -1492,7 +1523,7 @@ public class SafetyWarning {
 				endedOrderRows, ordersSharingASubstance, matchedOrderNames, subjectRows, currentMedicationOrders,
 				currentOrderDisplays, statedInTheAnswer, partnerRows, partnerScheduledStarts, orderScheduledStart,
 				alreadyOrdered, aboutAnotherOfHerMedications, aboutADrugOtherThanTheOneProposed, findingCitation,
-				allergyToItsDrug, crossReactivityBesideHerStatedConflicts, partnerOrderCounts, others);
+				allergyToItsDrug, crossReactivityBesideHerStatedConflicts, partnerOrderCounts, others, classPartnerRows);
 	}
 
 	/**
@@ -1506,6 +1537,30 @@ public class SafetyWarning {
 	 */
 	Map<String, Integer> partnerOrdersUnderOtherNames() {
 		return partnerOrdersUnderOtherNames;
+	}
+
+	/**
+	 * On a {@link #classOnlyInteraction} chip, the reference rows of the active order its sentence names, among her order
+	 * entries; empty on every other chip, and where the dataset identifies no entry of that order (ADR Decision 584). Its
+	 * own accessor and not {@link #partnerRows()}: that chip's {@link #namedPartners()} stays empty, so nothing reading
+	 * an order's partners counts it, and only {@code DrugReferenceInjector} asks it — whether a shared class relates the
+	 * two drugs a question asks about. Package-private and unpublished; changes nothing this warning prints.
+	 */
+	List<DrugReference> classPartnerRows() {
+		return classPartnerRows;
+	}
+
+	/** This class-only warning, carrying {@code rows} as {@link #classPartnerRows()}. Package-private: written only by
+	 *  {@code DrugSafetyValidator.addInteractionWarnings}' class-only loop. */
+	SafetyWarning withClassPartnerRows(List<DrugReference> rows) {
+		return new SafetyWarning(type, drug, detail, severity, unratedRelationship, uncorroboratedChartMatch,
+				reconciledRule, reconciledNoteName, chartOrderBridges, aboutACurrentMedication, chartRecords,
+				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
+				endedOrderRows, ordersSharingASubstance, matchedOrderNames, subjectRows, currentMedicationOrders,
+				currentOrderDisplays, statedInTheAnswer, partnerRows, partnerScheduledStarts, orderScheduledStart,
+				alreadyOrdered, aboutAnotherOfHerMedications, aboutADrugOtherThanTheOneProposed, findingCitation,
+				allergyToItsDrug, crossReactivityBesideHerStatedConflicts, partnerOrderCounts, partnerOrdersUnderOtherNames,
+				rows);
 	}
 
 	/**
@@ -1538,7 +1593,7 @@ public class SafetyWarning {
 				endedOrderRows, ordersSharingASubstance, matchedOrderNames, subjectRows, currentMedicationOrders,
 				currentOrderDisplays, statedInTheAnswer, partnerRows, partnerScheduledStarts,
 				DateFormatUtil.formatDate(start), alreadyOrdered, aboutAnotherOfHerMedications,
-				aboutADrugOtherThanTheOneProposed, findingCitation, allergyToItsDrug, crossReactivityBesideHerStatedConflicts, partnerOrderCounts, partnerOrdersUnderOtherNames);
+				aboutADrugOtherThanTheOneProposed, findingCitation, allergyToItsDrug, crossReactivityBesideHerStatedConflicts, partnerOrderCounts, partnerOrdersUnderOtherNames, classPartnerRows);
 	}
 
 	/**
@@ -1582,7 +1637,7 @@ public class SafetyWarning {
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
 				endedOrderRows, ordersSharingASubstance, matchedOrderNames, subjectRows, currentMedicationOrders,
 				currentOrderDisplays, true, partnerRows, partnerScheduledStarts, orderScheduledStart, alreadyOrdered, aboutAnotherOfHerMedications,
-				aboutADrugOtherThanTheOneProposed, findingCitation, allergyToItsDrug, crossReactivityBesideHerStatedConflicts, partnerOrderCounts, partnerOrdersUnderOtherNames);
+				aboutADrugOtherThanTheOneProposed, findingCitation, allergyToItsDrug, crossReactivityBesideHerStatedConflicts, partnerOrderCounts, partnerOrdersUnderOtherNames, classPartnerRows);
 	}
 
 	/**
@@ -1615,7 +1670,7 @@ public class SafetyWarning {
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
 				endedOrderRows, ordersSharingASubstance, matchedOrderNames, subjectRows, currentMedicationOrders,
 				currentOrderDisplays, statedInTheAnswer, partnerRows, partnerScheduledStarts, orderScheduledStart,
-				alreadyOrdered, true, aboutADrugOtherThanTheOneProposed, findingCitation, allergyToItsDrug, crossReactivityBesideHerStatedConflicts, partnerOrderCounts, partnerOrdersUnderOtherNames);
+				alreadyOrdered, true, aboutADrugOtherThanTheOneProposed, findingCitation, allergyToItsDrug, crossReactivityBesideHerStatedConflicts, partnerOrderCounts, partnerOrdersUnderOtherNames, classPartnerRows);
 	}
 
 	/**
@@ -1656,7 +1711,7 @@ public class SafetyWarning {
 				endedOrderRows, ordersSharingASubstance, matchedOrderNames, subjectRows, currentMedicationOrders,
 				currentOrderDisplays, statedInTheAnswer, partnerRows, partnerScheduledStarts, orderScheduledStart,
 				alreadyOrdered, aboutAnotherOfHerMedications, aboutADrugOtherThanTheOneProposed, findingCitation,
-				allergyToItsDrug, true, partnerOrderCounts, partnerOrdersUnderOtherNames);
+				allergyToItsDrug, true, partnerOrderCounts, partnerOrdersUnderOtherNames, classPartnerRows);
 	}
 
 	/**
@@ -1689,7 +1744,7 @@ public class SafetyWarning {
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
 				endedOrderRows, ordersSharingASubstance, matchedOrderNames, subjectRows, currentMedicationOrders,
 				currentOrderDisplays, statedInTheAnswer, partnerRows, partnerScheduledStarts, orderScheduledStart,
-				alreadyOrdered, aboutAnotherOfHerMedications, other, findingCitation, allergyToItsDrug, crossReactivityBesideHerStatedConflicts, partnerOrderCounts, partnerOrdersUnderOtherNames);
+				alreadyOrdered, aboutAnotherOfHerMedications, other, findingCitation, allergyToItsDrug, crossReactivityBesideHerStatedConflicts, partnerOrderCounts, partnerOrdersUnderOtherNames, classPartnerRows);
 	}
 
 	/**
@@ -1722,7 +1777,7 @@ public class SafetyWarning {
 				endedOrderRows, ordersSharingASubstance, matchedOrderNames, subjectRows, currentMedicationOrders,
 				currentOrderDisplays, statedInTheAnswer, partnerRows, partnerScheduledStarts, orderScheduledStart,
 				alreadyOrdered, aboutAnotherOfHerMedications, aboutADrugOtherThanTheOneProposed, citation,
-				allergyToItsDrug, crossReactivityBesideHerStatedConflicts, partnerOrderCounts, partnerOrdersUnderOtherNames);
+				allergyToItsDrug, crossReactivityBesideHerStatedConflicts, partnerOrderCounts, partnerOrdersUnderOtherNames, classPartnerRows);
 	}
 
 	/**
@@ -1759,7 +1814,7 @@ public class SafetyWarning {
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
 				endedOrderRows, ordersSharingASubstance, matchedOrderNames, rows, currentMedicationOrders,
 				currentOrderDisplays, statedInTheAnswer, partnerRows, partnerScheduledStarts, orderScheduledStart, alreadyOrdered, aboutAnotherOfHerMedications,
-				aboutADrugOtherThanTheOneProposed, findingCitation, allergyToItsDrug, crossReactivityBesideHerStatedConflicts, partnerOrderCounts, partnerOrdersUnderOtherNames);
+				aboutADrugOtherThanTheOneProposed, findingCitation, allergyToItsDrug, crossReactivityBesideHerStatedConflicts, partnerOrderCounts, partnerOrdersUnderOtherNames, classPartnerRows);
 	}
 
 	/**
@@ -1791,7 +1846,7 @@ public class SafetyWarning {
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
 				endedOrderRows, ordersSharingASubstance, matchedOrderNames, subjectRows, currentMedicationOrders,
 				currentOrderDisplays, statedInTheAnswer, rows, partnerScheduledStarts, orderScheduledStart, alreadyOrdered, aboutAnotherOfHerMedications,
-				aboutADrugOtherThanTheOneProposed, findingCitation, allergyToItsDrug, crossReactivityBesideHerStatedConflicts, partnerOrderCounts, partnerOrdersUnderOtherNames);
+				aboutADrugOtherThanTheOneProposed, findingCitation, allergyToItsDrug, crossReactivityBesideHerStatedConflicts, partnerOrderCounts, partnerOrdersUnderOtherNames, classPartnerRows);
 	}
 
 	/**

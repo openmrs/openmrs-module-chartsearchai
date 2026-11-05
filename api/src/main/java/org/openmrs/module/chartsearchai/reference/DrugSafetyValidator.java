@@ -5305,7 +5305,7 @@ public class DrugSafetyValidator {
 		// is the duplication being removed.
 		Map<SubjectRule, FoldedClassSentence> folded =
 				new LinkedHashMap<SubjectRule, FoldedClassSentence>();
-		List<String> classOnly = new ArrayList<String>();
+		List<ClassOnlyFinding> classOnly = new ArrayList<ClassOnlyFinding>();
 		for (Map.Entry<OrderPartner, ClassRelationship> hit : classRelationships(ref, coMedications)
 				.entrySet()) {
 			SubjectRule rule = ruleAbout(hit.getKey().codes, rules, coMedications);
@@ -5313,8 +5313,8 @@ public class DrugSafetyValidator {
 				// No rule to reconcile with, so the ladder's own name is the only one there is —
 				// but WHICH ROW of the substance it is the display of is still this response's
 				// question and not the ladder's, which is what classPartnerName re-decides.
-				classOnly.add(hit.getValue().sentence(ref, classPartnerName(hit.getKey(), subjects),
-					hit.getKey().scheduledStart()));
+				classOnly.add(new ClassOnlyFinding(hit.getValue().sentence(ref, classPartnerName(hit.getKey(), subjects),
+					hit.getKey().scheduledStart()), classPartnerRows(hit.getKey(), orderEntries)));
 			} else if (!folded.containsKey(rule)) {
 				// One name for the two sentences about to share a detail — see reconciledPartnerName.
 				// Both are worded from it here rather than each arm wording its own, which is what let
@@ -5456,7 +5456,7 @@ public class DrugSafetyValidator {
 		if (alreadyTaken != null) {
 			warnings.add(endedOrders.aboutTheSubject(ref, alreadyTaken));
 		}
-		for (String detail : classOnly) {
+		for (ClassOnlyFinding found : classOnly) {
 			// No rating, and not an omission: a shared-ATC-subgroup or cross-reactivity join is a
 			// relationship the reference data states without severity, which is why these chips are never
 			// floor-filtered either. See SafetyWarning.getSeverity on why null is the correct value.
@@ -5466,10 +5466,49 @@ public class DrugSafetyValidator {
 			// authored it deliberately", and licensesWithholding grades the two differently. The public
 			// constructor this used to call cannot say which of the two it is, and read as the second it
 			// refused a standard two-NRTI regimen — see SafetyWarning.restsOnSharedClassificationAlone.
+			//
+			// It carries the rows of the active order its sentence names (ADR Decision 584): without them nothing could
+			// tell that a class-only finding relates the two drugs a question asks about, so the pair's shared class was
+			// stated from both sides as about her other medications.
 			warnings.add(endedOrders.stamp(ref,
-				SafetyWarning.classOnlyInteraction(ref.displayLabel(), detail, herOrder)));
+				SafetyWarning.classOnlyInteraction(ref.displayLabel(), found.detail, herOrder)
+						.withClassPartnerRows(found.partnerRows)));
 		}
 		return relatedPairs;
+	}
+
+	/** A class-only finding's sentence and the rows of the active order it names. */
+	private static final class ClassOnlyFinding {
+
+		private final String detail;
+
+		private final List<DrugReference> partnerRows;
+
+		private ClassOnlyFinding(String detail, List<DrugReference> partnerRows) {
+			this.detail = detail;
+			this.partnerRows = partnerRows;
+		}
+	}
+
+	/**
+	 * The rows of the co-medication a class-only finding names, among her order entries: of the entry the ladder
+	 * labelled it from, and of every substance its orders are known to contain ({@link OrderPartner#substances}). Empty
+	 * where the dataset identifies no entry of it — an order named by its own display alone.
+	 */
+	private static List<DrugReference> classPartnerRows(OrderPartner partner, List<DrugReference> orderEntries) {
+		Set<Object> keys = new LinkedHashSet<Object>(partner.substances);
+		if (partner.labelEntry != null) {
+			keys.add(partner.labelEntry.substanceGroupKey());
+		}
+		List<DrugReference> rows = new ArrayList<DrugReference>();
+		if (orderEntries != null) {
+			for (DrugReference entry : orderEntries) {
+				if (keys.contains(entry.substanceGroupKey())) {
+					rows.add(entry);
+				}
+			}
+		}
+		return rows;
 	}
 
 	/**

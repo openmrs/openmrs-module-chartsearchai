@@ -27033,3 +27033,42 @@ empty list, and every caller reads exactly what it read before.
 
 Pinned by `HerOrdersNamedByTheirOwnNamesTest.aDrugProposedBesideOneOfHisOrdersNamedByItsOwnNameIsAnsweredAsItsProposal`,
 which reddens without the change.
+
+## Decision 584: A shared class between the two drugs asked about is stated once, as theirs
+
+**Status**: Accepted (2026-11-05)
+
+### Context
+
+On the 8089 rig, *"Does her abacavir interact with her didanosine?"* (Rhoda Ritonavirb, Ruth Ritonavira) said that the
+data lists the two with no severity. It then put *"Abacavir is in the same ATC class (J05AF) as active order
+Didanosine"* and *"Didanosine is in the same ATC class (J05AF) as active order Abacavir"* under *"Found as well, about
+this patient's other medications"*. That is the pair the question asked about, stated from both sides, as if it were
+about neither. Dexamethasone with hydrocortisone did the same for Richard Jones. The answer comes from
+`composeTwoDrugsTheDataDoesNotRelate` (Decisions 302, 329). That composer could not tell which order a class-only
+finding is about, because that chip (`SafetyWarning.classOnlyInteraction`) carries no partner.
+
+### Rejected
+
+Giving the chip its partner in `namedPartners()`, as a rule chip has, was tried first and reverted. Every reader of an
+order's partners then counted it. `FindingPartnerCoverageCheck` warned of unstated partners, which turned eight
+`ClassCodeFidelityTest` cases red. `InteractionClaimPairFidelityTest` judged claims that its two class-only cases pin
+as not judged. The switch and list answers changed too (`SwitchingHerDrugContextTest.aSwitchToTenofovirIsAnsweredForTenofovir`,
+`LlmInferenceServiceAnswerFromFindingsContextTest.aListQuestionWithAClassFindingAboutTheDrugProposedStatesIt`). That is
+the hazard the `namedPartners()` javadoc names.
+
+### The decision
+
+The class-only loop in `DrugSafetyValidator.addInteractionWarnings` stamps each chip with
+`SafetyWarning.classPartnerRows()`. These are her order entries of the co-medication its sentence names: the entry the
+ladder labelled it from, and the substances its orders are known to contain (`classPartnerRows`). The accessor is its
+own, package-private and unpublished, and `namedPartners()` stays empty. So nothing that reads partners sees it, and
+the chip prints what it printed before.
+
+`composeTwoDrugsTheDataDoesNotRelate` reads it alone (`sharesAClassAcross`). A class-only finding about one drug asked
+about, whose order is of the other, is stated right after the listing line, with no lead. It is stated from the drug
+the question names first, where a finding states it from there, as Decision 581 states a rated pair. Where the data
+lists nothing between the two, `SHARED_CLASS_NOT_COMPARED` is not said beside a line saying the two share a class.
+
+Pinned by `TwoDrugsListedBelowTheFloorTest.aSharedClassBetweenTwoOfHersIsStatedOnceAsTheirs`, which reddens without
+the change.

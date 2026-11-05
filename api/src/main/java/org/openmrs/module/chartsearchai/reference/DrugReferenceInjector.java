@@ -7988,9 +7988,26 @@ public class DrugReferenceInjector {
 		List<Integer> notHersLines = new ArrayList<Integer>();
 		List<Integer> herOwnLines = new ArrayList<Integer>();
 		List<Integer> askedAboutLines = new ArrayList<Integer>();
+		// A shared class relating the two is about them, stated once after what the data lists between them: from the drug
+		// the question names first where a finding states it from there (ADR Decision 584).
+		List<Integer> pairLines = new ArrayList<Integer>();
+		boolean classStatedFromTheFirst = false;
+		for (SafetyWarning finding : findings) {
+			classStatedFromTheFirst |= sharesAClassAcross(finding, asked.get(0).substances, asked.get(1).substances);
+		}
 		for (int i = 0; i < findings.size(); i++) {
 			SafetyWarning finding = findings.get(i);
 			Set<Object> about = subjectSubstances(finding);
+			if (sharesAClassAcross(finding, asked.get(0).substances, asked.get(1).substances)) {
+				pairLines.add(i);
+				continue;
+			}
+			if (sharesAClassAcross(finding, asked.get(1).substances, asked.get(0).substances)) {
+				if (!classStatedFromTheFirst) {
+					pairLines.add(i);
+				}
+				continue;
+			}
 			if (Collections.disjoint(about, both) && !hasPartnerOf(finding, both)) {
 				continue;
 			}
@@ -8058,6 +8075,7 @@ public class DrugReferenceInjector {
 		} else {
 			lines.add(listingLine(asked.get(0), asked.get(1), listed, cited.get(0), cited.get(1)));
 		}
+		lines.addAll(findingLines(findings, numbers, pairLines, orderRecordNumbers, herOrderRecords, true));
 		if (!notHersLines.isEmpty()) {
 			lines.add("Against this patient's active medications:");
 			lines.addAll(findingLines(findings, numbers, notHersLines, orderRecordNumbers, herOrderRecords, true));
@@ -8070,8 +8088,25 @@ public class DrugReferenceInjector {
 			lines.add(ABOUT_HER_OTHER_MEDICATIONS_LEAD);
 			lines.addAll(findingLines(findings, numbers, herOwnLines, orderRecordNumbers, herOrderRecords, true));
 		}
-		lines.add(listed.isEmpty() ? SHARED_CLASS_NOT_COMPARED : BELOW_FLOOR_SCOPE);
+		// That the check does not compare a shared class is not said beside a line saying the two share one.
+		if (!listed.isEmpty() || pairLines.isEmpty()) {
+			lines.add(listed.isEmpty() ? SHARED_CLASS_NOT_COMPARED : BELOW_FLOOR_SCOPE);
+		}
 		return String.join("\n", lines);
+	}
+
+	/** Whether {@code finding} is a class-only finding about {@code subject} whose order is of {@code partner} — {@link
+	 *  SafetyWarning#classPartnerRows()}, as the chip was decided (ADR Decision 584). */
+	private static boolean sharesAClassAcross(SafetyWarning finding, Set<Object> subject, Set<Object> partner) {
+		if (!finding.restsOnSharedClassificationAlone() || !isAbout(finding, subject)) {
+			return false;
+		}
+		for (DrugReference row : finding.classPartnerRows()) {
+			if (partner.contains(row.substanceGroupKey())) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**

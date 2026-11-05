@@ -179,6 +179,41 @@ repair_demo_programs >/dev/null 2>&1
 check "its programs, workflows and states all stay" "$(q 'SELECT COUNT(*) FROM program')$(q 'SELECT COUNT(*) FROM program_workflow')$(q 'SELECT COUNT(*) FROM program_workflow_state')" 335
 check "its enrollments with no date keep none" "$(q 'SELECT COUNT(*) FROM patient_program WHERE date_enrolled IS NULL')" 2
 
-for db in seeded existing empty lookup snapshot backup killed programs programs_other; do seed_sql -e "DROP DATABASE IF EXISTS demo_seed_t_$db"; done
+# The tables add_demo_hiv_series writes to, holding the demo dataset's encounters for its two patients
+# (bf4a0134 is Jude Yano Sulo's 16 Mar 2006 visit) and its viral load and HIV concepts.
+hiv_db() {
+  fresh_run "$1"
+  q "CREATE TABLE global_property (property VARCHAR(255) PRIMARY KEY, property_value TEXT, uuid CHAR(38));
+     CREATE TABLE concept (concept_id INT PRIMARY KEY, uuid CHAR(38));
+     INSERT INTO concept VALUES (202,'856AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'),(834,'884AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA');
+     CREATE TABLE encounter (encounter_id INT PRIMARY KEY, uuid CHAR(38), patient_id INT, encounter_datetime DATETIME, location_id INT);
+     INSERT INTO encounter VALUES (3927,'bf4a0134-1691-11df-97a5-7038c432aabf',8857,'2006-03-16',1),(13148,'bf708413-1691-11df-97a5-7038c432aabf',8857,'2006-04-13',1),
+       (29064,'bfa70d37-1691-11df-97a5-7038c432aabf',8857,'2006-05-11',1),(43405,'bfc7883b-1691-11df-97a5-7038c432aabf',8857,'2006-06-08',1),
+       (8707,'bf5b3327-1691-11df-97a5-7038c432aabf',7085,'2006-02-23',1),(18645,'bf7fdb8b-1691-11df-97a5-7038c432aabf',7085,'2006-04-25',1),
+       (28851,'bfa6bb69-1691-11df-97a5-7038c432aabf',7085,'2006-05-16',1),(37941,'bfbbf9d6-1691-11df-97a5-7038c432aabf',7085,'2006-05-30',1);
+     CREATE TABLE obs (obs_id INT AUTO_INCREMENT PRIMARY KEY, person_id INT NOT NULL, concept_id INT NOT NULL, encounter_id INT, obs_datetime DATETIME NOT NULL,
+       location_id INT, value_numeric DOUBLE, creator INT NOT NULL, date_created DATETIME NOT NULL, voided TINYINT NOT NULL, uuid CHAR(38) NOT NULL UNIQUE, status VARCHAR(16) NOT NULL);
+     CREATE TABLE conditions (condition_id INT AUTO_INCREMENT PRIMARY KEY, condition_coded INT, clinical_status VARCHAR(50) NOT NULL, onset_date DATETIME,
+       date_created DATETIME NOT NULL, voided TINYINT NOT NULL, uuid CHAR(38) UNIQUE, creator INT NOT NULL, patient_id INT NOT NULL, encounter_id INT);"
+}
+
+echo "== two of the demo dataset's HIV patients get a viral load series and HIV on their condition list"
+hiv_db demo_seed_t_hiv
+q "INSERT INTO global_property VALUES ('chartsearchai.demo.seededDataset','t-2026',UUID())"
+add_demo_hiv_series >/dev/null 2>&1
+check "Jude Yano Sulo's viral loads, oldest first, each on its own visit's date" "$(q "SELECT GROUP_CONCAT(CONCAT(DATE(obs_datetime),'=',value_numeric) ORDER BY obs_datetime) FROM obs WHERE person_id=8857 AND concept_id=202")" 2006-03-16=186000,2006-04-13=21400,2006-05-11=1350,2006-06-08=40
+check "Fhilister Merkwa Lithur's viral loads" "$(q "SELECT GROUP_CONCAT(CONCAT(DATE(obs_datetime),'=',value_numeric) ORDER BY obs_datetime) FROM obs WHERE person_id=7085 AND concept_id=202")" 2006-02-23=38500,2006-04-25=41200,2006-05-16=2900,2006-05-30=380
+check "each viral load sits on the patient's own encounter" "$(q 'SELECT COUNT(*) FROM obs o JOIN encounter e ON e.encounter_id=o.encounter_id AND e.patient_id=o.person_id')" 8
+check "each patient has HIV on the condition list from their first visit" "$(q "SELECT GROUP_CONCAT(CONCAT(patient_id,':',condition_coded,':',DATE(onset_date),':',clinical_status) ORDER BY patient_id) FROM conditions")" 7085:834:2006-02-23:ACTIVE,8857:834:2006-03-16:ACTIVE
+add_demo_hiv_series >/dev/null 2>&1
+check "a second run adds nothing" "$(q 'SELECT COUNT(*) FROM obs')$(q 'SELECT COUNT(*) FROM conditions')" 82
+
+echo "== a database not seeded with the demo dataset gets no viral loads"
+hiv_db demo_seed_t_hiv_other
+q "INSERT INTO global_property VALUES ('chartsearchai.demo.seededDataset','some-other-tag',UUID())"
+add_demo_hiv_series >/dev/null 2>&1
+check "no obs and no condition is added" "$(q 'SELECT COUNT(*) FROM obs')$(q 'SELECT COUNT(*) FROM conditions')" 00
+
+for db in seeded existing empty lookup snapshot backup killed programs programs_other hiv hiv_other; do seed_sql -e "DROP DATABASE IF EXISTS demo_seed_t_$db"; done
 [ "$FAILED" = 0 ] && echo "all cases pass" || echo "SOME CASES FAILED"
 exit "$FAILED"

@@ -208,3 +208,42 @@ SQL
   _left=$(seed_sql -N "$DB_NAME" -e "SELECT (SELECT COUNT(*) FROM program_workflow_state s WHERE $_s) + (SELECT COUNT(*) FROM program_workflow w WHERE $_w) + (SELECT COUNT(*) FROM program p WHERE $_p)" 2>/dev/null)
   echo "[demo-seed] program repair done; rows still naming a missing concept (kept, a patient's data uses them): ${_left:-unknown}"
 }
+
+# The demo dataset has no patient with a viral load series: 3 of its 5,284 patients carry one viral
+# load each, and 1 has HIV on the condition list, though thousands are on antiretrovirals. Reviewers
+# asked for an HIV+ patient whose viral loads can be read over time (talk.openmrs.org/t/50353/16), so
+# this adds a series to two of its patients on ART, Jude Yano Sulo (8856TU-0) and the pregnant
+# Fhilister Merkwa Lithur (7084KP-0), each value on an encounter the patient already has, and HIV to
+# each one's condition list. The values are invented for the demo and fall after each patient's own
+# ART start date. A row is matched by its fixed uuid, so a second boot adds nothing, and a row whose
+# patient, encounter or concept the database does not carry is skipped.
+add_demo_hiv_series() {
+  command -v mariadb >/dev/null 2>&1 || return 0
+  [ "$(seed_sql -N "$DB_NAME" -e "SELECT property_value FROM global_property WHERE property='chartsearchai.demo.seededDataset'" 2>/dev/null)" = "$DEMO_SEED_TAG" ] || return 0
+  if ! seed_sql "$DB_NAME" <<'SQL'
+INSERT INTO obs (person_id, concept_id, encounter_id, obs_datetime, location_id, value_numeric, creator, date_created, voided, uuid, status)
+SELECT e.patient_id, c.concept_id, e.encounter_id, e.encounter_datetime, e.location_id, s.v, 1, e.encounter_datetime, 0, s.u, 'FINAL'
+  FROM (SELECT 'bf4a0134-1691-11df-97a5-7038c432aabf' enc, '37fa0e73-81a8-4867-80ad-93ecc75143c7' u, 186000 v
+        UNION ALL SELECT 'bf708413-1691-11df-97a5-7038c432aabf', 'a7d0210b-87fd-4236-b61a-db4f9c1ccf41', 21400
+        UNION ALL SELECT 'bfa70d37-1691-11df-97a5-7038c432aabf', '4237760c-c6c1-4a04-a059-7d6dd1fb28cb', 1350
+        UNION ALL SELECT 'bfc7883b-1691-11df-97a5-7038c432aabf', '488715f2-a30a-4c4e-b928-180b77c09c50', 40
+        UNION ALL SELECT 'bf5b3327-1691-11df-97a5-7038c432aabf', '7065bd98-67d8-4355-84c5-178c5539e077', 38500
+        UNION ALL SELECT 'bf7fdb8b-1691-11df-97a5-7038c432aabf', '92fcb5a8-0bef-4c9b-bbf2-e6beac7f3992', 41200
+        UNION ALL SELECT 'bfa6bb69-1691-11df-97a5-7038c432aabf', '5b5f2f91-48a2-402b-b14e-dfec8e8e0445', 2900
+        UNION ALL SELECT 'bfbbf9d6-1691-11df-97a5-7038c432aabf', 'cea89431-84cd-4503-8b09-82e5dc4ce531', 380) s
+  JOIN encounter e ON e.uuid = s.enc
+  JOIN concept c ON c.uuid = '856AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
+ WHERE NOT EXISTS (SELECT 1 FROM obs o WHERE o.uuid = s.u);
+INSERT INTO conditions (condition_coded, clinical_status, onset_date, date_created, voided, uuid, creator, patient_id, encounter_id)
+SELECT c.concept_id, 'ACTIVE', e.encounter_datetime, e.encounter_datetime, 0, s.u, 1, e.patient_id, e.encounter_id
+  FROM (SELECT 'bf4a0134-1691-11df-97a5-7038c432aabf' enc, '7e261d92-6dfc-4a18-bdd9-b31ccc85161d' u
+        UNION ALL SELECT 'bf5b3327-1691-11df-97a5-7038c432aabf', '74032411-5848-4395-8f94-cecc26c3f4c7') s
+  JOIN encounter e ON e.uuid = s.enc
+  JOIN concept c ON c.uuid = '884AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
+ WHERE NOT EXISTS (SELECT 1 FROM conditions x WHERE x.uuid = s.u);
+SQL
+  then
+    echo "[demo-seed] HIV series not added."; return 0
+  fi
+  echo "[demo-seed] HIV series in place: $(seed_sql -N "$DB_NAME" -e "SELECT COUNT(*) FROM obs WHERE uuid IN ('37fa0e73-81a8-4867-80ad-93ecc75143c7','a7d0210b-87fd-4236-b61a-db4f9c1ccf41','4237760c-c6c1-4a04-a059-7d6dd1fb28cb','488715f2-a30a-4c4e-b928-180b77c09c50','7065bd98-67d8-4355-84c5-178c5539e077','92fcb5a8-0bef-4c9b-bbf2-e6beac7f3992','5b5f2f91-48a2-402b-b14e-dfec8e8e0445','cea89431-84cd-4503-8b09-82e5dc4ce531')" 2>/dev/null) viral loads."
+}

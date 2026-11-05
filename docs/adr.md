@@ -27244,3 +27244,47 @@ Spec changes made on the owner's direction, to the wording these tests pinned:
 
 Pinned by `ScreenBelowFloorPairsTest.theDemoPatientsThreeOrdersOfEachDrugAreAnsweredWithTheScreenAndTheDuplicates`, which
 reddens without the change and asserts that each line cites every one of his nine orders.
+
+## Decision 590: A finding that a substance is in her own orders says so on the wire
+
+**Status**: Accepted (2026-11-06), on the owner's direction.
+
+### Context
+
+The reference client's Safety checks box drew the demo patient's three duplicate findings as *"Lamivudine — Lamivudine"*
+under an *Interaction* tag. These are the findings that a substance is in several of her orders, or in one where the
+question proposes it (`SafetyWarning.ordersSharingASubstance`, `substanceInSeveralActiveOrders`; #477, #548). They are
+type `interaction`, and their `namedPartners` are her own orders (#477's contract). A client drawing an interaction's
+*"drug — partner"* line therefore named the drug twice. Where the orders are combinations, it read as an interaction
+with other drugs: *"Rifampicin (rifampin) — Isoniazid / pyrazinamide / rifampin 75/400/150mg, …"*. Over the 1,384 answers
+of `docs/ddi-tested-questions.md` on 2026-11-05, 22 chips had this shape: 12 drawn as *"X — X"*, 10 as an interaction
+with combination orders. Nothing on the wire said which chips these were.
+
+### Rejected
+
+- **A fifth published `type`, `duplicate-order`.** This was the first choice and was implemented, then reverted.
+  `ChartSearchAiSafetyWarningSeverityWireTest.everyPublicZeroArgumentAccessorOfAWarningNamesAKeyOnTheWire` (#340)
+  requires every public accessor to be published under its own key, carrying what it reads. `getType()` would then have
+  read `interaction` where the wire said `duplicate-order`. Making them agree means re-pointing 74 internal `getType()`
+  reads in the reference package, whose counts, strength and ordering treat these findings as interactions.
+  Publishing the type also moved the injected record's `<type>:<drug>` key, which hid these findings from
+  `InteractionClaimPairFidelityCheck`
+  (`InteractionClaimPairFidelityTest.anOrderToOrderClaimCitingTheAlreadyInSeveralOrdersFindingIsNotReported` went red).
+- **Emptying `namedPartners` for these chips:** breaks #477's contract that the partner checks read.
+- **The client comparing the drug's name with its partners':** text matching, and it misses the 10 combination-order
+  chips.
+
+### The decision
+
+- Both factories mark the finding `SafetyWarning.isAboutItsOwnOrders()`, set by the arm and never read off the detail.
+- It is published verbatim as `aboutItsOwnOrders` on every chip (`ChartSearchAiRestController.serializeSafetyWarnings`,
+  for answers and chart alerts alike). The wire guard then holds by construction.
+- `type`, the record key and every internal reading are unchanged.
+- The reference client (`openmrs-esm-chartsearchai`) tags a `true` chip *Duplicate order* and draws its one-line form as
+  *"Lamivudine — already in this patient's active orders"*. A client that does not read the key draws what it drew
+  before.
+- Class-based duplicates (*"in the same ATC class as active order …"*) answer `false`: their partner is another drug,
+  and *"drug — partner"* reads right.
+
+Pinned by `ChartSearchAiCurrentMedicationReferentTest.aFindingAboutHerOwnOrdersSaysSoOnTheWire`, which reddens without
+the change, and by the wire guard above.

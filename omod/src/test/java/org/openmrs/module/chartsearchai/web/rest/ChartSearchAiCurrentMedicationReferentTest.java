@@ -188,6 +188,22 @@ public class ChartSearchAiCurrentMedicationReferentTest {
 	 * play, and every other key the wire carries is equal between them — read off the chips themselves
 	 * rather than listed, so a key added later is compared too.
 	 */
+	/**
+	 * A finding that a substance is in her own orders says so on the wire, {@code aboutItsOwnOrders} (ADR Decision 590):
+	 * its {@code namedPartners} are her own orders, so a client drawing an interaction's "drug — partner" line drew
+	 * "Lamivudine — Lamivudine" under an "Interaction" tag. Every other chip says it is not.
+	 */
+	@Test
+	public void aFindingAboutHerOwnOrdersSaysSoOnTheWire() throws Exception {
+		JsonNode chips = streamedChips();
+		boolean[] expected = { false, false, false, false, true, true, false, false };
+		for (int i = 0; i < expected.length; i++) {
+			JsonNode chip = chips.get(i);
+			assertTrue(chip.has("aboutItsOwnOrders") && chip.get("aboutItsOwnOrders").isBoolean(), "chip " + i + ": " + chip);
+			assertEquals(expected[i], chip.get("aboutItsOwnOrders").asBoolean(), "chip " + i + ": " + chip);
+		}
+	}
+
 	private static void assertReferentsDiffer(JsonNode current, JsonNode proposed, String pair) {
 		assertEquals(fieldNames(current), fieldNames(proposed),
 			"precondition: " + pair + " carries one key set: " + current + " / " + proposed);

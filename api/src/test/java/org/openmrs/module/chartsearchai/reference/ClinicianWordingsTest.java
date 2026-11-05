@@ -707,10 +707,9 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 			ask("Is there an alternative to warfarin that doesn't interact with her ARVs?"));
 		String screen = ask("Is her regimen safe?");
 		assertNotNull(screen, "precondition: the module answers it");
-		for (String question : new String[] { "Are there any QT prolonging drugs in her list?",
-				"Can she safely take all her medicines together?" }) {
-			assertEquals(screen, ask(question), question);
-		}
+		assertEquals(screen, ask("Can she safely take all her medicines together?"));
+		// The screen weighs no drug's effect on the QT interval, and says so (ADR Decision 587, on the owner's direction).
+		assertEquals(screen + "\n" + DrugReferenceInjector.QT_NOT_WEIGHED, ask("Are there any QT prolonging drugs in her list?"));
 	}
 
 	/**

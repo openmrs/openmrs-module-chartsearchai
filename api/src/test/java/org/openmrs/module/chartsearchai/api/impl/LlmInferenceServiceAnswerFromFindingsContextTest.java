@@ -3065,6 +3065,24 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	}
 
 	/**
+	 * A screen request naming an organ the screen does not weigh keeps the model, as one naming her kidneys does (ADR
+	 * Decision 587): on the demo replica "does he have any eye medication risks?" was answered with the screen of his
+	 * medications — no rated interactions, three duplicate therapies — which says nothing of his eyes, whether the words
+	 * mean his eye medications or his medications' effects on his eyes.
+	 */
+	@Test
+	public void aScreenRequestNamingAnOrganTheScreenDoesNotWeigh_keepsTheModel() throws Exception {
+		executeDataSet(WARFARIN_ORDER);
+		for (String question : new String[] { "does he have any eye medication risks?", "Any risks with her eye medications?",
+				"Does she have any medication risks for her eyes?", "Any ophthalmic medication risks?",
+				"Any skin medication risks?", "Any lung medication risks?", "Do any of her medications affect her hearing?" }) {
+			RecordingProvider provider = new RecordingProvider();
+			ChartAnswer answer = serviceWith(provider).search(patient, question);
+			assertEquals(1, provider.calls, "the model must be asked: " + question + " — was: " + answer.getAnswer());
+		}
+	}
+
+	/**
 	 * A drug name the interaction data does not recognise, in the place a question names the drug it asks about (ADR
 	 * Decision 183). <em>"Can I give her rifampcin?"</em> resolved nothing, the model answered <em>"The records do not
 	 * address Rifampicin."</em>, and the post-answer pass, reading the model's corrected spelling, raised a Major

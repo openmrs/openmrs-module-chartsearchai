@@ -27120,3 +27120,54 @@ counts is dropped whole, with whatever it holds. An aside citing nothing stays a
 
 Pinned by `AnswerDetailsContextTest.anOrderWhoseDisplayHasBracketsIsDroppedWithItsAside`, which reddens without the
 change.
+
+## Decision 587: A screen request naming an organ keeps the model; one naming the QT interval says the check did not weigh it
+
+**Status**: Accepted (2026-11-05), on the owner's direction.
+
+### Context
+
+On the demo replica, *"does he have any eye medication risks?"* got the screen of his medications as its answer: *"No
+rated interactions; 3 possible duplicate therapies."* That says nothing about his eyes, whether the words mean his eye
+medications or his medications' effects on his eyes. The screen route admits any request to screen her medications
+that asks for nothing else (Decision 182). Its list of factors the screen does not weigh (`QueryScopeRouter.OTHER_FACTOR`)
+named her kidneys, liver and heart, but no other organ.
+
+That gap was measured with the router and injector over 40 wordings that narrow the question. 24 got the bare screen.
+They named eyes, skin, lungs, and groups like her ARVs or blood pressure medications.
+
+### Rejected
+
+- **Mapping "eye" to the eye-drug class:** it fixes one word.
+- **A vocabulary of known words, where any other word declines the screen:** the screen questions the tests pin use
+  words such as "marathon runner" and "blood pressure".
+- **Carrying Decision 313's "cannot tell which of her medications are the …" lead to the screen.** A review with the code
+  found it false in several ways:
+  - its "screened all of them" is untrue where the screen states orders it did not identify;
+  - it read "give her pain medication" and "any of her medications" as groups;
+  - it would have contradicted Decisions 254, 427 and 572.
+
+  A group of her medications stays Decision 221/572's screen, since the screen states every pair, those in the group
+  among them. An organ is not covered that way, because the screen weighs no drug's effect on one.
+
+### The decision
+
+- **An organ named in a screen request keeps the model**, as her kidneys do. `OTHER_FACTOR` now names:
+  - eye, eyesight, ocular, ophthalmic, vision, visual;
+  - skin, dermal;
+  - lung, pulmonary;
+  - ear, hearing;
+  - bone, nerve, brain.
+
+  The owner chose the model over a module answer closing *"This check did not weigh …"*. The list also reaches the other
+  readers of `OTHER_FACTOR`, as kidneys and heart already do: a purpose set aside (*"… for her eyes"*) and a question
+  asking the module to choose a drug.
+- **A screen asked of the QT interval** (*"Are there any QT prolonging drugs in her list?"*, Decision 427) keeps the
+  screen, as the owner directed, closing *"This check did not weigh QT prolongation."*
+  (`DrugReferenceInjector.QT_NOT_WEIGHED`, on `QueryScopeRouter.namesTheQtInterval`). It applies only where the question
+  names no drug, so Decision 414's *"Could warfarin cause QT problems with her meds?"* is unchanged.
+  `ClinicianWordingsTest.aWordingAClinicianTypesInPassingIsTheQuestionItSpells` drops its old equality with the bare
+  screen, a spec change made on the owner's direction.
+
+Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aScreenRequestNamingAnOrganTheScreenDoesNotWeigh_keepsTheModel`
+and that `ClinicianWordingsTest` case, each of which reddens without the change.

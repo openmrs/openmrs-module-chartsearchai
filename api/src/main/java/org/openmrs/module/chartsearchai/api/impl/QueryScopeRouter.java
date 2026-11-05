@@ -2639,6 +2639,12 @@ public final class QueryScopeRouter {
 						.matcher(String.join(" ", wordsWithTheDrugMarked)).find());
 	}
 
+	/** Whether {@code question} names the QT interval — "Are there any QT prolonging drugs in her list?" — whose
+	 *  prolongation no finding weighs (ADR Decision 587). */
+	public static boolean namesTheQtInterval(String question) {
+		return question != null && words(question).contains("qt");
+	}
+
 	/** Whether {@code question} says when the drug would be given — "two hours after her other medicines" — which no
 	 *  finding weighs (ADR Decision 394). */
 	public static boolean statesATiming(String question) {
@@ -4074,7 +4080,12 @@ public final class QueryScopeRouter {
 
 	private static final Pattern OTHER_FACTOR = Pattern.compile("\\b(?:safe (?:medications|meds|medicines|drugs)|doses?|dosage|dosing|how much|mg|levels?|food|foods|"
 			+ "grapefruit|alcohol|pregnan\\w*|breastfeed\\w*|lactat\\w*|kidneys?|renal|liver|hepatic|heart|cardiac|elderly|"
-			+ "age|weight|surgery|anaesthe\\w*|anesthe\\w*)\\b");
+			+ "age|weight|surgery|anaesthe\\w*|anesthe\\w*|"
+			// An organ the screen does not weigh, as her kidneys, liver and heart are: "does he have any eye medication
+			// risks?" asks of his eye medications or of his medications' effects on his eyes, and the screen answers
+			// neither (ADR Decision 587, the owner's direction that these keep the model).
+			+ "eyes?|eyesight|ocular|ophthalmic|vision|visual|skin|dermal|lungs?|pulmonary|ears?|hearing|bones?|nerves?|"
+			+ "brain)\\b");
 
 	/**
 	 * Whether {@code question} is in the MEDICATION domain, by the router's own classification.

@@ -1765,6 +1765,10 @@ public class DrugReferenceInjector {
 		if (moduleAnswer != null && QueryScopeRouter.statesATiming(question)) {
 			moduleAnswer = moduleAnswer + "\n" + TIMING_NOT_WEIGHED;
 		}
+		// And a screen asked of the QT interval, which no finding weighs (ADR Decision 587, the owner's direction).
+		if (moduleAnswer != null && questionDrugs.isEmpty() && QueryScopeRouter.namesTheQtInterval(question)) {
+			moduleAnswer = moduleAnswer + "\n" + QT_NOT_WEIGHED;
+		}
 		// And how long it would be given (ADR Decision 419).
 		if (moduleAnswer != null && QueryScopeRouter.statesADuration(question)) {
 			moduleAnswer = moduleAnswer + "\n" + DURATION_NOT_WEIGHED;
@@ -10164,6 +10168,9 @@ public class DrugReferenceInjector {
 
 	/** What closes an answer to a proposal saying when the drug would be given (ADR Decision 394): no finding weighs it. */
 	static final String TIMING_NOT_WEIGHED = "This check did not weigh when the drug would be given.";
+
+	/** What closes a screen asked of the QT interval (ADR Decision 587): no finding weighs a drug's effect on it. */
+	static final String QT_NOT_WEIGHED = "This check did not weigh QT prolongation.";
 
 	/** What opens the line closing an answer to a proposal naming a condition, the condition and ")." after it (ADR Decision
 	 *  394): the check weighs her recorded conditions, not one the question names. */

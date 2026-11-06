@@ -10,6 +10,8 @@
 package org.openmrs.module.chartsearchai.api.impl;
 
 import java.io.Closeable;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.concurrent.CancellationException;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -1610,13 +1612,52 @@ public class LlmProvider {
 		return value != null && !value.trim().isEmpty();
 	}
 
+	static String resolveReferenceDate(String configuredValue, String systemPropertyValue,
+			String envValue, String fallbackEnvValue) {
+		for (String candidate : new String[] { configuredValue, systemPropertyValue, envValue, fallbackEnvValue }) {
+			if (candidate != null && !candidate.trim().isEmpty()) {
+				return candidate.trim();
+			}
+		}
+		return LocalDate.now(ZoneOffset.UTC).toString();
+	}
+
+	static String withReferenceDate(String basePrompt, String referenceDate) {
+		if (referenceDate == null || referenceDate.trim().isEmpty()) {
+			return basePrompt;
+		}
+		String trimmed = referenceDate.trim();
+		return basePrompt + "\n\nToday's date is " + trimmed
+				+ ". Interpret relative time phrases in the query (such as \"today\", \"currently\", "
+				+ "\"recent\", \"past 6 months\", \"last year\", or \"upcoming\") relative to "
+				+ trimmed + ".";
+	}
+
+	protected String getReferenceDate() {
+		String configured = null;
+		try {
+			if (Context.getAdministrationService() != null) {
+				configured = Context.getAdministrationService()
+						.getGlobalProperty(ChartSearchAiConstants.GP_REFERENCE_DATE);
+			}
+		}
+		catch (RuntimeException ignored) {
+			// Context not open in pure unit tests; fall through to system property / env / UTC today.
+		}
+		return resolveReferenceDate(
+				configured,
+				System.getProperty(ChartSearchAiConstants.GP_REFERENCE_DATE),
+				System.getenv(ChartSearchAiConstants.ENV_REFERENCE_DATE),
+				System.getenv("HUB_ANCHOR"));
+	}
+
 	protected String getSystemPrompt() {
 		String value = Context.getAdministrationService()
 				.getGlobalProperty(ChartSearchAiConstants.GP_SYSTEM_PROMPT);
 		if (isCustomSystemPrompt(value)) {
 			return value.trim();
 		}
-		return DEFAULT_SYSTEM_PROMPT;
+		return withReferenceDate(DEFAULT_SYSTEM_PROMPT, getReferenceDate());
 	}
 
 	/**

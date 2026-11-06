@@ -27540,3 +27540,34 @@ file; …"*.
 
 Pinned by `AlwaysCollapsedAnswerTest.twoDrugsListedBelowTheFloorAreAnsweredInTheSentenceInView`, which reddens without the
 change.
+
+## Decision 602: A drug proposed beside a word the data does not know is answered as its own proposal
+
+**Status**: Accepted (2026-11-06).
+
+### Context
+
+Decision 250 says that a two-drug question whose other word is no name in the data had that pair go unchecked. Where the
+word has no near name, Decision 384 sends the question to the model and the statement follows its answer. On the demo
+replica, *"Can I give him fluconazole with his klarizom?"* was answered *"The records do not address …"*. A Moderate
+finding about fluconazole against his nevirapine stood in the chips, and the answer did not mention it.
+
+### The decision
+
+Where the question proposes giving the drug it names together with the word (`UnrecognisedDrugName.proposedTogether`,
+never in a switch), that drug is not one of hers, and every finding is about it, the module answers. First comes the
+statement that no check was run for the word. Then, under *"For Fluconazole:"*, comes what `composeSeveralDrugsTogether`
+says of each drug she does not take: that the check raised no finding about it, what it found where its findings make no
+verdict, or its proposal's answer. In every other case Decision 384 stands.
+
+Pinned by `HerOrderNamedByItsBrandAloneTest.aDrugProposedBesideAWordTheDataDoesNotKnowIsAnsweredAsItsOwnProposal`, which
+reddens without the change.
+
+It is fail-closed in two further ways. It does not answer where the question also says what the drug is for, since the
+answer would leave that unsaid. Nor does it answer where the word asks something: *"Can I give her mebendazole for worms
+and what dose?"* reads "what dose" in a drug's place, and still asks the model
+(`LlmInferenceServiceAnswerFromFindingsContextTest.aPurposeCarryingSomethingTheFindingsDoNotAnswerStillAsksTheModel`).
+
+A spec change by the owner's direction: `UnrecognisedNameNamedAsHersTest.aNameCalledHersThatNamesNoneOfHerOrdersIsSaidToBeSoAndUnchecked`
+pinned "klarizom" beside fluconazole to the chart answer. It now pins the module's answer, which opens with the same two
+lines.

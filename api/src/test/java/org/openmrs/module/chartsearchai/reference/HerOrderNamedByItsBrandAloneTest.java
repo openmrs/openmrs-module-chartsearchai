@@ -100,6 +100,31 @@ public class HerOrderNamedByItsBrandAloneTest extends BaseModuleContextSensitive
 		}
 	}
 
+	/**
+	 * A drug proposed beside a word the data has no near name for is answered as its own proposal, after the statement that
+	 * the word was not checked (ADR Decision 602): on the demo replica "Can I give him fluconazole with his klarizom?" went
+	 * to the model for patients on rifampicin, which answered "No — fluconazole should not be given …" — the module's own
+	 * finding, stated as the model's verdict.
+	 */
+	@Test
+	public void aDrugProposedBesideAWordTheDataDoesNotKnowIsAnsweredAsItsOwnProposal() {
+		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(DrugReferenceTestSupport.activeOrder("order-nvp",
+			"Nevirapine", "Nevirapine"));
+		LinkedHashSet<String> names = new LinkedHashSet<String>(orders.get(0).getNames());
+		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.shippedServiceWithGroups())
+				.injectRecords(DrugReferenceTestSupport.oneRecordChart(), DrugReferenceTestSupport.ctx(45, null, names, null,
+					null, null, orders), "Can I give him fluconazole with his klarizom?");
+		String answer = chart.getModuleAnswer();
+		assertNotNull(answer, "the module answers");
+		String[] lines = answer.split("\n");
+		assertEquals("None of this patient's active orders is named \"klarizom\".", lines[0], answer);
+		assertTrue(lines[1].startsWith("No interaction check was run for \"klarizom\" and Fluconazole: \"klarizom\" is not a "
+				+ "drug name the interaction data recognises."), answer);
+		assertEquals("For Fluconazole:", lines[2], answer);
+		assertTrue(answer.contains("\nFluconazole interacts with active order Nevirapine — Moderate."), answer);
+		assertNull(chart.getUncheckedWordStatement(), "stated in the answer, not after a model's");
+	}
+
 	private static String ask(String question) {
 		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(DrugReferenceTestSupport.activeOrder("order-k",
 			"Clarithromycine Co 500mg", new LinkedHashSet<String>(Arrays.asList("clarithromycine co 500mg", "clarithromycine")),

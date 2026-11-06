@@ -1635,7 +1635,20 @@ public class DrugReferenceInjector {
 					moduleAnswer = moduleAnswer + "\n" + allergies;
 				}
 			} else if (beside != null) {
-				uncheckedWord = beside.statementFor(named.get(0).label);
+				// Proposed with it, the drug the data recognises is answered as its own proposal after the statement (ADR
+				// Decision 602): the model answered "Can I give him fluconazole with his klarizom?" with "The records do not
+				// address …" beside a Moderate finding against his nevirapine.
+				String itsOwn = beside.proposedTogether() && context != null && context.chartReadForSafety()
+						? composeProposedBesideAWord(named.get(0), screenedSubstances, findings, findingNumbers,
+							orderRecordNumbers,
+							orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers,
+							pairExtent.stated())
+						: null;
+				if (itsOwn != null) {
+					moduleAnswer = beside.statementFor(named.get(0).label) + "\n" + itsOwn;
+				} else {
+					uncheckedWord = beside.statementFor(named.get(0).label);
+				}
 			}
 		}
 		// What the validator drew apart as about her other medications follows the answer it decided nothing of (ADR Decision
@@ -8571,6 +8584,45 @@ public class DrugReferenceInjector {
 		lines.add(BELOW_FLOOR_SCOPE);
 		return withHerOwnOrdersSharingASubstance(String.join("\n", lines), sharing, sharingNumbers, orderRecordNumbers,
 			herOrderRecords);
+	}
+
+	/**
+	 * The answer the drug the question proposes beside a word the data does not know gets on its own (ADR Decision 602), under
+	 * "For X:", as {@link #composeSeveralDrugsTogether} answers each drug she does not take: that the check raised no finding
+	 * about it, what it found where its findings make no verdict, or its proposal's answer; or {@code null} where the model
+	 * answers. Fail-closed: the drug is one of hers, or a finding is about something else.
+	 */
+	private static String composeProposedBesideAWord(AskedDrug drug, Set<Object> herSubstances, List<SafetyWarning> findings,
+			List<Integer> numbers, Map<String, Integer> orderRecordNumbers, Map<String, Integer> herOrderRecords,
+			PairChipExtent pairs) {
+		if (drug.isHers(herSubstances)) {
+			return null;
+		}
+		for (SafetyWarning finding : findings) {
+			if (!isAbout(finding, drug.substances)) {
+				return null;
+			}
+		}
+		String heading = "For " + drug.label + ":";
+		if (findings.isEmpty()) {
+			return heading + "\nThe interaction check raised no finding about " + drug.label
+					+ " against this patient's active medications.";
+		}
+		boolean withholds = false;
+		for (SafetyWarning finding : findings) {
+			withholds |= licensesTheModulesNo(finding);
+		}
+		if (!withholds && !cautionsOnlyAbout(drug.substances, findings)) {
+			List<String> lines = new ArrayList<String>();
+			lines.add(heading);
+			for (int f = 0; f < findings.size(); f++) {
+				lines.add(findingLine(findings.get(f), numbers.get(f), orderRecordNumbers, herOrderRecords, true));
+			}
+			return String.join("\n", lines);
+		}
+		String composed = composeFromFindings(findings, numbers, orderRecordNumbers, herOrderRecords, true, pairs, Lead.GIVE,
+			SCREEN_SCOPE, drug.substances.size() > 1 ? drug.label : null);
+		return composed == null ? null : heading + "\n" + composed;
 	}
 
 	/**

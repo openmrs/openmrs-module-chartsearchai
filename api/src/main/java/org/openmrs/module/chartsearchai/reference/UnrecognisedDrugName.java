@@ -271,6 +271,13 @@ final class UnrecognisedDrugName {
 	/** Whether the question names the word as hers, where it stands alone in a drug's place (ADR Decision 374). */
 	private boolean namedAsHersAlone;
 
+	/** Whether the question proposes giving the drug it names together with the word (ADR Decision 602). */
+	private boolean proposedTogether;
+
+	/** Words that ask something, which no drug's name carries (ADR Decision 602). */
+	private static final Set<String> ASKING_WORDS = new HashSet<String>(Arrays.asList("how", "what", "which", "when", "why",
+		"who", "whether"));
+
 	/**
 	 * @return the unrecognised word standing in the OTHER drug's place of a two-drug question whose one drug the data does
 	 *         recognise — {@code questionDrugs}, one substance — with its suggestions, or {@code null} where no two-drug shape
@@ -317,10 +324,25 @@ final class UnrecognisedDrugName {
 								|| !context.activeDrugOrdersRead())) {
 					return null;
 				}
-				return new UnrecognisedDrugName(asWritten(word, question), suggestionsFor(word, entries), inASwitch, hers);
+				UnrecognisedDrugName beside = new UnrecognisedDrugName(asWritten(word, question), suggestionsFor(word, entries),
+						inASwitch, hers);
+				// Fail-closed: never where the question also says what the drug is for, which this answer would leave unsaid,
+				// nor where the word asks something — "Can I give her mebendazole for worms and what dose?" reads "what dose"
+				// in a drug's place.
+				beside.proposedTogether = !inASwitch && QueryScopeRouter.asksWhetherToGiveDrugsTogether(marked)
+						&& !marked.contains("for") && Collections.disjoint(span, ASKING_WORDS);
+				return beside;
 			}
 		}
 		return null;
+	}
+
+	/**
+	 * @return whether the question proposes giving the drug it names together with this word — "Can I give him fluconazole
+	 *         with his klarizom?" — so that drug's proposal is answerable apart from the word (ADR Decision 602)
+	 */
+	boolean proposedTogether() {
+		return proposedTogether;
 	}
 
 	/**

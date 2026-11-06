@@ -48,14 +48,11 @@ public class UnrecognisedNameNamedAsHersTest extends BaseModuleContextSensitiveT
 		for (String word : Arrays.asList("klarizom", "clarithromycine")) {
 			String question = "Can I give him fluconazole with his " + word + "?";
 			PatientChart chart = askChart(question, orders);
-			// "klarizom" has no near name in the data, so it follows the chart answer; "clarithromycine" has one, and is
-			// the module's answer (ADR Decision 384).
-			boolean nearName = "clarithromycine".equals(word);
-			String answer = nearName ? chart.getModuleAnswer() : chart.getUncheckedWordStatement();
+			// "clarithromycine" has a near name in the data, and is the module's answer (ADR Decision 384); "klarizom" has
+			// none, and fluconazole proposed with it is answered as its own proposal after the statement (ADR Decision 602).
+			String answer = chart.getModuleAnswer();
 			assertNotNull(answer, question + " — stated");
-			if (!nearName) {
-				assertNull(chart.getModuleAnswer(), question + " — the chart answer: " + chart.getModuleAnswer());
-			}
+			assertNull(chart.getUncheckedWordStatement(), question + " — stated once: " + chart.getUncheckedWordStatement());
 			String[] lines = answer.split("\n");
 			assertEquals("None of this patient's active orders is named \"" + word + "\".", lines[0],
 				question + " — was: " + answer);

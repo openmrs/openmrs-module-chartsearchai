@@ -1500,8 +1500,8 @@ public class EntrypointRetrievalWiringTest {
 	/**
 	 * A stand-in for the {@code mariadb} client, understanding only the statements this wiring
 	 * issues: the reachability and schema probes, the two global-property reads, the
-	 * insert-if-blank, the update that turns the sweep off, and the demo seed's program repair with
-	 * the count that follows it. Anything else is recorded and
+	 * insert-if-blank, the update that turns the sweep off, and the demo seed's program repair and HIV
+	 * series, each with the count that follows it. Anything else is recorded and
 	 * refused — a stand-in that accepted a statement it did not understand would let a case pass for
 	 * a reason nobody checked.
 	 *
@@ -1600,6 +1600,12 @@ public class EntrypointRetrievalWiringTest {
 				"\t'DELETE s FROM program_workflow_state s'*)",
 				"\t\t: ;;",
 				"\t'SELECT (SELECT COUNT(*) FROM program_workflow_state'*)",
+				"\t\techo 0 ;;",
+				// And its HIV series and the count it reports after it: no obs or conditions tables here, so nothing is
+				// added and none is counted.
+				"\t'INSERT INTO obs (person_id, concept_id, encounter_id'*)",
+				"\t\t: ;;",
+				"\t'SELECT COUNT(*) FROM obs WHERE uuid IN'*)",
 				"\t\techo 0 ;;",
 				"\t'UPDATE global_property SET property_value='*)",
 				"\t\t_value=$(printf '%s' \"$_sql\" \\",

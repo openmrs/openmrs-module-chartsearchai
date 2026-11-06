@@ -105,6 +105,25 @@ public class TwoDrugsListedBelowTheFloorTest extends BaseModuleContextSensitiveT
 		}
 	}
 
+	/**
+	 * Whether two drugs interact, beside an order the drug data does not identify, is still the module's: what it can say
+	 * of the pair and of her orders it identifies, and that order named after it as not checked (ADR Decision 596). On the
+	 * demo replica every patient with a vaccination order had "Do her nevirapine and stavudine interact?" answered by the
+	 * model, "The records do not address whether nevirapine and stavudine interact."
+	 */
+	@Test
+	public void twoDrugsBesideAnOrderTheDataCannotIdentifyAreStillAnswered() {
+		String answer = ask("Do her nevirapine and stavudine interact?",
+			DrugReferenceTestSupport.activeOrder("order-mtz", "Metronidazole", "Metronidazole"),
+			DrugReferenceTestSupport.activeOrder("order-vax", "Measles vaccination", "Measles vaccination"));
+		assertNotNull(answer, "the module answers");
+		String[] lines = mask(answer).split("\n");
+		assertEquals("Neither Nevirapine nor Stavudine is one of this patient's active medications.", lines[0], answer);
+		assertEquals(LISTED, lines[1], answer);
+		assertTrue(lines[lines.length - 1].startsWith("Not checked: 1 active order the drug data does not identify — Measles "
+				+ "vaccination."), "the order it could not check, named: " + answer);
+	}
+
 	private static int count(String text, String part) {
 		int n = 0;
 		for (int at = text.indexOf(part); at >= 0; at = text.indexOf(part, at + 1)) {

@@ -1525,6 +1525,11 @@ public class DrugReferenceInjector {
 						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS)) {
 			// One name per ORDER, so two orders of one drug count as two (ADR Decision 379).
 			List<String> inIt = eachOrderFiledUnder(askedClass, orderEntries, context);
+			// Beside an order the drug data does not identify, what holds of the orders it identifies, Decision 161's line
+			// naming the rest (ADR Decision 597).
+			if (inIt == null && noneItIdentifiesIsIn(askedClass, unidentified, orderEntries, context)) {
+				moduleAnswer = NONE_IT_IDENTIFIES_OPENING + carried.trim() + ".";
+			}
 			if (inIt != null) {
 				// Whether she is on MORE than one: "Yes —" only for two or more; one is stated, and neither "Yes" nor "No"
 				// (ADR Decision 379).
@@ -8060,9 +8065,9 @@ public class DrugReferenceInjector {
 			return null;
 		}
 		List<AskedDrug> asked = askedDrugs(question, questionDrugs, context, true);
-		if (asked.size() != 2 || !Collections.disjoint(asked.get(0).substances, asked.get(1).substances)
-				|| !DrugSafetyValidator.unresolvedActiveOrders(drugReferenceService, context,
-						orderEntries == null ? Collections.<DrugReference> emptyList() : orderEntries).isEmpty()) {
+		// An order of hers the drug data does not identify no longer gives this up: Decision 161's line names it after the
+		// answer, and that whether it is a drug asked about is not established (ADR Decision 596).
+		if (asked.size() != 2 || !Collections.disjoint(asked.get(0).substances, asked.get(1).substances)) {
 			return null;
 		}
 		List<Integer> cited = new ArrayList<Integer>();
@@ -10017,10 +10022,8 @@ public class DrugReferenceInjector {
 			return drug.label + " is not one of this patient's active medications, so there is no order of it to stop.\n"
 					+ carried;
 		}
-		if (!DrugSafetyValidator.unresolvedActiveOrders(drugReferenceService, context,
-				orderEntries == null ? Collections.<DrugReference> emptyList() : orderEntries).isEmpty()) {
-			return null;
-		}
+		// An order of hers the drug data does not identify no longer gives this up: Decision 161's line names it after the
+		// answer (ADR Decision 598), as it does where the question asks whether to stop the combination.
 		List<String> found = new ArrayList<String>();
 		List<SafetyWarning> sharing = new ArrayList<SafetyWarning>();
 		List<Integer> sharingNumbers = new ArrayList<Integer>();

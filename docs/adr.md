@@ -27409,3 +27409,65 @@ scoped line and the allergy line. Where her orders were not read, it still retur
 
 Pinned by `DrugClassProposalTest.aClassProposedBesideAnOrderTheDataCannotIdentifyIsAnsweredAndNamesIt`, which reddens
 without the change.
+
+## Decision 596: Whether two drugs interact is answered beside an order the drug data cannot identify
+
+**Status**: Accepted (2026-11-06).
+
+### Context
+
+`composeTwoDrugsTheDataDoesNotRelate` (Decisions 302, 329) returned `null` wherever any order of hers was one the drug
+data does not identify. On the demo replica every patient has vaccination orders of that kind, so each of these went to
+the model for them, while a patient without such an order got the module's answer:
+- *"Do her nevirapine and stavudine interact?"* — *"The records do not address whether nevirapine and stavudine
+  interact."*
+- *"Does her lamivudine interact with her nevirapine?"* — *"There is an Unknown severity interaction between Nevirapine
+  and Lamivudine"*
+- *"Is lamivudine safe with nevirapine?"*
+
+*"Can I give him sulfamethoxazole and trimethoprim?"*, of a patient on that combination, drew the model's *"No — …"*.
+
+### The decision
+
+The gate is dropped. Decision 161's line names any such order after the answer, and, since the question names drugs,
+says *"Whether it is the drug asked about is not established."* So the answer's claim that a drug is or is not hers is
+qualified in the words every other answer uses.
+
+Pinned by `TwoDrugsListedBelowTheFloorTest.twoDrugsBesideAnOrderTheDataCannotIdentifyAreStillAnswered`, which reddens
+without the change.
+
+## Decision 597: Whether she is on any drug of a class is answered for the orders the data identifies
+
+**Status**: Accepted (2026-11-06).
+
+### Context
+
+*"Is she on any NSAIDs?"* (Decision 298) and *"… any blood thinners?"* went to the model for every replica patient with
+a vaccination order, as Decision 595's class proposal had. The model answered *"No NSAIDs are recorded."*
+
+### The decision
+
+Where none of the orders the data identifies is in the class and some order is one it does not identify, the answer is
+*"None of this patient's active medication orders the drug data identifies is in the drug group this module carries as
+NSAID."* (Decision 595's opening and test). Decision 161's line names the rest.
+
+Pinned by `DrugClassProposalTest.whetherSheIsOnAClassBesideAnOrderTheDataCannotIdentifyIsAnswered`, which reddens without
+the change.
+
+## Decision 598: A combination she takes in part is answered beside an order the drug data cannot identify
+
+**Status**: Accepted (2026-11-06).
+
+### Context
+
+`composeProductHeldInPart` (Decision 377) answers *"Is his isoniazid / rifapentine safe?"* with what she takes of it and
+what the check found. It returned `null` beside an order the data does not identify, so on the replica the model
+answered. Asked whether to stop the combination, it already answered without that gate.
+
+### The decision
+
+The gate is dropped. Decision 161's line names the order, and its *"the check raised none"* is qualified the way every
+answer's is.
+
+Pinned by `ProductHeldInPartNamedAsHersTest.aProductHeldInPartBesideAnOrderTheDataCannotIdentifyIsStillAnswered`, which
+reddens without the change.

@@ -256,6 +256,21 @@ public class DrugClassProposalTest extends BaseModuleContextSensitiveTest {
 			DrugReferenceTestSupport.activeOrder("order-vax", "Measles vaccination", "Measles vaccination")));
 	}
 
+	/**
+	 * Whether she is on any drug of a class, beside an order the drug data does not identify, says what holds of the orders
+	 * it identifies and names that order as not checked (ADR Decision 597): on the demo replica "Is she on any NSAIDs?" was
+	 * answered by the model for every patient with a vaccination order.
+	 */
+	@Test
+	public void whetherSheIsOnAClassBesideAnOrderTheDataCannotIdentifyIsAnswered() {
+		String answer = ask("Is she on any NSAIDs?", null,
+			DrugReferenceTestSupport.activeOrder("order-3tc", "Lamivudine", "Lamivudine"),
+			DrugReferenceTestSupport.activeOrder("order-vax", "Measles vaccination", "Measles vaccination"));
+		assertNotNull(answer, "the module answers");
+		assertEquals("None of this patient's active medication orders the drug data identifies is in the drug group this module "
+				+ "carries as NSAID.\nNot checked: 1 active order the drug data does not identify — Measles vaccination.", answer);
+	}
+
 	private static String ask(String question, Set<String> allergies, PatientClinicalContext.ActiveDrugOrder... given) {
 		return askChart(question, allergies, given).getModuleAnswer();
 	}

@@ -61,6 +61,24 @@ public class ProductHeldInPartNamedAsHersTest extends BaseModuleContextSensitive
 			ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS, "true");
 	}
 
+	/**
+	 * The same beside an order the drug data does not identify, that order named after the answer as not checked (ADR
+	 * Decision 598): on the demo replica "Is his isoniazid / rifapentine safe?" was answered by the model for a patient with
+	 * vaccination orders, as it was before Decision 377 for every patient.
+	 */
+	@Test
+	public void aProductHeldInPartBesideAnOrderTheDataCannotIdentifyIsStillAnswered() {
+		List<PatientClinicalContext.ActiveDrugOrder> withVaccination = new java.util.ArrayList<PatientClinicalContext.ActiveDrugOrder>(
+			ROSE);
+		withVaccination.add(DrugReferenceTestSupport.activeOrder("order-vax", "Measles vaccination", "Measles vaccination"));
+		String safe = ask(withVaccination, "Is his isoniazid / rifapentine safe?");
+		assertNotNull(safe, "the module answers");
+		String[] lines = safe.split("\n");
+		assertEquals("Isoniazid / rifapentine" + DrugReferenceInjector.NOT_HER_MEDICATION, lines[0], safe);
+		assertTrue(lines[lines.length - 1].startsWith("Not checked: 1 active order the drug data does not identify — Measles "
+				+ "vaccination."), "the order it could not check, named: " + safe);
+	}
+
 	@Test
 	public void herIsoniazidRifapentineIsNotHersAndWhatTheCheckFoundIsListed() {
 		String safe = ask(ROSE, "Is his isoniazid / rifapentine safe?");

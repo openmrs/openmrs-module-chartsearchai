@@ -105,6 +105,12 @@
 	</globalProperty>
 
 	<globalProperty>
+		<property>chartsearchai.referenceDate</property>
+		<defaultValue></defaultValue>
+		<description>Optional ISO-8601 reference date (YYYY-MM-DD) used to anchor relative time phrases in the built-in system prompt (for example, 2026-06-20 on a shifted evaluation corpus). When empty (the default), the module falls back to the CHARTSEARCHAI_REFERENCE_DATE or HUB_ANCHOR environment variable if set, or today's UTC date.</description>
+	</globalProperty>
+
+	<globalProperty>
 		<property>chartsearchai.llm.timeoutSeconds</property>
 		<defaultValue>300</defaultValue>
 		<description>Maximum number of seconds to wait for the inference server's FIRST output. It applies to EACH call the module makes to that server, and a cold query with the on-disk KV cache enabled makes more than one. It stops applying once that server's response headers arrive, which on the streaming endpoint is when the first token is produced, so it bounds the prompt prefill and NOT the generation that follows. It does not cover starting the embedded llama-server or loading the model; that has a separate fixed bound of its own. Default 300s gives a cold full-chart prefill headroom on CPU-only deployments. On GPU or remote-API setups, lower values are reasonable.</description>

@@ -169,6 +169,16 @@ public class ChartSearchAiConstants {
 
 	public static final String GP_SYSTEM_PROMPT = "chartsearchai.llm.systemPrompt";
 
+	/**
+	 * Optional ISO-8601 reference date ({@code YYYY-MM-DD}) anchoring relative time phrases in the
+	 * built-in system prompt (for example, {@code 2026-06-20} on a shifted evaluation corpus);
+	 * unset defaults to the environment override {@link #ENV_REFERENCE_DATE} / {@code HUB_ANCHOR}
+	 * or today's UTC date.
+	 */
+	public static final String GP_REFERENCE_DATE = "chartsearchai.referenceDate";
+
+	public static final String ENV_REFERENCE_DATE = "CHARTSEARCHAI_REFERENCE_DATE";
+
 	public static final String GP_LLM_TIMEOUT_SECONDS = "chartsearchai.llm.timeoutSeconds";
 
 	public static final int DEFAULT_LLM_TIMEOUT_SECONDS = 300;

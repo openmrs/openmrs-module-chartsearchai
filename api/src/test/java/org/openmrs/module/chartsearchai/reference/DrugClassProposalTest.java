@@ -271,6 +271,22 @@ public class DrugClassProposalTest extends BaseModuleContextSensitiveTest {
 				+ "carries as NSAID.\nNot checked: 1 active order the drug data does not identify — Measles vaccination.", answer);
 	}
 
+	/**
+	 * A group named beside another drug, as Decision 363 reads "penicillin", still states her recorded drug allergies in that
+	 * group (ADR Decision 599): on the demo replica a patient recorded allergic to the penicillins was asked "Is penicillin
+	 * safe with her methotrexate?" and told only that "penicillin" is not a drug name the data recognises, with names to
+	 * ask again by, her allergy never mentioned — Decision 363's own defect, in the two-drug form.
+	 */
+	@Test
+	public void aGroupNamedBesideAnotherDrugStatesHerAllergiesInIt() {
+		String answer = ask("Is penicillin safe with her methotrexate?", DrugReferenceTestSupport.set("penicillins"),
+			DrugReferenceTestSupport.activeOrder("order-3tc", "Lamivudine", "Lamivudine"));
+		assertNotNull(answer, "the module answers");
+		assertTrue(answer.contains("No interaction check was run for \"penicillin\" and Methotrexate"), "precondition: " + answer);
+		assertTrue(answer.contains("\nRecorded drug allergies in the drug group this module carries as Penicillins: penicillins."),
+			"her allergy in the group named: " + answer);
+	}
+
 	private static String ask(String question, Set<String> allergies, PatientClinicalContext.ActiveDrugOrder... given) {
 		return askChart(question, allergies, given).getModuleAnswer();
 	}

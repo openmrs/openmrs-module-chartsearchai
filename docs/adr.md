@@ -27471,3 +27471,26 @@ answer's is.
 
 Pinned by `ProductHeldInPartNamedAsHersTest.aProductHeldInPartBesideAnOrderTheDataCannotIdentifyIsStillAnswered`, which
 reddens without the change.
+
+## Decision 599: A drug group named beside another drug states her recorded allergies in that group
+
+**Status**: Accepted (2026-11-06).
+
+### Context
+
+Decision 363 reads *"penicillin"* as the Penicillins group, because *"Can I give her penicillin?"* had told patients
+allergic to a penicillin only that the word was not a drug name, never mentioning their allergy. The two-drug form kept
+that defect. On the demo replica, a patient recorded allergic to the penicillins asked *"Is penicillin safe with her
+methotrexate?"*. They were told *"No interaction check was run for "penicillin" and Methotrexate: "penicillin" is not a
+drug name the interaction data recognises. Did you mean …?"*, and nothing of the allergy. Decision 250's pair statement
+is reached because the question also names a drug the data resolves.
+
+### The decision
+
+Where that statement answers, and the word it names is a group this module carries (`DrugClassTerms.groupNamedBy`), the
+answer adds her recorded drug allergies in the group. It uses the line Decision 347's class answer states
+(`composeClassProposal`, `allergiesAlone`): *"Recorded drug allergies in the drug group this module carries as
+Penicillins: …"*, that none is in it, or that none is recorded. It is stated only where her allergy records were read.
+The pair statement, its suggestions and Decision 67's class note are unchanged.
+
+Pinned by `DrugClassProposalTest.aGroupNamedBesideAnotherDrugStatesHerAllergiesInIt`, which reddens without the change.

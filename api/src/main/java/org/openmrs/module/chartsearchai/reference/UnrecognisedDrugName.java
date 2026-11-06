@@ -764,6 +764,11 @@ final class UnrecognisedDrugName {
 	 * data recognises. Did you mean …?"</em> — {@link #statement} for a two-drug question whose other drug, {@code
 	 * namedDrug}, the data does recognise, so that what was not checked is the pair (ADR Decision 250).
 	 */
+	/** The word the question puts in a drug's place, as it writes it. */
+	String word() {
+		return word;
+	}
+
 	String statementBeside(String namedDrug) {
 		return withSuggestions(new StringBuilder(namedAsHersButNoOrder
 				? "None of this patient's active orders is named \"" + word + "\".\n" : "")

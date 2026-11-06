@@ -1620,6 +1620,15 @@ public class DrugReferenceInjector {
 					? UnrecognisedDrugName.besideANamedDrug(question, questionDrugs, drugReferenceService.getAll(), context) : null;
 			if (beside != null && beside.hasSuggestions()) {
 				moduleAnswer = beside.statementFor(named.get(0).label);
+				// The word names a group this module carries — "penicillin", as Decision 363 reads it — so her recorded drug
+				// allergies in it are stated, as the question naming the group alone states them (ADR Decision 599).
+				CrossReactivityGroup group = DrugClassTerms.groupNamedBy(beside.word(),
+					drugReferenceService.getCrossReactivityGroups());
+				String allergies = group == null || context == null || !context.contraindicationRecordsRead() ? null
+						: composeClassProposal(group.getName(), group, orderEntries, context, true);
+				if (allergies != null) {
+					moduleAnswer = moduleAnswer + "\n" + allergies;
+				}
 			} else if (beside != null) {
 				uncheckedWord = beside.statementFor(named.get(0).label);
 			}

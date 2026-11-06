@@ -69,7 +69,10 @@ final class UnrecognisedDrugName {
 		// and her pregnancy or breastfeeding asked as her state: "Can she get pregnant?" (ADR Decision 550)
 		"pregnant", "breastfeed", "lactating", "lactation", "conceive", "nursing",
 		// and a screen's: "Screen fluconazole" (ADR Decision 536)
-		"screen", "screening"));
+		"screen", "screening",
+		// and a question word, or a dose asked of the drug: "Can I give her mebendazole for worms and what dose?" (ADR
+		// Decision 603)
+		"how", "what", "which", "when", "why", "who", "whether", "dose", "doses", "dosage", "dosing"));
 
 	private static final int MAX_SUGGESTIONS = 4;
 
@@ -274,10 +277,6 @@ final class UnrecognisedDrugName {
 	/** Whether the question proposes giving the drug it names together with the word (ADR Decision 602). */
 	private boolean proposedTogether;
 
-	/** Words that ask something, which no drug's name carries (ADR Decision 602). */
-	private static final Set<String> ASKING_WORDS = new HashSet<String>(Arrays.asList("how", "what", "which", "when", "why",
-		"who", "whether"));
-
 	/**
 	 * @return the unrecognised word standing in the OTHER drug's place of a two-drug question whose one drug the data does
 	 *         recognise — {@code questionDrugs}, one substance — with its suggestions, or {@code null} where no two-drug shape
@@ -326,11 +325,9 @@ final class UnrecognisedDrugName {
 				}
 				UnrecognisedDrugName beside = new UnrecognisedDrugName(asWritten(word, question), suggestionsFor(word, entries),
 						inASwitch, hers);
-				// Fail-closed: never where the question also says what the drug is for, which this answer would leave unsaid,
-				// nor where the word asks something — "Can I give her mebendazole for worms and what dose?" reads "what dose"
-				// in a drug's place.
+				// Fail-closed: never where the question also says what the drug is for, which this answer would leave unsaid.
 				beside.proposedTogether = !inASwitch && QueryScopeRouter.asksWhetherToGiveDrugsTogether(marked)
-						&& !marked.contains("for") && Collections.disjoint(span, ASKING_WORDS);
+						&& !marked.contains("for");
 				return beside;
 			}
 		}

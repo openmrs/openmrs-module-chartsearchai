@@ -1245,6 +1245,23 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		}
 	}
 
+	/**
+	 * A question word is never read as a drug's name (ADR Decision 603): on the demo replica, "Can I give him mebendazole
+	 * for worms and what dose?" closed the model's answer with "No interaction check was run for "what dose" and
+	 * Mebendazole: "what dose" is not a drug name the interaction data recognises."
+	 */
+	@Test
+	public void aQuestionWordIsNeverReadAsADrugsName() throws Exception {
+		executeDataSet(RIFAMPICIN_ORDER);
+		for (String question : Arrays.asList("Can I give her mebendazole for worms and what dose?",
+			"Can I give her mebendazole and how often?")) {
+			ChartAnswer answer = serviceWith(new RecordingProvider(), shipped()).search(patient, question);
+
+			assertFalse(answer.getAnswer().contains("No interaction check was run for"), question + " — was: "
+					+ answer.getAnswer());
+		}
+	}
+
 	/** The same beside a proposal the check relates to her orders only below the severity floor (ADR Decisions 142,
 	 *  159): the below-floor answer, then the finding about her own orders. */
 	@Test

@@ -27571,3 +27571,23 @@ and what dose?"* reads "what dose" in a drug's place, and still asks the model
 A spec change by the owner's direction: `UnrecognisedNameNamedAsHersTest.aNameCalledHersThatNamesNoneOfHerOrdersIsSaidToBeSoAndUnchecked`
 pinned "klarizom" beside fluconazole to the chart answer. It now pins the module's answer, which opens with the same two
 lines.
+
+## Decision 603: A question word is never read as a drug's name
+
+**Status**: Accepted (2026-11-06).
+
+### Context
+
+Decision 250's scan puts each span of the question in a drug's place and asks whether it is a name. "What dose" passed,
+since no word of it was in `NOT_A_NAME`. On the demo replica, *"Can I give him mebendazole for worms and what dose?"*
+went to the model, as Decision 213 has it. But it closed with *"No interaction check was run for "what dose" and
+Mebendazole: "what dose" is not a drug name the interaction data recognises."*
+
+### The decision
+
+`NOT_A_NAME` gains the question words (how, what, which, when, why, who, whether) and the words of a dose (dose, doses,
+dosage, dosing). This replaces Decision 602's own check that the word asks nothing, which is no longer needed and is
+removed. 602's other fail-closed condition, that the question carries no purpose, stays.
+
+Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aQuestionWordIsNeverReadAsADrugsName`, which reddens without
+the change.

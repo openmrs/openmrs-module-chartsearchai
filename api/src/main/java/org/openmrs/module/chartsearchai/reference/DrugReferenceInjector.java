@@ -9626,7 +9626,15 @@ public class DrugReferenceInjector {
 	private String composeAllergyToHerMedications(List<SafetyWarning> findings, List<Integer> numbers,
 			Map<String, Integer> orderRecordNumbers, Map<String, Integer> herOrderRecords, PatientClinicalContext context,
 			int unidentified) {
-		if (unidentified > 0 || !context.contraindicationRecordsRead() || !context.activeDrugOrdersRead()) {
+		if (!context.contraindicationRecordsRead() || !context.activeDrugOrdersRead()) {
+			return null;
+		}
+		// No drug allergy recorded answers it whatever her orders are, the ones the data does not identify included (ADR
+		// Decision 594).
+		if (!context.getActiveDrugOrders().isEmpty() && !recordsADrugAllergy(context)) {
+			return "No drug allergies are recorded for this patient.";
+		}
+		if (unidentified > 0) {
 			return null;
 		}
 		List<String> named = new ArrayList<String>();
@@ -10116,21 +10124,34 @@ public class DrugReferenceInjector {
 		String ordersLine;
 		String where;
 		Predicate<Set<String>> allergenInIt;
+		// Her orders the drug data does not identify: where none it identifies is in the class, that is what is said (ADR
+		// Decision 595), and Decision 161's line names them after the answer.
+		List<PatientClinicalContext.ActiveDrugOrder> unidentified = DrugSafetyValidator.unresolvedActiveOrders(
+			drugReferenceService, context, orderEntries == null ? Collections.<DrugReference> emptyList() : orderEntries);
+		boolean scoped = false;
 		if (atc != null) {
+			Predicate<Set<String>> inAtc = codes -> DrugClassMembersStatement.filedUnder(codes, atc);
 			List<String> orders = ordersFiledUnder(atc, orderEntries, context);
-			if (orders == null) {
-				return null;
-			}
-			ordersLine = DrugClassMembersStatement.statement(atc, orders);
 			where = "in that class (" + DrugClassMembersStatement.groupPhrase(atc) + ")";
-			allergenInIt = codes -> DrugClassMembersStatement.filedUnder(codes, atc);
+			if (orders == null) {
+				scoped = noneItIdentifiesIsIn(inAtc, unidentified, orderEntries, context);
+				if (!scoped) {
+					return null;
+				}
+			}
+			ordersLine = scoped ? NONE_IT_IDENTIFIES_OPENING + where + "." : DrugClassMembersStatement.statement(atc, orders);
+			allergenInIt = inAtc;
 		} else if (group != null) {
 			List<String> orders = ordersFiledUnder(group::containsAnyCodeForDuplicateTherapy, orderEntries, context);
-			if (orders == null) {
-				return null;
-			}
 			where = "in the drug group this module carries as " + group.getName();
-			ordersLine = orders.isEmpty() ? "None of this patient's active medication orders is " + where + "."
+			if (orders == null) {
+				scoped = noneItIdentifiesIsIn(group::containsAnyCodeForDuplicateTherapy, unidentified, orderEntries, context);
+				if (!scoped) {
+					return null;
+				}
+			}
+			ordersLine = scoped ? NONE_IT_IDENTIFIES_OPENING + where + "."
+					: orders.isEmpty() ? "None of this patient's active medication orders is " + where + "."
 					: "Already among this patient's active medication orders " + where + ": "
 							+ DrugSafetyValidator.joinPartners(orders) + ".";
 			allergenInIt = group::containsAnyCode;
@@ -10160,7 +10181,31 @@ public class DrugReferenceInjector {
 				: inIt.isEmpty() ? "None of this patient's recorded drug allergies is " + where + "."
 						: "Recorded drug allergies " + where + ": " + String.join("; ", inIt) + ".";
 		// Asked whether she is allergic to it, the allergy line answers alone (ADR Decision 367).
+		// Her orders the data does not identify are named after it by Decision 161's line, as on every answer.
 		return allergiesAlone ? allergyLine : drugClassStatement(namedClass) + "\n" + ordersLine + "\n" + allergyLine;
+	}
+
+	/** How a class answer says no order the data identifies is in the class, beside orders it does not (ADR Decision 595). */
+	private static final String NONE_IT_IDENTIFIES_OPENING = "None of this patient's active medication orders the drug data "
+			+ "identifies is ";
+
+	/** Whether her orders were read, none the data identifies is in the class {@code inClass} answers, and some order is
+	 *  one it does not identify — so only the orders it identifies can be said to be outside it (ADR Decision 595). */
+	private boolean noneItIdentifiesIsIn(Predicate<Set<String>> inClass,
+			List<PatientClinicalContext.ActiveDrugOrder> unidentified, List<DrugReference> orderEntries,
+			PatientClinicalContext context) {
+		List<PatientClinicalContext.ActiveDrugOrder> filed = activeOrdersFiledUnder(inClass, orderEntries, context);
+		return filed != null && filed.isEmpty() && !unidentified.isEmpty();
+	}
+
+	/** Whether {@code context} records an allergy that is not a non-drug allergy. */
+	private static boolean recordsADrugAllergy(PatientClinicalContext context) {
+		for (String token : context.getAllergyTokens()) {
+			if (!context.getNonDrugAllergyTokens().contains(token)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/** How the answer to which drugs to avoid in her says that no finding lists drugs to avoid (ADR Decisions 324, 509). */

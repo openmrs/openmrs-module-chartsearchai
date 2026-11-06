@@ -27364,3 +27364,48 @@ Spec changes, adding the names to the wording they pinned:
 
 Pinned by `AlwaysCollapsedAnswerTest.aProposalTheDataListsBelowTheFloorNamesHerMedications`, which reddens without the
 change.
+
+## Decision 594: Whether she is allergic to her medications, with no drug allergy recorded, is answered whatever her orders
+
+**Status**: Accepted (2026-11-06).
+
+### Context
+
+On the demo replica, *"Are any of her medications contraindicated with her allergies?"* was answered by the module for a
+patient whose orders the data all identifies: *"No drug allergies are recorded for this patient."* A patient with a
+vaccination order the data does not identify, and no allergy, got the model's *"The patient records do not address
+whether any of her medications are contraindicated with her allergies."*. `composeAllergyToHerMedications` (Decision 295)
+refused on any unidentified order before it read her allergies. With none recorded, no order needs checking.
+
+### The decision
+
+With her allergies and orders read, at least one order, and no drug allergy recorded, the answer is *"No drug allergies
+are recorded for this patient."*, whatever her orders. Decision 161's line names any order the data does not identify
+after it, as on every answer. With a drug allergy recorded, an unidentified order still leaves the question to the model:
+the *"None"* there would be false of it.
+
+Pinned by `DrugClassProposalTest.noRecordedDrugAllergyIsSaidWhateverOrdersTheDataCannotIdentify`, which reddens without the
+change.
+
+## Decision 595: A drug class proposed beside an order the data cannot identify is answered for the orders it identifies
+
+**Status**: Accepted (2026-11-06).
+
+### Context
+
+Decision 347 answers *"Can I give her a statin?"* with the class note, her orders in the class and her drug allergies in
+it. Decision 275 returned `null` where none of her orders is in the class and one of them is an order the drug data does
+not identify, since *"none is in it"* could be false of that order. On the demo replica, every patient with a vaccination
+order therefore got the model's *"The records do not address whether it is safe to give her a statin."*, which says
+nothing of her orders or allergies.
+
+### The decision
+
+There, the orders line is scoped to what the module can say: *"None of this patient's active medication orders the drug
+data identifies is in that class (ATC group C10AA)."* (`DrugReferenceInjector.NONE_IT_IDENTIFIES_OPENING`,
+`noneItIdentifiesIsIn`). The unidentified orders are named after the answer by Decision 161's line, *"Not checked: 1
+active order the drug data does not identify — Measles vaccination."*, as on a screen. The summary (Decision 585) is the
+scoped line and the allergy line. Where her orders were not read, it still returns `null`.
+
+Pinned by `DrugClassProposalTest.aClassProposedBesideAnOrderTheDataCannotIdentifyIsAnsweredAndNamesIt`, which reddens
+without the change.

@@ -217,6 +217,45 @@ public class DrugClassProposalTest extends BaseModuleContextSensitiveTest {
 			"the note stays in the answer: " + answer);
 	}
 
+	/**
+	 * A class proposed beside an order the drug data does not identify is still the module's: what it can say of the orders
+	 * it identifies, and the order it could not check named after it, as a screen names it (ADR Decision 595). On the demo
+	 * replica every patient with a vaccination order had "Can I give her a statin?" answered by the model, "The records do
+	 * not address whether it is safe to give her a statin.", where a patient without one was told her orders and allergies.
+	 */
+	@Test
+	public void aClassProposedBesideAnOrderTheDataCannotIdentifyIsAnsweredAndNamesIt() {
+		PatientChart chart = askChart("Can I give her a statin?", null,
+			DrugReferenceTestSupport.activeOrder("order-3tc", "Lamivudine", "Lamivudine"),
+			DrugReferenceTestSupport.activeOrder("order-vax", "Measles vaccination", "Measles vaccination"));
+		String answer = chart.getModuleAnswer();
+		assertNotNull(answer, "the module answers");
+		String[] lines = answer.split("\n");
+		assertEquals("None of this patient's active medication orders the drug data identifies is in that class (ATC group "
+				+ "C10AA).", lines[1], "was: " + answer);
+		assertEquals("No drug allergies are recorded for this patient.", lines[2], "was: " + answer);
+		assertEquals("Not checked: 1 active order the drug data does not identify — Measles vaccination.", lines[3],
+			"was: " + answer);
+		assertEquals(4, lines.length, "was: " + answer);
+		assertEquals("None of this patient's active medication orders the drug data identifies is in that class (ATC group "
+				+ "C10AA); no drug allergies are recorded for this patient.", chart.getModuleAnswerSummary());
+	}
+
+	/**
+	 * Whether she is allergic to any of her medications, with no drug allergy recorded, is answered so whatever her orders
+	 * (ADR Decision 594): on the demo replica a patient with a vaccination order the data does not identify had it answered
+	 * by the model, "The patient records do not address whether any of her medications are contraindicated with her
+	 * allergies.", where a patient without one was told no drug allergies are recorded.
+	 */
+	@Test
+	public void noRecordedDrugAllergyIsSaidWhateverOrdersTheDataCannotIdentify() {
+		// The order it does not identify is named after it, as on every answer (ADR Decision 161).
+		assertEquals("No drug allergies are recorded for this patient.\nNot checked: 1 active order the drug data does not "
+				+ "identify — Measles vaccination.", ask("Are any of her medications contraindicated with her allergies?", null,
+			DrugReferenceTestSupport.activeOrder("order-3tc", "Lamivudine", "Lamivudine"),
+			DrugReferenceTestSupport.activeOrder("order-vax", "Measles vaccination", "Measles vaccination")));
+	}
+
 	private static String ask(String question, Set<String> allergies, PatientClinicalContext.ActiveDrugOrder... given) {
 		return askChart(question, allergies, given).getModuleAnswer();
 	}

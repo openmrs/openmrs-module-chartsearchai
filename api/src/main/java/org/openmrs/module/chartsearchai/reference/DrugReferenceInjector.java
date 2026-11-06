@@ -1043,6 +1043,9 @@ public class DrugReferenceInjector {
 		String belowFloorAboutHerOwn;
 		String noPairAboutHerOwn;
 		String switchAnswer;
+		// Which two composers answered, for the sentence a client shows of them (ADR Decisions 600, 601).
+		boolean answeredAsASwitch = false;
+		boolean answeredAsAListedPair = false;
 		String pairAnswer;
 		String aboutThePair;
 		String twoOrdersByName;
@@ -1364,6 +1367,7 @@ public class DrugReferenceInjector {
 			// One of her drugs switched to another: the new drug against her medications other than the one it replaces
 			// (ADR Decision 219).
 			moduleAnswer = switchAnswer;
+			answeredAsASwitch = true;
 		} else if (context != null
 				&& ChartSearchAiUtils.getBooleanGlobalProperty(
 						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
@@ -1515,6 +1519,7 @@ public class DrugReferenceInjector {
 					!orderRecordNumbers.isEmpty() ? orderRecordNumbers
 							: orderRecordNumbers(findingRecords != null ? findingRecords : new DrugOrderRecords(mappings), context),
 					mappings, orderEntries, context);
+			answeredAsAListedPair = moduleAnswer != null;
 		}
 		// Whether she is on any drug of a group this module carries: her orders in it (ADR Decision 298), or of a class an ATC
 		// group IS, by that group (ADR Decision 368).
@@ -1848,7 +1853,15 @@ public class DrugReferenceInjector {
 					cited.add(findings.get(i));
 				}
 			}
-			summary = statedThenCounted(moduleAnswer, new HashSet<Integer>(findingNumbers), cited, linesStatedWhole);
+			summary = answeredAsASwitch ? switchBottomLine(moduleAnswer, new HashSet<Integer>(findingNumbers)) : null;
+			if (summary == null) {
+				// Whether two drugs interact is answered by its second line, the listing between them, so that line is
+				// stated with the first before what else was found is counted (ADR Decision 601).
+				String[] parts = moduleAnswer.split("\n", 3);
+				String stated = answeredAsAListedPair && parts.length > 2 && parts[1].startsWith("The interaction data lists ")
+						? parts[0] + " " + parts[1] + "\n" + parts[2] : moduleAnswer;
+				summary = statedThenCounted(stated, new HashSet<Integer>(findingNumbers), cited, linesStatedWhole);
+			}
 			moduleAnswer = openedWithItsBottomLine(moduleAnswer, summary);
 		}
 		if (moduleAnswer != null) {
@@ -6377,6 +6390,43 @@ public class DrugReferenceInjector {
 	 */
 	/** Whether any line of {@code answer} is a scope line ({@link #isAScopeLine}), which {@link #withWhatWasNotChecked}
 	 *  drops (ADR Decisions 573, 574). */
+	/**
+	 * The sentence a client shows of {@link #composeSwitch}'s answer (ADR Decision 600): its first line, that the drug
+	 * switched from is hers and the switch replaces it, then its second, the new drug's answer against the orders that stay
+	 * — each in short — and how many findings are under {@link #SWITCH_REPLACES_LEAD}, counted and never headlined, since
+	 * the switch ends them. {@code null} where the answer is not of that shape.
+	 */
+	static String switchBottomLine(String answer, Set<Integer> findingNumbers) {
+		String[] lines = answer.split("\n", -1);
+		if (lines.length < 2 || lines[1].isEmpty() || isAHeading(lines[1])) {
+			return null;
+		}
+		String first = inShort(lines[0]);
+		String second = inShort(lines[1]);
+		if (first.isEmpty() || second.isEmpty()) {
+			return null;
+		}
+		int replaced = 0;
+		boolean under = false;
+		for (String line : lines) {
+			if (SWITCH_REPLACES_LEAD.equals(line)) {
+				under = true;
+			} else if (under && isAHeading(line)) {
+				under = false;
+			} else if (under) {
+				Set<Integer> markers = ChartSearchAiUtils.citedIndexes(line);
+				markers.retainAll(findingNumbers);
+				replaced += markers.isEmpty() ? 0 : 1;
+			}
+		}
+		return first + "; " + (second.matches("(?:The|No|This) .*") ? Character.toLowerCase(second.charAt(0)) + second.substring(1)
+				: second) + (replaced == 0 ? "" : "; " + replaced + (replaced == 1 ? " finding" : " findings")
+						+ " about the order the switch replaces") + ".";
+	}
+
+	/** The lead {@link #composeSwitch} states the findings about the order the switch replaces under (ADR Decision 219). */
+	static final String SWITCH_REPLACES_LEAD = "About the order the switch replaces:";
+
 	static boolean closesOnAScopeLine(String answer) {
 		for (String line : answer.split("\n", -1)) {
 			if (isAScopeLine(line)) {
@@ -7999,7 +8049,7 @@ public class DrugReferenceInjector {
 				? " is not one of this patient's active medications, so this switch replaces no order of it.\n"
 				: OWN_MEDICATION_LEAD + ", and this switch replaces it.\n").append(forTheNewDrug);
 		if (!replacesNone && !replacedLines.isEmpty()) {
-			answer.append("\nAbout the order the switch replaces:");
+			answer.append("\n").append(SWITCH_REPLACES_LEAD);
 			for (String line : replacedLines) {
 				answer.append('\n').append(line);
 			}

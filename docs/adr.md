@@ -27494,3 +27494,49 @@ Penicillins: …"*, that none is in it, or that none is recorded. It is stated o
 The pair statement, its suggestions and Decision 67's class note are unchanged.
 
 Pinned by `DrugClassProposalTest.aGroupNamedBesideAnotherDrugStatesHerAllergiesInIt`, which reddens without the change.
+
+## Decision 600: A switch is summed up by the new drug against the orders that stay
+
+**Status**: Accepted (2026-11-06).
+
+### Context
+
+Decision 219 answers *"Can I give her efavirenz instead of nevirapine?"* with that nevirapine is hers and the switch
+replaces it, then the efavirenz proposal's answer against her other medications. The efavirenz–nevirapine finding goes
+under *"About the order the switch replaces:"*, which the switch ends. The sentence a client shows was Decision 529's
+count of every cited finding: *"…, and this switch replaces it; 1 Moderate interaction — Efavirenz with Nevirapine — plus 2
+cautions."*. It led with the very pair the switch removes. On the demo replica that was every patient on nevirapine.
+
+### The decision
+
+`DrugReferenceInjector.switchBottomLine` sums up such an answer by its first two lines, each in short. Those are the
+switch and the new drug's own answer against the orders that stay. It then counts the findings under
+`SWITCH_REPLACES_LEAD`, so none is out of view uncounted (Decision 519): *"Nevirapine is one of this patient's active
+medications, and this switch replaces it; 2 interaction cautions for Efavirenz — Moderate, with Lamivudine and Stavudine;
+1 finding about the order the switch replaces."*
+
+Pinned by `AlwaysCollapsedAnswerTest.aSwitchIsSummedUpByTheNewDrugAgainstTheOrdersThatStay`, which reddens without the
+change.
+
+## Decision 601: Whether two drugs interact that the data lists below the floor is answered in the sentence in view
+
+**Status**: Accepted (2026-11-06).
+
+### Context
+
+Decision 329 answers *"Do her nevirapine and stavudine interact?"* by naming the drugs as hers or not, then *"The
+interaction data lists Nevirapine against Stavudine, with no severity or mechanism on file."*, then what else was found.
+Where findings follow, Decision 529's summary states the first line alone and counts the findings. So the line that
+answers the question was not in view. On the demo replica the sentence read *"Nevirapine is one of this patient's
+active medications; Stavudine is not; 1 Major interaction — Nevirapine with Rifampin; …"*: another order's Major, with the
+pair asked about missing.
+
+### The decision
+
+Where `composeTwoDrugsTheDataDoesNotRelate` answered and its second line is that listing, the summary states both lines,
+then counts the findings as before. Nothing is left out of the count: *"Lamivudine and Nevirapine are both among this
+patient's active medications; the interaction data lists Lamivudine against Nevirapine, with no severity or mechanism on
+file; …"*.
+
+Pinned by `AlwaysCollapsedAnswerTest.twoDrugsListedBelowTheFloorAreAnsweredInTheSentenceInView`, which reddens without the
+change.

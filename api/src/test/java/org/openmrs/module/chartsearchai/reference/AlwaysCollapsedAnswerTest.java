@@ -216,6 +216,37 @@ public class AlwaysCollapsedAnswerTest extends BaseModuleContextSensitiveTest {
 				+ "Stavudine, none with a severity or mechanism on file."), "was: " + own.getModuleAnswer());
 	}
 
+	/**
+	 * A switch is summed up by the new drug's answer against the orders that stay, and the finding about the order the switch
+	 * replaces is counted after it, never headlined (ADR Decision 600): on the demo replica "Can I give her efavirenz instead
+	 * of nevirapine?" was summed up "…, and this switch replaces it; 1 Moderate interaction — Efavirenz with Nevirapine —
+	 * plus 2 cautions.", leading with the pair the switch ends.
+	 */
+	@Test
+	public void aSwitchIsSummedUpByTheNewDrugAgainstTheOrdersThatStay() {
+		PatientChart chart = ask("Can I give him efavirenz instead of nevirapine?", null, demoOrders());
+		assertTrue(chart.getModuleAnswer().contains("\nAbout the order the switch replaces:\n"),
+			"precondition: " + chart.getModuleAnswer());
+		assertEquals("Nevirapine is one of this patient's active medications, and this switch replaces it; 2 interaction cautions "
+				+ "for Efavirenz — Moderate, with Lamivudine and Stavudine; 1 finding about the order the switch replaces.",
+			chart.getModuleAnswerSummary(), "was: " + chart.getModuleAnswer());
+	}
+
+	/**
+	 * Whether two drugs interact that the data lists only below the floor is answered in the sentence in view, before what
+	 * else was found is counted (ADR Decision 601): on the demo replica "Do her nevirapine and stavudine interact?" was
+	 * summed up by her orders and a count headed by another order's Major, and the listing that answers it was not in view.
+	 */
+	@Test
+	public void twoDrugsListedBelowTheFloorAreAnsweredInTheSentenceInView() {
+		PatientChart chart = ask("Does her lamivudine interact with her nevirapine?", null, demoOrders());
+		String summary = chart.getModuleAnswerSummary();
+		assertNotNull(summary, "was: " + chart.getModuleAnswer());
+		assertTrue(summary.startsWith("Lamivudine and Nevirapine are both among this patient's active medications; the "
+				+ "interaction data lists Lamivudine against Nevirapine, with no severity or mechanism on file; "),
+			"was: " + summary);
+	}
+
 	private static List<PatientClinicalContext.ActiveDrugOrder> demoOrders() {
 		List<PatientClinicalContext.ActiveDrugOrder> orders = new ArrayList<PatientClinicalContext.ActiveDrugOrder>();
 		for (int n = 1; n <= 3; n++) {

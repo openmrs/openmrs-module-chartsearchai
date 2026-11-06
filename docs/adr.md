@@ -27307,3 +27307,60 @@ Where the class bottom line is the summary, `DrugReferenceInjector` puts its two
 
 Pinned by `AnswerDetailsContextTest.aClassProposalsDetailsDoNotRepeatTheLinesItsSummaryStates`, which reddens without the
 change.
+
+## Decision 592: Her drug already in her own orders is counted as a possible duplicate therapy, never an unrated interaction
+
+**Status**: Accepted (2026-11-06).
+
+### Context
+
+On the demo replica, *"Are there any interactions with her nevirapine?"* was summed up as *"…; no Major interactions; 1
+unrated interaction."*. Its one finding was *"Nevirapine is already in active orders Nevirapine (3 orders) — possible
+duplicate therapy."* *"Can I stop her lamivudine?"* and *"Can I stop her nevirapine?"* counted it the same way. A screen
+counts the same kind of finding as *"possible duplicate therapy"*, but `screenSummary` asked only
+`statesOrdersSharingASubstance()`. That flag is the screen's own form; the drug-in-play arm's
+`substanceInSeveralActiveOrders` finding fell through to *"unrated interaction"*.
+
+### The decision
+
+The counter asks `SafetyWarning.isAboutItsOwnOrders()` as well (Decision 590), which both forms answer. Such a finding is
+counted *"possible duplicate therapy"*.
+
+`AlwaysCollapsedAnswerTest.whetherHeIsOnADrugIsSaidInTheSentenceInView` pinned *"1 unrated interaction."* for this very
+finding, under the message *"and counts what it cites"*. It now expects *"1 possible duplicate therapy."*, a correction
+of the count it was written to check.
+
+Pinned by `AlwaysCollapsedAnswerTest.aFindingThatHerDrugIsAlreadyInHerOrdersIsCountedAsADuplicate`, which reddens without
+the change.
+
+## Decision 593: A drug listed against her medications only below the floor names them
+
+**Status**: Accepted (2026-11-06).
+
+### Context
+
+On the demo replica, *"Can I give her metformin?"* answered *"The data lists Metformin against 3 of this patient's
+medications, none with a severity or mechanism on file."* and named none of them. *"Can I stop her nevirapine?"* did the
+same with *"… against 2 of this patient's other medications"*. The answer about a drug she is not on already names them:
+*"… against 3 of this patient's medications, Lamivudine, Nevirapine and Stavudine, …"*. Decision 589 named a screen's
+below-floor pairs for the same reason: a count alone does not say which.
+
+### The decision
+
+The proposal's below-floor sentence and the one about her own drug name the medications after the count, by the displays
+of her orders the drug was listed against (`DrugReferenceInjector.namedOrders`). They still cite the data and not her
+orders, as Decision 146 has it.
+
+Where any of those orders is one the module could read no name for, the sentence stays counted. Its stand-in display is
+its codes, which Decision 189 counts and never prints. The first version printed *"[ATC B01AC06]"*, and
+`LlmInferenceServiceAnswerFromFindingsContextTest.aProposalRelatedToHerOrdersOnlyBelowTheFloorOnACodeOnlyOrderIsAnsweredByTheModule`
+caught it.
+
+Spec changes, adding the names to the wording they pinned:
+- `LlmInferenceServiceAnswerFromFindingsContextTest` (nine cases);
+- `BottomLineOpensTheAnswerTest`, `ClosingLineScreenedCoverageTest`, `CombinationProposalNoFindingTest`,
+  `ProposalBesideHerOwnConflictsTest`;
+- `ListedRegimenAnswerTest` (one case) and `OwnMedicationSafetyContextTest` (three cases), for her own drug.
+
+Pinned by `AlwaysCollapsedAnswerTest.aProposalTheDataListsBelowTheFloorNamesHerMedications`, which reddens without the
+change.

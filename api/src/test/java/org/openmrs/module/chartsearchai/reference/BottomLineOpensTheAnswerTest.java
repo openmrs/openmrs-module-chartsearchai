@@ -55,7 +55,8 @@ public class BottomLineOpensTheAnswerTest extends BaseModuleContextSensitiveTest
 		String[] lines = answer.split("\n");
 		assertEquals(2, lines.length, "was: " + answer);
 		// His three drugs are nine orders: what is counted is his medications.
-		assertTrue(lines[1].startsWith("The data lists Ibuprofen against 3 of this patient's medications, none with a severity "
+		assertTrue(lines[1].startsWith("The data lists Ibuprofen against 3 of this patient's medications, Lamivudine, Nevirapine "
+				+ "and Stavudine, none with a severity "
 				+ "or mechanism on file. ["), "the rest of the sentence, and not its first words again: " + answer);
 		assertFalse(chart.moduleAnswerDetailsStateLimits(), "no line under it says what was not checked: " + answer);
 	}

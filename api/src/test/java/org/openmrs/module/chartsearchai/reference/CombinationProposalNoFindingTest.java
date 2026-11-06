@@ -49,7 +49,8 @@ public class CombinationProposalNoFindingTest extends BaseModuleContextSensitive
 		// The bottom line opens the answer, and the rest of its sentence follows it (ADR Decision 534).
 		assertEquals("The interaction data gives no rated reason to withhold Trimethoprim-sulfamethoxazole.", lines[0],
 			"was: " + answer);
-		assertTrue(lines[1].matches("The data lists Trimethoprim-sulfamethoxazole against one of this patient's medications, with no "
+		assertTrue(lines[1].matches("The data lists Trimethoprim-sulfamethoxazole against one of this patient's medications, "
+				+ "Aspirin 81mg, with no "
 				+ "severity( or mechanism)? on file\\. \\[\\d+\\] \\[\\d+\\]"), "was: " + answer);
 		// What was not weighed for this question follows it, and no scope line does (ADR Decision 573).
 		assertEquals("This check did not weigh what the drug is for (her UTI).", lines[2], "was: " + answer);

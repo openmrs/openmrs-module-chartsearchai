@@ -209,14 +209,14 @@ public class ListedRegimenAnswerTest extends BaseModuleContextSensitiveTest {
 		List<PatientClinicalContext.ActiveDrugOrder> metformin = orders("Metformin", "A10BA02", 1, "Lamivudine", "J05AF05", 1);
 		String alone = ask(metformin, "Is it safe to give Metformin?");
 		assertTrue(alone.contains(". The interaction data gives no rated reason to change it: the data lists Metformin against "
-				+ "one of this patient's other medications, with no severity or mechanism on file. ["),
+				+ "one of this patient's other medications, Lamivudine, with no severity or mechanism on file. ["),
 			"precondition, and unchanged asked alone: " + alone);
 		String answer = ask(metformin, "The patient is currently on Ritonavir, is it safe to give Metformin?");
 		assertNotNull(answer, "the module answers");
 		List<String> lines = Arrays.asList(answer.split("\n"));
 		assertTrue(lines.get(0).matches("Metformin is one of this patient's active medications \\(Metformin \\[\\d+\\]\\)\\. "
 				+ "Against this patient's other medications, the interaction data gives no rated reason to change it: the data "
-				+ "lists Metformin against one of them, with no severity or mechanism on file\\. \\[\\d+\\]"),
+				+ "lists Metformin against one of them, Lamivudine, with no severity or mechanism on file\\. \\[\\d+\\]"),
 			"scoped to her own medications: " + answer);
 		int heading = lines.indexOf(DrugReferenceInjector.LISTED_NOT_HERS_HEADING);
 		assertEquals(1, heading, "the list's findings under their heading, next: " + answer);

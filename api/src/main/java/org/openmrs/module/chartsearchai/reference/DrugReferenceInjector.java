@@ -3983,8 +3983,10 @@ public class DrugReferenceInjector {
 		// Her MEDICATIONS: the count is of distinct order displays, so three drugs in nine orders are 3 (ADR Decision 534).
 		// "the data", not "it": the clause follows the bottom line alone where that line is cut from this sentence (ADR
 		// Decision 534), and an "it" there reads as the drug.
+		// Each named, as the answer about a drug she is not on names them, where every one has a name (ADR Decision 593).
+		String named = namedOrders(rows.orders, context);
 		String against = "the data lists " + rows.drug + " against " + (n == 1 ? "one" : String.valueOf(n))
-				+ " of this patient's medications"
+				+ " of this patient's medications" + named
 				+ (scheduled == 0 ? "" : scheduled == n ? (n == 1 ? ", " : ", all ") + "scheduled and not yet started"
 						: " (" + (scheduled == 1 ? "one" : String.valueOf(scheduled)) + " of them scheduled and not yet started)")
 				+ ", ";
@@ -4202,6 +4204,29 @@ public class DrugReferenceInjector {
 	/** What a below-floor answer's bottom line does not cover, stated under it (ADR Decision 144). */
 	static final String BELOW_FLOOR_SCOPE =
 			"Interactions the data does not rate, and anything beyond drug interactions, are not covered.";
+
+	/**
+	 * {@code ", A, B and C"} — the displays of the orders a below-floor drug is listed against, named (ADR Decision 593) —
+	 * or {@code ""} where any of them is an order the module could read no name for, whose stand-in display is its codes
+	 * and is counted, never printed (ADR Decision 189).
+	 */
+	private static String namedOrders(List<String> displays, PatientClinicalContext context) {
+		if (displays.isEmpty()) {
+			return "";
+		}
+		for (String display : displays) {
+			if (ChartSearchAiUtils.isBlank(display)) {
+				return "";
+			}
+			for (PatientClinicalContext.ActiveDrugOrder order : context == null
+					? Collections.<PatientClinicalContext.ActiveDrugOrder> emptyList() : context.getActiveDrugOrders()) {
+				if (!order.hasKnownName() && order.getDisplay() != null && order.getDisplay().trim().equals(display.trim())) {
+					return "";
+				}
+			}
+		}
+		return ", " + joinedAsAList(displays);
+	}
 
 	/** {@code items} joined "A", "A and B", "A, B and C". */
 	private static String joinedAsAList(List<String> items) {
@@ -6071,7 +6096,9 @@ public class DrugReferenceInjector {
 				// A chain rates no pair, so it is counted by chain and by its own name, as a proposal's lead counts it (ADR
 				// Decision 559): counted per order it names, it read as that many interaction cautions.
 				chains++;
-			} else if (finding.statesOrdersSharingASubstance()) {
+			} else if (finding.statesOrdersSharingASubstance() || finding.isAboutItsOwnOrders()) {
+				// Her drug in her own orders is a possible duplicate therapy however it was raised, never an unrated
+				// interaction (ADR Decision 592).
 				duplicates++;
 			} else if (SafetyWarning.TYPE_CONTRAINDICATION.equals(finding.getType())) {
 				contraindications++;
@@ -7439,9 +7466,12 @@ public class DrugReferenceInjector {
 				+ (scopedToHerMedications
 						? ". Against this patient's " + (other ? "other " : "") + "medications, the interaction data gives no "
 								+ "rated reason to change it: the data lists " + rows.drug + " against "
-								+ (n == 1 ? "one" : String.valueOf(n)) + " of them, "
+								+ (n == 1 ? "one" : String.valueOf(n)) + " of them" + namedOrders(rows.orders, context) + ", "
 						: ". The interaction data gives no rated reason to change it: the data lists "
-								+ rows.drug + " against " + (n == 1 ? "one" : String.valueOf(n)) + ofHers)
+								+ rows.drug + " against " + (n == 1 ? "one" : String.valueOf(n)) + ofHers.substring(0,
+										ofHers.length() - 2)
+								// Each named (ADR Decision 593).
+								+ namedOrders(rows.orders, context) + ", ")
 				+ (!rows.allUnknown ? "rated " + rows.ratings() + ", below the level this module reports as a finding"
 						: (n == 1 ? "with no severity" : "none with a severity") + (rows.noMechanism ? " or mechanism" : "")
 								+ " on file")

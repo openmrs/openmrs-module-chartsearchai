@@ -57,7 +57,8 @@ public class ClosingLineScreenedCoverageTest extends BaseModuleContextSensitiveT
 		assertNoScopeLine(answer);
 		// The bottom line, then the data it rests on, and nothing after (ADR Decisions 534, 573, 574).
 		assertTrue(answer.matches("The interaction data gives no rated reason to withhold Amoxicillin\\.\nThe data lists Amoxicillin "
-				+ "against 2 of this patient's medications, none with a severity or mechanism on file\\. \\[\\d+\\]"),
+				+ "against 2 of this patient's medications, Lamivudine and Nevirapine, none with a severity or mechanism on file\\. "
+				+ "\\[\\d+\\]"),
 			"was: " + answer);
 	}
 

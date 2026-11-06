@@ -106,7 +106,8 @@ public class AlwaysCollapsedAnswerTest extends BaseModuleContextSensitiveTest {
 
 		assertNotNull(summary, "was: " + chart.getModuleAnswer());
 		assertTrue(summary.startsWith("Nevirapine is one of this patient's active medications; "), "was: " + summary);
-		assertTrue(summary.endsWith("1 unrated interaction."), "and counts what it cites: " + summary);
+		// The finding that it is already in his orders, counted as the duplicate it is (ADR Decision 592).
+		assertTrue(summary.endsWith("1 possible duplicate therapy."), "and counts what it cites: " + summary);
 		assertFalse(summary.contains("[") || summary.contains("("), "no markers or asides in view: " + summary);
 	}
 
@@ -181,6 +182,38 @@ public class AlwaysCollapsedAnswerTest extends BaseModuleContextSensitiveTest {
 			"from the drug named first: " + answer);
 		assertTrue(chart.getModuleAnswerSummary().endsWith("1 Major interaction — Rifampicin (rifampin) with Nevirapine."),
 			"was: " + chart.getModuleAnswerSummary());
+	}
+
+	/**
+	 * A finding that her drug is already in her own orders is counted as a possible duplicate therapy, as a screen counts
+	 * it, never as an unrated interaction (ADR Decision 592): on the demo replica "Are there any interactions with her
+	 * nevirapine?" was summed up "…; no Major interactions; 1 unrated interaction." over "Nevirapine is already in active
+	 * orders Nevirapine (3 orders) — possible duplicate therapy."
+	 */
+	@Test
+	public void aFindingThatHerDrugIsAlreadyInHerOrdersIsCountedAsADuplicate() {
+		PatientChart chart = ask("Are there any interactions with her nevirapine?", null, demoOrders());
+		assertTrue(chart.getModuleAnswer().contains("Nevirapine is already in active orders Nevirapine (3 orders)"),
+			"precondition: the finding — " + chart.getModuleAnswer());
+		assertTrue(chart.getModuleAnswerSummary().endsWith("1 possible duplicate therapy."),
+			"was: " + chart.getModuleAnswerSummary());
+		assertFalse(chart.getModuleAnswerSummary().contains("unrated interaction"), "was: " + chart.getModuleAnswerSummary());
+	}
+
+	/**
+	 * A drug the data lists against her medications only below the floor names those medications, as the answer about one
+	 * she is not on names them (ADR Decision 593): on the demo replica "Can I give her metformin?" said "The data lists
+	 * Metformin against 3 of this patient's medications, none with a severity or mechanism on file." and named none.
+	 */
+	@Test
+	public void aProposalTheDataListsBelowTheFloorNamesHerMedications() {
+		PatientChart chart = ask("Can I give her metformin?", null, demoOrders());
+		assertTrue(chart.getModuleAnswer().contains("Metformin against 3 of this patient's medications, Lamivudine, Nevirapine "
+				+ "and Stavudine, none with a severity or mechanism on file."), "was: " + chart.getModuleAnswer());
+		// And of one of hers, against her other medications.
+		PatientChart own = ask("Can I stop her nevirapine?", null, demoOrders());
+		assertTrue(own.getModuleAnswer().contains("Nevirapine against 2 of this patient's other medications, Lamivudine and "
+				+ "Stavudine, none with a severity or mechanism on file."), "was: " + own.getModuleAnswer());
 	}
 
 	private static List<PatientClinicalContext.ActiveDrugOrder> demoOrders() {

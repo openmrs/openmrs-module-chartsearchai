@@ -1763,6 +1763,11 @@ public class DrugReferenceInjector {
 		}
 		if (moduleAnswer != null && summary == null && classBottomLine != null) {
 			summary = classBottomLine;
+			// Its two lines, her orders and her allergies in the class, are stated whole by it, so a client is not shown
+			// them again under it (ADR Decisions 560, 591).
+			String[] classLines = moduleAnswer.split("\n", -1);
+			linesStatedWhole.add(classLines[1]);
+			linesStatedWhole.add(classLines[2]);
 		}
 		// And when the drug would be given, or a condition the question names, which no finding weighs (ADR Decision 394).
 		if (moduleAnswer != null && QueryScopeRouter.statesATiming(question)) {

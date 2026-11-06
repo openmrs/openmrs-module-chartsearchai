@@ -27288,3 +27288,22 @@ with combination orders. Nothing on the wire said which chips these were.
 
 Pinned by `ChartSearchAiCurrentMedicationReferentTest.aFindingAboutHerOwnOrdersSaysSoOnTheWire`, which reddens without
 the change, and by the wire guard above.
+
+## Decision 591: A class proposal's details do not repeat the lines its summary states
+
+**Status**: Accepted (2026-11-06).
+
+### Context
+
+Decision 585 sums up *"Can I give her a statin?"* by its two lines about her chart, her orders in the class and her drug
+allergies in it. On the demo replica, those two lines then appeared again under *"Show details"*, below the note that the
+class was not resolved. The summary is no line of the answer, so a client shows the whole answer under it, and nothing
+marked the two lines as stated.
+
+### The decision
+
+Where the class bottom line is the summary, `DrugReferenceInjector` puts its two lines into `linesStatedWhole`
+(Decision 560). `LlmInferenceService.detailsUnder` then leaves them out, and the details are the note alone.
+
+Pinned by `AnswerDetailsContextTest.aClassProposalsDetailsDoNotRepeatTheLinesItsSummaryStates`, which reddens without the
+change.

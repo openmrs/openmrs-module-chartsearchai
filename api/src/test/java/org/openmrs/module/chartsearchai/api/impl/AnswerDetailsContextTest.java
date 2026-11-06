@@ -279,6 +279,25 @@ public class AnswerDetailsContextTest extends BaseModuleContextSensitiveTest {
 			"was: " + answer.getAnswerSummary());
 	}
 
+	/**
+	 * A class proposed is summed up by her orders and allergies in it (ADR Decision 585), and those two lines are not shown
+	 * again under it (ADR Decision 591): on the demo replica "Can I give her a statin?" published them in the summary and
+	 * again in the details, under the note that the class was not resolved.
+	 */
+	@Test
+	public void aClassProposalsDetailsDoNotRepeatTheLinesItsSummaryStates() {
+		String question = "Can I give her a statin?";
+		ChartAnswer answer = serviceOver(DrugReferenceTestSupport.injectedChartOverOrders(question, "Lamivudine"), "unused")
+				.search(aPatient(), question);
+		assertTrue(answer.isAnsweredByTheModule(), "precondition: the module answers — " + answer.getAnswer());
+		String[] lines = answer.getAnswer().split("\n");
+		assertEquals(3, lines.length, "precondition: the note, her orders, her allergies — " + answer.getAnswer());
+		assertTrue(answer.getAnswerSummary().startsWith(lines[1].substring(0, lines[1].length() - 1) + "; "),
+			"precondition: the summary states her orders and allergies — " + answer.getAnswerSummary());
+
+		assertEquals(lines[0], answer.getAnswerDetails(), "the note alone is under the summary: " + answer.getAnswerDetails());
+	}
+
 	/** A model's list carries a summary too (ADR Decision 528), so it publishes its details: never null beside one. */
 	@Test
 	public void aModelsListPublishesItsDetails() {

@@ -109,6 +109,15 @@ public final class SafetyWarningFixtures {
 	}
 
 	/**
+	 * A CLASS-ONLY interaction chip — two drugs sharing a classification, no rule behind them — built by
+	 * {@code SafetyWarning.classOnlyInteraction}, the class arm's own factory, whose
+	 * {@code restsOnSharedClassificationAlone()} is {@code true} (ADR Decision 604).
+	 */
+	public static SafetyWarning classOnlyInteraction(String drug, String detail) {
+		return SafetyWarning.classOnlyInteraction(drug, detail, true);
+	}
+
+	/**
 	 * The finding that two or more of her own orders carry the same substances — built by
 	 * {@code SafetyWarning.ordersSharingASubstance}, whose referent is {@code true} (issue #477): every
 	 * order it names is hers.

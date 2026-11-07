@@ -294,7 +294,15 @@ public class ChartSearchAiSafetyWarningSeverityWireTest {
 				// Chip 18: a chip naming its finding's record number (ADR Decision 138) — the only non-null
 				// getFindingCitation() here, so a put dropping it disagrees. Mutate the put and read this class's failure.
 				SafetyWarningFixtures.withFindingCitation(new SafetyWarning(SafetyWarning.TYPE_INTERACTION,
-						"Fluconazole", "Fluconazole interacts with active order Lidocaine — Moderate.", "Moderate"), 50));
+						"Fluconazole", "Fluconazole interacts with active order Lidocaine — Moderate.", "Moderate"), 50),
+				// Chips 19 and 20: one sentence, differing only in SafetyWarning.restsOnSharedClassificationAlone() (ADR
+				// Decision 604) — chip 19 built by the class arm's own factory, chip 20 by the public constructor, so neither a
+				// hardcoded `false` nor a value re-derived from the sentence agrees with both. Mutate the put and read this
+				// class's failure.
+				SafetyWarningFixtures.classOnlyInteraction("Stavudine",
+						"Stavudine is in the same ATC class (J05AF) as active order Lamivudine — possible duplicate therapy"),
+				new SafetyWarning(SafetyWarning.TYPE_INTERACTION, "Stavudine",
+						"Stavudine is in the same ATC class (J05AF) as active order Lamivudine — possible duplicate therapy"));
 	}
 
 	private ChartSearchAiRestController controller;

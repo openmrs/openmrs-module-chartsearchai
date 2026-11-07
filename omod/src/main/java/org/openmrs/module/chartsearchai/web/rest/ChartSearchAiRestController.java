@@ -2538,6 +2538,8 @@ public class ChartSearchAiRestController {
 			map.put("aboutADrugOtherThanTheOneProposed", warning.isAboutADrugOtherThanTheOneProposed());
 			// A substance in her own orders, whose namedPartners are those orders (ADR Decision 590).
 			map.put("aboutItsOwnOrders", warning.isAboutItsOwnOrders());
+			// A chip resting on a shared classification alone is a possible duplicate therapy (ADR Decision 604).
+			map.put("restsOnSharedClassificationAlone", warning.restsOnSharedClassificationAlone());
 			// ADR Decision 138: the record number this chip's own finding has in the prompt, or null where no single
 			// record is it. SafetyWarning.getFindingCitation() says what null does not say.
 			map.put("findingCitation", warning.getFindingCitation());

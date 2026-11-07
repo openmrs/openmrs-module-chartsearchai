@@ -27591,3 +27591,25 @@ removed. 602's other fail-closed condition, that the question carries no purpose
 
 Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aQuestionWordIsNeverReadAsADrugsName`, which reddens without
 the change.
+
+## Decision 604: A chip resting on a shared classification alone says so on the wire
+
+**Status**: Accepted (2026-11-06).
+
+### Context
+
+A class-only chip is issue #400's finding that two drugs share an ATC subgroup or a cross-reactivity group, with no rule
+of any kind relating them. It reaches the client as `type: interaction` with a `null` severity. The client tags every
+such chip "Interaction". So *"Stavudine is in the same ATC class (J05AF) as active order Lamivudine — possible duplicate
+therapy"* was shown as an interaction, although the sentence says it is a possible duplicate. The module already held the
+difference on `SafetyWarning.restsOnSharedClassificationAlone()`, set by the arm (Decision 86), but did not publish it.
+
+### The decision
+
+The accessor is public and published as `restsOnSharedClassificationAlone`. The chip's `type` stays `interaction`, for
+the reason Decision 590 gives for `aboutItsOwnOrders`: a new type broke the #340 wire guard and the type-keyed readers.
+`openmrs-esm-chartsearchai` tags a `true` chip "Duplicate therapy".
+
+Pinned by `ChartSearchAiSafetyWarningSeverityWireTest.everyPublicZeroArgumentAccessorOfAWarningNamesAKeyOnTheWire` over
+its chips 19 and 20, which share one sentence and differ only in this answer. The guard reddens with the accessor public
+and the put left out.

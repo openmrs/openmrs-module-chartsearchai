@@ -997,9 +997,11 @@ public class SafetyWarning {
 	 * so what it grades is its own evidence and never the drugs. → ADR Decision 86;
 	 * {@code ClassOnlyFindingStrengthTest}.
 	 *
-	 * <p>Not serialized; the wire shape is unchanged.
+	 * <p><b>Published</b> as {@code restsOnSharedClassificationAlone} (ADR Decision 604), so a client tags the chip as a
+	 * possible duplicate therapy rather than as an interaction: its {@code namedPartners} are the orders sharing the class,
+	 * and no rule relates them.
 	 */
-	boolean restsOnSharedClassificationAlone() {
+	public boolean restsOnSharedClassificationAlone() {
 		return restsOnSharedClassificationAlone;
 	}
 

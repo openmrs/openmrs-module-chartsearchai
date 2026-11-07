@@ -1403,6 +1403,22 @@ public class LlmInferenceService implements ChartSearchService {
 	private SafetyReading readForDrugSafety(Patient patient, String question, PatientChart built,
 			ChartReadStatus chartRead, CancellationSignal cancellation) {
 		PatientChart injected = drugReferenceInjector.inject(built, patient, question, chartRead);
+		// A screen the router's safety words alone admitted, answered by the module for a question naming no drug, may be a
+		// proposal of a drug it does not name: the model is asked, and a yes runs the router's own choice of drug, whose
+		// answer leads with the check choosing none (ADR Decision 605). "Is any drug safe for him?" was answered with the
+		// screen alone, its "No rated interactions" read as a yes.
+		if (injected != null && injected.getModuleAnswer() != null && injected.screenedHerOrders()
+				&& injected.getQuestionSubstances().isEmpty() && ChartSearchAiUtils.isDrugReferenceEnabled()
+				&& ChartSearchAiUtils.getBooleanGlobalProperty(ChartSearchAiConstants.GP_DRUG_SAFETY_READ_QUESTIONS_WITH_THE_MODEL,
+					ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_READ_QUESTIONS_WITH_THE_MODEL)
+				&& QueryScopeRouter.admitsAScreenByItsSafetyWordsAlone(question)
+				&& Boolean.TRUE.equals(LlmProvider.interruptible(cancellation,
+					() -> Boolean.valueOf(llmProvider.readsAsADrugToGive(question))))) {
+			log.info("Patient {}: the model read the question as proposing a drug it does not name; running the check as "
+					+ "that choice (ADR Decision 605)", patient == null ? null : patient.getPatientId());
+			return new SafetyReading(drugReferenceInjector.inject(built, patient, QueryScopeRouter.A_DRUG_TO_GIVE_QUESTION,
+				chartRead), QueryScopeRouter.A_DRUG_TO_GIVE_QUESTION);
+		}
 		if (injected == null || question == null || question.trim().isEmpty() || !ChartSearchAiUtils.isDrugReferenceEnabled()
 				|| !ChartSearchAiUtils.getBooleanGlobalProperty(
 					ChartSearchAiConstants.GP_DRUG_SAFETY_READ_QUESTIONS_WITH_THE_MODEL,
@@ -1430,9 +1446,13 @@ public class LlmInferenceService implements ChartSearchService {
 			return new SafetyReading(injected, question);
 		}
 		// A question asking which drugs not to give her runs as the router's own such question, whose answer says first
-		// that the check lists none (ADR Decision 491); any other, as the screen of her medications.
+		// that the check lists none (ADR Decision 491); one proposing a drug it does not name, as the router's own choice of
+		// drug, whose answer says first that the check chooses none (ADR Decision 605); any other, as the screen of her
+		// medications.
 		String checkQuestion = reading == LlmProvider.MedicationSafetyReading.DRUGS_TO_AVOID
-				? QueryScopeRouter.DRUGS_TO_AVOID_QUESTION : QueryScopeRouter.MEDICATION_CHECK_QUESTION;
+				? QueryScopeRouter.DRUGS_TO_AVOID_QUESTION
+				: reading == LlmProvider.MedicationSafetyReading.A_DRUG_TO_GIVE ? QueryScopeRouter.A_DRUG_TO_GIVE_QUESTION
+				: QueryScopeRouter.MEDICATION_CHECK_QUESTION;
 		// The patient id and nothing of the question, which can name her medications (ADR Decision 102).
 		log.info("Patient {}: the model read the question as {}; running the medication check for it (ADR Decision 489)",
 			patient == null ? null : patient.getPatientId(), reading);

@@ -145,6 +145,13 @@ public final class QueryScopeRouter {
 	public static final String DRUGS_TO_AVOID_QUESTION = "What drugs should I avoid in this patient?";
 
 	/**
+	 * The question the medication check runs for where the model reads a question as proposing to give her a drug it does
+	 * not name (ADR Decision 605): {@link #asksWhichDrugToGiveHer} reads it, so the answer is the screen of what she takes
+	 * under the lead that the check chooses no drug and clears none (ADR Decision 293).
+	 */
+	public static final String A_DRUG_TO_GIVE_QUESTION = "What drug can I safely give this patient?";
+
+	/**
 	 * True when the question asks to be SCREENED for drug interactions — "are there any drug
 	 * interactions with her current medications?", "do any of her meds interact?" — as opposed to
 	 * merely mentioning medications. Consumed by {@code DrugSafetyValidator}, which has no way to
@@ -174,8 +181,23 @@ public final class QueryScopeRouter {
 	 */
 	public static boolean isInteractionScreening(String question) {
 		// Never something else's interactions with her medications (ADR Decision 473).
-		return question != null && !asksOfSomethingElseWithHerMedications(question) && (DDI_CUES.matcher(question).find() || asksForADrugSafetyReading(question)
-				&& asksAboutMedications(question)
+		return question != null && !asksOfSomethingElseWithHerMedications(question)
+				&& (asksForADrugSafetyReading(question) && asksAboutMedications(question)
+						|| readsAScreenBeyondItsSafetyWords(question));
+	}
+
+	/**
+	 * Whether {@link #isInteractionScreening} admits {@code question} by its safety and medication words alone — "Is any drug
+	 * safe for him?" — and by no shape or cue that says what it asks (ADR Decision 605). Those words do not tell a question
+	 * about her medications from one proposing a drug it does not name, so the model is asked which it is.
+	 */
+	public static boolean admitsAScreenByItsSafetyWordsAlone(String question) {
+		return isInteractionScreening(question) && !readsAScreenBeyondItsSafetyWords(question);
+	}
+
+	/** {@link #isInteractionScreening}'s legs other than its safety and medication words. */
+	private static boolean readsAScreenBeyondItsSafetyWords(String question) {
+		return DDI_CUES.matcher(question).find()
 				|| INTERACTION_NOUN_CUES.matcher(question).find() && !SOCIAL_CUES.matcher(question).find()
 				// Two groups of her own medications, named by words the MEDICATIONS cues need not know — "her TB treatment",
 				// "her ARVs" — and asked whether they interact: the grammar says what the cues cannot (ADR Decision 221).
@@ -193,7 +215,7 @@ public final class QueryScopeRouter {
 				|| asksAboutADrugNamedAsHersByAnyName(question)
 				// And any question a screen shape reads, whatever cue it lacks — "Any contraindicated combinations?" (ADR
 				// Decision 412).
-				|| fitsAShape(words(question), SCREEN_SHAPES));
+				|| fitsAShape(words(question), SCREEN_SHAPES);
 	}
 
 	/** What a chart measures of her — "her potassium", "his creatinine": named as hers, her result and never her drug (ADR

@@ -1030,6 +1030,21 @@ public class LlmProvider {
 	/** The second reply's one field, a JSON boolean. */
 	static final String DRUGS_TO_AVOID_FIELD = "asks_which_drugs_to_avoid";
 
+	/**
+	 * The words {@link #readMedicationSafetyQuestion} asks in its third call, made only after a YES that its second call read
+	 * as not asking which drugs to avoid (ADR Decision 605): whether the question proposes giving her a drug it does not
+	 * name, rather than asking about the drugs she takes. Scored by {@code MedicationSafetyQuestionEvalTest} as the first
+	 * two are.
+	 */
+	static final String A_DRUG_TO_GIVE_QUESTION_SYSTEM_PROMPT = "You classify one question a clinician typed about their "
+			+ "patient's drugs. Set asks_about_a_drug_to_give to true when the question asks whether the patient can be "
+			+ "given, started on or prescribed a drug that the question does not name - any drug, a new medication, "
+			+ "something, another medicine - or which such drug to give. Set it to false when it asks about the drugs the "
+			+ "patient already takes - whether they are safe together, interact, or should be stopped or continued.";
+
+	/** The third reply's one field, a JSON boolean. */
+	static final String A_DRUG_TO_GIVE_FIELD = "asks_about_a_drug_to_give";
+
 	/** How long the model may take to read a question (ADR Decision 489): it reads one sentence, so a slow reply is a
 	 *  busy or failing engine, and the question then goes on as the router read it rather than waiting. */
 	static final int MEDICATION_SAFETY_QUESTION_TIMEOUT_SECONDS = 20;
@@ -1044,7 +1059,10 @@ public class LlmProvider {
 		HER_MEDICATIONS,
 
 		/** Which drugs not to give or prescribe her. */
-		DRUGS_TO_AVOID
+		DRUGS_TO_AVOID,
+
+		/** Whether, or which, drug the question does not name may be given her (ADR Decision 605). */
+		A_DRUG_TO_GIVE
 	}
 
 	/**
@@ -1069,8 +1087,30 @@ public class LlmProvider {
 		if (!asksAboutDrugSafety.booleanValue()) {
 			return MedicationSafetyReading.OTHER;
 		}
-		return Boolean.TRUE.equals(readOneBoolean(DRUGS_TO_AVOID_QUESTION_SYSTEM_PROMPT, DRUGS_TO_AVOID_FIELD, question))
-				? MedicationSafetyReading.DRUGS_TO_AVOID : MedicationSafetyReading.HER_MEDICATIONS;
+		return readAfterItsDrugSafety(question);
+	}
+
+	/**
+	 * What a question already read as a drug-safety question asks (ADR Decisions 491, 605): which drugs to avoid, a drug it
+	 * does not name to give her, or else her medications. The second call is asked first because the third, asked alone,
+	 * reads "What medications should he avoid?" as proposing a drug.
+	 */
+	private MedicationSafetyReading readAfterItsDrugSafety(String question) {
+		if (Boolean.TRUE.equals(readOneBoolean(DRUGS_TO_AVOID_QUESTION_SYSTEM_PROMPT, DRUGS_TO_AVOID_FIELD, question))) {
+			return MedicationSafetyReading.DRUGS_TO_AVOID;
+		}
+		return Boolean.TRUE.equals(readOneBoolean(A_DRUG_TO_GIVE_QUESTION_SYSTEM_PROMPT, A_DRUG_TO_GIVE_FIELD, question))
+				? MedicationSafetyReading.A_DRUG_TO_GIVE : MedicationSafetyReading.HER_MEDICATIONS;
+	}
+
+	/**
+	 * Whether the model reads {@code question}, which the router already reads as a drug-safety question, as proposing to
+	 * give her a drug it does not name (ADR Decision 605): {@link #readMedicationSafetyQuestion}'s second and third calls,
+	 * without its first. A failed or unreadable reply reads as no.
+	 */
+	public boolean readsAsADrugToGive(String question) {
+		return question != null && !question.trim().isEmpty()
+				&& readAfterItsDrugSafety(question) == MedicationSafetyReading.A_DRUG_TO_GIVE;
 	}
 
 	/** One call whose reply is constrained to {@code {"<field>": true|false}}; {@code null} on any failure. */

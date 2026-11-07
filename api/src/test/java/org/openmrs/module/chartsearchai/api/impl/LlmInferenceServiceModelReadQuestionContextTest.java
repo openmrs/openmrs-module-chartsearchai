@@ -108,6 +108,67 @@ public class LlmInferenceServiceModelReadQuestionContextTest extends BaseModuleC
 				+ answer.getAnswer());
 	}
 
+	/** The lead of the answer to a choice of drug asked of the module (ADR Decision 293). */
+	private static final String CHOOSES_NO_DRUG = "This check does not choose a medication to give this patient, and states"
+			+ " none as safe: it screens only the medications this patient is already taking.";
+
+	/**
+	 * A question the model reads as proposing a drug it does not name is answered as the router's own choice of drug, under
+	 * the lead that the check chooses none (ADR Decision 605). On the demo replica "Can I give him any drug?" was read as
+	 * asking about his medications and answered "No rated interactions; 3 possible duplicate therapies.", read as a yes.
+	 */
+	@Test
+	public void aQuestionReadAsProposingADrugItDoesNotNameSaysTheCheckChoosesNone() {
+		RecordingProvider provider = new RecordingProvider("GIVE");
+		ChartAnswer answer = serviceWith(provider).search(patient, "Can I give her any drug?");
+
+		assertEquals(1, provider.engine.readings, "the model read the question");
+		assertEquals(1, provider.engine.avoidReadings);
+		assertEquals(1, provider.engine.giveReadings, "and, as not asking which drugs to avoid, whether it proposes one");
+		assertTrue(answer.isAnsweredByTheModule(), "was: " + answer.getAnswer());
+		assertEquals(CHOOSES_NO_DRUG, answer.getAnswer().split("\n")[0], "was: " + answer.getAnswer());
+		assertTrue(answer.getAnswer().contains(" interacts with active order "), "and states the findings: "
+				+ answer.getAnswer());
+	}
+
+	/**
+	 * The same where the router's safety words alone admitted the screen: the model is asked only whether it proposes a drug
+	 * it does not name, after whether it asks which to avoid, and a yes answers it as that choice (ADR Decision 605). "Is any
+	 * drug safe for him?" was answered with the screen alone.
+	 */
+	@Test
+	public void aScreenAdmittedByItsSafetyWordsAloneIsAnsweredAsAChoiceWhereTheModelReadsItSo() {
+		RecordingProvider provider = new RecordingProvider("GIVE");
+		ChartAnswer answer = serviceWith(provider).search(patient, "Is any drug safe for her?");
+
+		assertEquals(0, provider.engine.readings, "the router read it as a drug-safety question");
+		assertEquals(1, provider.engine.avoidReadings);
+		assertEquals(1, provider.engine.giveReadings);
+		assertTrue(answer.isAnsweredByTheModule(), "was: " + answer.getAnswer());
+		assertEquals(CHOOSES_NO_DRUG, answer.getAnswer().split("\n")[0], "was: " + answer.getAnswer());
+	}
+
+	/** And a no keeps the screen's own answer. */
+	@Test
+	public void aScreenAdmittedByItsSafetyWordsAloneKeepsItsAnswerWhereTheModelReadsNoDrugProposed() {
+		RecordingProvider provider = new RecordingProvider("YES");
+		ChartAnswer answer = serviceWith(provider).search(patient, "Is any drug safe for her?");
+
+		assertEquals(1, provider.engine.giveReadings);
+		assertTrue(answer.isAnsweredByTheModule(), "was: " + answer.getAnswer());
+		assertFalse(answer.getAnswer().contains(CHOOSES_NO_DRUG), "was: " + answer.getAnswer());
+	}
+
+	/** A screen its grammar reads, not its safety words alone, is never read by the model (ADR Decision 605). */
+	@Test
+	public void aScreenItsGrammarReadsIsNotAskedWhetherItProposesADrug() {
+		RecordingProvider provider = new RecordingProvider("GIVE");
+		ChartAnswer answer = serviceWith(provider).search(patient, "Are her current medications safe to take together?");
+
+		assertEquals(0, provider.engine.avoidReadings + provider.engine.giveReadings);
+		assertFalse(answer.getAnswer().contains(CHOOSES_NO_DRUG), "was: " + answer.getAnswer());
+	}
+
 	/** And one it reads as asking about the drugs she takes keeps the screen's own lead. */
 	@Test
 	public void aQuestionReadAsAskingAboutHerDrugsKeepsTheScreensLead() {
@@ -618,9 +679,10 @@ public class LlmInferenceServiceModelReadQuestionContextTest extends BaseModuleC
 		}
 	}
 
-	/** Answers the first reading call with {@code verdict} — YES, NO, or AVOID for a YES whose second call reads it as
-	 *  asking which drugs to avoid — or with {@code verdict} verbatim where it is none of those, or fails it where
-	 *  {@code verdict} is null; and the second call with whether {@code verdict} is AVOID. */
+	/** Answers the first reading call with {@code verdict} — YES, NO, AVOID for a YES whose second call reads it as
+	 *  asking which drugs to avoid, or GIVE for a YES whose third call reads it as proposing a drug it does not name — or
+	 *  with {@code verdict} verbatim where it is none of those, or fails it where {@code verdict} is null; the second call
+	 *  with whether {@code verdict} is AVOID, and the third with whether it is GIVE. */
 	private static final class ReadingEngine implements LlmEngine {
 
 		private final String verdict;
@@ -630,6 +692,9 @@ public class LlmInferenceServiceModelReadQuestionContextTest extends BaseModuleC
 
 		/** The second call's, made only after a YES. */
 		private int avoidReadings;
+
+		/** The third call's, made only where the second read no drugs to avoid. */
+		private int giveReadings;
 
 		private String readingPrompt;
 
@@ -644,6 +709,11 @@ public class LlmInferenceServiceModelReadQuestionContextTest extends BaseModuleC
 		@Override
 		public InferenceResult infer(String systemPrompt, String userMessage, int timeoutSeconds,
 				ObjectNode responseFormat) {
+			if (LlmProvider.A_DRUG_TO_GIVE_QUESTION_SYSTEM_PROMPT.equals(systemPrompt)) {
+				giveReadings++;
+				return new InferenceResult("{\"" + LlmProvider.A_DRUG_TO_GIVE_FIELD + "\": " + "GIVE".equals(verdict) + "}",
+						1, 1, 0);
+			}
 			if (LlmProvider.DRUGS_TO_AVOID_QUESTION_SYSTEM_PROMPT.equals(systemPrompt)) {
 				avoidReadings++;
 				return new InferenceResult("{\"" + LlmProvider.DRUGS_TO_AVOID_FIELD + "\": " + "AVOID".equals(verdict) + "}",
@@ -656,7 +726,7 @@ public class LlmInferenceServiceModelReadQuestionContextTest extends BaseModuleC
 			if (verdict == null) {
 				throw new IllegalStateException("engine down");
 			}
-			String text = "YES".equals(verdict) || "NO".equals(verdict) || "AVOID".equals(verdict)
+			String text = "YES".equals(verdict) || "NO".equals(verdict) || "AVOID".equals(verdict) || "GIVE".equals(verdict)
 					? "{\"" + LlmProvider.MEDICATION_SAFETY_FIELD + "\": " + !"NO".equals(verdict) + "}" : verdict;
 			return new InferenceResult(text, 1, 1, 0);
 		}

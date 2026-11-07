@@ -58,13 +58,36 @@ public class MedicationSafetyQuestionEvalTest {
 			"Are any of his meds a bad combination?", "Can this patient's medicines be given safely at the same time?",
 			"Is it ok to keep giving all of these together?" };
 
+	/**
+	 * Yes/no questions proposing to give him a drug they do not name (ADR Decision 605): answered with the screen of what he
+	 * takes under the lead that the check chooses no drug, never as the screen alone, whose "No rated interactions" read as
+	 * a yes on the replica.
+	 */
+	private static final String[] ASKS_ABOUT_A_DRUG_TO_GIVE = { "Can I give him any drug?", "Can I give him anything?",
+			"Can I give him any medication?", "Is any drug safe for him?", "Is it safe to start a new medication?",
+			"Can I start him on a new drug?", "Can he take any medicine?", "Should I start him on something?",
+			"Is it ok to add another drug?", "Can I give him something for pain?", "Can I give him an antibiotic?",
+			"Can we try something else?", "Can I prescribe him something new?", "Is he fit to start a new medication?",
+			"¿Puedo darle algún medicamento?", "Puis-je lui donner un nouveau médicament ?" };
+
+	/** Questions near a proposal of an unnamed drug that are not one: another dose, a time or route, a negation, food, a
+	 *  condition. Printed for what the reading makes of them, not scored (ADR Decision 605). */
+	private static final String[] NEAR_A_PROPOSAL = { "Can I give her another tablet?", "Can she take a pill now?",
+			"Can I give her something IV?", "Should I not give her any new drugs?", "Is there any drug I should avoid giving her?",
+			"Can she eat anything?", "Can she use any drugs?", "Can I give her a new drug if she has diabetes?",
+			"Is it safe to start a new medication given her diabetes?", "Is the drug I prescribed safe?",
+			"Can I give her another drug, for example tramadol?" };
+
 	/** Drug-safety questions that read either way, scored for reaching the check alone. */
 	private static final String[] ASKS_EITHER = { "Does he have any drug contraindications?",
 			"Anything I need to watch out for before prescribing?" };
 
-	/** Drug-safety questions measured on 2026-10-27 to reach neither the router nor the model (ADR Decision 491). */
+	/** Drug-safety questions measured to reach neither the router nor the model (ADR Decisions 491, 605). */
 	private static final java.util.Set<String> KNOWN_UNREACHED = new java.util.HashSet<String>(java.util.Arrays.asList(
-		"Is it ok to keep giving all of these together?", "Anything I need to watch out for before prescribing?"));
+		"Is it ok to keep giving all of these together?", "Anything I need to watch out for before prescribing?",
+		// and, on 2026-11-08, three the first call reads as no drug-safety question, which the model answers as before (ADR
+		// Decision 605)
+		"Can we try something else?", "Can I prescribe him something new?", "¿Puedo darle algún medicamento?"));
 
 	/** Questions that ask nothing of a drug's safety, medication questions among them. */
 	private static final String[] ASKS_SOMETHING_ELSE = { "What is his blood pressure?", "What medications is he on?",
@@ -91,6 +114,22 @@ public class MedicationSafetyQuestionEvalTest {
 		score(provider, ASKS_WHICH_DRUGS_TO_AVOID, LlmProvider.MedicationSafetyReading.DRUGS_TO_AVOID, missed, misreadKind);
 		score(provider, ASKS_ABOUT_HER_DRUGS, LlmProvider.MedicationSafetyReading.HER_MEDICATIONS, missed, misreadKind);
 		score(provider, ASKS_EITHER, null, missed, misreadKind);
+		List<String> drugToGiveMissed = new ArrayList<String>();
+		for (String question : ASKS_ABOUT_A_DRUG_TO_GIVE) {
+			boolean answered = readAsADrugToGive(provider, question);
+			System.out.println("MEDICATION-SAFETY-EVAL A_DRUG_TO_GIVE | answered as a choice=" + answered + " | " + question);
+			if (!answered && KNOWN_UNREACHED.contains(question)) {
+				System.out.println("MEDICATION-SAFETY-EVAL known gap, not read as a drug-safety question | " + question);
+			}
+			else if (!answered) {
+				drugToGiveMissed.add(question);
+			}
+		}
+		// Printed, not scored: what the reading makes of questions near a proposal that are not one (ADR Decision 605).
+		for (String question : NEAR_A_PROPOSAL) {
+			System.out.println("MEDICATION-SAFETY-EVAL near | answered as a choice=" + readAsADrugToGive(provider, question)
+					+ " model=" + provider.readMedicationSafetyQuestion(question) + " | " + question);
+		}
 		List<String> misread = new ArrayList<String>();
 		for (String question : ASKS_SOMETHING_ELSE) {
 			LlmProvider.MedicationSafetyReading model = provider.readMedicationSafetyQuestion(question);
@@ -102,6 +141,21 @@ public class MedicationSafetyQuestionEvalTest {
 		assertTrue(missed.isEmpty(), "drug-safety questions neither the router nor the model read as one: " + missed);
 		assertTrue(misread.isEmpty(), "questions the model read as drug-safety questions: " + misread);
 		assertTrue(misreadKind.isEmpty(), "questions about her drugs the model read as asking which to avoid: " + misreadKind);
+		assertTrue(drugToGiveMissed.isEmpty(), "questions proposing a drug they do not name, read otherwise: "
+				+ drugToGiveMissed);
+	}
+
+	/**
+	 * Whether production answers {@code question} as a choice of drug (ADR Decisions 293, 605): the router's grammar reads it
+	 * as one; or its safety words alone admit it and the model reads it as proposing a drug it does not name; or the router
+	 * screens nothing and the model reads it so.
+	 */
+	private static boolean readAsADrugToGive(LlmProvider provider, String question) {
+		if (QueryScopeRouter.isInteractionScreening(question)) {
+			return QueryScopeRouter.asksWhichDrugToGiveHer(question)
+					|| QueryScopeRouter.admitsAScreenByItsSafetyWordsAlone(question) && provider.readsAsADrugToGive(question);
+		}
+		return provider.readMedicationSafetyQuestion(question) == LlmProvider.MedicationSafetyReading.A_DRUG_TO_GIVE;
 	}
 
 	/** Scores one labelled list; {@code kind} null scores reaching the check alone. */
@@ -113,13 +167,24 @@ public class MedicationSafetyQuestionEvalTest {
 			System.out.println("MEDICATION-SAFETY-EVAL " + (kind == null ? "either" : kind) + " | router=" + router + " model="
 					+ model + " | " + question);
 			boolean readAsOne = model == LlmProvider.MedicationSafetyReading.HER_MEDICATIONS
-					|| model == LlmProvider.MedicationSafetyReading.DRUGS_TO_AVOID;
+					|| model == LlmProvider.MedicationSafetyReading.DRUGS_TO_AVOID
+					|| model == LlmProvider.MedicationSafetyReading.A_DRUG_TO_GIVE;
 			if (!router && !readAsOne) {
 				if (KNOWN_UNREACHED.contains(question)) {
 					System.out.println("MEDICATION-SAFETY-EVAL known gap, unreached | " + question);
 				}
 				else {
 					missed.add(question);
+				}
+			}
+			if (kind != null && kind != LlmProvider.MedicationSafetyReading.A_DRUG_TO_GIVE
+					&& readAsADrugToGive(provider, question)) {
+				if (kind == LlmProvider.MedicationSafetyReading.HER_MEDICATIONS) {
+					misreadKind.add(question + " (answered as a choice of drug)");
+				}
+				else {
+					System.out.println("MEDICATION-SAFETY-EVAL avoid answered as a choice of drug, under that lead | "
+							+ question);
 				}
 			}
 			if (kind == LlmProvider.MedicationSafetyReading.HER_MEDICATIONS

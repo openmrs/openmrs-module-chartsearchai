@@ -27613,3 +27613,76 @@ the reason Decision 590 gives for `aboutItsOwnOrders`: a new type broke the #340
 Pinned by `ChartSearchAiSafetyWarningSeverityWireTest.everyPublicZeroArgumentAccessorOfAWarningNamesAKeyOnTheWire` over
 its chips 19 and 20, which share one sentence and differ only in this answer. The guard reddens with the accessor public
 and the put left out.
+
+## Decision 605: A question proposing a drug it does not name is read as that choice, by the model where the words cannot tell
+
+**Status**: Accepted (2026-11-08).
+
+### Context
+
+On the demo replica, *"Can I give him any drug?"* was answered *"No rated interactions; 3 possible duplicate therapies."*,
+a screen of his own medications, which reads as a yes. On a patient with Major findings it opened *"2 Major interactions
+…"*, which reads as a no. Neither answers a question about a drug the question does not name. Decision 293 answers
+*"What drugs can I give him?"* with the same screen, under the lead that the check chooses no drug and clears none. The
+yes/no wordings did not get that lead, and they reached the screen by two routes, neither of which kept *"a drug to give
+him"* apart from *"his medications"*:
+
+- **Decision 489's model reading.** Where the router reads nothing, the model may read the question as one of OTHER,
+  HER_MEDICATIONS or DRUGS_TO_AVOID. *"Can I give him any drug?"* could only be HER_MEDICATIONS, and the check ran for
+  `MEDICATION_CHECK_QUESTION`, so the clinician's wording never reached the injector. A temporary probe on the replica
+  confirmed this.
+- **`isInteractionScreening`'s safety words.** A safety word and a medication word admit *"Is any drug safe for him?"*
+  and *"Is it safe to start a new medication?"*.
+
+Of the 58 such questions the module answered on the replica, 33 came by the first route and 25 by the second.
+
+Widening Decision 293's English grammar to the yes/no forms was measured and rejected, which is Decision 489's own reason.
+Two refutation rounds by agents that had not seen the design broke it:
+
+- **Round one:** about 40 false positives, among them "the drug", "his TB drugs" and "give her medications".
+- **Round two**, after the grammar was tightened: about 50 new failures. These included another dose (*"Can I give her
+  another tablet?"*), negation (*"Should I not give her any new drugs?"*), food (*"Can she eat anything?"*), conditions
+  and missed wordings (*"an antibiotic"*, *"try something else"*).
+
+Sending every safety-word screen to the model reading instead was also rejected. Decision 489 measured the model reading
+NO for *"Can his medications be taken together?"*, so screens would be lost.
+
+### The decision
+
+- `LlmProvider.readMedicationSafetyQuestion` gains a third call, made only after its first reads a drug-safety question
+  and its second reads no drugs to avoid. That call asks whether the question proposes giving her a drug it does not name
+  (`A_DRUG_TO_GIVE_QUESTION_SYSTEM_PROMPT`), and a yes reads as `A_DRUG_TO_GIVE`. The check then runs for
+  `QueryScopeRouter.A_DRUG_TO_GIVE_QUESTION`, which `asksWhichDrugToGiveHer` reads. The answer is therefore Decision 293's:
+  the lead, then the screen.
+- A screen the router admitted by its safety and medication words alone (`QueryScopeRouter.admitsAScreenByItsSafetyWordsAlone`,
+  a split of `isInteractionScreening`, not a copy of it) is asked the second and third calls when the module answered it
+  for a question naming no drug (`LlmProvider.readsAsADrugToGive`). A yes runs the same check. The second call comes first
+  because the third, asked alone, read *"What medications should he avoid?"* as proposing a drug.
+- Only adds a lead. A no, an unreadable reply or a failed engine keeps the first answer. The new call is behind the same
+  `chartsearchai.drugSafety.readQuestionsWithTheModel`.
+
+### Measured
+
+`MedicationSafetyQuestionEvalTest` was run against Gemma 4 E2B Q4_K_M, the demo's model, on a tester-started llama-server.
+
+- **Unnamed-drug proposals:** 13 of 16 were answered as a choice, French among them. The other three are read by the first
+  call as no drug-safety question, so the model answers them as before. They are recorded as known gaps: *"Can we try
+  something else?"*, *"Can I prescribe him something new?"* and *"¿Puedo darle algún medicamento?"*.
+- **Questions about his own drugs:** none of the 12 was answered as a choice, and none of the 21 other questions moved.
+- **One avoid question:** *"Any meds he can't take?"* now carries the choice lead instead of the screen's own. Both
+  readings say the check lists no drug to avoid by name, so it is printed rather than scored, as Decision 491 prints that
+  question's other misreading.
+
+Pinned by `LlmInferenceServiceModelReadQuestionContextTest`:
+
+- `aQuestionReadAsProposingADrugItDoesNotNameSaysTheCheckChoosesNone`
+- `aScreenAdmittedByItsSafetyWordsAloneIsAnsweredAsAChoiceWhereTheModelReadsItSo`
+- `aScreenAdmittedByItsSafetyWordsAloneKeepsItsAnswerWhereTheModelReadsNoDrugProposed`
+
+The first three redden without the change. A fourth test, `aScreenItsGrammarReadsIsNotAskedWhetherItProposesADrug`, keeps
+the call off screens the grammar reads.
+
+Not covered here: the safety words also admit questions the screen cannot answer, such as *"Is the drug I prescribed
+safe?"* and *"Is it safe to start a new medication given her diabetes?"*. Where the model reads the second as a choice it
+gets the lead, which is true, but the condition is still not weighed. That is the safety-word leg's own scope, for a
+decision of its own.

@@ -57,7 +57,7 @@ RUN node /stamp-esm-version.mjs
 RUN yarn build && yarn pack
 
 # Build the patient chart from Veronica Muthee's omnibar commands branch, so the community can try
-# /visit, /order, /pending and /enroll on the demo (talk.openmrs.org/t/openmrs-omnibar-prototype/50353/7).
+# /visit, /order, /renew, /pending and /enroll on the demo (talk.openmrs.org/t/openmrs-omnibar-prototype/50353/7).
 # The branch is not published to npm. It is pinned to a commit rather than tracking the branch, because
 # this is a fork's code on the public demo; bump PATIENT_CHART_SHA to take her later pushes.
 #
@@ -72,7 +72,7 @@ FROM esm-builder AS patient-chart-esm
 
 ARG CACHE_BUST
 ARG PATIENT_CHART_REPO=https://github.com/VeronicaMuthee/openmrs-esm-patient-chart.git
-ARG PATIENT_CHART_SHA=965993f6c460fbd2586805daab1fcbd79e42ad96
+ARG PATIENT_CHART_SHA=09d5b87cd0a86f727482ae22ee1e0be850d8916a
 RUN git init -q /esm && cd /esm \
     && git fetch -q --depth 1 "$PATIENT_CHART_REPO" "$PATIENT_CHART_SHA" \
     && git checkout -q FETCH_HEAD
@@ -230,7 +230,7 @@ ENV SPA_CONFIG_URLS=/openmrs/spa/config-chartsearchai.json
 # This fails the build on the shape described above: against the image
 # published before this commit, both greps exit 1. The omnibar is held to the
 # same two files; against the image published before it was added, its greps
-# exit 1. So are the five omnibar providers the patient-chart-esm stage exists
+# exit 1. So are the six omnibar providers the patient-chart-esm stage exists
 # for, which npm's `next` chart apps do not register.
 RUN set -eux; \
     cd /usr/share/nginx/html; \
@@ -238,7 +238,7 @@ RUN set -eux; \
     gzip -cd routes.registry.json.gz | grep -q 'chartsearchai'; \
     gzip -cd importmap.json.gz | grep -q '@openmrs/esm-omnibar-app'; \
     gzip -cd routes.registry.json.gz | grep -q '@openmrs/esm-omnibar-app'; \
-    for p in visit-actions drug-order lab-order pending-labs enroll; do \
+    for p in visit-actions drug-order renew-order lab-order pending-labs enroll; do \
       gzip -cd routes.registry.json.gz | grep -q "\"$p-omnibar-provider\""; \
     done; \
     for f in importmap.json routes.registry.json; do \

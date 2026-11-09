@@ -2991,7 +2991,10 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 				"What are her drug interactions?",
 				// A rating asked about, as "Any major interactions?" is (ADR Decision 570)
 				"Does she have any major interactions?", "Does she have any serious drug interactions?",
-				"Does she have any clinically significant interactions?" }) {
+				"Does she have any clinically significant interactions?",
+				// The worst of them asked for: the model named Moderate cautions "the most dangerous" (ADR Decision 610)
+				"What is the most dangerous interaction in her list?", "What's the most serious interaction among her medications?",
+				"Which is the worst drug interaction she has?" }) {
 			RecordingProvider provider = new RecordingProvider();
 			ChartAnswer answer = serviceWith(provider).search(patient, question);
 
@@ -3500,7 +3503,11 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 				"Does she need any of her medications adjusted?", "Do any of her medications need to be changed?",
 				// ADR Decision 571: two replica patients were told "No — the patient's regimen should be changed because …"
 				"Should I change her regimen?", "Do I need to adjust her medications?", "Should we modify her treatment?",
-				"Does her regimen need changing?", "Should I stop her medications?" }) {
+				"Does her regimen need changing?", "Should I stop her medications?",
+				// ADR Decision 610: two replica patients were told "No drug should be stopped" and "No. The patient is taking
+				// several medications that require changes"
+				"Is there any drug she takes that I should stop now?", "Is there any medication she is on that we should stop?",
+				"Is there anything in her list I should stop?" }) {
 			RecordingProvider provider = new RecordingProvider();
 			ChartAnswer answer = serviceWith(provider).search(patient, question);
 

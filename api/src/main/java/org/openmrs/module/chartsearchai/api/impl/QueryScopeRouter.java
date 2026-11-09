@@ -1002,6 +1002,14 @@ public final class QueryScopeRouter {
 			"how (?:serious|severe|bad|dangerous|significant|important) (?:is|are) (?:the |this |that )?" + D + " interactions?",
 			"(?:please )?explain (?:the |this |that )?" + D + " interactions?",
 			"how (?:does|do|will|would) " + D + " interact with " + POSSESSIVE + " (?:other |current )?" + MEDICATIONS,
+			// "Should I separate the doses of didanosine and her other meds?", "Does didanosine need to be given apart from her
+			// medications?" — ADR Decision 270's question asked of her medications as a whole; the model led it "No" (ADR
+			// Decision 610)
+			"(?:should|do|must|can) (?:i|we) (?:need to )?(?:separate|space|space out|stagger) (?:the )?(?:doses?|dosing"
+					+ "|administration|timing) of (?:" + POSSESSIVE + " )?" + D + " (?:and|from) (?:all )?" + POSSESSIVE + " (?:other )?"
+					+ MEDICATIONS,
+			"(?:should|must|does|do) (?:" + POSSESSIVE + " )?" + D + " (?:need to )?be (?:given|taken) (?:apart|separately) from (?:all )?"
+					+ POSSESSIVE + " (?:other )?" + MEDICATIONS,
 			// "Does rifampicin require dose adjustment with her meds?" (ADR Decision 422)
 			"(?:does|will|would|could|might) " + D + " (?:require|need|mean) (?:a |any )?(?:dose|dosage) (?:adjustments?|changes?) "
 					+ "(?:with|of|for|to|in) (?:any of )?" + POSSESSIVE + " (?:other )?" + MEDICATIONS,
@@ -1112,6 +1120,10 @@ public final class QueryScopeRouter {
 			// and "Can I prescribe rifampicin if she's on nevirapine?" (ADR Decision 444)
 			"(?:can|could|may) (?:i|we) (?:give|start|add|prescribe|use) (?:" + PATIENT + " )?(?:on )?" + HER_D + " (?:while|when|if) "
 					+ "(?:she's|he's|they're|(?:she|he|the patient|this patient) is|they are) (?:on|taking) " + HER_D,
+			// "Is it safe to give ciprofloxacin and does it interact with nevirapine?" — the model answered "No — ciprofloxacin
+			// should not be given due to a Major interaction with ivosidenib", a drug no order of hers carries (ADR Decision 610)
+			"is it (?:ok|okay|safe|fine|appropriate) to (?:start|give|add|use|prescribe) (?:" + PATIENT + " )?(?:on )?" + HER_D
+					+ " and (?:does|will|would) (?:it|that) interact with " + HER_D,
 			// "Is concomitant use of fluconazole and nevirapine safe?" (ADR Decision 428)
 			// and "Is the combination of rifampicin and efavirenz safe?" (ADR Decision 433)
 			"is (?:the )?(?:(?:concomitant|concurrent|combined|simultaneous) use|co administration|coadministration|combination|combo)"
@@ -1461,6 +1473,13 @@ public final class QueryScopeRouter {
 			"is it safe to continue (?:all )?" + POSSESSIVE + " " + MEDICATIONS,
 			// "What interactions does she have?", "What drug interactions does the patient have?"
 			"what " + QUALIFIER + "(?:drug )?(?:interactions|ddis) (?:does|do) (?:she|he|they|the patient|this patient) have",
+			// "What is the most dangerous interaction in her list?", "Which is the worst drug interaction she has?" — the
+			// screen states its Major interactions first; the model named Moderate cautions "the most dangerous" (ADR
+			// Decision 610)
+			"(?:what|which) (?:is|are) the (?:most (?:dangerous|serious|severe|important|significant|concerning|risky)|worst|"
+					+ "biggest|riskiest) (?:drug )?(?:interactions?|ddis?)(?: (?:in|on|among|between|of) (?:" + POSSESSIVE + " "
+					+ MEDICATIONS + "|the (?:drugs|medicines|medications) " + SUBJECT_TAKES + ")| (?:she|he|they|the patient|"
+					+ "this patient) (?:has|have))?",
 			// "List her drug interactions"
 			"(?:please )?list " + POSSESSIVE + " " + QUALIFIER + "(?:drug )?(?:interactions|ddis)",
 			// "Check her medications for interactions", "Review her meds for drug interactions", "Please screen her current
@@ -1957,6 +1976,11 @@ public final class QueryScopeRouter {
 	private static final String DOSE_ADJUSTMENT_FOR_THE_PAIR = HER_D + " (?:and|with|plus) " + HER_D + " (?:any )?(?:dose|"
 			// and "Rifampicin with efavirenz - any dose change?" (ADR Decision 444)
 			+ "dosage) (?:adjustments?|changes?)(?: (?:needed|required|necessary))?"
+			// "How much should I reduce simvastatin if she is on lopinavir?" — the model told a patient on no lopinavir
+			// "Simvastatin can be given" (ADR Decision 610)
+			+ "|how much (?:should|do|must) (?:i|we) (?:reduce|lower|decrease|increase|raise|adjust|change) (?:the |" + POSSESSIVE
+			+ " )?" + D + "(?: dose| dosage)? (?:if|when|since|as|because) (?:she|he|they|the patient|this patient) (?:is|are) (?:on"
+			+ "|taking) " + HER_D
 			// "What dose of efavirenz with rifampicin?" (ADR Decision 433)
 			+ "|(?:what|which) (?:dose|dosage) of " + HER_D + " (?:should (?:i|we) (?:give|use) |(?:is|would be) (?:needed|required|"
 			+ "safe) )?(?:with|alongside|on) " + HER_D
@@ -3922,6 +3946,11 @@ public final class QueryScopeRouter {
 					+ POSSESSIVE + " )?(?:current |active |other )?(?:drugs?|medications?|meds|medicines?)"
 					+ BECAUSE_OF_INTERACTIONS,
 			"should any of " + HER_MEDICATIONS + " be " + CHANGED,
+			// "Is there any drug she takes that I should stop now?", "Is there anything in her list I should stop?" — the model
+			// answered "No drug should be stopped" beside two Major interactions (ADR Decision 610)
+			"is there (?:any (?:drug|medication|medicine|med)|anything) (?:(?:that )?" + SUBJECT_TAKES + "|(?:that )?(?:she|he|they) "
+					+ "(?:is|are) on|(?:in|on) " + POSSESSIVE + " " + MEDICATIONS + ") (?:that )?(?:i|we) (?:should|must|need to) "
+					+ "(?:stop|discontinue|change|adjust)(?: now)?",
 			"should (?:i|we) stop any of " + HER_MEDICATIONS,
 			// "Should I change her regimen?", "Do I need to adjust her medications?", "Should I stop her medications?", "Does her
 			// regimen need changing?" — the model answered "No — the patient's regimen should be changed" (ADR Decision 571)

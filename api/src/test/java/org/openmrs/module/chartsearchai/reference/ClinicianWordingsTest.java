@@ -2216,6 +2216,27 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		assertNull(ask("Does she need dose adjustment because of her kidney function?"));
 	}
 
+	/**
+	 * ADR Decision 610: spacing one drug's doses from her other medications, and how much to change one drug's dose beside
+	 * another, are the questions the module already answers for a pair (ADR Decisions 270, 433). On the demo replica the
+	 * model led the first "No" on three patients, and told a patient on no lopinavir "Simvastatin can be given".
+	 */
+	@Test
+	public void spacingADrugFromHerMedicationsOrSizingItsDoseBesideAnotherAsksTheModulesQuestion() {
+		String[][] pairs = { { "Should I separate the doses of warfarin and her other meds?", "Does warfarin require dose adjustment with her meds?" },
+			{ "Should I space the dosing of warfarin from her medications?", "Does warfarin require dose adjustment with her meds?" },
+			{ "Does warfarin need to be given apart from her other medications?", "Does warfarin require dose adjustment with her meds?" },
+			{ "How much should I reduce warfarin if she is on efavirenz?", "What dose of warfarin with efavirenz?" },
+			{ "How much should I increase the efavirenz dose if she is taking rifampicin?", "What dose of efavirenz with rifampicin?" },
+			{ "Is it safe to give warfarin and does it interact with efavirenz?", "Is it safe to give warfarin while she is on efavirenz?" },
+			{ "Is it ok to give clarithromycin and does it interact with rifampicin?", "Is it ok to give clarithromycin while she is on rifampicin?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+	}
+
 	/** ADR Decision 536: screening a drug, and a drug messing, interfering or conflicting with her medications, ask its interactions. */
 	@Test
 	public void screeningADrugOrItMessingWithHerMedicationsAsksItsInteractions() {

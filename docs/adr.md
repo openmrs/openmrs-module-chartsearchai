@@ -27950,3 +27950,47 @@ adjustment because of her kidney function?"* are still asked of it.
 
 Pinned by `ClinicianWordingsTest.aClinicianListingInteractionsOrStoppingBecauseOfThemAsksTheModulesQuestion`, which
 reddens without the change on its first wording, and whose two controls stay the model's.
+
+## Decision 610: The worst interaction, a drug to stop now, spacing a drug from her medications, and two more wordings are the module's questions
+
+**Status: Accepted** (November 2026). Found by a second sweep of 10 patients by 30 drug-safety questions on the demo
+replica on 2026-11-09.
+
+### Context
+
+Five wordings fitted no shape and went to the model, which answered them wrongly:
+
+- *"Is there any drug she takes that I should stop now?"* — 9 of 10 patients were told some form of *"No"*, among them
+  *"No drug should be stopped"* to dd55b54e, beside her two Major interactions.
+- *"What is the most dangerous interaction in her list?"* — dd84b10f was told *"The most dangerous interactions listed are
+  those rated Moderate"*, then given his duplicates.
+- *"Should I separate the doses of didanosine and her other meds?"* — led *"No"* on 8 of 10 patients. The didanosine
+  findings the model then cited say its absorption is what is at stake.
+- *"How much should I reduce simvastatin if he is on lopinavir?"* — dd66488f, on no lopinavir, was told *"Simvastatin can
+  be given"*.
+- *"Is it safe to give ciprofloxacin and does it interact with nevirapine?"* — dd5536fd was told *"No — ciprofloxacin should
+  not be given due to a Major interaction with ivosidenib"*, a drug no order of his carries.
+
+### The decision
+
+- `NEED_CHANGING_SHAPES` reads *"is there any drug / anything she takes / in her list that I should stop / change (now)"*.
+  The screen answers, as it does Decision 571's wordings.
+- The screen shapes read *"what / which is the most dangerous / serious / worst interaction (in her list / she has)"*. The
+  screen states its Major interactions first.
+- `WHICH_OF_HER_MEDICATIONS_INTERACT_SHAPES` reads Decision 270's spacing question asked of her medications as a whole:
+  *"should I separate / space the doses of X and her other meds"*, *"does X need to be given apart from her medications"*.
+- `DOSE_ADJUSTMENT_FOR_THE_PAIR` reads *"how much should I reduce / increase X if she is on Y"*, as it reads Decision 433's
+  *"What dose of X with Y?"*.
+- `TOGETHER_SHAPES` reads *"is it safe to give X and does it interact with Y"*.
+
+**On the replica**, the five questions on the 8 patients they failed on: 40 of 40 module-answered after.
+
+**Left as found.** The pair answer to *"…simvastatin if he is on lopinavir?"* for a patient on lopinavir/ritonavir opens
+*"The interaction data lists no interaction between Simvastatin and Lopinavir at any rating"*. That is true of the
+lopinavir substance in this data: the Major row is ritonavir's, and the next line states it against his Lopinavir /
+ritonavir order. It is Decision 433's answer, unchanged.
+
+Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.everyWayOfAskingForAScreenIsAnsweredWithTheScreensCount`,
+`.askingWhichOfHerMedicationsIShouldStopIsAScreen` and
+`ClinicianWordingsTest.spacingADrugFromHerMedicationsOrSizingItsDoseBesideAnotherAsksTheModulesQuestion`. Each reddens
+without the change on its first new wording.

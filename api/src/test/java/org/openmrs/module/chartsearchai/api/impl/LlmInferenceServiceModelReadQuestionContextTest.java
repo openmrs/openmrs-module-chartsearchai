@@ -408,6 +408,29 @@ public class LlmInferenceServiceModelReadQuestionContextTest extends BaseModuleC
 		}
 	}
 
+	/**
+	 * Something the data does not know, proposed by a verb of giving beside her medications, is said to be unchecked as the
+	 * same thing she would take beside them is (ADR Decision 606): on the demo replica "Can I give her boldo with her
+	 * medications?" was read by the model as a drug the question does not name and answered "This check does not choose a
+	 * medication to give this patient", with the screen of her orders, while "Can she take boldo with her ARVs?" said the
+	 * check did not run for boldo.
+	 */
+	@Test
+	public void somethingProposedByAVerbOfGivingBesideHerMedicationsIsSaidToBeUnchecked() {
+		String[][] cases = { { "Can I give her boldo with her medications?", "boldo" },
+			{ "Can I give her boldo tea with her meds?", "boldo tea" }, { "Can we give him boldo with his ARVs?", "boldo" },
+			{ "Could I give her boldo alongside her other medications?", "boldo" } };
+		for (String[] c : cases) {
+			RecordingProvider provider = new RecordingProvider("YES");
+			ChartAnswer answer = serviceWith(provider).search(patient, c[0]);
+
+			assertEquals(0, provider.engine.readings, c[0] + " is not read by the model");
+			assertTrue(answer.getAnswer().contains("No interaction check was run: \"" + c[1] + "\" is not a drug name"),
+				c[0] + " says the check did not run for it: " + answer.getAnswer());
+			assertTrue(answer.getSafetyWarnings().isEmpty(), c[0] + " carries no chip: " + answer.getSafetyWarnings());
+		}
+	}
+
 	/** A group named as hers is her medications, never a drug proposed: no unchecked statement (ADR Decisions 416, 551). */
 	@Test
 	public void aGroupNamedAsHersIsNoUncheckedDrug() {

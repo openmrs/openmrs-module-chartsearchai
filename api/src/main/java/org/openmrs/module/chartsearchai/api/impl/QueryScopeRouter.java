@@ -631,6 +631,11 @@ public final class QueryScopeRouter {
 					+ " (?:with|alongside|while (?:on|taking)) " + "(?:" + POSSESSIVE + " " + MEDICATIONS + "|" + HER_MEDICATION_GROUP + ")",
 			"is it (?:safe|ok|okay) for (?:her|him|them|the patient|this patient) to (?:drink|have|take|consume) " + D
 					+ " (?:with|alongside|while (?:on|taking)) " + "(?:" + POSSESSIVE + " " + MEDICATIONS + "|" + HER_MEDICATION_GROUP + ")",
+			// and given her by the one asking, "Can I give her boldo with her medications?" — the same proposal by a verb of
+			// giving, whose word the data does not know is said to be unchecked as the one she would take is (ADR Decision 606)
+			"(?:can|could|may|should) (?:i|we) (?:also )?(?:safely )?(?:give|add|start|prescribe|administer) (?:" + PATIENT
+					+ " )?(?:on )?" + D + " (?:with|alongside|while (?:on|taking)) (?:" + POSSESSIVE + " (?:other )?" + MEDICATIONS
+					+ "|" + HER_MEDICATION_GROUP + ")",
 			// "Can this patient take warfarin?", "Can she take ibuprofen?", "Can she drink alcohol?" (ADR Decision 268)
 			"(?:can|could|may|should) (?:she|he|they|the patient|this patient) (?:also )?(?:safely )?(?:take|start|be given|be started on"
 					// and "Can she get fluconazole?" (ADR Decision 431), and "Can she eat ginger?", answered by the model "Ginger

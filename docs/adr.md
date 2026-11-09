@@ -27686,3 +27686,54 @@ Not covered here: the safety words also admit questions the screen cannot answer
 safe?"* and *"Is it safe to start a new medication given her diabetes?"*. Where the model reads the second as a choice it
 gets the lead, which is true, but the condition is still not weighed. That is the safety-word leg's own scope, for a
 decision of its own.
+
+## Decision 606: Something the data does not know, proposed by a verb of giving beside her medications, is said to be unchecked
+
+**Status**: Accepted (2026-11-09).
+
+### Context
+
+On the demo replica, *"Can I give her boldo with her medications?"* was answered *"This check does not choose a
+medication to give this patient …"*, followed by the screen of her own orders and three chips about them. Nothing in the
+answer said boldo was never checked. *"Can she take boldo with her ARVs?"* said so: *"No interaction check was run:
+"boldo" is not a drug name the interaction data recognises."*
+
+The two questions ask the same thing. Decision 300 made *"Can she (drink|have|take) X with her medications?"* a proposal
+shape, so the unknown-word reading (`UnrecognisedDrugName`) found *"boldo"* in its drug place. The same proposal with a
+verb of giving fit only `QueryScopeRouter.asksWhetherADrugIsSafeWithHerMedications`, which Decision 202 keeps out of that
+reading so that *"Is grapefruit juice safe with her medications?"* stays the model's. So no word was said to stand in a
+drug's place, the question reached Decision 489's model reading, and Decision 605's third call read it as proposing a drug
+it does not name.
+
+The same gap would carry every non-English wording of it, once rewritten into English, to the same answer: *"Puis-je lui
+donner du gingembre avec ses médicaments ?"* became *"Can I give him ginger with his medications?"*.
+
+### The decision
+
+- The proposal shapes gain Decision 300's shape with a verb of giving: *"(can|could|may|should) (i|we) (give|add|start|
+  prescribe|administer) [her] X (with|alongside|while on) her medications"*. A word the data does not know in that place
+  is said to be unchecked, as the one she would take is, and the model is not asked to read the question.
+- Decision 202's exclusion is kept: a question whether a thing is SAFE with her medications, with no verb of giving, is
+  not a proposal shape and stays the model's.
+- Widening `UnrecognisedDrugName` to every one-drug shape was rejected on Decision 202's own evidence.
+
+### Measured
+
+`UnrecognisedDrugName.namesAWordInADrugsPlace`, `asksOfOneThingInADrugsPlace`, `QueryScopeRouter.isInteractionScreening`
+and `asksWhichDrugToGiveHer` were compared between the API jar built before the change and after it, over 3,062 distinct
+questions: every quoted question in the test sources and the questions of three refutation rounds. Three answers moved:
+
+- *"Can I give rifampcin with her ARVs?"*: the misspelling is now found in its drug place and offered its near name.
+- *"Can I give her dolutegravir with her TB preventive therapy?"* and *"Can I give her paracetamol with her cold
+  medicine?"*: each names a drug the data resolves, which decides the answer before this reading; the tests pinning them
+  stay green.
+
+On the replica after deploying, *"Can I give her boldo with her medications?"*, *"Can I give her boldo tea with her
+medications?"*, *"Can I give him neem with his medications?"* and *"Could I give her boldo alongside her other
+medications?"* each said the check did not run for the thing named, with no chip.
+*"Is grapefruit juice safe with her medications?"* still took the model's answer, *"Can I give her ibuprofen with her
+medications?"* was still answered as a proposal of ibuprofen, and *"Can I give him any drug?"* still led with Decision
+605's lead.
+
+Pinned by `LlmInferenceServiceModelReadQuestionContextTest.somethingProposedByAVerbOfGivingBesideHerMedicationsIsSaidToBeUnchecked`,
+which reddens without the change at the model's reading of the replica's own question.

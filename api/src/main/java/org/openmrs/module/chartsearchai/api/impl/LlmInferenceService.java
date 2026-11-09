@@ -1403,6 +1403,56 @@ public class LlmInferenceService implements ChartSearchService {
 	private SafetyReading readForDrugSafety(Patient patient, String question, PatientChart built,
 			ChartReadStatus chartRead, CancellationSignal cancellation) {
 		PatientChart injected = drugReferenceInjector.inject(built, patient, question, chartRead);
+		SafetyReading reading = readForDrugSafety(patient, question, built, chartRead, cancellation, injected);
+		if (reading.chart != injected || !aWordingRuleKeptTheReadingOff(question, injected)) {
+			return reading;
+		}
+		// A wording rule of the router kept the model from reading the question, so it is read again as one plain English
+		// question (ADR Decision 608): "¿Qué medicamentos debo evitar?" stood a word in a drug's place and ran no check. The
+		// rewrite is used only where it runs the screen of her orders, which a rewrite naming a drug the data resolves, or
+		// standing a word it does not know in a drug's place, never does — the default model rewrote "mwarobaini" (neem) as
+		// "quinine". Nor where the model read the rewrite as proposing a drug it does not name: whether a question names its
+		// drug cannot be judged on a rewrite, which may have translated, dropped or replaced the name — the demo's model
+		// rewrote it "Can I give him neem along with its medications?", which no shape read a name in. The router's own
+		// choice of drug stands, its grammar never reading a name as no drug.
+		String plain = LlmProvider.interruptible(cancellation, () -> llmProvider.inPlainEnglish(question));
+		if (plain == null || plain.equalsIgnoreCase(question.trim())) {
+			return reading;
+		}
+		SafetyReading plainReading = readForDrugSafety(patient, plain, built, chartRead, cancellation,
+			drugReferenceInjector.inject(built, patient, plain, chartRead));
+		if (plainReading.chart == null || plainReading.chart.getModuleAnswer() == null
+				|| !plainReading.chart.screenedHerOrders()
+				|| QueryScopeRouter.A_DRUG_TO_GIVE_QUESTION.equals(plainReading.question)) {
+			return reading;
+		}
+		// The patient id and nothing of the question, which can name her medications (ADR Decision 102).
+		log.info("Patient {}: the question read in plain English runs a check of her medications (ADR Decision 608)",
+			patient == null ? null : patient.getPatientId());
+		return plainReading;
+	}
+
+	/**
+	 * Whether a wording rule of the router, and not the question's naming a drug or the screen's having run, kept the model
+	 * from reading {@code question} (ADR Decision 608): a word read in a drug's place, her allergies, something beside her
+	 * medications, a drug's record, one thing in a drug's place, or drug resistance — the rules {@link
+	 * #readForDrugSafety(Patient, String, PatientChart, ChartReadStatus, CancellationSignal, PatientChart)} stops at.
+	 */
+	private static boolean aWordingRuleKeptTheReadingOff(String question, PatientChart injected) {
+		return injected != null && question != null && !question.trim().isEmpty() && ChartSearchAiUtils.isDrugReferenceEnabled()
+				&& ChartSearchAiUtils.getBooleanGlobalProperty(ChartSearchAiConstants.GP_DRUG_SAFETY_READ_QUESTIONS_WITH_THE_MODEL,
+					ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_READ_QUESTIONS_WITH_THE_MODEL)
+				&& injected.getQuestionSubstances().isEmpty() && !injected.screenedHerOrders()
+				&& (injected.getUncheckedWordStatement() != null || QueryScopeRouter.asksAboutAllergies(question)
+						|| QueryScopeRouter.asksOfSomethingElseWithHerMedications(question) || injected.asksOnlyAboutADrugsRecord()
+						|| DrugReferenceInjector.asksOfOneThingInADrugsPlace(question)
+						|| QueryScopeRouter.asksOfDrugResistance(question));
+	}
+
+	/** {@link #readForDrugSafety(Patient, String, PatientChart, ChartReadStatus, CancellationSignal)} over the chart
+	 *  {@code injected} for {@code question}. */
+	private SafetyReading readForDrugSafety(Patient patient, String question, PatientChart built,
+			ChartReadStatus chartRead, CancellationSignal cancellation, PatientChart injected) {
 		// A screen the router's safety words alone admitted, answered by the module for a question naming no drug, may be a
 		// proposal of a drug it does not name: the model is asked, and a yes runs the router's own choice of drug, whose
 		// answer leads with the check choosing none (ADR Decision 605). "Is any drug safe for him?" was answered with the

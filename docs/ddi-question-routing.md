@@ -226,6 +226,12 @@ and a drug the question does not name for `A_DRUG_TO_GIVE_QUESTION`
 Every drug-safety step after that, the validator's post-answer pass included, reads the fixed
 question. Retrieval and the answering prompt keep the clinician's own words.
 
+Where one of those wording rules is what kept the model from reading the question, the model first
+rewrites it as one plain English question, and the rewrite takes this step instead; it is used only
+where it runs the screen of her orders, and never on the model's reading of a drug the question does
+not name, which a rewrite cannot be judged by
+([ADR Decision 608](adr.md#decision-608-a-question-a-wording-rule-kept-from-the-models-reading-is-read-again-in-plain-english)).
+
 **It only adds checks.** An answer of something else, an unreadable reply or a failed model call keeps the first injection.
 The model never removes a check the code chose to run, and never decides which drugs a question
 names. `MedicationSafetyQuestionEvalTest` (opt-in, against a real model) scores the exact prompt.

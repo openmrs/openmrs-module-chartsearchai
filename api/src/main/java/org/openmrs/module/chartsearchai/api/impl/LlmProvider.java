@@ -1099,6 +1099,52 @@ public class LlmProvider {
 		return readMedicationSafetyQuestion(question) == MedicationSafetyReading.A_DRUG_TO_GIVE;
 	}
 
+	/**
+	 * The words {@link #inPlainEnglish} asks the model in (ADR Decision 608): the question as one plain English question,
+	 * every name kept as written. A constant because it is a prompt, measured on the demo's model and the module's default
+	 * over the questions three refutation rounds wrote; rewording it is a change to measure there first.
+	 */
+	static final String PLAIN_ENGLISH_QUESTION_SYSTEM_PROMPT = "Rewrite the question a clinician typed about their patient "
+			+ "as one plain, correctly spelt English question with exactly the same meaning. Keep every name of a drug, food "
+			+ "or other thing exactly as written - never expand, correct, translate or replace a name. Add nothing the "
+			+ "question does not say, and leave out nothing it says.\n"
+			+ "Reply with JSON {\"question\": \"<the rewritten question>\"}.";
+
+	/** The rewrite's one field. */
+	static final String PLAIN_ENGLISH_QUESTION_FIELD = "question";
+
+	/**
+	 * {@code question} as one plain English question, as the model rewrites it (ADR Decision 608) — asked only where a
+	 * wording rule of the router kept the model from reading it, so a question in another language or with a typo is read
+	 * as its English form would be. What the rewrite may change is decided by its caller, never here.
+	 *
+	 * @return the rewrite, or {@code null} where the question is blank, the call failed or the reply carried none
+	 */
+	public String inPlainEnglish(String question) {
+		if (question == null || question.trim().isEmpty()) {
+			return null;
+		}
+		LlmEngine engine = getActiveEngine();
+		if (engine == null) {
+			return null;
+		}
+		try {
+			LlmEngine.InferenceResult inference = engine.infer(PLAIN_ENGLISH_QUESTION_SYSTEM_PROMPT, question.trim(),
+				Math.min(getTimeoutSeconds(), MEDICATION_SAFETY_QUESTION_TIMEOUT_SECONDS), medicationSafetyResponseFormat());
+			String text = inference == null ? null : inference.getText();
+			if (text == null || text.trim().isEmpty()) {
+				return null;
+			}
+			JsonNode rewrite = MAPPER.readTree(text).get(PLAIN_ENGLISH_QUESTION_FIELD);
+			return rewrite != null && rewrite.isTextual() && !rewrite.textValue().trim().isEmpty()
+					? rewrite.textValue().trim() : null;
+		}
+		catch (JsonProcessingException | RuntimeException e) {
+			log.warn("The model could not rewrite the question; keeping the router's reading: {}", e.toString());
+			return null;
+		}
+	}
+
 	/** {@code {"type": "json_object"}}: a JSON reply, its answer validated by {@link #readMedicationSafetyQuestion} rather
 	 *  than enumerated in a schema, which neither measured model ever answered {@code other} under (ADR Decision 607). */
 	static ObjectNode medicationSafetyResponseFormat() {

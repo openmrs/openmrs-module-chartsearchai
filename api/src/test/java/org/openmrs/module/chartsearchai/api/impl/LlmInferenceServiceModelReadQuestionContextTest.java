@@ -430,6 +430,85 @@ public class LlmInferenceServiceModelReadQuestionContextTest extends BaseModuleC
 		}
 	}
 
+	/**
+	 * A question a wording rule kept from the model's reading is read again in plain English, and runs the check its English
+	 * form runs (ADR Decision 608): "¿Qué medicamentos debo evitar?" stood a word in a drug's place for the router and took
+	 * the model's answer, with no check run.
+	 */
+	@Test
+	public void aQuestionAWordingRuleKeptFromTheReadingIsReadAgainInPlainEnglish() {
+		RecordingProvider provider = new RecordingProvider("AVOID");
+		provider.engine.rewrites.put("¿Qué medicamentos debo evitar?", "What medications should I avoid?");
+		ChartAnswer answer = serviceWith(provider).search(patient, "¿Qué medicamentos debo evitar?");
+
+		assertEquals(1, provider.engine.rewritesAsked, "the model rewrote it once");
+		assertTrue(answer.isAnsweredByTheModule(), "the check its English form runs answered it: " + answer.getAnswer());
+		assertTrue(answer.getAnswer().split("\n")[0].endsWith("This check does not list other drugs to avoid."),
+			"under the lead of what its English form asks: " + answer.getAnswer());
+		assertFalse(answer.getSafetyWarnings().isEmpty(), "the check's findings are published");
+	}
+
+	/** A rewrite naming a drug the data resolves names a drug the question did not, so it is not used (ADR Decision
+	 *  608): on the default model "mwarobaini" (neem) was rewritten "quinine". */
+	@Test
+	public void aRewriteNamingADrugTheQuestionDidNotIsNotUsed() {
+		RecordingProvider provider = new RecordingProvider("YES");
+		provider.engine.rewrites.put("Naweza kumpa mwarobaini pamoja na dawa zake?",
+			"Does ibuprofen interact with her medications?");
+		ChartAnswer answer = serviceWith(provider).search(patient, "Naweza kumpa mwarobaini pamoja na dawa zake?");
+
+		assertEquals(1, provider.engine.rewritesAsked);
+		assertFalse(answer.isAnsweredByTheModule(), "was: " + answer.getAnswer());
+		assertTrue(answer.getSafetyWarnings().isEmpty(), "no check ran: " + answer.getSafetyWarnings());
+		assertFalse(answer.getAnswer().toLowerCase().contains("ibuprofen"), "was: " + answer.getAnswer());
+	}
+
+	/** Nor one leaving a word unchecked, a word the clinician may never have typed: "neem" for "mwarobaini" (ADR Decision
+	 *  608). */
+	@Test
+	public void aRewriteLeavingAWordUncheckedIsNotUsed() {
+		RecordingProvider provider = new RecordingProvider("YES");
+		provider.engine.rewrites.put("Naweza kumpa mwarobaini pamoja na dawa zake?",
+			"Can I give her neem with her medications?");
+		ChartAnswer answer = serviceWith(provider).search(patient, "Naweza kumpa mwarobaini pamoja na dawa zake?");
+
+		assertEquals(1, provider.engine.rewritesAsked);
+		assertFalse(answer.isAnsweredByTheModule(), "was: " + answer.getAnswer());
+		assertTrue(answer.getSafetyWarnings().isEmpty(), "no check ran: " + answer.getSafetyWarnings());
+		assertFalse(answer.getAnswer().contains("neem"), "was: " + answer.getAnswer());
+	}
+
+	/**
+	 * Nor one the model reads as proposing a drug it does not name, which a rewrite cannot be judged by: it may have
+	 * translated, dropped or replaced the name (ADR Decision 608). On the demo replica the demo's model rewrote "Naweza kumpa
+	 * mwarobaini pamoja na dawa zake?" as "Can I give him neem along with its medications?", which no shape read a name in,
+	 * and the answer led with the check choosing no drug, beside the screen of his orders.
+	 */
+	@Test
+	public void aRewriteTheModelReadsAsADrugToGiveIsNotUsed() {
+		RecordingProvider provider = new RecordingProvider("GIVE");
+		provider.engine.rewrites.put("Naweza kumpa mwarobaini pamoja na dawa zake?",
+			"Can I give her neem along with its medications?");
+		ChartAnswer answer = serviceWith(provider).search(patient, "Naweza kumpa mwarobaini pamoja na dawa zake?");
+
+		assertEquals(1, provider.engine.rewritesAsked);
+		assertFalse(answer.isAnsweredByTheModule(), "was: " + answer.getAnswer());
+		assertTrue(answer.getSafetyWarnings().isEmpty(), "no check ran: " + answer.getSafetyWarnings());
+	}
+
+	/** And one the router itself reads as asking which drug to give still runs that choice: its grammar never reads a
+	 *  name as a drug the question does not name (ADR Decisions 293, 608). */
+	@Test
+	public void aRewriteTheRouterReadsAsAChoiceOfDrugIsUsed() {
+		RecordingProvider provider = new RecordingProvider("NO");
+		provider.engine.rewrites.put("¿Qué le puedo dar para el dolor?", "What can I give her for the pain?");
+		ChartAnswer answer = serviceWith(provider).search(patient, "¿Qué le puedo dar para el dolor?");
+
+		assertEquals(1, provider.engine.rewritesAsked);
+		assertTrue(answer.isAnsweredByTheModule(), "was: " + answer.getAnswer());
+		assertEquals(CHOOSES_NO_DRUG, answer.getAnswer().split("\n")[0], "was: " + answer.getAnswer());
+	}
+
 	/** A group named as hers is her medications, never a drug proposed: no unchecked statement (ADR Decisions 416, 551). */
 	@Test
 	public void aGroupNamedAsHersIsNoUncheckedDrug() {
@@ -714,6 +793,11 @@ public class LlmInferenceServiceModelReadQuestionContextTest extends BaseModuleC
 		/** Every call this engine was asked. */
 		private int calls;
 
+		/** The rewrite calls (ADR Decision 608), and what each question is rewritten as; none where it is absent. */
+		private int rewritesAsked;
+
+		private final java.util.Map<String, String> rewrites = new java.util.HashMap<String, String>();
+
 		private String readingPrompt;
 
 		private String readQuestion;
@@ -728,6 +812,12 @@ public class LlmInferenceServiceModelReadQuestionContextTest extends BaseModuleC
 		public InferenceResult infer(String systemPrompt, String userMessage, int timeoutSeconds,
 				ObjectNode responseFormat) {
 			calls++;
+			if (LlmProvider.PLAIN_ENGLISH_QUESTION_SYSTEM_PROMPT.equals(systemPrompt)) {
+				rewritesAsked++;
+				String rewrite = rewrites.get(userMessage);
+				return new InferenceResult(rewrite == null ? "{}"
+						: "{\"" + LlmProvider.PLAIN_ENGLISH_QUESTION_FIELD + "\": \"" + rewrite + "\"}", 1, 1, 0);
+			}
 			if (!LlmProvider.MEDICATION_SAFETY_QUESTION_SYSTEM_PROMPT.equals(systemPrompt)) {
 				return new InferenceResult("{}", 1, 1, 0);
 			}

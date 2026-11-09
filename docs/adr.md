@@ -27810,3 +27810,104 @@ named.
 
 Pinned by `LlmInferenceServiceModelReadQuestionContextTest`. Its reading tests assert one call in the free JSON-object
 format; nine of them redden on the three-call chain.
+
+## Decision 608: A question a wording rule kept from the model's reading is read again in plain English
+
+**Status**: Accepted (2026-11-09).
+
+### Context
+
+`LlmInferenceService.readForDrugSafety` does not let the model read a question that one of the router's English
+wording rules has read. Those rules are:
+
+- a word in a drug's place;
+- her allergies;
+- something beside her medications;
+- a drug's record;
+- one thing in a drug's place (Decisions 514, 564);
+- drug resistance.
+
+Each rule reads English word shapes. In another language every word looks like an unknown name, so the rules fire on
+questions they were never written for. *"¿Qué medicamentos debo evitar?"*, *"Ses médicaments interagissent-ils ?"* and
+*"Naweza kumpa dawa gani ya maumivu?"* each took the model's answer with no check run. So did *"safe combo?"*. Over the
+first three refutation rounds, 35 of the questions the module still answered wrongly after Decision 607 were stopped
+this way, 34 of them by `asksOfOneThingInADrugsPlace`.
+
+Decision 607 measured that the reading cannot replace that rule: it reads *"amox ok?"* and *"Can i give him high blood
+pressure?"* as a drug to give. So the rules stay, and a question one of them stopped is read again in English.
+
+### The decision
+
+- **When it runs.** A wording rule kept the model's reading off. The question names no drug the data resolves, and the
+  screen of her orders did not run. Then the model rewrites it as one plain English question, keeping every name as
+  written (`LlmProvider.inPlainEnglish`, `PLAIN_ENGLISH_QUESTION_SYSTEM_PROMPT`). The rewrite then takes the whole first
+  injection and Decision 607's reading, with no further rewrite.
+- **When it is used.** Only where the rewrite runs the screen of her orders and the module answers it, as a screen of
+  her medications or Decision 491's avoid lead. The router's own choice of drug (Decision 293) also counts. Anything
+  else keeps the first injection, as before.
+- **The guard is that condition.** A rewrite naming a drug the data resolves never runs that screen. Neither does one
+  where a shape reads a word the data does not know in a drug's place. So E4B's rewrite of *"mwarobaini"* (neem) as
+  *"quinine"* is never used. A separate test of what the rewrite names was written, measured to redden nothing, and
+  removed.
+- **Not the model's reading of a drug to give.** Decision 605's reading asks whether the question names its drug, and a
+  rewrite cannot answer that: it may have translated, dropped or replaced the name. E2B rewrote the same question as
+  *"Can I give him neem along with its medications?"*. No shape reads a name in that, and the reading took it for a drug
+  the question does not name. On the replica, before this condition, the answer led with the check choosing no drug,
+  beside the screen of his orders. The router's own choice of drug stands, because its grammar never reads a name as no
+  drug.
+- **Like Decision 489,** retrieval and the answering prompt keep the clinician's own words, and only the drug-safety
+  layer reads the rewrite.
+
+### Measured
+
+**Scripted.** The rewrite was scored over the 311 labelled questions of the first two refutation rounds and the eval,
+with Decision 607's reading and the real router's flags on both the original and the rewrite. The rule above was
+applied, and the outcome was right for:
+
+| | Before | After |
+|---|---|---|
+| E2B | 256 | 276 |
+| E4B | 260 | 281 |
+
+- E2B lost none.
+- E4B lost *"Is the COVID vaccine ok with her meds?"*. Its rewrite *"…safe to administer with her current medications"*
+  is no longer caught by Decision 492's rule.
+- Over the third round's 120 questions, E2B went from 76 to 88 and lost none. E4B went from 78 to 88 and lost *"Is
+  flucanazole ok with her meds?"* and *"Is diabetes ok with her medicines?"* to the same rewording.
+
+**On the demo replica (E2B), end to end.** A fourth round of 90 questions was written by an agent that had seen the
+code: 60 that must keep their answer, and 30 drug-safety questions in six languages or with typos. Each was asked before
+and after the change:
+
+| Should get | Before | After |
+|---|---|---|
+| The screen (15) | 4 | 10 |
+| The avoid lead (7) | 3 | 6 |
+| The choice lead (8) | 3 | 2 |
+| Today's answer kept (60) | 54 | 54 |
+
+- **The choice lead's one fewer** is a Luganda question that no wording rule stops, so the change never reaches it.
+  Asked alone it was led as before, and in a batch it was answered by the model, on both runs.
+- **No losses after the drug-to-give condition was added.** Before it, *"Alianza lini kutumia dawa za kifua kikuu?"*
+  (when he started his TB drugs) was rewritten by E2B as a proposal and answered with the choice lead.
+
+**Left as found.** Five of the 60 questions that must keep their answer were already led wrongly before this change, and
+no wording rule stops them. They are Decision 607's E2B misreads:
+
+- *"is metforman safe for his kidneys"*, *"can he hav gingko"*, *"can he get the hep b vacine"* and *"Ele pode fazer a
+  vacina da gripe?"*, which the three-call chain also led wrongly;
+- *"ok for him to hav a tooth extraction?"*, which the chain read correctly.
+
+**Cost:** one call, about 1 s on E2B, and only for a question a wording rule stopped.
+
+Pinned by `LlmInferenceServiceModelReadQuestionContextTest`:
+
+- `aQuestionAWordingRuleKeptFromTheReadingIsReadAgainInPlainEnglish`
+- `aRewriteNamingADrugTheQuestionDidNotIsNotUsed`
+- `aRewriteLeavingAWordUncheckedIsNotUsed`
+- `aRewriteTheModelReadsAsADrugToGiveIsNotUsed`
+- `aRewriteTheRouterReadsAsAChoiceOfDrugIsUsed`
+
+The first reddens without the change. The second and third redden without the screen condition, the second on the
+answer *"Yes — Ibuprofen interacts with this patient's active medications"*. The fourth reddens without the drug-to-give
+condition, on the replica's own rewrite.

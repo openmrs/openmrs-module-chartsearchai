@@ -27737,3 +27737,76 @@ medications?"* was still answered as a proposal of ibuprofen, and *"Can I give h
 
 Pinned by `LlmInferenceServiceModelReadQuestionContextTest.somethingProposedByAVerbOfGivingBesideHerMedicationsIsSaidToBeUnchecked`,
 which reddens without the change at the model's reading of the replica's own question.
+
+## Decision 607: The model reads a question in one call that names what it asks
+
+**Status**: Accepted (2026-11-09).
+
+### Context
+
+Decisions 489, 491 and 605 read a question with up to three yes/no calls, in order: whether it asks of drug safety at
+all, then whether it asks which drugs to avoid, then whether it proposes a drug it does not name. Each was measured on
+Gemma 4 E2B, the demo's model, alone. On Gemma 4 E4B, the module's default, the chain failed its own eval. The avoid call
+read yes for every proposal, so none of the 16 proposals of a drug the question does not name reached Decision 605's
+lead. It also read *"Should I stop any of his drugs?"* as asking which drugs to avoid. Rewording the yes/no prompts
+cannot fix an order-dependent chain whose two models pull the same wording opposite ways.
+
+### The decision
+
+- `LlmProvider.readMedicationSafetyQuestion` makes one call. Its prompt describes four answers, *her_medications*,
+  *drugs_to_avoid*, *a_drug_to_give* and *other*, and the model replies `{"asks": "<one of them>"}`. Any other reply,
+  a failed call or a blank question is no reading, and the router's reading stands, as before.
+- The reply is a free JSON object, validated in code, never a schema enumerating the four. Under such a schema neither
+  model ever answered *other*: 33 eval failures on E2B and 22 on E4B.
+- `readsAsADrugToGive`, Decision 605's call on a screen its safety words alone admitted, is that same call read as
+  *a_drug_to_give*.
+- What each answer runs is unchanged: Decisions 489, 491 and 605's fixed questions.
+
+### Measured
+
+**`MedicationSafetyQuestionEvalTest`**, run against tester-started llama-servers on 2026-11-09:
+
+- **E2B:** 0 failures. Two known gaps remain: *"Anything I need to watch out for before prescribing?"* and *"Can we try
+  something else?"*.
+- **E4B:** 0 failures, and one known gap, *"Can we try something else?"*.
+- *"Can I prescribe him something new?"*, *"¿Puedo darle algún medicamento?"* and *"Is it ok to keep giving all of these
+  together?"* are reached on both, so they leave `KNOWN_UNREACHED`.
+
+**Refutation rounds.** 259 questions written by two agents that had not seen the design, labelled by that test's
+categories. Each was read by the chain and the single call on both models, with the routing flags taken from the real
+`QueryScopeRouter` and scored by the test's rules. Of the 245 that reach the reading, the outcome was right for:
+
+| | Chain | Single call |
+|---|---|---|
+| E2B | 180 | 198 |
+| E4B | 182 | 201 |
+
+- **Mean time to a reading:** 0.9 to 1.0 s against 1.6 to 1.7 s on E2B, and 1.4 s against 2.8 s on E4B.
+- **E2B reads four worse than the chain:**
+  - *"Can she get the flu vaccine?"*, as a drug to give;
+  - *"meds?"*, as her medications;
+  - *"contraindicatd meds"*, as her medications rather than drugs to avoid;
+  - *"Is there something I can give that won't clash with her meds?"*, as her medications.
+- **E4B** reads none worse.
+- Each round found about two further one-off E2B misreads, so a round finding nothing new is not reachable on that model.
+
+**Rejected after measuring:**
+
+- **A reasoning field before the answer** was within one question of this either way. It added a failure to the eval on
+  E2B, and it doubled the time on both models, past the chain's own.
+- **Nine worked examples in the prompt** added two eval failures on E4B.
+- **A fifth answer for a question about a factor the findings do not weigh** read 23 of 24 such questions on E4B. On E2B
+  it sent 10 questions about her own medications to the model, so it waits on the choice of model.
+- **A reading in place of `UnrecognisedDrugName.asksOfOneThingInADrugsPlace` (Decision 514).** Of the 35 refutation
+  questions the single call got wrong because no reading was made, that gate stopped 34, most of them in other languages,
+  so it was a candidate for replacement. But the single call
+  read only 7 to 13% of the 872 questions in the test sources the gate stops as *other*, and it read *"amox ok?"* and
+  *"Can i give him high blood pressure?"* as a drug to give on both models. Those are the very wordings Decisions 514 and
+  564 were made for.
+
+**Left as found:** on E2B, *"Is the COVID vaccine safe to administer with her current medications?"* is still read as a
+drug to give, which Decision 605's call also read on both models. That is the safety-word leg's scope, which Decision 605
+named.
+
+Pinned by `LlmInferenceServiceModelReadQuestionContextTest`. Its reading tests assert one call in the free JSON-object
+format; nine of them redden on the three-call chain.

@@ -14,7 +14,9 @@ import java.util.concurrent.CancellationException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 
 import org.openmrs.module.chartsearchai.api.provider.CancellationSignal;
@@ -998,58 +1000,35 @@ public class LlmProvider {
 	}
 
 	/**
-	 * The words {@link #readMedicationSafetyQuestion} first asks the model in (ADR Decision 489). A constant because it is
-	 * a prompt: {@code MedicationSafetyQuestionEvalTest} scores these exact words and {@link #MEDICATION_SAFETY_FIELD}'s
-	 * format against a labelled set of questions, and rewording either is a change to measure there first. Measured: the
-	 * same instruction ending in a request for a {@code "verdicts"} array of YES or NO, in the grounding call's format,
-	 * read five of the six wordings it exists for as NO; and asking it for a second field in the same reply read six
-	 * drug-safety questions as not being one (ADR Decision 491), which is why that is a call of its own.
+	 * The words {@link #readMedicationSafetyQuestion} asks the model in (ADR Decisions 489, 491, 605, 607): one call that
+	 * names what the question asks, as one of four answers. A constant because it is a prompt: {@code
+	 * MedicationSafetyQuestionEvalTest} scores these exact words against a labelled set of questions, and rewording them is
+	 * a change to measure there first, against the demo's model and the module's default alike. Measured (ADR Decision
+	 * 607): the chain of yes/no calls it replaced read its eval correctly on the demo's model and not on the default one,
+	 * whose avoid call pre-empted every proposal; asking for the answer through a schema enumerating the four was never
+	 * answered {@code other} by either model, so the reply is a free JSON object validated here.
 	 */
 	static final String MEDICATION_SAFETY_QUESTION_SYSTEM_PROMPT = "You classify one question a clinician typed about "
-			+ "their patient. Set drug_safety to true when the question asks whether any drug - one the patient takes or one "
-			+ "being considered - is safe for this patient, interacts, is contraindicated, should be avoided, stopped or "
-			+ "not given, or causes a problem. Set it to false for every other question, including ones that only ask which "
-			+ "drugs the patient takes, a dose, a date, or why a drug was given. Set it to false as well when the question "
-			+ "asks about something else beside the patient's drugs - a food or drink, smoking or another activity, a "
-			+ "vaccine, a procedure or giving blood, when or how to take them, or whether they cause a symptom, a weight "
-			+ "change or an abnormal result - since it asks about that other thing, not whether a drug is safe.";
+			+ "their patient. Choose the one answer that fits it best.\n"
+			+ "her_medications: it asks whether the drugs the patient already takes are safe, interact with each other, are "
+			+ "contraindicated, or should be stopped or changed - not merely which drugs they are.\n"
+			+ "drugs_to_avoid: it asks which drugs should not be given, prescribed or added for the patient.\n"
+			+ "a_drug_to_give: it asks whether the patient can be given, started on or prescribed some drug that the question "
+			+ "does not name, or which such drug to give.\n"
+			+ "other: anything else - including a request to list or name the drugs the patient takes, however short, a dose, "
+			+ "a date or why a drug was given - and a question about something beside the drugs: a food or drink, smoking or "
+			+ "another activity, a vaccine, a procedure or giving blood, when or how to take them, or whether they cause a "
+			+ "symptom, a weight change or an abnormal result.\n"
+			+ "Reply with JSON {\"asks\": \"<one of: her_medications, drugs_to_avoid, a_drug_to_give, other>\"}.";
 
-	/** The first reply's one field, a JSON boolean. */
-	static final String MEDICATION_SAFETY_FIELD = "drug_safety";
-
-	/**
-	 * The words {@link #readMedicationSafetyQuestion} asks in its second call, made only after a YES (ADR Decision 491):
-	 * whether the question asks which drugs not to give her, rather than about the drugs she takes. Scored by {@code
-	 * MedicationSafetyQuestionEvalTest} as the first is.
-	 */
-	static final String DRUGS_TO_AVOID_QUESTION_SYSTEM_PROMPT = "You classify one question a clinician typed about their "
-			+ "patient's drugs. Set asks_which_drugs_to_avoid to true when the question asks which drugs should not be given "
-			+ "or prescribed to this patient. Set it to false when it asks about the drugs the patient already takes - "
-			+ "whether they are safe together, interact, or should be stopped.";
-
-	/** The second reply's one field, a JSON boolean. */
-	static final String DRUGS_TO_AVOID_FIELD = "asks_which_drugs_to_avoid";
-
-	/**
-	 * The words {@link #readMedicationSafetyQuestion} asks in its third call, made only after a YES that its second call read
-	 * as not asking which drugs to avoid (ADR Decision 605): whether the question proposes giving her a drug it does not
-	 * name, rather than asking about the drugs she takes. Scored by {@code MedicationSafetyQuestionEvalTest} as the first
-	 * two are.
-	 */
-	static final String A_DRUG_TO_GIVE_QUESTION_SYSTEM_PROMPT = "You classify one question a clinician typed about their "
-			+ "patient's drugs. Set asks_about_a_drug_to_give to true when the question asks whether the patient can be "
-			+ "given, started on or prescribed a drug that the question does not name - any drug, a new medication, "
-			+ "something, another medicine - or which such drug to give. Set it to false when it asks about the drugs the "
-			+ "patient already takes - whether they are safe together, interact, or should be stopped or continued.";
-
-	/** The third reply's one field, a JSON boolean. */
-	static final String A_DRUG_TO_GIVE_FIELD = "asks_about_a_drug_to_give";
+	/** The reply's one field, naming one of {@link #MEDICATION_SAFETY_ANSWERS}. */
+	static final String MEDICATION_SAFETY_FIELD = "asks";
 
 	/** How long the model may take to read a question (ADR Decision 489): it reads one sentence, so a slow reply is a
 	 *  busy or failing engine, and the question then goes on as the router read it rather than waiting. */
 	static final int MEDICATION_SAFETY_QUESTION_TIMEOUT_SECONDS = 20;
 
-	/** What the model read a question as asking (ADR Decisions 489, 491). */
+	/** What the model read a question as asking (ADR Decisions 489, 491, 605). */
 	public enum MedicationSafetyReading {
 
 		/** Nothing about the safety of a drug for this patient. */
@@ -1065,94 +1044,66 @@ public class LlmProvider {
 		A_DRUG_TO_GIVE
 	}
 
+	/** The answers {@link #MEDICATION_SAFETY_QUESTION_SYSTEM_PROMPT} names, each as the reading it is. Any other reply is
+	 *  no reading. */
+	private static final Map<String, MedicationSafetyReading> MEDICATION_SAFETY_ANSWERS;
+
+	static {
+		Map<String, MedicationSafetyReading> answers = new HashMap<String, MedicationSafetyReading>();
+		answers.put("her_medications", MedicationSafetyReading.HER_MEDICATIONS);
+		answers.put("drugs_to_avoid", MedicationSafetyReading.DRUGS_TO_AVOID);
+		answers.put("a_drug_to_give", MedicationSafetyReading.A_DRUG_TO_GIVE);
+		answers.put("other", MedicationSafetyReading.OTHER);
+		MEDICATION_SAFETY_ANSWERS = Collections.unmodifiableMap(answers);
+	}
+
 	/**
-	 * What {@code question} asks about the safety of drugs for the patient, as the model reads it (ADR Decisions 489,
-	 * 491) — asked only where {@code QueryScopeRouter}'s closed grammar ran no screen of her medications for a question
-	 * naming no drug, so a wording it does not know still reaches the module's medication check. One short call whether it
-	 * asks about drug safety at all; after a YES, a second whether it asks which drugs not to give her. A failed or
-	 * unreadable second call reads as {@link MedicationSafetyReading#HER_MEDICATIONS}, the screen's own lead.
+	 * What {@code question} asks about the safety of drugs for the patient, as the model reads it (ADR Decisions 489, 491,
+	 * 605, 607) — asked only where {@code QueryScopeRouter}'s closed grammar ran no screen of her medications for a question
+	 * naming no drug, so a wording it does not know still reaches the module's medication check. One short call, whose
+	 * reply names one of the four readings.
 	 *
-	 * @return the reading, or {@code null} where the question is blank or the first call failed or replied with no
-	 *         readable verdict — the caller then keeps the router's reading, which is what it did before
+	 * @return the reading, or {@code null} where the question is blank, the call failed, or the reply named none of the
+	 *         four — the caller then keeps the router's reading, which is what it did before
 	 */
 	public MedicationSafetyReading readMedicationSafetyQuestion(String question) {
 		if (question == null || question.trim().isEmpty()) {
 			return null;
 		}
-		Boolean asksAboutDrugSafety = readOneBoolean(MEDICATION_SAFETY_QUESTION_SYSTEM_PROMPT, MEDICATION_SAFETY_FIELD,
-			question);
-		if (asksAboutDrugSafety == null) {
-			return null;
-		}
-		if (!asksAboutDrugSafety.booleanValue()) {
-			return MedicationSafetyReading.OTHER;
-		}
-		return readAfterItsDrugSafety(question);
-	}
-
-	/**
-	 * What a question already read as a drug-safety question asks (ADR Decisions 491, 605): which drugs to avoid, a drug it
-	 * does not name to give her, or else her medications. The second call is asked first because the third, asked alone,
-	 * reads "What medications should he avoid?" as proposing a drug.
-	 */
-	private MedicationSafetyReading readAfterItsDrugSafety(String question) {
-		if (Boolean.TRUE.equals(readOneBoolean(DRUGS_TO_AVOID_QUESTION_SYSTEM_PROMPT, DRUGS_TO_AVOID_FIELD, question))) {
-			return MedicationSafetyReading.DRUGS_TO_AVOID;
-		}
-		return Boolean.TRUE.equals(readOneBoolean(A_DRUG_TO_GIVE_QUESTION_SYSTEM_PROMPT, A_DRUG_TO_GIVE_FIELD, question))
-				? MedicationSafetyReading.A_DRUG_TO_GIVE : MedicationSafetyReading.HER_MEDICATIONS;
-	}
-
-	/**
-	 * Whether the model reads {@code question}, which the router already reads as a drug-safety question, as proposing to
-	 * give her a drug it does not name (ADR Decision 605): {@link #readMedicationSafetyQuestion}'s second and third calls,
-	 * without its first. A failed or unreadable reply reads as no.
-	 */
-	public boolean readsAsADrugToGive(String question) {
-		return question != null && !question.trim().isEmpty()
-				&& readAfterItsDrugSafety(question) == MedicationSafetyReading.A_DRUG_TO_GIVE;
-	}
-
-	/** One call whose reply is constrained to {@code {"<field>": true|false}}; {@code null} on any failure. */
-	private Boolean readOneBoolean(String systemPrompt, String field, String question) {
 		LlmEngine engine = getActiveEngine();
 		if (engine == null) {
 			return null;
 		}
 		try {
-			LlmEngine.InferenceResult inference = engine.infer(systemPrompt, question.trim(),
-				Math.min(getTimeoutSeconds(), MEDICATION_SAFETY_QUESTION_TIMEOUT_SECONDS), oneBooleanResponseFormat(field));
+			LlmEngine.InferenceResult inference = engine.infer(MEDICATION_SAFETY_QUESTION_SYSTEM_PROMPT, question.trim(),
+				Math.min(getTimeoutSeconds(), MEDICATION_SAFETY_QUESTION_TIMEOUT_SECONDS), medicationSafetyResponseFormat());
 			String text = inference == null ? null : inference.getText();
 			if (text == null || text.trim().isEmpty()) {
 				return null;
 			}
-			JsonNode verdict = MAPPER.readTree(text).get(field);
-			return verdict != null && verdict.isBoolean() ? Boolean.valueOf(verdict.booleanValue()) : null;
+			JsonNode answer = MAPPER.readTree(text).get(MEDICATION_SAFETY_FIELD);
+			return answer != null && answer.isTextual() ? MEDICATION_SAFETY_ANSWERS.get(answer.textValue()) : null;
 		}
 		catch (JsonProcessingException | RuntimeException e) {
-			log.warn("The model could not read the question's {}; keeping the router's reading: {}", field, e.toString());
+			log.warn("The model could not read the question; keeping the router's reading: {}", e.toString());
 			return null;
 		}
 	}
 
-	/** {@code {"<field>": boolean}}, required and alone — the format the reading was measured in. */
-	static ObjectNode oneBooleanResponseFormat(String field) {
-		ObjectNode type = MAPPER.createObjectNode();
-		type.put("type", "boolean");
-		ObjectNode properties = MAPPER.createObjectNode();
-		properties.set(field, type);
-		ObjectNode schema = MAPPER.createObjectNode();
-		schema.put("type", "object");
-		schema.set("properties", properties);
-		schema.set("required", MAPPER.createArrayNode().add(field));
-		schema.put("additionalProperties", false);
-		ObjectNode jsonSchema = MAPPER.createObjectNode();
-		jsonSchema.put("name", "medication_safety_question");
-		jsonSchema.put("strict", true);
-		jsonSchema.set("schema", schema);
+	/**
+	 * Whether the model reads {@code question}, which the router already reads as a drug-safety question, as proposing to
+	 * give her a drug it does not name (ADR Decisions 605, 607): {@link #readMedicationSafetyQuestion}'s one call. A failed
+	 * or unreadable reply reads as no.
+	 */
+	public boolean readsAsADrugToGive(String question) {
+		return readMedicationSafetyQuestion(question) == MedicationSafetyReading.A_DRUG_TO_GIVE;
+	}
+
+	/** {@code {"type": "json_object"}}: a JSON reply, its answer validated by {@link #readMedicationSafetyQuestion} rather
+	 *  than enumerated in a schema, which neither measured model ever answered {@code other} under (ADR Decision 607). */
+	static ObjectNode medicationSafetyResponseFormat() {
 		ObjectNode responseFormat = MAPPER.createObjectNode();
-		responseFormat.put("type", "json_schema");
-		responseFormat.set("json_schema", jsonSchema);
+		responseFormat.put("type", "json_object");
 		return responseFormat;
 	}
 

@@ -214,15 +214,19 @@ hold:
   about a drug's record or how she takes it, not one thing asked in a drug's place, and not about
   drug resistance.
 
-The call is a constrained yes/no classification, not an answer. A YES injects again for a fixed
-question, `QueryScopeRouter.MEDICATION_CHECK_QUESTION` ("Does this patient have any drug interactions
-or contraindications?"). Where a second call reads the question as asking which drugs to avoid, the
-fixed question is `DRUGS_TO_AVOID_QUESTION` instead
-([ADR Decision 491](adr.md#decision-491-a-question-the-model-reads-as-asking-which-drugs-to-avoid-says-the-check-lists-none-and-what-a-reading-costs-on-the-demo)).
+The call is one classification, not an answer: the model names one of four answers, and any other
+reply is no reading
+([ADR Decision 607](adr.md#decision-607-the-model-reads-a-question-in-one-call-that-names-what-it-asks)).
+Her medications injects again for a fixed question, `QueryScopeRouter.MEDICATION_CHECK_QUESTION`
+("Does this patient have any drug interactions or contraindications?"). Drugs to avoid injects for
+`DRUGS_TO_AVOID_QUESTION` instead
+([ADR Decision 491](adr.md#decision-491-a-question-the-model-reads-as-asking-which-drugs-to-avoid-says-the-check-lists-none-and-what-a-reading-costs-on-the-demo)),
+and a drug the question does not name for `A_DRUG_TO_GIVE_QUESTION`
+([ADR Decision 605](adr.md#decision-605-a-question-proposing-a-drug-it-does-not-name-is-read-as-that-choice-by-the-model-where-the-words-cannot-tell)).
 Every drug-safety step after that, the validator's post-answer pass included, reads the fixed
 question. Retrieval and the answering prompt keep the clinician's own words.
 
-**It only adds checks.** A NO, an unreadable reply or a failed model call keeps the first injection.
+**It only adds checks.** An answer of something else, an unreadable reply or a failed model call keeps the first injection.
 The model never removes a check the code chose to run, and never decides which drugs a question
 names. `MedicationSafetyQuestionEvalTest` (opt-in, against a real model) scores the exact prompt.
 

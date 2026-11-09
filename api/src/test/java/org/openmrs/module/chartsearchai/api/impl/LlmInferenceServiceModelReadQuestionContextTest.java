@@ -65,10 +65,11 @@ public class LlmInferenceServiceModelReadQuestionContextTest extends BaseModuleC
 		ChartAnswer answer = serviceWith(provider).search(patient, UNKNOWN_WORDING);
 
 		assertEquals(1, provider.engine.readings, "the model was asked to read the question once");
-		assertEquals(1, provider.engine.avoidReadings, "and, after its YES, whether it asks which drugs to avoid");
+		assertEquals(1, provider.engine.calls, "in one call, which names what the question asks (ADR Decision 607)");
 		assertEquals(LlmProvider.MEDICATION_SAFETY_QUESTION_SYSTEM_PROMPT, provider.engine.readingPrompt);
-		assertEquals(LlmProvider.oneBooleanResponseFormat(LlmProvider.MEDICATION_SAFETY_FIELD), provider.engine.readingFormat,
-			"constrained to the format the reading was measured in");
+		assertEquals("json_object", provider.engine.readingFormat.path("type").asText(),
+			"a free JSON object, the format the reading was measured in: a schema enumerating the four answers was never "
+					+ "answered OTHER (ADR Decision 607)");
 		assertEquals(UNKNOWN_WORDING, provider.engine.readQuestion, "the model reads the question as typed");
 		assertTrue(answer.isAnsweredByTheModule(), "the medication check answered it: " + answer.getAnswer());
 		assertEquals(0, provider.answers, "no model answer was asked for");
@@ -123,8 +124,7 @@ public class LlmInferenceServiceModelReadQuestionContextTest extends BaseModuleC
 		ChartAnswer answer = serviceWith(provider).search(patient, "Can I give her any drug?");
 
 		assertEquals(1, provider.engine.readings, "the model read the question");
-		assertEquals(1, provider.engine.avoidReadings);
-		assertEquals(1, provider.engine.giveReadings, "and, as not asking which drugs to avoid, whether it proposes one");
+		assertEquals(1, provider.engine.calls, "in one call (ADR Decision 607)");
 		assertTrue(answer.isAnsweredByTheModule(), "was: " + answer.getAnswer());
 		assertEquals(CHOOSES_NO_DRUG, answer.getAnswer().split("\n")[0], "was: " + answer.getAnswer());
 		assertTrue(answer.getAnswer().contains(" interacts with active order "), "and states the findings: "
@@ -132,18 +132,17 @@ public class LlmInferenceServiceModelReadQuestionContextTest extends BaseModuleC
 	}
 
 	/**
-	 * The same where the router's safety words alone admitted the screen: the model is asked only whether it proposes a drug
-	 * it does not name, after whether it asks which to avoid, and a yes answers it as that choice (ADR Decision 605). "Is any
-	 * drug safe for him?" was answered with the screen alone.
+	 * The same where the router's safety words alone admitted the screen: the model reads it, and a reading of a drug it does
+	 * not name answers it as that choice (ADR Decisions 605, 607). "Is any drug safe for him?" was answered with the screen
+	 * alone.
 	 */
 	@Test
 	public void aScreenAdmittedByItsSafetyWordsAloneIsAnsweredAsAChoiceWhereTheModelReadsItSo() {
 		RecordingProvider provider = new RecordingProvider("GIVE");
 		ChartAnswer answer = serviceWith(provider).search(patient, "Is any drug safe for her?");
 
-		assertEquals(0, provider.engine.readings, "the router read it as a drug-safety question");
-		assertEquals(1, provider.engine.avoidReadings);
-		assertEquals(1, provider.engine.giveReadings);
+		assertEquals(1, provider.engine.readings, "the model read it");
+		assertEquals(1, provider.engine.calls, "in one call (ADR Decision 607)");
 		assertTrue(answer.isAnsweredByTheModule(), "was: " + answer.getAnswer());
 		assertEquals(CHOOSES_NO_DRUG, answer.getAnswer().split("\n")[0], "was: " + answer.getAnswer());
 	}
@@ -154,7 +153,7 @@ public class LlmInferenceServiceModelReadQuestionContextTest extends BaseModuleC
 		RecordingProvider provider = new RecordingProvider("YES");
 		ChartAnswer answer = serviceWith(provider).search(patient, "Is any drug safe for her?");
 
-		assertEquals(1, provider.engine.giveReadings);
+		assertEquals(1, provider.engine.readings);
 		assertTrue(answer.isAnsweredByTheModule(), "was: " + answer.getAnswer());
 		assertFalse(answer.getAnswer().contains(CHOOSES_NO_DRUG), "was: " + answer.getAnswer());
 	}
@@ -165,7 +164,7 @@ public class LlmInferenceServiceModelReadQuestionContextTest extends BaseModuleC
 		RecordingProvider provider = new RecordingProvider("GIVE");
 		ChartAnswer answer = serviceWith(provider).search(patient, "Are her current medications safe to take together?");
 
-		assertEquals(0, provider.engine.avoidReadings + provider.engine.giveReadings);
+		assertEquals(0, provider.engine.calls);
 		assertFalse(answer.getAnswer().contains(CHOOSES_NO_DRUG), "was: " + answer.getAnswer());
 	}
 
@@ -195,7 +194,7 @@ public class LlmInferenceServiceModelReadQuestionContextTest extends BaseModuleC
 		ChartAnswer answer = serviceWith(provider).search(patient, UNKNOWN_WORDING);
 
 		assertEquals(1, provider.engine.readings);
-		assertEquals(0, provider.engine.avoidReadings, "the second call follows a YES only");
+		assertEquals(1, provider.engine.calls, "and nothing after it (ADR Decision 607)");
 		assertFalse(answer.isAnsweredByTheModule());
 		assertEquals(1, provider.answers, "the model answered it, as before");
 		assertTrue(answer.getSafetyWarnings().isEmpty(), "and no check ran: " + answer.getSafetyWarnings());
@@ -702,22 +701,18 @@ public class LlmInferenceServiceModelReadQuestionContextTest extends BaseModuleC
 		}
 	}
 
-	/** Answers the first reading call with {@code verdict} — YES, NO, AVOID for a YES whose second call reads it as
-	 *  asking which drugs to avoid, or GIVE for a YES whose third call reads it as proposing a drug it does not name — or
-	 *  with {@code verdict} verbatim where it is none of those, or fails it where {@code verdict} is null; the second call
-	 *  with whether {@code verdict} is AVOID, and the third with whether it is GIVE. */
+	/** Answers the reading call with what {@code verdict} names — YES her medications, NO something else, AVOID which drugs
+	 *  to avoid, GIVE a drug the question does not name — or with {@code verdict} verbatim where it is none of those, or
+	 *  fails it where {@code verdict} is null (ADR Decision 607). */
 	private static final class ReadingEngine implements LlmEngine {
 
 		private final String verdict;
 
-		/** The first call's, whether the question asks about drug safety at all. */
+		/** The reading calls, in the reading's own words. */
 		private int readings;
 
-		/** The second call's, made only after a YES. */
-		private int avoidReadings;
-
-		/** The third call's, made only where the second read no drugs to avoid. */
-		private int giveReadings;
+		/** Every call this engine was asked. */
+		private int calls;
 
 		private String readingPrompt;
 
@@ -732,15 +727,9 @@ public class LlmInferenceServiceModelReadQuestionContextTest extends BaseModuleC
 		@Override
 		public InferenceResult infer(String systemPrompt, String userMessage, int timeoutSeconds,
 				ObjectNode responseFormat) {
-			if (LlmProvider.A_DRUG_TO_GIVE_QUESTION_SYSTEM_PROMPT.equals(systemPrompt)) {
-				giveReadings++;
-				return new InferenceResult("{\"" + LlmProvider.A_DRUG_TO_GIVE_FIELD + "\": " + "GIVE".equals(verdict) + "}",
-						1, 1, 0);
-			}
-			if (LlmProvider.DRUGS_TO_AVOID_QUESTION_SYSTEM_PROMPT.equals(systemPrompt)) {
-				avoidReadings++;
-				return new InferenceResult("{\"" + LlmProvider.DRUGS_TO_AVOID_FIELD + "\": " + "AVOID".equals(verdict) + "}",
-						1, 1, 0);
+			calls++;
+			if (!LlmProvider.MEDICATION_SAFETY_QUESTION_SYSTEM_PROMPT.equals(systemPrompt)) {
+				return new InferenceResult("{}", 1, 1, 0);
 			}
 			readings++;
 			readingPrompt = systemPrompt;
@@ -749,9 +738,10 @@ public class LlmInferenceServiceModelReadQuestionContextTest extends BaseModuleC
 			if (verdict == null) {
 				throw new IllegalStateException("engine down");
 			}
-			String text = "YES".equals(verdict) || "NO".equals(verdict) || "AVOID".equals(verdict) || "GIVE".equals(verdict)
-					? "{\"" + LlmProvider.MEDICATION_SAFETY_FIELD + "\": " + !"NO".equals(verdict) + "}" : verdict;
-			return new InferenceResult(text, 1, 1, 0);
+			String label = "YES".equals(verdict) ? "her_medications" : "NO".equals(verdict) ? "other"
+					: "AVOID".equals(verdict) ? "drugs_to_avoid" : "GIVE".equals(verdict) ? "a_drug_to_give" : null;
+			return new InferenceResult(label == null ? verdict
+					: "{\"" + LlmProvider.MEDICATION_SAFETY_FIELD + "\": \"" + label + "\"}", 1, 1, 0);
 		}
 
 		@Override

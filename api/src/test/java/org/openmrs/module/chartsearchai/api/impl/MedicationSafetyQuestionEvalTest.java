@@ -84,10 +84,9 @@ public class MedicationSafetyQuestionEvalTest {
 
 	/** Drug-safety questions measured to reach neither the router nor the model (ADR Decisions 491, 605). */
 	private static final java.util.Set<String> KNOWN_UNREACHED = new java.util.HashSet<String>(java.util.Arrays.asList(
-		"Is it ok to keep giving all of these together?", "Anything I need to watch out for before prescribing?",
-		// and, on 2026-11-08, three the first call reads as no drug-safety question, which the model answers as before (ADR
-		// Decision 605)
-		"Can we try something else?", "Can I prescribe him something new?", "¿Puedo darle algún medicamento?"));
+		"Anything I need to watch out for before prescribing?",
+		// and one the reading names something else, which the model answers as before (ADR Decisions 605, 607)
+		"Can we try something else?"));
 
 	/** Questions that ask nothing of a drug's safety, medication questions among them. */
 	private static final String[] ASKS_SOMETHING_ELSE = { "What is his blood pressure?", "What medications is he on?",

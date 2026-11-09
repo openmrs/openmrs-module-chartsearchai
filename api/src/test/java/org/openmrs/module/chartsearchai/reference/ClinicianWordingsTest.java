@@ -2260,6 +2260,29 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		assertNull(ask("Should I swap nevirapine for warfarin because of the rash?"));
 	}
 
+	/**
+	 * ADR Decision 612: allergy conflicts asked with no drug, a problem with her drug and her other medicines, her drug safe with a group of hers, and a prescription causing problems are the questions the module
+	 * already answers. On the demo replica the model answered each, among them "No — there are several safety findings" and,
+	 * to a patient on no medication, "Erythromycin has major interactions with ivosidenib, ketoconazole, …".
+	 */
+	@Test
+	public void allergyConflictsAndAProblemWithHerDrugAskTheModulesQuestion() {
+		String[][] pairs = { { "Any drug-allergy conflicts?", "Is she allergic to any of her medications?" },
+			{ "Any drug allergy conflicts with her medications?", "Is she allergic to any of her medications?" },
+			{ "Is there a problem with her nevirapine and her other medicines?", "Does her nevirapine interact with her other medications?" },
+			{ "Will my prescription of warfarin cause problems?", "Would warfarin be a problem with her current meds?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+		// Her drug named as hers beside a group of hers is the same question, and says when it is not hers.
+		String hers = ask("Is her warfarin safe with her ARVs?");
+		assertNotNull(hers, "the module answers it");
+		assertTrue(hers.contains("\nWarfarin is not one of this patient's active medications.\n"), hers);
+		assertTrue(hers.contains("\nNo — this module's drug-safety check found a reason to withhold Warfarin.\n"), hers);
+	}
+
 	/** ADR Decision 536: screening a drug, and a drug messing, interfering or conflicting with her medications, ask its interactions. */
 	@Test
 	public void screeningADrugOrItMessingWithHerMedicationsAsksItsInteractions() {

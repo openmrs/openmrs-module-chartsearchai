@@ -28047,3 +28047,49 @@ Pinned by `ClinicianWordingsTest.aSwapForHerTreatmentOrWhatOneDrugCausesBesideAn
 without the change on its first wording; its *"because of the rash"* control stays the model's) and the two new cases of
 `LlmInferenceServiceModelReadQuestionContextTest.somethingProposedByAVerbOfGivingBesideHerMedicationsIsSaidToBeUnchecked`
 (red without the change on *"Starting boldo today, any issues with her ARVs?"*).
+
+## Decision 612: Allergy conflicts asked with no drug, a problem with her drug and her other medicines, her drug beside a group of hers, and a prescription causing problems
+
+**Status: Accepted** (November 2026). Found by a fourth sweep of 8 patients by 30 drug-safety questions on the demo
+replica on 2026-11-09. Two of the patients have a recorded penicillin allergy, and one has no orders.
+
+### Context
+
+Four wordings went to the model on every patient, and it answered them wrongly:
+
+- *"Any drug-allergy conflicts?"* — dd66f161, with no allergy recorded, was told *"No — there are safety findings
+  regarding possible duplicate therapy"*.
+- *"Is there a problem with his isoniazid and his other medicines?"* — led *"No — there are several safety findings"*.
+  dd5562bb, who has no orders, was given isoniazid's reference partners (ketoconazole, leflunomide, …) as if they
+  mattered to her.
+- *"Is his co-trimoxazole safe with his ARVs?"* — led *"No"* above Moderate and Minor cautions.
+- *"Will my prescription of erythromycin cause problems?"* — dd5562bb was told *"Erythromycin has major interactions with
+  ivosidenib, ketoconazole, lefamulin, …"*.
+
+### The decision
+
+- `ALLERGIC_TO_HER_MEDICATIONS_SHAPES` reads *"any drug-allergy conflicts / clashes / issues (with her medications)"*.
+  Decision 295's answer follows.
+- `INTERACTS_WITH_HER_MEDICATIONS_SHAPES` reads *"is there a problem with her X and her other medicines"*.
+- `SAFE_WITH_A_GROUP_OF_HER_MEDICATIONS` takes X named as hers: *"is her X safe with her ARVs"*. Decision 315 already says
+  the same of her X with no group.
+- `SAFE_WITH_HER_MEDICATIONS_SHAPES` reads *"will (my) prescription / use of X cause problems (with her medications)"*.
+- `A_GROUP_OF_HER_MEDICATIONS` never takes a word that opens a second possessive. Without this, *"her nevirapine and her
+  other medicines"* was read as one group named *"nevirapine and her other medicines"*, and the answer opened *"This check
+  cannot tell which of this patient's active medications are the "nevirapine and her other medicines""*. *"Her TB and
+  HIV meds"* is still one group.
+
+**On the replica**, the four questions on 6 of those patients: 24 of 24 module-answered after.
+
+**Left as found.**
+
+- *"Can I give amoxicillin given her allergies?"* stays the model's. The model answered it rightly for the penicillin
+  allergy (*"No — amoxicillin should not be given …"*), and with *"The records do not address"* elsewhere. A proposal
+  with a condition reads the clause before the allergy shape does, so routing it needs a decision about that order.
+- *"Is ceftriaxone ok with his penicillin allergy?"* stays the model's. The module carries no cephalosporin group, so its
+  answer would be *"None of this patient's recorded drug allergies … relates to Ceftriaxone"*. Whether that may be said
+  without naming the group's limit needs its owner's decision.
+- *"vitamin B6"* is not a name the drug data knows. Pyridoxine is.
+
+Pinned by `ClinicianWordingsTest.allergyConflictsAndAProblemWithHerDrugAskTheModulesQuestion`, red without the change on
+its first wording.

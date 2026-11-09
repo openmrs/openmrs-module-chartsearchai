@@ -942,6 +942,10 @@ public final class QueryScopeRouter {
 			// and "Any problems with her metronidazole?", answered from the same check (ADR Decision 339)
 			"(?:(?:are|is) there )?any (?:drug )?(?:interactions?|problems?|probs?|issues?|concerns?) with (?:" + POSSESSIVE + " )?"
 					+ D,
+			// "Is there a problem with her isoniazid and her other medicines?" — led "No — there are several safety findings";
+			// for a patient on no isoniazid the model recited its reference record's Major partners (ADR Decision 612)
+			"is there (?:a|any) problem with (?:" + POSSESSIVE + " )?" + D + " and (?:any of )?" + POSSESSIVE + " (?:other )?"
+					+ MEDICATIONS,
 			// "Interactions for fluconazole?" (ADR Decision 440)
 			"(?:(?:are|is) there )?(?:any )?(?:drug )?interactions? (?:for|of) " + D,
 			// "List the interactions of his isoniazid", "What are the interactions of her nevirapine?" — the model listed his
@@ -1326,8 +1330,13 @@ public final class QueryScopeRouter {
 		return words != null && ENDS_ON_A_MEDICATION_GROUP_NOUN.matcher(words.toLowerCase(Locale.ROOT).trim()).find();
 	}
 
-	private static final Pattern A_GROUP_OF_HER_MEDICATIONS = Pattern.compile("(?:^| )" + POSSESSIVE + " ((?:\\p{L}+ ){0,2}"
-			+ "(?:and (?:\\p{L}+ ){1,2})?" + MEDICATION_GROUP_NOUN + ")(?= |$)", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+	// Never a word that opens a second possessive: "her nevirapine and her other medicines" is her drug and then her
+	// medications, never one group named "nevirapine and her other medicines" (ADR Decision 612). "Her TB and HIV meds" is.
+	private static final String A_GROUP_WORD = "(?!(?:her|his|their) )\\p{L}+ ";
+
+	private static final Pattern A_GROUP_OF_HER_MEDICATIONS = Pattern.compile("(?:^| )" + POSSESSIVE + " ((?:" + A_GROUP_WORD
+			+ "){0,2}(?:and (?:" + A_GROUP_WORD + "){1,2})?" + MEDICATION_GROUP_NOUN + ")(?= |$)", Pattern.CASE_INSENSITIVE
+			| Pattern.UNICODE_CASE);
 
 	/** "Her regimen", "his current medications": every medication she takes, no group within them. */
 	private static final Pattern EVERY_MEDICATION_SHE_TAKES = Pattern.compile("(?:(?:other|current|active|usual|regular|daily"
@@ -1572,7 +1581,7 @@ public final class QueryScopeRouter {
 
 	/** "Is dolutegravir safe with her TB preventive therapy?" — one drug beside a group of her medications (ADR Decision
 	 *  313), answered as beside her medications under a lead naming the group. */
-	private static final String SAFE_WITH_A_GROUP_OF_HER_MEDICATIONS = "(?:is " + D + " (?:safe|ok|okay|appropriate)"
+	private static final String SAFE_WITH_A_GROUP_OF_HER_MEDICATIONS = "(?:is (?:" + POSSESSIVE + " )?" + D + " (?:safe|ok|okay|appropriate)"
 			+ "(?: to (?:give|take|use|start))?"
 			// "Is it ok to combine ciprofloxacin with her ART?" (ADR Decision 422)
 			+ "|is it (?:safe|ok|okay|appropriate) to combine " + D + ")"
@@ -1596,6 +1605,10 @@ public final class QueryScopeRouter {
 			// 394)
 			"(?:what|which) (?:dose|dosage|amount) of " + D + " (?:is|would be) (?:safe|ok|okay|appropriate) (?:with|alongside) (?:any "
 					+ "of )?" + POSSESSIVE + " (?:other )?" + MEDICATIONS,
+			// "Will my prescription of erythromycin cause problems?" — for a patient on no medication the model listed its
+			// reference record's Major partners (ADR Decision 612)
+			"(?:will|would|could|might) (?:my |the |this )?(?:prescription|prescribing|use|addition) of " + D + " cause (?:any )?"
+					+ "(?:problems?|issues?)(?: (?:with|for) (?:any of )?" + POSSESSIVE + " (?:other )?" + MEDICATIONS + ")?",
 			// "What about warfarin, any problem with her meds?" — the model recited the warfarin record whole (ADR Decision 609)
 			"(?:what|how) about " + D + " (?:(?:is there )?any )?(?:problems?|issues?|concerns?) with (?:any of )?" + POSSESSIVE
 					+ " (?:other )?" + MEDICATIONS,
@@ -4063,6 +4076,10 @@ public final class QueryScopeRouter {
 					+ POSSESSIVE + " " + MEDICATIONS + ")?",
 			// "Does she have an allergy to any of her medications?"
 			"(?:does|do) " + SUBJECT + " have (?:an |any )?allerg(?:y|ies) to any of " + POSSESSIVE + " " + MEDICATIONS,
+			// "Any drug-allergy conflicts?" — the model told a patient with no allergy recorded "No — there are safety findings
+			// regarding possible duplicate therapy" (ADR Decision 612)
+			"(?:(?:are|is) there )?any (?:drug |medication )?(?:allergy|allergic) (?:conflicts?|clash(?:es)?|issues?|problems?)(?: "
+					+ "(?:with|in|among) " + POSSESSIVE + " " + MEDICATIONS + ")?",
 			// "Is she on anything she is allergic to?", "Is she taking any medication she's allergic to?"
 			"(?:is|are) " + SUBJECT + " (?:on|taking|receiving) (?:anything|any (?:medications?|meds|medicines?|drugs?))"
 					+ " (?:that )?" + ALLERGIC + " to",

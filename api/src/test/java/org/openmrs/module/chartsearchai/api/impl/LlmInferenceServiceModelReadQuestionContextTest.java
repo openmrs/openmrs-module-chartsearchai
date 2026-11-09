@@ -418,7 +418,11 @@ public class LlmInferenceServiceModelReadQuestionContextTest extends BaseModuleC
 	public void somethingProposedByAVerbOfGivingBesideHerMedicationsIsSaidToBeUnchecked() {
 		String[][] cases = { { "Can I give her boldo with her medications?", "boldo" },
 			{ "Can I give her boldo tea with her meds?", "boldo tea" }, { "Can we give him boldo with his ARVs?", "boldo" },
-			{ "Could I give her boldo alongside her other medications?", "boldo" } };
+			{ "Could I give her boldo alongside her other medications?", "boldo" },
+			// and a plan to start it stated, then asked about her medications: the replica answered "Starting RHZE today, any
+			// issues with his ARVs?" with the screen of his orders and no word about RHZE (ADR Decision 611)
+			{ "Starting boldo today, any issues with her ARVs?", "boldo" },
+			{ "Adding boldo, any interactions with her medications?", "boldo" } };
 		for (String[] c : cases) {
 			RecordingProvider provider = new RecordingProvider("YES");
 			ChartAnswer answer = serviceWith(provider).search(patient, c[0]);

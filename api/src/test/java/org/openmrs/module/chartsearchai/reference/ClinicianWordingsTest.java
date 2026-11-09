@@ -2237,6 +2237,29 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/**
+	 * ADR Decision 611: a swap for a reason her treatment names, what one drug causes beside another, and "probs" are the
+	 * questions the module already answers. On the demo replica the
+	 * model answered each, among them "No — do not swap nevirapine for efavirenz because the combination … has resulted in
+	 * increased toxicity" and "No, isoniazid interacts with active order Stavudine, and the risk of peripheral neuropathy
+	 * may be increased".
+	 */
+	@Test
+	public void aSwapForHerTreatmentOrWhatOneDrugCausesBesideAnotherAsksTheModulesQuestion() {
+		String[][] pairs = { { "Should I swap nevirapine for warfarin because of her TB treatment?", "Swap nevirapine for warfarin?" },
+			{ "Should I switch her nevirapine to warfarin due to her HIV treatment?", "Swap nevirapine for warfarin?" },
+			{ "Will warfarin cause bleeding with aspirin?", "Will warfarin increase the risk of bleeding with aspirin?" },
+			{ "Does nevirapine cause rash with efavirenz?", "Does nevirapine increase the risk of rash with efavirenz?" },
+			{ "any probs with warfarin?", "Any problems with warfarin?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+		// A reason that is not her treatment stays the model's.
+		assertNull(ask("Should I swap nevirapine for warfarin because of the rash?"));
+	}
+
 	/** ADR Decision 536: screening a drug, and a drug messing, interfering or conflicting with her medications, ask its interactions. */
 	@Test
 	public void screeningADrugOrItMessingWithHerMedicationsAsksItsInteractions() {

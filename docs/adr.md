@@ -27994,3 +27994,56 @@ Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.everyWayOfAskingForA
 `.askingWhichOfHerMedicationsIShouldStopIsAScreen` and
 `ClinicianWordingsTest.spacingADrugFromHerMedicationsOrSizingItsDoseBesideAnotherAsksTheModulesQuestion`. Each reddens
 without the change on its first new wording.
+
+## Decision 611: A swap for her treatment, what one drug causes beside another, "probs", and a drug started then asked about
+
+**Status: Accepted** (November 2026). Found by a third sweep of 8 patients by 30 drug-safety questions on the demo replica
+on 2026-11-09.
+
+### Context
+
+Four wordings fitted no shape:
+
+- *"Should I swap nevirapine for efavirenz because of her TB treatment?"* went to the model on all 8 patients. dd6539bd
+  was told *"No — do not swap nevirapine for efavirenz because the combination of nevirapine and efavirenz has resulted in
+  increased toxicity"*. A swap is not that combination.
+- *"Will isoniazid cause neuropathy with stavudine?"* went to the model on all 8. dd6539bd was told *"No, isoniazid
+  interacts with active order Stavudine, and the risk of peripheral neuropathy may be increased"*.
+- *"any probs with bactrim?"* went to the model on all 8. dd6539bd, who is not on it, was told *"The drug can be given"*.
+- *"Starting RHZE today, any issues with his ARVs?"* — no drug data knows *"RHZE"*. Four patients got the screen of
+  their own orders with nothing said about RHZE. The other four got the model's answer about adherence. None of the 8
+  said RHZE was never checked.
+
+### The decision
+
+- `SWITCH_SHAPES`' first shape may close with *"because of / due to / given / for her TB / HIV / ART … treatment"*. The
+  switch answer screens her medications, so it covers that treatment. Any other reason (*"because of the rash"*) stays the
+  model's.
+- `DOES_ONE_CHANGE_THE_OTHER` reads *"does / will X cause (more) <effect> with Y"*. The answer states what relates the
+  pair, with neither "Yes" nor "No".
+- Decision 339's *"any problems with X"* reads *"probs"*.
+- `PROPOSAL_SHAPES` reads *"starting / adding / giving X (today), any issues / problems / interactions with her
+  medications or ARVs"*, and *"plan / want to start X …"*. It is Decision 606's proposal stated as a plan, so a word the
+  data does not know there is said to be unchecked. A drug it knows is answered as the proposal it already was:
+  *"Starting rifampicin today, any issues with her ARVs?"* got the withhold lead before this change.
+
+**On the replica**, after the change on 6 of those patients:
+
+- The swap, cause and *"probs"* questions were module-answered on 18 of 18.
+- *"Starting RHZE today …"* states *"No interaction check was run: "RHZE" is not a drug name the interaction data
+  recognises"* on 6 of 6. The prose before it is still the model's, as Decision 384 has it for every unknown word.
+
+**Left as found.**
+
+- No drug data here knows *"RHZE"* or *"Rifafour"*. Teaching it those names is a change to the data, which needs its
+  owner's decision.
+- *"DDIs with her ART?"* stays the model's. `isAWordOfTheQuestion` refuses *"ddis"* deliberately, because the words are
+  lower-cased and didanosine's *"ddI"* becomes the same token. Telling them apart needs the raw casing where the
+  unknown-word reading runs, and that is its own decision.
+- *"Is double dosing lamivudine a problem?"* stays the model's. No module answer reads a single drug's duplication yet
+  (*"Is lamivudine duplicated in her orders?"* is also the model's), so there is no answer to map it to.
+
+Pinned by `ClinicianWordingsTest.aSwapForHerTreatmentOrWhatOneDrugCausesBesideAnotherAsksTheModulesQuestion` (red
+without the change on its first wording; its *"because of the rash"* control stays the model's) and the two new cases of
+`LlmInferenceServiceModelReadQuestionContextTest.somethingProposedByAVerbOfGivingBesideHerMedicationsIsSaidToBeUnchecked`
+(red without the change on *"Starting boldo today, any issues with her ARVs?"*).

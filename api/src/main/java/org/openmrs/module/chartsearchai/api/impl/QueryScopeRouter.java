@@ -637,6 +637,13 @@ public final class QueryScopeRouter {
 					+ " (?:with|alongside|while (?:on|taking)) " + "(?:" + POSSESSIVE + " " + MEDICATIONS + "|" + HER_MEDICATION_GROUP + ")",
 			"is it (?:safe|ok|okay) for (?:her|him|them|the patient|this patient) to (?:drink|have|take|consume) " + D
 					+ " (?:with|alongside|while (?:on|taking)) " + "(?:" + POSSESSIVE + " " + MEDICATIONS + "|" + HER_MEDICATION_GROUP + ")",
+			// "Starting rifampicin today, any issues with her ARVs?", "Adding boldo, any interactions with her medications?" — a plan
+			// to give it stated, then asked about her medications; the model answered "Starting RHZE today, …" with her adherence
+			// and never named RHZE (ADR Decision 611)
+			"(?:(?:i am |i'm |we are |we're )?(?:starting|adding|giving|prescribing)|(?:i |we )?(?:plan|want) to (?:start|add|give"
+					+ "|prescribe)) (?:" + PATIENT + " )?(?:on )?" + D + "(?: today| now| tomorrow)? (?:(?:are there |is there )?any )?(?:drug )?"
+					+ "(?:issues?|problems?|interactions?|concerns?) with (?:any of )?(?:" + POSSESSIVE + " (?:other )?" + MEDICATIONS
+					+ "|" + HER_MEDICATION_GROUP + ")",
 			// and given her by the one asking, "Can I give her boldo with her medications?" — the same proposal by a verb of
 			// giving, whose word the data does not know is said to be unchecked as the one she would take is (ADR Decision 606)
 			"(?:can|could|may|should) (?:i|we) (?:also )?(?:safely )?(?:give|add|start|prescribe|administer) (?:" + PATIENT
@@ -933,7 +940,7 @@ public final class QueryScopeRouter {
 			// "Any interactions with his lisinopril?", "Are there any drug interactions with rifampicin?" — the model told a
 			// patient on no medication "interactions with Lisinopril are recorded: ketoconazole (Major) …" (ADR Decision 338);
 			// and "Any problems with her metronidazole?", answered from the same check (ADR Decision 339)
-			"(?:(?:are|is) there )?any (?:drug )?(?:interactions?|problems?|issues?|concerns?) with (?:" + POSSESSIVE + " )?"
+			"(?:(?:are|is) there )?any (?:drug )?(?:interactions?|problems?|probs?|issues?|concerns?) with (?:" + POSSESSIVE + " )?"
 					+ D,
 			// "Interactions for fluconazole?" (ADR Decision 440)
 			"(?:(?:are|is) there )?(?:any )?(?:drug )?interactions? (?:for|of) " + D,
@@ -1817,7 +1824,11 @@ public final class QueryScopeRouter {
 			// "Does rifampicin potentiate nevirapine?", answered "No — Rifampicin should not be given" (ADR Decision 440)
 			// and "Does rifampicin decrease nevirapine?" (ADR Decision 446)
 			+ "|(?:does|do|will|would|can|could|might) " + HER_D + " (?:potentiate|antagonize|antagonise|inhibit|induce|increase"
-			+ "|decrease|reduce|lower|raise|boost|weaken) " + HER_D;
+			+ "|decrease|reduce|lower|raise|boost|weaken) " + HER_D
+			// "Will isoniazid cause neuropathy with stavudine?" — answered "No, isoniazid interacts with active order Stavudine,
+			// and the risk of peripheral neuropathy may be increased" (ADR Decision 611)
+			+ "|(?:does|do|will|would|can|could|might) " + HER_D + " cause (?:more )?(?:\\p{L}+ ){0,2}\\p{L}+ (?:with|alongside|"
+			+ "when given with|if given with) " + HER_D;
 
 	/**
 	 * What a drug does beside another, asked otherwise than as an effect (ADR Decision 251): whether to avoid the two
@@ -2250,7 +2261,11 @@ public final class QueryScopeRouter {
 	private static final List<Pattern> SWITCH_SHAPES = shapes(
 			// and with the verb bare: "Swap nevirapine for efavirenz?", "Replace her nevirapine with efavirenz?" (ADR Decision 504)
 			"(?:(?:can|could|may|should) (?:i|we) )?(?:switch|change|swap) (?:" + PATIENT + " (?:from )?|" + POSSESSIVE + " |from )?"
-					+ D + " (?:to|for) " + D + "(?: now| today)?",
+					+ D + " (?:to|for) " + D + "(?: now| today)?"
+					// and for her treatment, "… because of her TB treatment" — the screen the switch answer states covers it;
+					// any other reason stays the model's (ADR Decision 611)
+					+ "(?: (?:because of|due to|given|for) (?:" + POSSESSIVE + " |the )?(?:tb|hiv|art|arv|antiretroviral|"
+					+ "tuberculosis|anti tb|antituberculosis) (?:treatment|therapy|regimen|drugs|meds|medications))?",
 			"(?:(?:can|could|may|should) (?:i|we) )?replace (?:" + POSSESSIVE + " )?" + D + " (?:with|by) " + D + "(?: now| today)?",
 			"is it (?:safe|ok|okay|appropriate) to (?:switch|change|swap) (?:" + PATIENT + " (?:from )?|" + POSSESSIVE + " |from )?" + D
 					+ " (?:to|for) " + D,

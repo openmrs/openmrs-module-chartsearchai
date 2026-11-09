@@ -27911,3 +27911,42 @@ Pinned by `LlmInferenceServiceModelReadQuestionContextTest`:
 The first reddens without the change. The second and third redden without the screen condition, the second on the
 answer *"Yes — Ibuprofen interacts with this patient's active medications"*. The fourth reddens without the drug-to-give
 condition, on the replica's own rewrite.
+
+## Decision 609: Listing a drug's interactions, and stopping or adjusting "because of interactions", are the module's questions
+
+**Status: Accepted** (November 2026). Found by a sweep of 6 patients by 30 drug-safety questions on the demo replica on
+2026-11-09.
+
+### Context
+
+Four wordings fitted no shape and went to the model, which answered each wrongly on most of the 6 patients:
+
+- *"Does he need dose adjustment of any drug because of interactions?"* — dd84b10f, on efavirenz with rifampicin, was
+  told *"No dose adjustment is required"*, although the efavirenz–rifampin finding it then cited says rifampin lowers
+  efavirenz. dd6539bd was told *"Nevirapine can be given, with a caution"*.
+- *"Should I stop co-trimoxazole because of interactions?"* — dd84b10f was told *"No. Safety findings indicate that
+  stopping the medication is a reason to change a medication"*. dd7d1995, who is not on it, was told *"The patient can be
+  given co-trimoxazole"*.
+- *"List the interactions of his isoniazid"* — dd84b10f got his lamivudine, efavirenz and stavudine duplicates listed
+  among isoniazid's interactions. dd55a293, who is not on isoniazid, was never told so.
+- *"What about warfarin, any problem with his meds?"* — dd55a293 got the warfarin reference record recited whole, and
+  his lopinavir duplicate called a warfarin caution.
+
+### The decision
+
+- `NEED_CHANGING_SHAPES` reads *"does she need (a) dose adjustment of any (of her) drug(s)"*. It and *"do any of her
+  drugs need dose adjustment"* may close with `BECAUSE_OF_INTERACTIONS` (*"because of / due to / given (the) (drug)
+  interactions"*). The screen answers, as it does Decision 416's wording.
+- The *"should I stop her X"* shape may close with the same clause. Decision 335's answer follows: her drug's findings,
+  or that it is not one of her medications.
+- `INTERACTS_WITH_HER_MEDICATIONS_SHAPES` reads *"list / show me / give me / what are the interactions of (her) X"* and
+  *"what about X, any interactions with her meds"*. `SAFE_WITH_HER_MEDICATIONS_SHAPES` reads *"what about X, any
+  problem / issue / concern with her meds"*.
+
+Any other reason stays the model's: *"Should I stop her nevirapine because of the rash?"* and *"Does she need dose
+adjustment because of her kidney function?"* are still asked of it.
+
+**On the replica**, the four questions on the same 6 patients: 24 of 24 module-answered after, 0 before.
+
+Pinned by `ClinicianWordingsTest.aClinicianListingInteractionsOrStoppingBecauseOfThemAsksTheModulesQuestion`, which
+reddens without the change on its first wording, and whose two controls stay the model's.

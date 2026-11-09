@@ -2187,6 +2187,35 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		return answer == null ? null : answer.replaceAll("\\[\\d+\\]", "[n]");
 	}
 
+	/**
+	 * ADR Decision 609: listing a drug's interactions, stopping her drug "because of interactions", a dose adjustment of
+	 * any of her drugs "because of interactions" and "What about X, any problem with her meds?" are the questions the
+	 * module already answers. On the demo replica each went to the model, which told one patient "No dose adjustment is
+	 * required" and listed his lamivudine duplicate among "the interactions of his isoniazid".
+	 */
+	@Test
+	public void aClinicianListingInteractionsOrStoppingBecauseOfThemAsksTheModulesQuestion() {
+		String[][] pairs = { { "List the interactions of his nevirapine", "Any interactions with his nevirapine?" },
+			{ "List the interactions of nevirapine", "Any interactions with nevirapine?" },
+			{ "List all drug interactions for her nevirapine", "Any interactions with her nevirapine?" },
+			{ "What are the interactions of her nevirapine?", "Any interactions with her nevirapine?" },
+			{ "Should I stop nevirapine because of interactions?", "Should I stop her nevirapine?" },
+			{ "Should I stop her nevirapine because of the interactions?", "Should I stop her nevirapine?" },
+			{ "Does she need dose adjustment of any drug because of interactions?", "Do any of her drugs need dose adjustment?" },
+			{ "Does she need a dose adjustment of any of her medications?", "Do any of her drugs need dose adjustment?" },
+			{ "Do any of her drugs need dose adjustment because of interactions?", "Do any of her drugs need dose adjustment?" },
+			{ "What about warfarin, any problem with her meds?", "Would warfarin be a problem with her current meds?" },
+			{ "What about warfarin, any interactions with her medications?", "Does warfarin interact with her medications?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+		// A reason that is not an interaction stays the model's.
+		assertNull(ask("Should I stop her nevirapine because of the rash?"));
+		assertNull(ask("Does she need dose adjustment because of her kidney function?"));
+	}
+
 	/** ADR Decision 536: screening a drug, and a drug messing, interfering or conflicting with her medications, ask its interactions. */
 	@Test
 	public void screeningADrugOrItMessingWithHerMedicationsAsksItsInteractions() {

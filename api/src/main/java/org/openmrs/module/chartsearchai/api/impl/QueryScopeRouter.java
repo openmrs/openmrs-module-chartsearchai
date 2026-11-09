@@ -394,6 +394,12 @@ public final class QueryScopeRouter {
 			// "her medication list", "her current list" (ADR Decision 429)
 			+ "|(?:med |medication |medicine |drug )?list)";
 
+	/** "… because of interactions", "… because of the drug interactions" closing a question whether to stop or adjust her
+	 *  drugs: the reason the module's screen of them states, so it asks nothing else (ADR Decision 609). Any other reason —
+	 *  "because of the rash" — is not this, and stays the model's. */
+	private static final String BECAUSE_OF_INTERACTIONS = "(?: (?:because of|due to|given) (?:the |its |these |those |any |"
+			+ "her |his |their )?(?:drug )?interactions?)?";
+
 	/** Her medications as a whole, as a question asking something else's interactions with them names them (ADR Decision
 	 *  473). */
 	private static final String HER_MEDICATIONS_AS_A_WHOLE = POSSESSIVE + " (?:other |current |active |usual |regular )?"
@@ -931,6 +937,13 @@ public final class QueryScopeRouter {
 					+ D,
 			// "Interactions for fluconazole?" (ADR Decision 440)
 			"(?:(?:are|is) there )?(?:any )?(?:drug )?interactions? (?:for|of) " + D,
+			// "List the interactions of his isoniazid", "What are the interactions of her nevirapine?" — the model listed his
+			// lamivudine duplicate among them (ADR Decision 609)
+			"(?:(?:please )?(?:list|show(?: me)?|give me)|what are) (?:the |all (?:the )?)?(?:drug )?interactions? (?:for|of|with) (?:"
+					+ POSSESSIVE + " )?" + D,
+			// "What about warfarin, any interactions with her medications?" (ADR Decision 609)
+			"(?:what|how) about " + D + " (?:(?:are there )?any )?(?:drug )?interactions? with (?:any of )?" + POSSESSIVE
+					+ " (?:other )?" + MEDICATIONS,
 			// "Fluconazole interactions with her meds" (ADR Decision 441)
 			D + " (?:drug )?interactions? with (?:any of )?" + POSSESSIVE + " (?:other )?" + MEDICATIONS,
 			// "Fluconazole?" — a drug's name asked alone; the model told a patient "Fluconazole can be given, with one
@@ -1557,6 +1570,9 @@ public final class QueryScopeRouter {
 			// 394)
 			"(?:what|which) (?:dose|dosage|amount) of " + D + " (?:is|would be) (?:safe|ok|okay|appropriate) (?:with|alongside) (?:any "
 					+ "of )?" + POSSESSIVE + " (?:other )?" + MEDICATIONS,
+			// "What about warfarin, any problem with her meds?" — the model recited the warfarin record whole (ADR Decision 609)
+			"(?:what|how) about " + D + " (?:(?:is there )?any )?(?:problems?|issues?|concerns?) with (?:any of )?" + POSSESSIVE
+					+ " (?:other )?" + MEDICATIONS,
 			// "Would amiodarone be a problem with her current meds?" (ADR Decision 391)
 			"(?:(?:would|will|could|might|is) " + D + " (?:be )?|is " + D + " going to be )(?:a problem|an issue|a concern|problematic)"
 					+ " (?:with|for) (?:any of )?" + POSSESSIVE + " (?:other )?" + MEDICATIONS,
@@ -1623,8 +1639,9 @@ public final class QueryScopeRouter {
 					+ BEFORE_AN_OCCASION,
 			"(?:(?:can|could|may) (?:i|we) (?:safely )?|" + A_PLAN_TO + ")(?:stop|discontinue|hold) " + HER_D + "(?: now)?"
 					+ BEFORE_AN_OCCASION,
+			// and "… because of interactions" (ADR Decision 609)
 			"(?:should|must|do) (?:i|we) (?:need to )?(?:stop|discontinue|hold) " + HER_D + "(?: now)?"
-					+ BEFORE_AN_OCCASION,
+					+ BEFORE_AN_OCCASION + BECAUSE_OF_INTERACTIONS,
 			ONE_OF_HER_D_ORDERS_STOPPED);
 
 	/** Whether it asks whether stopping it is safe or allowed — not whether it should be stopped, which ADR Decision 259
@@ -1691,8 +1708,9 @@ public final class QueryScopeRouter {
 					+ BEFORE_AN_OCCASION,
 			"(?:(?:can|could|may) (?:i|we) (?:safely )?|" + A_PLAN_TO + ")(?:stop|discontinue|hold) " + HER_D + "(?: now)?"
 					+ BEFORE_AN_OCCASION,
+			// and "… because of interactions" (ADR Decision 609)
 			"(?:should|must|do) (?:i|we) (?:need to )?(?:stop|discontinue|hold) " + HER_D + "(?: now)?"
-					+ BEFORE_AN_OCCASION,
+					+ BEFORE_AN_OCCASION + BECAUSE_OF_INTERACTIONS,
 			ONE_OF_HER_D_ORDERS_STOPPED,
 			// "If I stop her rifampicin, which interactions go away?" (ADR Decision 333)
 			"if (?:i|we) (?:stop|discontinue|remove|hold) " + POSSESSIVE + " " + D + " (?:which|what) (?:drug )?interactions? "
@@ -3895,7 +3913,14 @@ public final class QueryScopeRouter {
 			// 397)
 			"(?:is there )?any reason not to continue " + HER_MEDICATIONS,
 			// "Do any of her drugs need dose adjustment?", "Should any of her medicines be stopped?" (ADR Decision 416)
-			"(?:do|does) any of " + HER_MEDICATIONS + " need (?:a )?dos(?:e|ing) (?:adjustments?|changes?)",
+			// and "… because of interactions" (ADR Decision 609)
+			"(?:do|does) any of " + HER_MEDICATIONS + " need (?:a )?dos(?:e|ing) (?:adjustments?|changes?)"
+					+ BECAUSE_OF_INTERACTIONS,
+			// "Does she need dose adjustment of any drug because of interactions?", "Does he need a dose adjustment of any of
+			// his medications?" — the model answered "No dose adjustment is required" (ADR Decision 609)
+			"(?:does|do) " + SUBJECT + " need (?:a |any )?dos(?:e|ing) (?:adjustments?|changes?) (?:of|for|to|on) (?:any (?:of )?)?(?:"
+					+ POSSESSIVE + " )?(?:current |active |other )?(?:drugs?|medications?|meds|medicines?)"
+					+ BECAUSE_OF_INTERACTIONS,
 			"should any of " + HER_MEDICATIONS + " be " + CHANGED,
 			"should (?:i|we) stop any of " + HER_MEDICATIONS,
 			// "Should I change her regimen?", "Do I need to adjust her medications?", "Should I stop her medications?", "Does her

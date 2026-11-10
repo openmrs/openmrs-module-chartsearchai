@@ -288,7 +288,7 @@ public class AllergyQuestionConflictingOrderContextTest extends BaseModuleContex
 		plain.setLlmProvider(unrelated);
 		plain.search(patient, "Summarize her chart.");
 		for (String question : Arrays.asList("Should I stop her aspirin because of the rash?",
-				"Should I hold her aspirin due to the nosebleeds?", "Can aspirin cause stomach bleeding?",
+				"Should I hold her aspirin due to her nosebleeds?", "Can aspirin cause stomach bleeding?",
 				"Could her aspirin be causing her tinnitus?")) {
 			// The model judging none to bear on it: the model is handed no finding and no reference record, and no chip
 			// is published.

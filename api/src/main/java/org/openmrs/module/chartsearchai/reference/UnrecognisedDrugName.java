@@ -325,6 +325,13 @@ final class UnrecognisedDrugName {
 				}
 				UnrecognisedDrugName beside = new UnrecognisedDrugName(asWritten(word, question), suggestionsFor(word, entries),
 						inASwitch, hers);
+				// Nor the reason or effect a question asks of what its drug does to her, where no drug is near the word:
+				// "Should I hold her aspirin due to her nosebleeds?" is her nosebleeds, never an order of hers named so, and
+				// "None of this patient's active orders is named "nosebleeds"" answered nothing asked (ADR Decision 614). A
+				// misspelt drug in that place — "… because of her warfrin" — is near a name, and is still said to be unchecked.
+				if (!beside.hasSuggestions() && QueryScopeRouter.asksWhatADrugDoesToHer(words)) {
+					return null;
+				}
 				// Fail-closed: never where the question also says what the drug is for, which this answer would leave unsaid.
 				beside.proposedTogether = !inASwitch && QueryScopeRouter.asksWhetherToGiveDrugsTogether(marked)
 						&& !marked.contains("for");

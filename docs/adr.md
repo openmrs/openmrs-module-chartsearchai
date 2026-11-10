@@ -28200,3 +28200,34 @@ which reddens without the injector's and the service's change. It covers four ca
 
 The prompt is scored by `FindingRelevanceEvalTest`, opt-in, which asserts at least 75% related kept and 60% unrelated
 removed.
+
+## Decision 614: A reason or effect asked of her drug is never read as a second drug she is said to take
+
+**Status: Accepted** (November 2026), on the owner's direction ("yes make that fix") after Decision 613 left it.
+
+### Context
+
+*"Should I hold her aspirin due to her nosebleeds?"* has a pair shape: *"stop her X because of her Y"*. That shape puts
+"nosebleeds" in a second drug's place (`UnrecognisedDrugName.besideANamedDrug`), and "her" names it as hers. So the
+answer gained two lines about nothing the question asked: *"None of this patient's active orders is named
+"nosebleeds"."* and *"No interaction check was run for "nosebleeds" and Acetylsalicylic acid (aspirin) …"*.
+
+### The decision
+
+`besideANamedDrug` reads no unknown word where two things hold: no drug name is near the word
+(`UnrecognisedDrugName.hasSuggestions`), and the question, with its known drug marked, asks what that drug does to her
+(`QueryScopeRouter.asksWhatADrugDoesToHer`, Decision 613). Such a word is the reason or the effect asked about.
+
+A misspelt drug in that place is near a name and is read as before. Checked through the real method over the shipped
+data: *"warfrin"* and *"rifampcin"* after *"because of his"* are still flagged with suggestions, and *"nosebleeds"* is not.
+
+**The cost:** an invented name in that place, near no drug, is no longer said to be on none of her orders. Decision 308
+said so of *"his klarizom"*; *"Should I stop his nevirapine because of his klarizom?"* now says nothing of it. In a
+reason to stop her drug, a word near no drug name is far more often a symptom.
+
+**On the replica**, *"Should I hold his nevirapine due to his nosebleeds?"* and *"… because of his headaches?"* add no
+line about an order on dd74dc61 or dd5558ed.
+
+Pinned by the *"her nosebleeds"* case of
+`AllergyQuestionConflictingOrderContextTest.search_aQuestionOfWhatADrugDoesToHerKeepsOnlyTheFindingsTheModelJudgesBearOnIt`,
+which reddens without the change on exactly those two lines.

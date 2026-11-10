@@ -16783,7 +16783,7 @@ Pinned by `SwitchingHerDrugContextTest.aSwitchIsAnsweredForTheNewDrugAgainstHerO
 
 ## Decision 220: Whether two drugs, neither hers, interact is answered "Yes" where the data relates them
 
-**Status: Accepted** (October 2026) — the owner's request of 2026-10-14. The companion of
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-14. The companion of **Superseded in part by [Decision 616](#decision-616-a-question-about-two-drugs-states-neither-against-her-other-medications):** neither drug is stated against her other medications.
 [Decision 218](#decision-218-whether-her-drug-and-another-interact-is-answered-yes-where-a-finding-relates-them) for a
 pair neither of which her orders carry.
 
@@ -21915,7 +21915,7 @@ Pinned by `ClinicianWordingsTest.whyARiskOrATerseOrRatedPairIsAnsweredWithWhatTh
 
 ## Decision 425: The pair's interaction states a drug not hers against her active medications
 
-**Status: Accepted** (October 2026) — found by the full regression matrix of 2026-10-25 on the 3.7.1 standalone.
+**Status: Accepted** (October 2026) — found by the full regression matrix of 2026-10-25 on the 3.7.1 standalone. **Superseded in part by [Decision 616](#decision-616-a-question-about-two-drugs-states-neither-against-her-other-medications):** a drug not hers is no longer stated against her other medications.
 
 ### Context
 
@@ -21932,7 +21932,8 @@ is part of the answer.
   against her active medications, under *"Against this patient's active medications:"*, as Decision 220's answer does. A pair of her
   own two medications is still answered with what relates them alone.
 
-Pinned by `TogetherWithHerOwnMedicationContextTest.thePairsInteractionStatesADrugNotHersAgainstHerActiveMedications`.
+Pinned, until [Decision 616](#decision-616-a-question-about-two-drugs-states-neither-against-her-other-medications)
+superseded it, by what is now `TogetherWithHerOwnMedicationContextTest.thePairsInteractionStatesNoDrugAgainstHerOtherMedications`.
 
 ## Decision 426: A wording that weighs a drug for her is the question it spells
 
@@ -28271,3 +28272,45 @@ change. The chips are kept to the stamp by `LlmInferenceService.aboutTheDrugAske
 **Left for the owner:** Decision 220's answer to *"Is there an interaction between X and Y?"* still lists each drug against
 her other medications. That was the owner's own decision, and whether the newer direction now reaches it is the owner's
 to say.
+
+## Decision 616: A question about two drugs states neither against her other medications
+
+**Status: Accepted** (November 2026), on the owner's direction ("Yes") to trim Decision 220's answer to the pair, under
+the direction that an answer carries nothing the question did not ask. It supersedes the part of Decisions 220 and 425
+that states each drug against her other medications.
+
+### Context
+
+*"Is there an interaction between fluconazole and nevirapine?"*, for a patient on neither, was answered with the pair's
+line. Under *"Against this patient's active medications:"* it then listed nevirapine against his rifampin and efavirenz,
+and fluconazole against each of his other orders (Decision 220). Decision 425 gave *"What is the interaction between X
+and Y?"* the same section, and so did the answer for a pair the data lists unrated. None of those lines is about the two
+drugs asked.
+
+### The decision
+
+- The three answers no longer carry that section.
+- A line of it stays where its partner is the other drug asked about, through an order of hers that carries it, and it
+  is stated with the pair (`DrugReferenceInjector.relatingTheOther`). *"Does her efavirenz interact with her isoniazid /
+  pyrazinamide / rifampin?"*, for a patient whose *"Isoniazid / Rifapentine"* carries the isoniazid asked about, still
+  states *"Efavirenz interacts with active order Isoniazid — Moderate."*
+- Decision 615's chips, kept to the lines the answer states, now cover whether two drugs interact as well.
+
+**Left as found:** a pair answer's lines about her own drug against her third order (Decision 370) and her allergy
+covering a drug asked about (Decision 371) are separate decisions, and are untouched.
+
+The tests that pinned the section now pin its absence, a spec change made on the owner's direction:
+
+- `TwoDrugsTheDataDoesNotRelateTest.twoDrugsNeitherHersTheDataDoesNotRelateAreSaidToBeUnrelatedAndNotAgainstHerOtherMedications`
+- `ProductHeldInPartAskedWithAnotherDrugTest.herIsoniazidRifapentineIsNamedAsTheIsoniazidOfTheCombinationAskedAbout`
+- `TogetherWithHerOwnMedicationContextTest.thePairsInteractionStatesNoDrugAgainstHerOtherMedications`
+
+Each reddens without the change. Two tests whose subject is how such a line NAMES its substance now ask that of the two
+drugs proposed together, which still states each against her medications (Decision 222). Each also asserts that whether
+the two interact states no such line:
+
+- `CombinationOrderLineContextTest.twoDrugsNeitherOfThemHersNameTheSubstanceOfHerCombinationOrderEachLineIsAbout`
+- `MoietyAskedAboutTest.twoDrugsOneOfThemTenofovirStateEachFindingOfBothFormsOnce`
+
+**Not yet reached:** where one of the two drugs is hers, Decision 218's answer to whether they interact, and the answer
+to what combining them does, state the other drug against all of her medications. They are left for the owner's word.

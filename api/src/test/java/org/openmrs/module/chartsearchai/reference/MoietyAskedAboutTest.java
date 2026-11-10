@@ -64,8 +64,12 @@ public class MoietyAskedAboutTest extends BaseModuleContextSensitiveTest {
 		String answer = answer("Does tenofovir interact with rifampicin?", "Didanosine 400mg");
 		assertTrue(answer.contains("\nRifampicin (rifampin) interacts with Tenofovir disoproxil, also named in the question — "
 				+ "Major." + DrugReferenceInjector.SAME_OF_FORMS_OPENING + "Tenofovir alafenamide. ["), "was: " + answer);
-		assertTrue(answer.contains("\nTenofovir disoproxil interacts with active order Didanosine — Major."), "was: " + answer);
-		assertFalse(answer.contains("\nTenofovir alafenamide interacts with active order Didanosine"), "stated once: " + answer);
+		// Whether they interact states neither against her didanosine (ADR Decision 616); the two proposed together state
+		// each against it (ADR Decision 222), each finding of both forms once.
+		assertFalse(answer.contains("interacts with active order Didanosine"), "ADR Decision 616: " + answer);
+		String proposed = answer("Can I give her tenofovir and rifampicin?", "Didanosine 400mg");
+		assertTrue(proposed.contains("\nTenofovir disoproxil interacts with active order Didanosine — Major."), "was: " + proposed);
+		assertFalse(proposed.contains("\nTenofovir alafenamide interacts with active order Didanosine"), "stated once: " + proposed);
 	}
 
 	/** Her tenofovir is the form she is on. */

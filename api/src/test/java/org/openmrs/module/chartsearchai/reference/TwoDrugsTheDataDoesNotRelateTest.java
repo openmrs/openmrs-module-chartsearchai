@@ -10,6 +10,7 @@
 package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -60,7 +61,7 @@ public class TwoDrugsTheDataDoesNotRelateTest extends BaseModuleContextSensitive
 	}
 
 	@Test
-	public void twoDrugsNeitherHersTheDataDoesNotRelateAreSaidToBeUnrelatedAndEachStatesItsOwnFindings() {
+	public void twoDrugsNeitherHersTheDataDoesNotRelateAreSaidToBeUnrelatedAndNotAgainstHerOtherMedications() {
 		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
 			DrugReferenceTestSupport.activeOrder("order-cel", "Celebrex 200mg", "Celecoxib"));
 		String question = "Does his chloroquine interact with his diphenhydramine?";
@@ -70,8 +71,10 @@ public class TwoDrugsTheDataDoesNotRelateTest extends BaseModuleContextSensitive
 		assertEquals("Neither Chloroquine nor Diphenhydramine is one of this patient's active medications.", lines[0],
 			"was: " + answer);
 		assertTrue(lines[1].matches(java.util.regex.Pattern.quote(NO_LISTING) + " \\[\\d+\\] \\[\\d+\\]"), "was: " + answer);
-		assertEquals("Against this patient's active medications:", lines[2], "was: " + answer);
-		assertTrue(lines[3].startsWith("Chloroquine interacts with active order Celecoxib — Moderate."), "was: " + answer);
+		// Neither drug against her other medications, which the question about the two did not ask (ADR Decision 616, the
+		// owner's direction; ADR Decision 220 stated them under "Against this patient's active medications:").
+		assertFalse(answer.contains("Against this patient's active medications"), "was: " + answer);
+		assertFalse(answer.contains("Chloroquine interacts with active order Celecoxib"), "was: " + answer);
 	}
 
 	private static String ask(String question, List<PatientClinicalContext.ActiveDrugOrder> orders) {

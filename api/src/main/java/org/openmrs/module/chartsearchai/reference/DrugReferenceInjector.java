@@ -1793,7 +1793,9 @@ public class DrugReferenceInjector {
 		// her, and its findings against her medications are lines of the answer (ADR Decision 425), so they stand.
 		if (bearing == null && moduleAnswer != null && !questionDrugs.isEmpty()
 				&& (QueryScopeRouter.asksAboutThePairsInteraction(wordsBesideItsNames(question, questionDrugs))
-						|| QueryScopeRouter.asksWhetherOneDrugChangesTheOther(wordsBesideItsNames(question, questionDrugs)))) {
+						|| QueryScopeRouter.asksWhetherOneDrugChangesTheOther(wordsBesideItsNames(question, questionDrugs))
+						// and whether the two interact, trimmed to the pair as well (ADR Decision 616)
+						|| QueryScopeRouter.asksWhetherTwoDrugsInteract(wordsBesideItsNames(question, questionDrugs)))) {
 			Set<Integer> cited = ChartSearchAiUtils.citedIndexes(moduleAnswer);
 			Set<String> stated = new HashSet<String>();
 			for (int f = 0; f < renderedFindings.size(); f++) {
@@ -7916,6 +7918,27 @@ public class DrugReferenceInjector {
 
 	/** Whether one of {@code finding}'s partners was resolved to a row of one of {@code substances} — {@link
 	 *  SafetyWarning#partnerRows()}, as the chip was decided. */
+	/**
+	 * Of {@code lines}, findings each about one drug asked about against her medications, those whose partner is the OTHER
+	 * drug asked about — the pair, through an order of hers carrying it — in their order (ADR Decision 616). Every other is
+	 * that drug against her other medications, which the question about the two did not ask: "Against this patient's
+	 * active medications:" stated them under ADR Decisions 220 and 425 until the owner's direction that an answer carries
+	 * nothing the question did not ask.
+	 */
+	private static List<Integer> relatingTheOther(List<SafetyWarning> findings, List<Integer> lines, List<AskedDrug> pair) {
+		List<Integer> relating = new ArrayList<Integer>();
+		for (Integer i : lines) {
+			SafetyWarning finding = findings.get(i);
+			Set<Object> about = subjectSubstances(finding);
+			if (pair.size() == 2 && !about.isEmpty()
+					&& (pair.get(0).substances.containsAll(about) && hasPartnerOf(finding, pair.get(1).substances)
+							|| pair.get(1).substances.containsAll(about) && hasPartnerOf(finding, pair.get(0).substances))) {
+				relating.add(i);
+			}
+		}
+		return relating;
+	}
+
 	private static boolean hasPartnerOf(SafetyWarning finding, Set<Object> substances) {
 		for (List<DrugReference> rows : finding.partnerRows().values()) {
 			for (DrugReference row : rows) {
@@ -8360,10 +8383,9 @@ public class DrugReferenceInjector {
 			lines.add(listingLine(asked.get(0), asked.get(1), listed, cited.get(0), cited.get(1)));
 		}
 		lines.addAll(findingLines(findings, numbers, pairLines, orderRecordNumbers, herOrderRecords, true));
-		if (!notHersLines.isEmpty()) {
-			lines.add("Against this patient's active medications:");
-			lines.addAll(findingLines(findings, numbers, notHersLines, orderRecordNumbers, herOrderRecords, true));
-		}
+		// Of a drug asked about against her medications, only what relates it to the other asked about (ADR Decision 616).
+		lines.addAll(findingLines(findings, numbers, relatingTheOther(findings, notHersLines, asked), orderRecordNumbers,
+			herOrderRecords, true));
 		if (!askedAboutLines.isEmpty()) {
 			lines.add(ABOUT_THE_DRUGS_ASKED_ABOUT_LEAD);
 			lines.addAll(findingLines(findings, numbers, askedAboutLines, orderRecordNumbers, herOrderRecords, true));
@@ -8442,8 +8464,11 @@ public class DrugReferenceInjector {
 		}
 		List<String> pairLines = withEachFormStatedOnce(findings, numbers, pair,
 				findingLines(findings, numbers, pair, orderRecordNumbers, herOrderRecords, true), formsOf(rows));
-		List<String> herLines = withEachFormStatedOnce(findings, numbers, hers,
-				findingLines(findings, numbers, hers, orderRecordNumbers, herOrderRecords, true), formsOf(rows));
+		// Of each drug against her medications, only what relates it to the other asked about — her order carrying it (ADR
+		// Decision 616, the owner's direction that an answer carries nothing the question did not ask).
+		List<Integer> relating = relatingTheOther(findings, hers, rows);
+		List<String> herLines = withEachFormStatedOnce(findings, numbers, relating,
+				findingLines(findings, numbers, relating, orderRecordNumbers, herOrderRecords, true), formsOf(rows));
 		List<String> lines = new ArrayList<String>();
 		lines.add(interact ? "Yes — " + rows.get(0).label + " and " + rows.get(1).label
 				+ " interact; neither is one of this patient's active medications."
@@ -8456,10 +8481,7 @@ public class DrugReferenceInjector {
 			}
 		}
 		lines.addAll(pairLines);
-		if (!herLines.isEmpty()) {
-			lines.add("Against this patient's active medications:");
-			lines.addAll(herLines);
-		}
+		lines.addAll(herLines);
 		lines.add(BELOW_FLOOR_SCOPE);
 		return String.join("\n", lines);
 	}
@@ -9669,10 +9691,11 @@ public class DrugReferenceInjector {
 				}
 			}
 		}
-		if (!notHers.isEmpty()) {
-			lines.add("Against this patient's active medications:");
-			lines.addAll(withEachFormStatedOnce(findings, numbers, notHers,
-				findingLines(findings, numbers, notHers, orderRecordNumbers, herOrderRecords, true), formsOf(pair)));
+		// Of a drug not hers against her medications, only what relates it to the other asked about (ADR Decision 616).
+		List<Integer> relatingNotHers = relatingTheOther(findings, notHers, pair);
+		if (!relatingNotHers.isEmpty()) {
+			lines.addAll(withEachFormStatedOnce(findings, numbers, relatingNotHers,
+				findingLines(findings, numbers, relatingNotHers, orderRecordNumbers, herOrderRecords, true), formsOf(pair)));
 		}
 		String first = pair.get(0).label;
 		String second = pair.get(1).label;

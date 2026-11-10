@@ -10,6 +10,7 @@
 package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -50,9 +51,11 @@ public class ProductHeldInPartAskedWithAnotherDrugTest extends BaseModuleContext
 				+ "active medications.", lines[0], answer);
 		assertEquals("Isoniazid / pyrazinamide / rifampin carries Isoniazid, which this patient takes in active order "
 				+ "Isoniazid / Rifapentine [n].", lines[1], answer);
-		assertTrue(answer.contains("\nAgainst this patient's active medications:\n")
-				&& answer.contains("\nEfavirenz interacts with active order Isoniazid — Moderate."),
+		// Her order carries the isoniazid of the combination asked about, so what relates efavirenz to it is the pair, stated
+		// with it and under no heading of her other medications (ADR Decision 616).
+		assertTrue(answer.contains("\nEfavirenz interacts with active order Isoniazid — Moderate."),
 			"what relates efavirenz to her order: " + answer);
+		assertFalse(answer.contains("Against this patient's active medications"), answer);
 		assertTrue(answer.contains("\nPyrazinamide interacts with Efavirenz, also named in the question — Moderate."),
 			"what relates the two asked about: " + answer);
 		assertTrue(!answer.contains("can be given") && !answer.contains("not a reason to withhold"), answer);

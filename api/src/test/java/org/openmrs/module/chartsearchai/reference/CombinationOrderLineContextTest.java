@@ -10,6 +10,7 @@
 package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
@@ -91,7 +92,10 @@ public class CombinationOrderLineContextTest extends BaseModuleContextSensitiveT
 
 	@Test
 	public void twoDrugsNeitherOfThemHersNameTheSubstanceOfHerCombinationOrderEachLineIsAbout() {
-		String answer = ask("Does fluconazole interact with rifampicin?");
+		// Whether they interact states neither against her other medications (ADR Decision 616), so the lines are asked of the
+		// two proposed together, which states each against them (ADR Decision 222).
+		assertFalse(ask("Does fluconazole interact with rifampicin?").contains(HER_LPVR), "ADR Decision 616");
+		String answer = ask("Can I give her fluconazole and rifampicin?");
 		assertTrue(answer.contains("\nRifampicin (rifampin)" + HER_LPVR + "Major." + NAMED + "Lopinavir. ["), "was: " + answer);
 		assertTrue(answer.contains("\nRifampicin (rifampin)" + HER_LPVR + "Major." + NAMED + "Ritonavir. ["), "was: " + answer);
 		assertTrue(answer.contains("\nFluconazole" + HER_LPVR + "Moderate." + NAMED + "Lopinavir. ["), "was: " + answer);

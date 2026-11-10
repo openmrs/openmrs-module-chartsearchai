@@ -28417,7 +28417,7 @@ answer also published a chip relating her fluconazole to her nevirapine, which i
 
 Both kinds are still classified, so a finding the composer cannot place still leaves the question to the model, but
 neither is stated. The chips are the findings the answer cites, through Decision 615's stamp, which this composer's
-answer now sets as well (`answeredAsSeveralTogether`).
+answer now sets as well (the flag Decision 620 names `chipsFollowTheAnswer`).
 
 The other two places that use the lead are left alone. A finding Decision 296 draws apart after a single-drug answer, and
 her own orders sharing a substance under Decision 312's lead, reach it only where they name a substance the question asks
@@ -28432,3 +28432,37 @@ on the other two, which Decision 196's composer answers rather than this one.
 Pinned by `TerseDrugQuestionWordingsTest.severalDrugsTogetherStateNoFindingAboutHerOwnDrugAlone` and
 `TerseDrugQuestionWordingsTest.severalDrugsTogetherDoNotStateThatOneOfHersIsAlreadyInSeveralOrders`. Each checks both the
 answer and the chips, and reddens without the change.
+
+## Decision 620: A drug proposed with one of hers publishes only the findings its answer states
+
+**Status: Accepted** (November 2026), on the owner's direction that an answer carries nothing the question did not ask.
+It is the residue Decision 619 names.
+
+### Context
+
+`DrugReferenceInjector.composeTogetherWithHerOwn` answers a drug proposed with one she takes (Decision 196). It states
+the proposed drug's findings and nothing else, but the answer's chips were every finding raised. On the demo replica,
+*"Can I give fluconazole, rifampicin and efavirenz together?"* was asked for a patient on the other two. The answer was
+about fluconazole, yet it published chips for her rifampicin against her co-trimoxazole, her efavirenz against her
+trimethoprim, and her rifampicin in two of her orders.
+
+### The decision
+
+The answer's chips are the findings it cites, through Decision 615's stamp. A flag, `chipsFollowTheAnswer`, marks this
+composer's answer, Decision 619's, `composeTwoOfHerOwn`'s (Decision 203) and `composeTwoDrugsTheDataDoesNotRelate`'s. That last one had been stamped only where
+the question asks whether the two interact. Asked as a proposal, *"Can I give her rifampicin with her lamivudine?"* for a
+patient on both, its answer states the listing between the two, yet it published 9 chips about each drug against her
+other orders. Where the data relates the two, `composeTwoOfHerOwn` answers the same question. For another patient its answer
+stated that one finding but published 11 chips.
+
+Measured on the demo replica on 2026-11-10 (E2B), over three probe sets. One is four proposals beside drugs she takes, for
+eight patients (32 answers). The others are Decision 619's set (20 answers) and Decision 618's (26). A chip naming a drug
+or partner its answer never names was counted with a heuristic over the wire's chip detail and answer text, checked by
+reading the answers it flagged. Before, the proposal set had 18 such chips. After, none of the three sets had any. Chips
+on the proposal set fell from 175 to 115, and no answer's text changed. Every answer the module gave before it still gave.
+Every safety and contraindication question kept its allergy chip.
+
+Pinned by `TogetherWithHerOwnMedicationContextTest.aDrugProposedWithHersPublishesOnlyTheFindingsItsAnswerStates`,
+`TogetherWithHerOwnMedicationContextTest.twoOfHersAskedTogetherPublishOnlyTheFindingsRelatingThem` and the
+chip half of `TwoDrugsListedBelowTheFloorTest.aFindingRelatingOneOfHersToAThirdOrderIsNotStated`. Each reddens without
+the change.

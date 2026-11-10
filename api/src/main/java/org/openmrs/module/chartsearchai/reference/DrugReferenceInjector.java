@@ -1121,8 +1121,10 @@ public class DrugReferenceInjector {
 		// Which two composers answered, for the sentence a client shows of them (ADR Decisions 600, 601).
 		boolean answeredAsASwitch = false;
 		boolean answeredAsAListedPair = false;
-		// Whether several drugs asked about together were answered, whose chips are the findings it states (ADR Decision 619).
-		boolean answeredAsSeveralTogether = false;
+		// Whether a composer answered whose chips are the findings it states: several drugs asked about together (ADR
+		// Decision 619), a drug proposed with one of hers, two of hers asked about together, two drugs the data relates at
+		// no reported rating (ADR Decision 620).
+		boolean chipsFollowTheAnswer = false;
 		String pairAnswer;
 		String aboutThePair;
 		String twoOrdersByName;
@@ -1386,6 +1388,8 @@ public class DrugReferenceInjector {
 					orderRecordNumbers,
 					orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers,
 					orderEntries, context);
+			// It states what relates the two alone, so each against her other orders is no chip of it (ADR Decision 620).
+			chipsFollowTheAnswer = moduleAnswer != null;
 		} else if (!findings.isEmpty() && context != null && questionDrugs.isEmpty()
 				&& ChartSearchAiUtils.getBooleanGlobalProperty(
 						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
@@ -1432,6 +1436,9 @@ public class DrugReferenceInjector {
 					orderRecordNumbers,
 					orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers,
 					pairExtent.stated(), context, orderEntries);
+			// It states the proposed drug's findings alone, so a finding relating her own orders is no chip of it (ADR
+			// Decision 620).
+			chipsFollowTheAnswer = moduleAnswer != null;
 		} else if (context != null
 				&& ChartSearchAiUtils.getBooleanGlobalProperty(
 						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
@@ -1537,7 +1544,7 @@ public class DrugReferenceInjector {
 					orderRecordNumbers,
 					orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers,
 					pairExtent.stated(), context);
-			answeredAsSeveralTogether = moduleAnswer != null;
+			chipsFollowTheAnswer = moduleAnswer != null;
 		}
 		// A drug proposed beside one of hers that the data relates to her orders only without a rating, or to none: her drug is
 		// named, then the answer its proposal alone gets, over the drug-in-play arm's own statement of it (ADR Decision 306).
@@ -1598,6 +1605,9 @@ public class DrugReferenceInjector {
 							: orderRecordNumbers(findingRecords != null ? findingRecords : new DrugOrderRecords(mappings), context),
 					mappings, orderEntries, context);
 			answeredAsAListedPair = moduleAnswer != null;
+			// It states no finding about her own drugs against her other orders (ADR Decision 618), so their chips go too,
+			// whatever the question's wording (ADR Decision 620).
+			chipsFollowTheAnswer |= answeredAsAListedPair;
 		}
 		// Whether she is on any drug of a group this module carries: her orders in it (ADR Decision 298), or of a class an ATC
 		// group IS, by that group (ADR Decision 368).
@@ -1794,10 +1804,10 @@ public class DrugReferenceInjector {
 		// answer carries nothing the question did not ask). "How do isoniazid and stavudine interact?" stated that pair's
 		// finding beside chips of each drug against her other medications. A drug of the two that is not hers is weighed for
 		// her, and its findings against her medications are lines of the answer (ADR Decision 425), so they stand.
-		// Several drugs asked about together publish what their answer states as well: its sections leave out what is about
-		// her own drugs alone, so their chips do too (ADR Decision 619).
+		// So does every answer chipsFollowTheAnswer marks: each leaves out what is about her own drugs alone, so its chips do
+		// too (ADR Decisions 619, 620).
 		if (bearing == null && moduleAnswer != null && !questionDrugs.isEmpty()
-				&& (answeredAsSeveralTogether
+				&& (chipsFollowTheAnswer
 						|| QueryScopeRouter.asksAboutThePairsInteraction(wordsBesideItsNames(question, questionDrugs))
 						|| QueryScopeRouter.asksWhetherOneDrugChangesTheOther(wordsBesideItsNames(question, questionDrugs))
 						// and whether the two interact, trimmed to the pair as well (ADR Decision 616)

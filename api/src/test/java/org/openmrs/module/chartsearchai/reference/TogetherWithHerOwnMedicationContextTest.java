@@ -168,6 +168,51 @@ public class TogetherWithHerOwnMedicationContextTest extends BaseModuleContextSe
 	}
 
 	/**
+	 * A drug proposed with one of hers publishes as chips the findings its answer states — the proposed drug's — and none
+	 * relating her own orders to each other, which it never states (ADR Decision 620, the owner's direction that an answer
+	 * carries nothing the question did not ask). On the demo replica "Can I give fluconazole, rifampicin and efavirenz
+	 * together?", for a patient on the other two, published her rifampicin against her co-trimoxazole beside an answer about
+	 * fluconazole alone.
+	 */
+	@Test
+	public void aDrugProposedWithHersPublishesOnlyTheFindingsItsAnswerStates() {
+		for (String question : Arrays.asList("Can I give her rifampicin with her nevirapine?",
+			"Is there an interaction between rifampicin and nevirapine?")) {
+			PatientChart chart = askOverTheseOrders(question);
+			String answer = chart.getModuleAnswer();
+			assertNotNull(answer, "precondition: the module answers " + question);
+			Set<String> bearing = chart.getFindingsBearingOnTheQuestion();
+			assertNotNull(bearing, question + " — the chips follow the answer: " + answer);
+			assertFalse(bearing.isEmpty(), question + " — the answer states findings: " + answer);
+			for (String detail : bearing) {
+				assertTrue(detail.startsWith("Rifampicin (rifampin)"), question + " — a chip the answer does not state: "
+						+ detail);
+			}
+		}
+	}
+
+	/**
+	 * Two of hers asked about together publish as chips only the findings relating the two, which is all the answer states
+	 * (ADR Decisions 203, 620). On the demo replica "Can I give him rifampicin with his lamivudine?", for a patient on both,
+	 * published each against his efavirenz and co-trimoxazole and their own duplicate orders.
+	 */
+	@Test
+	public void twoOfHersAskedTogetherPublishOnlyTheFindingsRelatingThem() {
+		String question = "Can I give her lopinavir with her nevirapine?";
+		PatientChart chart = askOverTheseOrders(question);
+		String answer = chart.getModuleAnswer();
+		assertTrue(answer != null && answer.contains(DrugReferenceInjector.TWO_OF_HER_OWN_LEAD.trim()),
+			"precondition: answered as two of hers: " + answer);
+		Set<String> bearing = chart.getFindingsBearingOnTheQuestion();
+		assertNotNull(bearing, "the chips follow the answer: " + answer);
+		assertFalse(bearing.isEmpty(), "the answer states findings: " + answer);
+		for (String detail : bearing) {
+			assertTrue(detail.contains("Nevirapine") && (detail.contains("Lopinavir") || detail.contains("Ritonavir")),
+				"a chip the answer does not state: " + detail);
+		}
+	}
+
+	/**
 	 * Her drug named as hers in a together question (ADR Decision 246). On the 3.7.1 standalone Donald Thompson's "Is
 	 * fluconazole safe with his warfarin?" fitted no shape — the together grammar took no "his" — and the model answered
 	 * "The records do not address the safety of Fluconazole with his current regimen" beside a Major finding relating the

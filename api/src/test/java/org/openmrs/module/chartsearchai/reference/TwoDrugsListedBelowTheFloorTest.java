@@ -155,9 +155,15 @@ public class TwoDrugsListedBelowTheFloorTest extends BaseModuleContextSensitiveT
 			"Can she take lamivudine and nevirapine together?")) {
 			String two = ask(question, lamivudine, nevirapine);
 			assertNotNull(two, "precondition: answered of the two alone: " + question);
-			String answer = ask(question, lamivudine, nevirapine,
+			PatientChart chart = askChart(question, lamivudine, nevirapine,
 				DrugReferenceTestSupport.activeOrder("order-d4t", "Stavudine 30mg", "Stavudine"));
+			String answer = chart.getModuleAnswer();
 			assertNotNull(answer, "the module answers " + question);
+			// nor any chip of it: the chips are the findings the answer states (ADR Decision 620)
+			assertNotNull(chart.getFindingsBearingOnTheQuestion(), question + " — the chips follow the answer");
+			for (String detail : chart.getFindingsBearingOnTheQuestion()) {
+				assertTrue(!detail.contains("Stavudine"), question + " — a chip the answer does not state: " + detail);
+			}
 			assertEquals(mask(two), mask(answer),
 				question + " — as of the two alone: " + answer);
 			assertTrue(!answer.contains("Stavudine") && !answer.contains(DrugReferenceInjector.ABOUT_HER_OTHER_MEDICATIONS_LEAD),
@@ -215,6 +221,10 @@ public class TwoDrugsListedBelowTheFloorTest extends BaseModuleContextSensitiveT
 	}
 
 	private static String ask(String question, PatientClinicalContext.ActiveDrugOrder... given) {
+		return askChart(question, given).getModuleAnswer();
+	}
+
+	private static PatientChart askChart(String question, PatientClinicalContext.ActiveDrugOrder... given) {
 		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(given);
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : orders) {
@@ -222,6 +232,6 @@ public class TwoDrugsListedBelowTheFloorTest extends BaseModuleContextSensitiveT
 		}
 		return DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.shippedServiceWithGroups()).injectRecords(
 			DrugReferenceTestSupport.oneRecordChart(), DrugReferenceTestSupport.ctx(45, null, names, null, null, null, orders),
-			question).getModuleAnswer();
+			question);
 	}
 }

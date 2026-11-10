@@ -16734,7 +16734,7 @@ named apart are Decision 222's (`.twoDrugsNamedApartAreAnsweredAsTwoDrugsAndNotA
 
 ## Decision 218: Whether her drug and another interact is answered "Yes" where a finding relates them
 
-**Status: Accepted** (October 2026) — the owner's request of 2026-10-14. It widens
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-14. It widens **Superseded in part by [Decision 617](#decision-617-a-question-about-her-drug-and-another-states-the-other-against-her-drug-alone):** the other drug is no longer stated against her other medications.
 [Decision 196](#decision-196-two-drugs-asked-about-together-one-of-them-hers-are-answered-for-the-other-and-her-drugs-other-findings-are-drawn-apart)
 to a question about the PAIR.
 
@@ -28314,3 +28314,34 @@ the two interact states no such line:
 
 **Not yet reached:** where one of the two drugs is hers, Decision 218's answer to whether they interact, and the answer
 to what combining them does, state the other drug against all of her medications. They are left for the owner's word.
+
+## Decision 617: A question about her drug and another states the other against her drug alone
+
+**Status: Accepted** (November 2026), on the owner's direction ("Yes"). It carries Decision 616 to pairs where one drug is
+hers, and supersedes the part of Decision 218 that states the other drug against all her medications.
+
+### Context
+
+Where one of two drugs asked about is hers, Decision 218 answers whether they interact, and Decision 249 whether one
+changes the other, with Decision 196's composed proposal of the other drug. That states the other drug against ALL her
+medications. *"What happens when you combine rifampicin and nevirapine?"*, for a replica patient on nevirapine, listed
+rifampicin against his lopinavir, zidovudine and didanosine. *"Is there an interaction between fluconazole and
+nevirapine?"* listed fluconazole against his lopinavir and zidovudine.
+
+### The decision
+
+`DrugReferenceInjector.composeTogetherWithHerOwn` keeps, for a question about the pair, only the other drug's interaction
+findings whose partner is her drug asked about. A question about the pair is one `QueryScopeRouter.asksWhetherTwoDrugsInteract`
+or `asksWhetherOneDrugChangesTheOther` reads. A contraindication of the other drug, her allergy covering it, is about giving
+it at all, so it stays, as Decision 371 keeps it apart. *"Is naproxen contraindicated with her aspirin?"* keeps her
+ibuprofen-allergy cross-reactivity and still answers as Decision 359 answers it. Her
+drug is the order she takes it in, every substance of it (Decisions 285, 288, through `ofHerOrders`). A first build
+matched her drug's own substances alone, and on the replica it dropped methadone's ritonavir finding from *"Does lopinavir
+affect methadone?"* for a patient on lopinavir / ritonavir.
+
+A proposal of the two (*"Can I give her rifampicin with her nevirapine?"*) is untouched. Giving the other drug is what it
+asks, and its findings against all she takes answer that (Decision 196). The chips follow the answer's lines through
+Decision 615.
+
+Pinned by `TogetherWithHerOwnMedicationContextTest.aQuestionAboutHerDrugAndAnotherStatesTheOtherAgainstHerDrugAlone`. It
+reddens without the change, and its proposal control keeps the lines.

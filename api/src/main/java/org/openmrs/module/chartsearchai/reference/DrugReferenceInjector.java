@@ -1429,7 +1429,7 @@ public class DrugReferenceInjector {
 					findingNumbers,
 					orderRecordNumbers,
 					orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers,
-					pairExtent.stated(), context);
+					pairExtent.stated(), context, orderEntries);
 		} else if (context != null
 				&& ChartSearchAiUtils.getBooleanGlobalProperty(
 						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
@@ -9055,20 +9055,24 @@ public class DrugReferenceInjector {
 	 * which carries the pair asked about among them. Her own drug's findings against her other medications are not its
 	 * lines; the validator draws their chips apart.
 	 */
-	private static String composeTogetherWithHerOwn(String question, List<DrugReference> questionDrugs,
+	private String composeTogetherWithHerOwn(String question, List<DrugReference> questionDrugs,
 			List<AskedDrug> ownNamed, Set<Object> herSubstances, List<SafetyWarning> findings, List<Integer> numbers,
 			Map<String, Integer> orderRecordNumbers, Map<String, Integer> herOrderRecords, PairChipExtent pairs,
-			PatientClinicalContext context) {
+			PatientClinicalContext context, List<DrugReference> orderEntries) {
 		AskedDrug proposed = theOneOfTwoDrugsNotHers(question, questionDrugs, ownNamed, herSubstances, findings);
 		List<DrugReference> proposedRows = proposed.rows;
 		// Each of hers once, in the question's order (ADR Decision 263): "Nevirapine and Lopinavir are among …".
 		List<String> herLabels = new ArrayList<String>();
+		Set<Object> herAsked = new HashSet<Object>();
 		AskedDrug named = null;
 		for (AskedDrug drug : withOwnNamed(askedDrugs(question, questionDrugs, context, false), ownNamed)) {
 			if (drug.substances.equals(proposed.substances)) {
 				named = drug;
 			} else {
 				herLabels.add(drug.label);
+				// Her drug is the order she takes it in, every substance of it (ADR Decisions 285, 288): "Does lopinavir affect
+				// methadone?" of a patient on lopinavir / ritonavir asks of the ritonavir in that order too.
+				herAsked.addAll(ofHerOrders(drug, orderEntries, context));
 			}
 		}
 		String hers = herLabels.size() == 1 ? herLabels.get(0) + OWN_MEDICATION_LEAD
@@ -9092,6 +9096,29 @@ public class DrugReferenceInjector {
 		List<String> words = wordsBesideItsNames(question, questionDrugs, ownNamed);
 		Lead lead = QueryScopeRouter.asksWhetherTwoDrugsInteract(words) ? Lead.INTERACTS
 				: QueryScopeRouter.asksWhetherOneDrugChangesTheOther(words) ? Lead.NOT_GIVE : Lead.of(question, proposedRows);
+		// A question about the pair — whether they interact, whether one changes the other — states the other drug against
+		// her drug asked about alone, never against her other medications (ADR Decision 617, the owner's direction that an
+		// answer carries nothing the question did not ask). A proposal of the two keeps them all: giving the other drug is what
+		// it asks, and its findings against all she takes answer that (ADR Decision 196).
+		// A contraindication of the other drug — her allergy covering it — is about giving it at all, so it stays (as ADR
+		// Decision 371 keeps it apart).
+		boolean aboutThePair = QueryScopeRouter.asksWhetherTwoDrugsInteract(words)
+				|| QueryScopeRouter.asksWhetherOneDrugChangesTheOther(words);
+		if (aboutThePair && !herAsked.isEmpty()) {
+			List<SafetyWarning> pairOnly = new ArrayList<SafetyWarning>();
+			List<Integer> pairOnlyNumbers = new ArrayList<Integer>();
+			for (int i = 0; i < ofIt.size(); i++) {
+				if (!SafetyWarning.TYPE_INTERACTION.equals(ofIt.get(i).getType()) || hasPartnerOf(ofIt.get(i), herAsked)) {
+					pairOnly.add(ofIt.get(i));
+					pairOnlyNumbers.add(ofItNumbers.get(i));
+				}
+			}
+			if (pairOnly.isEmpty()) {
+				return null;
+			}
+			ofIt = pairOnly;
+			ofItNumbers = pairOnlyNumbers;
+		}
 		String composed = composeFromFindings(ofIt, ofItNumbers, orderRecordNumbers, herOrderRecords, true, pairs,
 				lead, SCREEN_SCOPE, proposed.substances.size() > 1 ? proposed.label : null);
 		return composed == null ? null : notHers + hers + ".\n" + composed;

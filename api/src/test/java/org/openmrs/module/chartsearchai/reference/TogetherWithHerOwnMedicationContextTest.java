@@ -101,6 +101,39 @@ public class TogetherWithHerOwnMedicationContextTest extends BaseModuleContextSe
 	}
 
 	/**
+	 * Whether her drug and another interact, or whether one changes the other, states the other drug against her drug alone
+	 * and never against her other medications (ADR Decision 617, the owner's direction that an answer carries nothing the
+	 * question did not ask). On the demo replica "What happens when you combine rifampicin and nevirapine?" of a patient on
+	 * nevirapine listed rifampicin against his lopinavir, zidovudine and didanosine. Two drugs proposed together, one hers,
+	 * still answer the proposal of the other (ADR Decision 196).
+	 */
+	@Test
+	public void aQuestionAboutHerDrugAndAnotherStatesTheOtherAgainstHerDrugAlone() {
+		for (String question : Arrays.asList("Is there an interaction between rifampicin and nevirapine?",
+				"Does rifampicin interact with her nevirapine?", "Will rifampicin lower her nevirapine levels?",
+				"What happens when you combine rifampicin and nevirapine?")) {
+			String answer = askOverTheseOrders(question).getModuleAnswer();
+			assertNotNull(answer, "precondition: the module answers " + question);
+			assertTrue(answer.contains("Rifampicin (rifampin) interacts with active order Nevirapine"), question + ": " + answer);
+			assertFalse(answer.contains("interacts with active order Lopinavir") || answer.contains("interacts with active order "
+					+ "Lamivudine / zidovudine"), question + " — nothing against her other medications: " + answer);
+		}
+		// Her lopinavir is the lopinavir / ritonavir order she takes it in, so what relates the other drug to its ritonavir is
+		// the pair too (ADR Decisions 285, 288): the replica dropped methadone's ritonavir finding until it was.
+		String methadone = askOverTheseOrders("Does lopinavir affect methadone?").getModuleAnswer();
+		assertNotNull(methadone, "precondition: the module answers it");
+		assertEquals(2, methadone.split("\nMethadone interacts with active order ", -1).length - 1,
+			"both of methadone's findings against her lopinavir / ritonavir: " + methadone);
+		assertTrue(methadone.contains("\nMethadone interacts with active order Ritonavir"), "its ritonavir: " + methadone);
+		assertFalse(methadone.contains("interacts with active order Nevirapine")
+				|| methadone.contains("interacts with active order Lamivudine / zidovudine"),
+			"nothing against her other medications: " + methadone);
+		String together = askOverTheseOrders("Can I give her rifampicin with her nevirapine?").getModuleAnswer();
+		assertTrue(together != null && together.contains("interacts with active order Lopinavir"),
+			"a proposal of the two still states the other against her other medications: " + together);
+	}
+
+	/**
 	 * Her drug named as hers in a together question (ADR Decision 246). On the 3.7.1 standalone Donald Thompson's "Is
 	 * fluconazole safe with his warfarin?" fitted no shape — the together grammar took no "his" — and the model answered
 	 * "The records do not address the safety of Fluconazole with his current regimen" beside a Major finding relating the

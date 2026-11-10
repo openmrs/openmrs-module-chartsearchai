@@ -4322,8 +4322,19 @@ public final class QueryScopeRouter {
 	 */
 	public static boolean asksOnlyAboutInteractions(String question) {
 		return question != null && (DDI_CUES.matcher(question).find() || INTERACTION_CUES.matcher(question).find())
-				&& !MEDICATION_SAFETY_CUES.matcher(question).find() && !asksAboutAllergies(question)
-				&& !asksAboutConditions(question);
+				&& !asksWhatAContraindicationAnswers(question);
+	}
+
+	/**
+	 * Whether the question asks anything a contraindication answers: a safety-or-change cue ({@link
+	 * #MEDICATION_SAFETY_CUES} — "safe", "contraindicated", "problems", "stop" and the rest), or the allergy or condition
+	 * domain — the half of {@link #asksOnlyAboutInteractions} that is not the interaction cue. <em>"Is naproxen
+	 * contraindicated with her aspirin?"</em> does; <em>"Does rifampicin interact with her nevirapine?"</em> does not, so
+	 * an answer about the pair states no allergy covering either (ADR Decision 618).
+	 */
+	public static boolean asksWhatAContraindicationAnswers(String question) {
+		return question != null && (MEDICATION_SAFETY_CUES.matcher(question).find() || asksAboutAllergies(question)
+				|| asksAboutConditions(question));
 	}
 
 	public static boolean asksAboutAllergies(String question) {

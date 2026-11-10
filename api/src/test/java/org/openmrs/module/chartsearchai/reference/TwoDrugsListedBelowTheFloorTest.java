@@ -21,6 +21,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 
 /**
@@ -138,55 +139,70 @@ public class TwoDrugsListedBelowTheFloorTest extends BaseModuleContextSensitiveT
 
 	/**
 	 * Two of hers the data lists only below the floor, one of them related by a finding to a third order of hers, is answered
-	 * as without that order, the finding stated apart (ADR Decision 370): on the 3.7.1 standalone "Does her lamivudine
-	 * interact with her nevirapine?" went to the model for Mogan Kamwara, on stavudine too, whose answer ended "Unknown
-	 * severity interaction (DDInter 2.0; no mechanism description on file) and.".
+	 * as without that order, and the finding is not stated (ADR Decisions 370, 618 — the owner's direction that an answer
+	 * carries nothing the question did not ask): on the 3.7.1 standalone "Does her lamivudine interact with her nevirapine?"
+	 * went to the model for Mogan Kamwara, on stavudine too, whose answer ended "Unknown severity interaction (DDInter 2.0; no
+	 * mechanism description on file) and."; the module then stated lamivudine against her stavudine apart, which the question
+	 * never asked.
 	 */
 	@Test
-	public void aFindingRelatingOneOfHersToAThirdOrderIsStatedApart() {
+	public void aFindingRelatingOneOfHersToAThirdOrderIsNotStated() {
 		PatientClinicalContext.ActiveDrugOrder lamivudine = DrugReferenceTestSupport.activeOrder("order-3tc", "Lamivudine 150mg",
 			"Lamivudine");
 		PatientClinicalContext.ActiveDrugOrder nevirapine = DrugReferenceTestSupport.activeOrder("order-nvp", "Nevirapine 200mg",
 			"Nevirapine");
-		String two = ask("Does her lamivudine interact with her nevirapine?", lamivudine, nevirapine);
-		assertNotNull(two, "precondition: answered of the two alone");
-		String[] twoLines = two.replaceAll("\\[\\d+\\]", "[n]").split("\n");
-		String answer = ask("Does her lamivudine interact with her nevirapine?", lamivudine, nevirapine,
-			DrugReferenceTestSupport.activeOrder("order-d4t", "Stavudine 30mg", "Stavudine"));
-		assertNotNull(answer, "the module answers");
-		String[] lines = answer.replaceAll("\\[\\d+\\]", "[n]").split("\n");
-		assertEquals(twoLines[0], lines[0], "was: " + answer);
-		assertEquals(twoLines[1], lines[1], "was: " + answer);
-		assertEquals(DrugReferenceInjector.ABOUT_HER_OTHER_MEDICATIONS_LEAD, lines[2], "was: " + answer);
-		assertTrue(lines[3].contains("Stavudine"), "the finding relating lamivudine to stavudine: " + answer);
-		DrugReferenceTestSupport.assertNoScopeLine(answer);
+		for (String question : Arrays.asList("Does her lamivudine interact with her nevirapine?",
+			"Can she take lamivudine and nevirapine together?")) {
+			String two = ask(question, lamivudine, nevirapine);
+			assertNotNull(two, "precondition: answered of the two alone: " + question);
+			String answer = ask(question, lamivudine, nevirapine,
+				DrugReferenceTestSupport.activeOrder("order-d4t", "Stavudine 30mg", "Stavudine"));
+			assertNotNull(answer, "the module answers " + question);
+			assertEquals(mask(two), mask(answer),
+				question + " — as of the two alone: " + answer);
+			assertTrue(!answer.contains("Stavudine") && !answer.contains(DrugReferenceInjector.ABOUT_HER_OTHER_MEDICATIONS_LEAD),
+				question + " — nothing about her stavudine: " + answer);
+		}
 	}
 
 	/**
-	 * Two drugs the data lists only below the floor, one of them related by a contraindication to her allergy, is answered
-	 * as without the allergy, the contraindication stated apart (ADR Decision 371): on the 3.7.1 standalone "Does her
-	 * amoxicillin interact with her clopidogrel?" went to the model for the three patients recorded allergic to a penicillin,
-	 * which answered "The records do not address whether Amoxicillin interacts with Clopidogrel".
+	 * Whether two drugs the data lists only below the floor interact, one of them covered by her allergy, is answered as
+	 * without the allergy (ADR Decisions 371, 618): the allergy says nothing of whether the two interact. Asked whether
+	 * giving them is safe, it bears on giving that drug at all, and is stated apart as before: on the 3.7.1 standalone
+	 * "Does her amoxicillin interact with her clopidogrel?" went to the model for the three patients recorded allergic to a
+	 * penicillin, which answered "The records do not address whether Amoxicillin interacts with Clopidogrel".
 	 */
 	@Test
-	public void aContraindicationAboutADrugAskedAboutIsStatedApart() {
+	public void aContraindicationAboutADrugAskedAboutIsStatedOnlyWhereGivingItIsAsked() {
 		PatientClinicalContext.ActiveDrugOrder metformin = DrugReferenceTestSupport.activeOrder("order-met", "Metformin",
 			"Metformin");
-		String plain = askAllergic("Does her amoxicillin interact with her clopidogrel?", null, metformin);
-		assertNotNull(plain, "precondition: answered with no allergy");
-		String[] plainLines = plain.replaceAll("\\[\\d+\\]", "[n]").split("\n");
-		String answer = askAllergic("Does her amoxicillin interact with her clopidogrel?",
+		for (String interact : Arrays.asList("Does her amoxicillin interact with her clopidogrel?",
+			"Will amoxicillin lower her clopidogrel levels?")) {
+			String plain = askAllergic(interact, null, metformin);
+			assertNotNull(plain, "precondition: answered with no allergy: " + interact);
+			PatientChart chart = askAllergicChart(interact, DrugReferenceTestSupport.set("penicillin g"), metformin);
+			String answer = chart.getModuleAnswer();
+			assertNotNull(answer, "the module answers " + interact);
+			assertEquals(mask(plain), mask(answer), interact + " — as without the allergy: " + answer);
+			// and no chip either: the answer states no finding, so none bears on it (ADR Decisions 615, 618)
+			assertEquals(java.util.Collections.emptySet(), chart.getFindingsBearingOnTheQuestion(),
+				interact + " — no finding published beside an answer stating none");
+		}
+		String together = askAllergic("Is it safe to give amoxicillin and then clopidogrel later?",
 			DrugReferenceTestSupport.set("penicillin g"), metformin);
-		assertNotNull(answer, "the module answers");
-		String[] lines = answer.replaceAll("\\[\\d+\\]", "[n]").split("\n");
-		assertEquals(plainLines[0], lines[0], "was: " + answer);
-		assertEquals(plainLines[1], lines[1], "was: " + answer);
+		assertNotNull(together, "the module answers whether giving them is safe");
+		String[] lines = mask(together).split("\n");
 		int lead = Arrays.asList(lines).indexOf(DrugReferenceInjector.ABOUT_THE_DRUGS_ASKED_ABOUT_LEAD);
-		assertTrue(lead > 1 && lines[lead + 1].startsWith("Amoxicillin"), "the allergy finding apart: " + answer);
-		DrugReferenceTestSupport.assertNoScopeLine(answer);
+		assertTrue(lead > 1 && lines[lead + 1].startsWith("Amoxicillin"), "the allergy finding apart: " + together);
+		DrugReferenceTestSupport.assertNoScopeLine(together);
 	}
 
 	private static String askAllergic(String question, java.util.Set<String> allergies,
+			PatientClinicalContext.ActiveDrugOrder... given) {
+		return askAllergicChart(question, allergies, given).getModuleAnswer();
+	}
+
+	private static PatientChart askAllergicChart(String question, java.util.Set<String> allergies,
 			PatientClinicalContext.ActiveDrugOrder... given) {
 		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(given);
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
@@ -195,7 +211,7 @@ public class TwoDrugsListedBelowTheFloorTest extends BaseModuleContextSensitiveT
 		}
 		return DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.shippedServiceWithGroups()).injectRecords(
 			DrugReferenceTestSupport.oneRecordChart(), DrugReferenceTestSupport.ctx(45, null, names, null, allergies, null,
-				orders), question).getModuleAnswer();
+				orders), question);
 	}
 
 	private static String ask(String question, PatientClinicalContext.ActiveDrugOrder... given) {

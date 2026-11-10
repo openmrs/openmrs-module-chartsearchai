@@ -236,15 +236,17 @@ public class AlwaysCollapsedAnswerTest extends BaseModuleContextSensitiveTest {
 	 * Whether two drugs interact that the data lists only below the floor is answered in the sentence in view, before what
 	 * else was found is counted (ADR Decision 601): on the demo replica "Do her nevirapine and stavudine interact?" was
 	 * summed up by her orders and a count headed by another order's Major, and the listing that answers it was not in view.
+	 * Since ADR Decision 618 nothing about her other orders follows it.
 	 */
 	@Test
 	public void twoDrugsListedBelowTheFloorAreAnsweredInTheSentenceInView() {
 		PatientChart chart = ask("Does her lamivudine interact with her nevirapine?", null, demoOrders());
 		String summary = chart.getModuleAnswerSummary();
 		assertNotNull(summary, "was: " + chart.getModuleAnswer());
-		assertTrue(summary.startsWith("Lamivudine and Nevirapine are both among this patient's active medications; the "
-				+ "interaction data lists Lamivudine against Nevirapine, with no severity or mechanism on file; "),
-			"was: " + summary);
+		// and nothing after it: what relates either to her stavudine is not what was asked (ADR Decision 618)
+		assertEquals("Lamivudine and Nevirapine are both among this patient's active medications; the interaction data lists "
+				+ "Lamivudine against Nevirapine, with no severity or mechanism on file [n] [n].",
+			summary.replaceAll("\\[\\d+\\]", "[n]"), "was: " + summary);
 	}
 
 	private static List<PatientClinicalContext.ActiveDrugOrder> demoOrders() {

@@ -134,6 +134,40 @@ public class TogetherWithHerOwnMedicationContextTest extends BaseModuleContextSe
 	}
 
 	/**
+	 * Whether her drug and another interact, or whether one changes the other, states no allergy covering the other drug
+	 * (ADR Decision 618, the owner's direction that an answer carries nothing the question did not ask): the allergy says
+	 * nothing of what relates the two. Asked whether she may be given the other with hers, it bears on giving it at all and
+	 * is stated.
+	 */
+	@Test
+	public void aQuestionAboutHerDrugAndAnotherStatesNoAllergyCoveringTheOther() {
+		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
+			DrugReferenceTestSupport.activeOrder("order-nvp", "Nevirapine 200mg", "Nevirapine"));
+		LinkedHashSet<String> names = new LinkedHashSet<String>(orders.get(0).getNames());
+		for (String question : Arrays.asList("Is there an interaction between rifampicin and nevirapine?",
+			"Does rifampicin interact with her nevirapine?", "Will rifampicin lower her nevirapine levels?",
+			"Can I give her rifampicin with her nevirapine?")) {
+			String plain = DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.shippedServiceWithGroups())
+					.injectRecords(DrugReferenceTestSupport.oneRecordChart(),
+						DrugReferenceTestSupport.ctx(40, null, names, null, null, null, orders), question)
+					.getModuleAnswer();
+			String allergic = DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.shippedServiceWithGroups())
+					.injectRecords(DrugReferenceTestSupport.oneRecordChart(),
+						DrugReferenceTestSupport.ctx(40, null, names, null, DrugReferenceTestSupport.set("rifampicin"), null,
+							orders), question)
+					.getModuleAnswer();
+			assertNotNull(plain, "precondition: the module answers " + question);
+			assertNotNull(allergic, "the module answers " + question + " with the allergy");
+			boolean proposal = question.startsWith("Can I give");
+			assertEquals(proposal, allergic.contains("allergy"), question + ": " + allergic);
+			if (!proposal) {
+				assertEquals(plain.replaceAll("\\[\\d+\\]", "[n]"), allergic.replaceAll("\\[\\d+\\]", "[n]"),
+					question + " — as without the allergy: " + allergic);
+			}
+		}
+	}
+
+	/**
 	 * Her drug named as hers in a together question (ADR Decision 246). On the 3.7.1 standalone Donald Thompson's "Is
 	 * fluconazole safe with his warfarin?" fitted no shape — the together grammar took no "his" — and the model answered
 	 * "The records do not address the safety of Fluconazole with his current regimen" beside a Major finding relating the

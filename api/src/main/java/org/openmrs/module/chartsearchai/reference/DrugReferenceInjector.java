@@ -1803,9 +1803,8 @@ public class DrugReferenceInjector {
 					stated.add(renderedFindings.get(f).getDetail());
 				}
 			}
-			if (!stated.isEmpty()) {
-				injected.markFindingsBearingOnTheQuestion(stated);
-			}
+			// An answer stating no finding — two drugs the data does not relate — publishes none (ADR Decision 618).
+			injected.markFindingsBearingOnTheQuestion(stated);
 		}
 		// Stamped on the chart the injector built and on no other, because only this pass knows what
 		// it resolved (issue #469). A chart this method returns early is one it resolved nothing on,
@@ -8293,7 +8292,6 @@ public class DrugReferenceInjector {
 		Set<Object> both = new HashSet<Object>(asked.get(0).substances);
 		both.addAll(asked.get(1).substances);
 		List<Integer> notHersLines = new ArrayList<Integer>();
-		List<Integer> herOwnLines = new ArrayList<Integer>();
 		List<Integer> askedAboutLines = new ArrayList<Integer>();
 		// A shared class relating the two is about them, stated once after what the data lists between them: from the drug
 		// the question names first where a finding states it from there (ADR Decision 584).
@@ -8342,7 +8340,7 @@ public class DrugReferenceInjector {
 				continue;
 			}
 			// A finding about a drug of hers the question names, relating it to none of the two — a third order of hers,
-			// or her allergy — is about her medications, stated apart after the rest (ADR Decision 370).
+			// or her allergy — is about her medications and not the question, so it is not stated (ADR Decisions 370, 618).
 			boolean ofOneOfHers = false;
 			for (AskedDrug drug : asked) {
 				ofOneOfHers |= drug.isHers(herSubstances)
@@ -8351,7 +8349,6 @@ public class DrugReferenceInjector {
 			if (!ofOneOfHers) {
 				return null;
 			}
-			herOwnLines.add(i);
 		}
 		List<String> lines = new ArrayList<String>();
 		boolean first = asked.get(0).isHers(herSubstances);
@@ -8386,19 +8383,27 @@ public class DrugReferenceInjector {
 		// Of a drug asked about against her medications, only what relates it to the other asked about (ADR Decision 616).
 		lines.addAll(findingLines(findings, numbers, relatingTheOther(findings, notHersLines, asked), orderRecordNumbers,
 			herOrderRecords, true));
-		if (!askedAboutLines.isEmpty()) {
+		// Her allergy covering a drug asked about bears on giving it, so it is stated where giving them together, or anything
+		// else a contraindication answers, is asked, and never where only what relates the two is; a finding relating
+		// one of hers to a third order of hers, or her allergy to one she already takes, is about neither, and is never
+		// stated (ADR Decision 618, the owner's direction that an answer carries nothing the question did not ask). Each is
+		// still classified above, so a finding none of these covers still leaves the pair to the model.
+		if (!askedAboutLines.isEmpty() && (!asksAboutThePair(words) || QueryScopeRouter.asksWhatAContraindicationAnswers(
+			question))) {
 			lines.add(ABOUT_THE_DRUGS_ASKED_ABOUT_LEAD);
 			lines.addAll(findingLines(findings, numbers, askedAboutLines, orderRecordNumbers, herOrderRecords, true));
-		}
-		if (!herOwnLines.isEmpty()) {
-			lines.add(ABOUT_HER_OTHER_MEDICATIONS_LEAD);
-			lines.addAll(findingLines(findings, numbers, herOwnLines, orderRecordNumbers, herOrderRecords, true));
 		}
 		// That the check does not compare a shared class is not said beside a line saying the two share one.
 		if (!listed.isEmpty() || pairLines.isEmpty()) {
 			lines.add(listed.isEmpty() ? SHARED_CLASS_NOT_COMPARED : BELOW_FLOOR_SCOPE);
 		}
 		return String.join("\n", lines);
+	}
+
+	/** Whether a question asks what relates two drugs — whether they interact, or whether one changes the other — and not
+	 *  whether to give them (ADR Decisions 617, 618). */
+	private static boolean asksAboutThePair(List<String> words) {
+		return QueryScopeRouter.asksWhetherTwoDrugsInteract(words) || QueryScopeRouter.asksWhetherOneDrugChangesTheOther(words);
 	}
 
 	/** Whether {@code finding} is a class-only finding about {@code subject} whose order is of {@code partner} — {@link
@@ -9100,15 +9105,17 @@ public class DrugReferenceInjector {
 		// her drug asked about alone, never against her other medications (ADR Decision 617, the owner's direction that an
 		// answer carries nothing the question did not ask). A proposal of the two keeps them all: giving the other drug is what
 		// it asks, and its findings against all she takes answer that (ADR Decision 196).
-		// A contraindication of the other drug — her allergy covering it — is about giving it at all, so it stays (as ADR
-		// Decision 371 keeps it apart).
-		boolean aboutThePair = QueryScopeRouter.asksWhetherTwoDrugsInteract(words)
-				|| QueryScopeRouter.asksWhetherOneDrugChangesTheOther(words);
+		// Nor, where the question asks nothing a contraindication answers, is any other finding of the other drug stated —
+		// her allergy covering it, a condition of hers: neither says what relates the two (ADR Decision 618). "Is naproxen
+		// contraindicated with her aspirin?" asks what her allergy answers, and keeps it (ADR Decision 359).
+		boolean aboutThePair = asksAboutThePair(words);
+		boolean keepsTheRest = QueryScopeRouter.asksWhatAContraindicationAnswers(question);
 		if (aboutThePair && !herAsked.isEmpty()) {
 			List<SafetyWarning> pairOnly = new ArrayList<SafetyWarning>();
 			List<Integer> pairOnlyNumbers = new ArrayList<Integer>();
 			for (int i = 0; i < ofIt.size(); i++) {
-				if (!SafetyWarning.TYPE_INTERACTION.equals(ofIt.get(i).getType()) || hasPartnerOf(ofIt.get(i), herAsked)) {
+				if (SafetyWarning.TYPE_INTERACTION.equals(ofIt.get(i).getType()) ? hasPartnerOf(ofIt.get(i), herAsked)
+						: keepsTheRest) {
 					pairOnly.add(ofIt.get(i));
 					pairOnlyNumbers.add(ofItNumbers.get(i));
 				}

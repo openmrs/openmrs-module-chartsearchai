@@ -20622,7 +20622,7 @@ Pinned by `WhichOfHerMedicationsInteractTest.whatInteractsWithHerDrugSheIsNotOnS
 ## Decision 370: Two drugs the data does not relate at a reported rating state a finding about one of hers apart
 
 **Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
-`docs/ddi-tested-questions.md` answer correctly for every patient. It completes [Decision 302](#decision-302-two-drugs-the-interaction-data-relates-in-no-way-are-said-to-be-so-with-which-of-them-she-takes) and
+**Superseded in part by [Decision 618](#decision-618-a-question-about-two-drugs-states-nothing-about-a-third-order-of-hers-nor-an-allergy-it-does-not-ask-about):** the finding about one of hers is no longer stated at all; the pair is still answered as without it. `docs/ddi-tested-questions.md` answer correctly for every patient. It completes [Decision 302](#decision-302-two-drugs-the-interaction-data-relates-in-no-way-are-said-to-be-so-with-which-of-them-she-takes) and
 [Decision 329](#decision-329-two-drugs-the-data-lists-against-each-other-only-below-the-severity-floor-are-answered-with-that-listing).
 
 ### Context
@@ -20643,7 +20643,7 @@ Pinned by `TwoDrugsListedBelowTheFloorTest.aFindingRelatingOneOfHersToAThirdOrde
 ## Decision 371: Two drugs the data does not relate at a reported rating state a contraindication to one not hers apart
 
 **Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
-`docs/ddi-tested-questions.md` answer correctly for every patient. It completes [Decision 370](#decision-370-two-drugs-the-data-does-not-relate-at-a-reported-rating-state-a-finding-about-one-of-hers-apart) for a drug she is not
+**Superseded in part by [Decision 618](#decision-618-a-question-about-two-drugs-states-nothing-about-a-third-order-of-hers-nor-an-allergy-it-does-not-ask-about):** the contraindication is stated only where the question asks something a contraindication answers. `docs/ddi-tested-questions.md` answer correctly for every patient. It completes [Decision 370](#decision-370-two-drugs-the-data-does-not-relate-at-a-reported-rating-state-a-finding-about-one-of-hers-apart) for a drug she is not
 on.
 
 ### Context
@@ -28318,7 +28318,7 @@ to what combining them does, state the other drug against all of her medications
 ## Decision 617: A question about her drug and another states the other against her drug alone
 
 **Status: Accepted** (November 2026), on the owner's direction ("Yes"). It carries Decision 616 to pairs where one drug is
-hers, and supersedes the part of Decision 218 that states the other drug against all her medications.
+hers, and supersedes the part of Decision 218 that states the other drug against all her medications. **Superseded in part by [Decision 618](#decision-618-a-question-about-two-drugs-states-nothing-about-a-third-order-of-hers-nor-an-allergy-it-does-not-ask-about):** the other drug's contraindication now stays only where the question asks something a contraindication answers.
 
 ### Context
 
@@ -28345,3 +28345,55 @@ Decision 615.
 
 Pinned by `TogetherWithHerOwnMedicationContextTest.aQuestionAboutHerDrugAndAnotherStatesTheOtherAgainstHerDrugAlone`. It
 reddens without the change, and its proposal control keeps the lines.
+
+## Decision 618: A question about two drugs states nothing about a third order of hers, nor an allergy it does not ask about
+
+**Status: Accepted** (November 2026), on the owner's direction ("Can you fix that too?", of the sections Decisions 370
+and 371 add). It carries Decisions 616 and 617 to the rest of a two-drug answer, and supersedes in part Decisions 370,
+371 and 617.
+
+### Context
+
+Two sections still followed the answer to a question about two drugs. Under Decision 370, a finding relating one of hers
+asked about to a third order of hers, or to her allergy, was stated under `ABOUT_HER_OTHER_MEDICATIONS_LEAD`.
+*"Is there an interaction between lamivudine and zidovudine?"* on the demo replica followed the pair with lamivudine
+against her efavirenz, her other lamivudine orders and her stavudine. Under Decision 371, her allergy covering a drug asked
+about that she is not on was stated under `ABOUT_THE_DRUGS_ASKED_ABOUT_LEAD`, whatever the question asked. Decision 617
+kept the same allergy line for the other drug when one of the two is hers. Neither says whether the two interact.
+
+### The decision
+
+`DrugReferenceInjector.composeTwoDrugsTheDataDoesNotRelate` no longer states a finding about one of hers asked about that
+relates it to neither drug. The finding is still classified, so a finding the composer cannot place still leaves the pair
+to the model. It states her allergy covering a drug asked about except where the question asks only what relates the
+two. A question asks that when `QueryScopeRouter.asksWhetherTwoDrugsInteract` or `asksWhetherOneDrugChangesTheOther`
+reads it (`DrugReferenceInjector.asksAboutThePair`, which Decision 617's trim now shares) and it asks nothing a
+contraindication answers. That second test is `QueryScopeRouter.asksWhatAContraindicationAnswers`:
+Decision 190's safety-or-change cues, or the allergy or condition domain. It was extracted from
+`asksOnlyAboutInteractions`, which now calls it. `composeTogetherWithHerOwn` keeps the other drug's findings that are not
+interactions under the same test. *"Is naproxen contraindicated with her aspirin?"* still keeps her ibuprofen-allergy
+cross-reactivity (Decision 359). *"Can I give her rifampicin with her nevirapine?"* and every proposal are untouched,
+because giving the drug is what they ask (Decision 196).
+
+The chips follow the answer's lines through Decision 615, whose stamp was skipped where the answer cited no finding. That
+case had published every finding of either drug as a chip. Here the answer cites only the two reference records, so
+removing the sections alone left the allergy chip, and each drug's chips against her other medications, beside it. The
+stamp is now recorded empty there, and an empty stamp publishes no chip.
+
+The cue set is Decision 190's and was not widened for this. A pair question carrying one of its cues in another sense
+keeps the allergy line. On the replica, *"Will amoxicillin change his efavirenz levels?"* ("change") and *"Does amoxicillin
+clash with his efavirenz?"* ("clash") still state it. Proposals of three drugs (Decision 358's section about her own drug) and the section Decision
+296 draws apart after a single-drug answer are not changed by this decision.
+
+Measured on the demo replica on 2026-11-10 (E2B), over 26 (patient, question) pairs on 7 patients: eight wordings for
+the two patients recorded allergic to the penicillins, and two lamivudine wordings for five patients the earlier sweep found
+carrying Decision 370's section. Answers carrying a *"Found as well"* section fell from 18 to 4. The 4 are the allergy line
+under *"Is it safe to give amoxicillin and then efavirenz later?"* and *"Is amoxicillin contraindicated with his
+efavirenz?"*, for each patient. Chips fell from 74 to 21, and every one left is about the two drugs asked or is the
+allergy those two questions ask about. Every answer stayed the module's.
+
+Pinned by `TwoDrugsListedBelowTheFloorTest.aFindingRelatingOneOfHersToAThirdOrderIsNotStated`,
+`TwoDrugsListedBelowTheFloorTest.aContraindicationAboutADrugAskedAboutIsStatedOnlyWhereGivingItIsAsked` and
+`TogetherWithHerOwnMedicationContextTest.aQuestionAboutHerDrugAndAnotherStatesNoAllergyCoveringTheOther`. Each reddens
+without the change. Removing the contraindication test from the first composer reddens the second test's kept half, and
+removing it from the second reddens `TerseDrugQuestionWordingsTest.whetherADrugIsContraindicatedWithHersMakingNoVerdictStatesWhatTheCheckFound`.

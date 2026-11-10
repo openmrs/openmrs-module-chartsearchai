@@ -1356,8 +1356,14 @@ public class LlmInferenceService implements ChartSearchService {
 			return new ArrayList<SafetyWarning>();
 		}
 		boolean allergyToOneThing = QueryScopeRouter.asksWhetherAllergicToOneNamedThing(question);
+		// And of a question asking what one drug does to her, only the findings the model judged to bear on it (ADR Decision
+		// 613): the duplicate order beside "Should I stop his nevirapine because of the rash?" was not what was asked.
+		Set<String> bearing = chart.getFindingsBearingOnTheQuestion();
 		List<SafetyWarning> published = new ArrayList<SafetyWarning>(chips.size());
 		for (SafetyWarning chip : chips) {
+			if (bearing != null && !bearing.contains(chip.getDetail())) {
+				continue;
+			}
 			if (allergyToOneThing && !SafetyWarning.TYPE_CONTRAINDICATION.equals(chip.getType())) {
 				continue;
 			}
@@ -1403,6 +1409,15 @@ public class LlmInferenceService implements ChartSearchService {
 	private SafetyReading readForDrugSafety(Patient patient, String question, PatientChart built,
 			ChartReadStatus chartRead, CancellationSignal cancellation) {
 		PatientChart injected = drugReferenceInjector.inject(built, patient, question, chartRead);
+		// A question asking what one drug does to her is injected again, keeping only the findings the model judges to bear
+		// on it (ADR Decision 613). Again rather than in the one pass, so an injector a caller substitutes, which never says
+		// the question asks so, is called as it always was.
+		if (injected != null && injected.asksWhatADrugDoesToHer() && ChartSearchAiUtils.getBooleanGlobalProperty(
+			ChartSearchAiConstants.GP_DRUG_SAFETY_READ_QUESTIONS_WITH_THE_MODEL,
+			ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_READ_QUESTIONS_WITH_THE_MODEL)) {
+			injected = drugReferenceInjector.injectKeepingWhatBearsOn(built, patient, question, chartRead,
+				(asked, findings) -> LlmProvider.interruptible(cancellation, () -> llmProvider.findingsBearingOn(asked, findings)));
+		}
 		SafetyReading reading = readForDrugSafety(patient, question, built, chartRead, cancellation, injected);
 		if (reading.chart != injected || !aWordingRuleKeptTheReadingOff(question, injected)) {
 			return reading;

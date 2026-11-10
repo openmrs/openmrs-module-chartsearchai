@@ -15,8 +15,10 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Consumer;
 
 import org.openmrs.module.chartsearchai.api.provider.CancellationSignal;
@@ -1141,6 +1143,74 @@ public class LlmProvider {
 		}
 		catch (JsonProcessingException | RuntimeException e) {
 			log.warn("The model could not rewrite the question; keeping the router's reading: {}", e.toString());
+			return null;
+		}
+	}
+
+	/**
+	 * The words {@link #findingsBearingOn} asks the model in (ADR Decision 613): which findings bear on the one effect,
+	 * reaction or reason a question names. A constant because it is a prompt: {@code FindingRelevanceEvalTest} scores these
+	 * exact words against labelled findings on the demo's model and the module's default, and rewording them is a change
+	 * to measure there first.
+	 */
+	static final String FINDING_RELEVANCE_SYSTEM_PROMPT = "A clinician asked a question about a patient, and a "
+			+ "drug-interaction check produced numbered findings. A finding is RELATED only if what it states bears directly on "
+			+ "what the clinician asked: the effect, reaction or reason the question names. A finding about something else "
+			+ "(another effect, drug levels, duplicate orders) is NOT related, even if it is about the same drug.\n"
+			+ "Reply with JSON only: {\"related\": [numbers of the related findings]}. Use [] if none is related.";
+
+	/** The reply's one field: the numbers of the findings that bear on the question. */
+	static final String FINDING_RELEVANCE_FIELD = "related";
+
+	/** How long the model may take to judge the findings (ADR Decision 613): it reads them all once, so a slow reply is a
+	 *  busy or failing engine, and every finding then stands as before rather than the answer waiting. */
+	static final int FINDING_RELEVANCE_TIMEOUT_SECONDS = 60;
+
+	/**
+	 * Which of {@code findings} bear on what {@code question} asks of one drug — the rash it causes, a reason to stop it —
+	 * as the model judges them in one call (ADR Decision 613). The medical knowledge that "anaphylaxis" is a reaction a
+	 * recorded allergy bears on, or that "hepatotoxicity" is liver damage, is the model's, never a list in the module.
+	 *
+	 * @return the indexes into {@code findings} the model named, or {@code null} where the question or findings are blank,
+	 *         the call failed, or the reply named no list — the caller then keeps every finding, as before
+	 */
+	public Set<Integer> findingsBearingOn(String question, List<String> findings) {
+		if (question == null || question.trim().isEmpty() || findings == null || findings.isEmpty()) {
+			return null;
+		}
+		LlmEngine engine = getActiveEngine();
+		if (engine == null) {
+			return null;
+		}
+		StringBuilder user = new StringBuilder("Question: \"").append(question.trim()).append("\"\n\nFindings:\n");
+		for (int f = 0; f < findings.size(); f++) {
+			user.append(f + 1).append(". ").append(findings.get(f)).append("\n");
+		}
+		try {
+			LlmEngine.InferenceResult inference = engine.infer(FINDING_RELEVANCE_SYSTEM_PROMPT, user.toString(),
+				Math.min(getTimeoutSeconds(), FINDING_RELEVANCE_TIMEOUT_SECONDS), medicationSafetyResponseFormat());
+			String text = inference == null ? null : inference.getText();
+			if (text == null || text.trim().isEmpty()) {
+				return null;
+			}
+			JsonNode related = MAPPER.readTree(text).get(FINDING_RELEVANCE_FIELD);
+			if (related == null || !related.isArray()) {
+				return null;
+			}
+			Set<Integer> indexes = new HashSet<Integer>();
+			for (JsonNode number : related) {
+				// A number, or a number written as a string, "2", as a small model may write it.
+				int n = number.isIntegralNumber() ? number.asInt()
+						: number.isTextual() && number.textValue().trim().matches("\\d{1,3}")
+								? Integer.parseInt(number.textValue().trim()) : 0;
+				if (n >= 1 && n <= findings.size()) {
+					indexes.add(Integer.valueOf(n - 1));
+				}
+			}
+			return indexes;
+		}
+		catch (JsonProcessingException | RuntimeException e) {
+			log.warn("The model could not judge which findings bear on the question; keeping them all: {}", e.toString());
 			return null;
 		}
 	}

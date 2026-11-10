@@ -1,0 +1,669 @@
+{
+ "_about": "ADR Decision 613: questions asking what one drug does to her, each with the findings the demo replica injected for it on 2026-11-10 (duplicate-order findings, which production never puts to the model, left out), each labelled related, unrelated or borderline by whether what it states bears on the effect, reaction or reason the question names. Borderline is printed and not scored.",
+ "cases": [
+  {
+   "question": "Can fluconazole cause liver damage?",
+   "findings": [
+    {
+     "finding": "Fluconazole interacts with active order Nevirapine — Moderate. Coadministration with fluconazole may increase the plasma concentrations of drugs that are substrates of CYP450 3A4. The mechanism is decreased clearance due to inhibition of CYP450 3A4-mediated metabolism by fluconazole, a moderate inhibitor of the isoenzyme.",
+     "label": "unrelated"
+    }
+   ]
+  },
+  {
+   "question": "Can tramadol cause serotonin syndrome?",
+   "findings": [
+    {
+     "finding": "Tramadol interacts with active order Nevirapine — Moderate. Coadministration with inducers of CYP450 3A4 may decrease the plasma concentrations of tramadol, which is primarily metabolized by CYP450 3A4 and 2D6.  Reduced opioid efficacy can occur, including opioid withdrawal in physically dependent patients.",
+     "label": "unrelated"
+    }
+   ]
+  },
+  {
+   "question": "Can erythromycin cause QT prolongation?",
+   "findings": [
+    {
+     "finding": "Erythromycin interacts with active order Nevirapine — Moderate. Coadministration with nevirapine may decrease the plasma concentrations and therapeutic efficacy of drugs that are substrates of CYP450 3A4. The proposed mechanism is increased clearance due to nevirapine-mediated induction of CYP450 3A4.",
+     "label": "unrelated"
+    }
+   ]
+  },
+  {
+   "question": "Could co-trimoxazole cause hyperkalaemia?",
+   "findings": [
+    {
+     "finding": "Trimethoprim interacts with active order Lamivudine — Minor. In a study with 14 HIV-positive patients, coadministration of trimethoprim/sulfamethoxazole (trimethoprim/sulfamethoxazole DS once a day for 5 days) and lamivudine (300 mg single dose on day 5) resulted in a mean decrease of 35% in lamivudine renal clearance and a mean increase of 43% in lamivudine area under the plasma concentration-time curve. The mechanism of interaction is thought to be competitive inhibition of tubular secretion by trimethoprim. Lamivudine did not affect the pharmacokinetic profile of trimethoprim/sulfamethoxazole. Given the favorable safety profile of lamivudine, this interaction is unlikely to be of clinical significance. However, patients with renal dysfunction should be monitored carefully and the lamivudine dose adjusted if necessary. In addition, it should be noted that the effect of higher dosages of trimethoprim/sulfamethoxazole on lamivudine pharmacokinetics has not been investigated.",
+     "label": "unrelated"
+    }
+   ]
+  },
+  {
+   "question": "Can isoniazid cause neuropathy?",
+   "findings": [
+    {
+     "finding": "Isoniazid interacts with active order Stavudine — Moderate. The risk of peripheral neuropathy may be increased during concurrent use of two or more agents that are associated with this adverse effect. Patient risk factors include diabetes and age older than 60 years.",
+     "label": "related"
+    }
+   ]
+  },
+  {
+   "question": "Should I stop his efavirenz because of the nightmares?",
+   "findings": [
+    {
+     "finding": "Efavirenz interacts with active order Nevirapine — Moderate. Coadministration of nevirapine and efavirenz has resulted in increased toxicity without additional therapeutic benefit over either agent alone. The mechanism of interaction has not been established, although this combination has exhibited strong antagonistic anti-HIV-1 activity in cell culture. Efavirenz is in the same ATC class (J05AG) as active order Nevirapine — possible duplicate therapy",
+     "label": "unrelated"
+    },
+    {
+     "finding": "Efavirenz interacts with active order Lamivudine and Stavudine — Moderate. Coadministration of efavirenz with other agents known to induce hepatotoxicity may potentiate the risk of liver injury. Efavirenz has been associated with hepatotoxicity during postmarketing use.",
+     "label": "unrelated"
+    }
+   ]
+  },
+  {
+   "question": "Can efavirenz cause dizziness?",
+   "findings": [
+    {
+     "finding": "Efavirenz interacts with active order Nevirapine — Moderate. Coadministration of nevirapine and efavirenz has resulted in increased toxicity without additional therapeutic benefit over either agent alone. The mechanism of interaction has not been established, although this combination has exhibited strong antagonistic anti-HIV-1 activity in cell culture. Efavirenz is in the same ATC class (J05AG) as active order Nevirapine — possible duplicate therapy",
+     "label": "unrelated"
+    },
+    {
+     "finding": "Efavirenz interacts with active order Lamivudine and Stavudine — Moderate. Coadministration of efavirenz with other agents known to induce hepatotoxicity may potentiate the risk of liver injury. Efavirenz has been associated with hepatotoxicity during postmarketing use.",
+     "label": "unrelated"
+    }
+   ]
+  },
+  {
+   "question": "Should I stop his nevirapine because of the rash?",
+   "findings": [
+    {
+     "finding": "Nevirapine interacts with active order Rifampin — Major. Coadministration with rifampin may substantially decrease the plasma concentrations of nevirapine, although a few studies have suggested that the combination may be used effectively without dosage adjustments. The mechanism is rifampin induction of nevirapine metabolism via CYP450 3A4.",
+     "label": "unrelated"
+    },
+    {
+     "finding": "Nevirapine interacts with active order Efavirenz — Moderate. Coadministration of nevirapine and efavirenz has resulted in increased toxicity without additional therapeutic benefit over either agent alone. The mechanism of interaction has not been established, although this combination has exhibited strong antagonistic anti-HIV-1 activity in cell culture. Nevirapine is in the same ATC class (J05AG) as active order Efavirenz — possible duplicate therapy",
+     "label": "borderline"
+    }
+   ]
+  },
+  {
+   "question": "Can nevirapine cause liver damage?",
+   "findings": [
+    {
+     "finding": "Nevirapine interacts with active order Rifampin — Major. Coadministration with rifampin may substantially decrease the plasma concentrations of nevirapine, although a few studies have suggested that the combination may be used effectively without dosage adjustments. The mechanism is rifampin induction of nevirapine metabolism via CYP450 3A4.",
+     "label": "unrelated"
+    },
+    {
+     "finding": "Nevirapine interacts with active order Efavirenz — Moderate. Coadministration of nevirapine and efavirenz has resulted in increased toxicity without additional therapeutic benefit over either agent alone. The mechanism of interaction has not been established, although this combination has exhibited strong antagonistic anti-HIV-1 activity in cell culture. Nevirapine is in the same ATC class (J05AG) as active order Efavirenz — possible duplicate therapy",
+     "label": "borderline"
+    }
+   ]
+  },
+  {
+   "question": "Can fluconazole cause liver damage?",
+   "findings": [
+    {
+     "finding": "Fluconazole interacts with active order Rifampin — Major. Coadministration with rifampin may decrease the plasma concentrations of fluconazole. The precise mechanism of interaction has not been established, but may involve rifampin induction of fluconazole metabolism via CYP450 isoenzymes, although fluconazole is not extensively metabolized but is primarily (approximately 80%) eliminated unchanged by the kidney.",
+     "label": "unrelated"
+    },
+    {
+     "finding": "Fluconazole interacts with active order Efavirenz — Major. Efavirenz can cause significant QT interval prolongation in patients with the CYP450 2B6 *6/*6 genotype due to reduced metabolic clearance of the drug stemming from decreased levels of functional CYP450 2B6 isoenzyme.",
+     "label": "unrelated"
+    },
+    {
+     "finding": "Fluconazole interacts with active order Sulfamethoxazole — Minor. Limited data suggest that sulfamethoxazole-trimethoprim (SMX-TMP) may rarely prolong the QT interval of the electrocardiogram. Theoretically, coadministration with other agents that can prolong the QT interval may result in additive effects and increased risk of ventricular arrhythmias including torsade de pointes and sudden death. There have been isolated reports of QT prolongation and ventricular arrhythmias occurring in patients treated with SMX-TMP intravenously. Patients should be advised to seek prompt medical attention if they experience symptoms that could indicate the occurrence of torsade de pointes such as dizziness, lightheadedness, fainting, palpitation, irregular heart rhythm, shortness of breath, or syncope.",
+     "label": "unrelated"
+    }
+   ]
+  },
+  {
+   "question": "Can tramadol cause serotonin syndrome?",
+   "findings": [
+    {
+     "finding": "Tramadol interacts with active order Efavirenz — Major. Efavirenz can cause significant QT interval prolongation in patients with the CYP450 2B6 *6/*6 genotype due to reduced metabolic clearance of the drug stemming from decreased levels of functional CYP450 2B6 isoenzyme.",
+     "label": "unrelated"
+    },
+    {
+     "finding": "Tramadol interacts with active order Rifampicin and isoniazid — Moderate. Coadministration with drugs that are inhibitors of the CYP450 3A4 isoenzymes may increase the plasma concentrations of tramadol and its active O-demethylated metabolite.",
+     "label": "unrelated"
+    },
+    {
+     "finding": "Tramadol interacts with active order Sulfamethoxazole — Minor. Limited data suggest that sulfamethoxazole-trimethoprim (SMX-TMP) may rarely prolong the QT interval of the electrocardiogram. Theoretically, coadministration with other agents that can prolong the QT interval may result in additive effects and increased risk of ventricular arrhythmias including torsade de pointes and sudden death. There have been isolated reports of QT prolongation and ventricular arrhythmias occurring in patients treated with SMX-TMP intravenously. Patients should be advised to seek prompt medical attention if they experience symptoms that could indicate the occurrence of torsade de pointes such as dizziness, lightheadedness, fainting, palpitation, irregular heart rhythm, shortness of breath, or syncope.",
+     "label": "unrelated"
+    }
+   ]
+  },
+  {
+   "question": "Can erythromycin cause QT prolongation?",
+   "findings": [
+    {
+     "finding": "Erythromycin interacts with active order Efavirenz — Major. Efavirenz can cause significant QT interval prolongation in patients with the CYP450 2B6 *6/*6 genotype due to reduced metabolic clearance of the drug stemming from decreased levels of functional CYP450 2B6 isoenzyme.",
+     "label": "related"
+    },
+    {
+     "finding": "Erythromycin interacts with active order Rifampin — Moderate. The coadministration of clarithromycin and rifabutin at normally recommended dosages has been reported to have resulted in significantly altered pharmacokinetics for both drugs. This bidirectional interaction is consistent with rifabutin's cumulative inducing effect over time on the CYP450 enzymatic pathway as well as clarithromycin's immediate inhibiting effect on the pathway. Other macrolide antibiotics may interact in a similar manner with rifamycins.",
+     "label": "unrelated"
+    },
+    {
+     "finding": "Erythromycin interacts with active order Sulfamethoxazole — Minor. Limited data suggest that sulfamethoxazole-trimethoprim (SMX-TMP) may rarely prolong the QT interval of the electrocardiogram. Theoretically, coadministration with other agents that can prolong the QT interval may result in additive effects and increased risk of ventricular arrhythmias including torsade de pointes and sudden death. There have been isolated reports of QT prolongation and ventricular arrhythmias occurring in patients treated with SMX-TMP intravenously. Patients should be advised to seek prompt medical attention if they experience symptoms that could indicate the occurrence of torsade de pointes such as dizziness, lightheadedness, fainting, palpitation, irregular heart rhythm, shortness of breath, or syncope.",
+     "label": "related"
+    }
+   ]
+  },
+  {
+   "question": "Could co-trimoxazole cause hyperkalaemia?",
+   "findings": [
+    {
+     "finding": "Sulfamethoxazole interacts with active order Rifampin — Moderate. During coadministration of rifampin and sulfamethoxazole-trimethoprim (SMX-TMP), the serum concentrations of rifampin may be increased while those of SMX and TMP may be decreased.",
+     "label": "unrelated"
+    },
+    {
+     "finding": "Sulfamethoxazole interacts with active order Efavirenz — Moderate. Coadministration of efavirenz with other agents known to induce hepatotoxicity may potentiate the risk of liver injury. Efavirenz has been associated with hepatotoxicity during postmarketing use.",
+     "label": "unrelated"
+    },
+    {
+     "finding": "Trimethoprim interacts with active order Rifampin — Moderate. During coadministration of rifampin and sulfamethoxazole-trimethoprim (SMX-TMP), the serum concentrations of rifampin may be increased while those of SMX and TMP may be decreased.",
+     "label": "unrelated"
+    },
+    {
+     "finding": "Trimethoprim interacts with active order Lamivudine — Minor. In a study with 14 HIV-positive patients, coadministration of trimethoprim/sulfamethoxazole (trimethoprim/sulfamethoxazole DS once a day for 5 days) and lamivudine (300 mg single dose on day 5) resulted in a mean decrease of 35% in lamivudine renal clearance and a mean increase of 43% in lamivudine area under the plasma concentration-time curve. The mechanism of interaction is thought to be competitive inhibition of tubular secretion by trimethoprim. Lamivudine did not affect the pharmacokinetic profile of trimethoprim/sulfamethoxazole. Given the favorable safety profile of lamivudine, this interaction is unlikely to be of clinical significance. However, patients with renal dysfunction should be monitored carefully and the lamivudine dose adjusted if necessary. In addition, it should be noted that the effect of higher dosages of trimethoprim/sulfamethoxazole on lamivudine pharmacokinetics has not been investigated.",
+     "label": "unrelated"
+    },
+    {
+     "finding": "Trimethoprim interacts with active order Efavirenz — Minor. Limited data suggest that sulfamethoxazole-trimethoprim (SMX-TMP) may rarely prolong the QT interval of the electrocardiogram. Theoretically, coadministration with other agents that can prolong the QT interval may result in additive effects and increased risk of ventricular arrhythmias including torsade de pointes and sudden death. There have been isolated reports of QT prolongation and ventricular arrhythmias occurring in patients treated with SMX-TMP intravenously. Patients should be advised to seek prompt medical attention if they experience symptoms that could indicate the occurrence of torsade de pointes such as dizziness, lightheadedness, fainting, palpitation, irregular heart rhythm, shortness of breath, or syncope.",
+     "label": "unrelated"
+    }
+   ]
+  },
+  {
+   "question": "Can isoniazid cause neuropathy?",
+   "findings": [
+    {
+     "finding": "Isoniazid interacts with active order Stavudine — Moderate. The risk of peripheral neuropathy may be increased during concurrent use of two or more agents that are associated with this adverse effect. Patient risk factors include diabetes and age older than 60 years.",
+     "label": "related"
+    },
+    {
+     "finding": "Isoniazid interacts with active order Efavirenz — Moderate. Coadministration of efavirenz with other agents known to induce hepatotoxicity may potentiate the risk of liver injury. Efavirenz has been associated with hepatotoxicity during postmarketing use.",
+     "label": "unrelated"
+    },
+    {
+     "finding": "Isoniazid interacts with active order Rifampin — Minor. The risk of hepatotoxicity is greater when rifampin and isoniazid are given concomitantly than when either drug is given alone. Rifampin appears to alter the metabolism of isoniazid and increase the amount of toxic metabolites. Theoretically, a similar reaction may occur with rifabutin and isoniazid. Patients who are elderly, have hepatic impairment, are slow acetylators of isoniazid, drink alcohol daily, are female, or are taking other strong CYP450-inducing agents may be at greater risk of hepatotoxicity.",
+     "label": "unrelated"
+    }
+   ]
+  },
+  {
+   "question": "Should I stop his efavirenz because of the nightmares?",
+   "findings": [
+    {
+     "finding": "Efavirenz interacts with active order Lamivudine, Stavudine, Sulfamethoxazole and Rifampicin and isoniazid — Moderate. Coadministration of efavirenz with other agents known to induce hepatotoxicity may potentiate the risk of liver injury. Efavirenz has been associated with hepatotoxicity during postmarketing use.",
+     "label": "unrelated"
+    },
+    {
+     "finding": "Efavirenz interacts with active order Rifampin — Moderate. Coadministration of efavirenz with other agents known to induce hepatotoxicity such as rifampin may potentiate the risk of liver injury. Efavirenz has been associated with hepatotoxicity during postmarketing use. Coadministration with rifampin may decrease the plasma concentrations of efavirenz. The mechanism is rifampin induction of efavirenz metabolism via CYP450 3A4.",
+     "label": "unrelated"
+    },
+    {
+     "finding": "Efavirenz interacts with active order Trimethoprim — Minor. Limited data suggest that sulfamethoxazole-trimethoprim (SMX-TMP) may rarely prolong the QT interval of the electrocardiogram. Theoretically, coadministration with other agents that can prolong the QT interval may result in additive effects and increased risk of ventricular arrhythmias including torsade de pointes and sudden death. There have been isolated reports of QT prolongation and ventricular arrhythmias occurring in patients treated with SMX-TMP intravenously. Patients should be advised to seek prompt medical attention if they experience symptoms that could indicate the occurrence of torsade de pointes such as dizziness, lightheadedness, fainting, palpitation, irregular heart rhythm, shortness of breath, or syncope.",
+     "label": "unrelated"
+    }
+   ]
+  },
+  {
+   "question": "Can efavirenz cause dizziness?",
+   "findings": [
+    {
+     "finding": "Efavirenz interacts with active order Lamivudine, Stavudine, Sulfamethoxazole and Rifampicin and isoniazid — Moderate. Coadministration of efavirenz with other agents known to induce hepatotoxicity may potentiate the risk of liver injury. Efavirenz has been associated with hepatotoxicity during postmarketing use.",
+     "label": "unrelated"
+    },
+    {
+     "finding": "Efavirenz interacts with active order Rifampin — Moderate. Coadministration of efavirenz with other agents known to induce hepatotoxicity such as rifampin may potentiate the risk of liver injury. Efavirenz has been associated with hepatotoxicity during postmarketing use. Coadministration with rifampin may decrease the plasma concentrations of efavirenz. The mechanism is rifampin induction of efavirenz metabolism via CYP450 3A4.",
+     "label": "unrelated"
+    },
+    {
+     "finding": "Efavirenz interacts with active order Trimethoprim — Minor. Limited data suggest that sulfamethoxazole-trimethoprim (SMX-TMP) may rarely prolong the QT interval of the electrocardiogram. Theoretically, coadministration with other agents that can prolong the QT interval may result in additive effects and increased risk of ventricular arrhythmias including torsade de pointes and sudden death. There have been isolated reports of QT prolongation and ventricular arrhythmias occurring in patients treated with SMX-TMP intravenously. Patients should be advised to seek prompt medical attention if they experience symptoms that could indicate the occurrence of torsade de pointes such as dizziness, lightheadedness, fainting, palpitation, irregular heart rhythm, shortness of breath, or syncope.",
+     "label": "borderline"
+    }
+   ]
+  },
+  {
+   "question": "Should I stop his nevirapine because of the rash?",
+   "findings": [
+    {
+     "finding": "Nevirapine interacts with active order Rifampin — Major. Coadministration with rifampin may substantially decrease the plasma concentrations of nevirapine, although a few studies have suggested that the combination may be used effectively without dosage adjustments. The mechanism is rifampin induction of nevirapine metabolism via CYP450 3A4.",
+     "label": "unrelated"
+    },
+    {
+     "finding": "Nevirapine interacts with active order Efavirenz — Moderate. Coadministration of nevirapine and efavirenz has resulted in increased toxicity without additional therapeutic benefit over either agent alone. The mechanism of interaction has not been established, although this combination has exhibited strong antagonistic anti-HIV-1 activity in cell culture. Nevirapine is in the same ATC class (J05AG) as active order Efavirenz — possible duplicate therapy",
+     "label": "borderline"
+    }
+   ]
+  },
+  {
+   "question": "Can nevirapine cause liver damage?",
+   "findings": [
+    {
+     "finding": "Nevirapine interacts with active order Rifampin — Major. Coadministration with rifampin may substantially decrease the plasma concentrations of nevirapine, although a few studies have suggested that the combination may be used effectively without dosage adjustments. The mechanism is rifampin induction of nevirapine metabolism via CYP450 3A4.",
+     "label": "unrelated"
+    },
+    {
+     "finding": "Nevirapine interacts with active order Efavirenz — Moderate. Coadministration of nevirapine and efavirenz has resulted in increased toxicity without additional therapeutic benefit over either agent alone. The mechanism of interaction has not been established, although this combination has exhibited strong antagonistic anti-HIV-1 activity in cell culture. Nevirapine is in the same ATC class (J05AG) as active order Efavirenz — possible duplicate therapy",
+     "label": "borderline"
+    }
+   ]
+  },
+  {
+   "question": "Can fluconazole cause liver damage?",
+   "findings": [
+    {
+     "finding": "Fluconazole interacts with active order Rifampin — Major. Coadministration with rifampin may decrease the plasma concentrations of fluconazole. The precise mechanism of interaction has not been established, but may involve rifampin induction of fluconazole metabolism via CYP450 isoenzymes, although fluconazole is not extensively metabolized but is primarily (approximately 80%) eliminated unchanged by the kidney.",
+     "label": "unrelated"
+    },
+    {
+     "finding": "Fluconazole interacts with active order Efavirenz — Major. Efavirenz can cause significant QT interval prolongation in patients with the CYP450 2B6 *6/*6 genotype due to reduced metabolic clearance of the drug stemming from decreased levels of functional CYP450 2B6 isoenzyme.",
+     "label": "unrelated"
+    },
+    {
+     "finding": "Fluconazole interacts with active order Lamivudine / zidovudine — Moderate. Fluconazole may significantly reduce zidovudine clearance, and increase its elimination half-life and AUC. The mechanism is unknown but may be related to inhibition of its hepatic metabolism.",
+     "label": "unrelated"
+    },
+    {
+     "finding": "Fluconazole interacts with active order Sulfamethoxazole — Minor. Limited data suggest that sulfamethoxazole-trimethoprim (SMX-TMP) may rarely prolong the QT interval of the electrocardiogram. Theoretically, coadministration with other agents that can prolong the QT interval may result in additive effects and increased risk of ventricular arrhythmias including torsade de pointes and sudden death. There have been isolated reports of QT prolongation and ventricular arrhythmias occurring in patients treated with SMX-TMP intravenously. Patients should be advised to seek prompt medical attention if they experience symptoms that could indicate the occurrence of torsade de pointes such as dizziness, lightheadedness, fainting, palpitation, irregular heart rhythm, shortness of breath, or syncope.",
+     "label": "unrelated"
+    }
+   ]
+  },
+  {
+   "question": "Could amoxicillin cause anaphylaxis?",
+   "findings": [
+    {
+     "finding": "Amoxicillin is in the drug group (Penicillins) the patient has a recorded allergy to.",
+     "label": "related"
+    }
+   ]
+  },
+  {
+   "question": "Can tramadol cause serotonin syndrome?",
+   "findings": [
+    {
+     "finding": "Tramadol interacts with active order Efavirenz — Major. Efavirenz can cause significant QT interval prolongation in patients with the CYP450 2B6 *6/*6 genotype due to reduced metabolic clearance of the drug stemming from decreased levels of functional CYP450 2B6 isoenzyme.",
+     "label": "unrelated"
+    },
+    {
+     "finding": "Tramadol interacts with active order Rifampicin isoniazid pyrazinamide and ethambutol — Moderate. Coadministration with drugs that are inhibitors of the CYP450 3A4 isoenzymes may increase the plasma concentrations of tramadol and its active O-demethylated metabolite.",
+     "label": "unrelated"
+    },
+    {
+     "finding": "Tramadol interacts with active order Sulfamethoxazole — Minor. Limited data suggest that sulfamethoxazole-trimethoprim (SMX-TMP) may rarely prolong the QT interval of the electrocardiogram. Theoretically, coadministration with other agents that can prolong the QT interval may result in additive effects and increased risk of ventricular arrhythmias including torsade de pointes and sudden death. There have been isolated reports of QT prolongation and ventricular arrhythmias occurring in patients treated with SMX-TMP intravenously. Patients should be advised to seek prompt medical attention if they experience symptoms that could indicate the occurrence of torsade de pointes such as dizziness, lightheadedness, fainting, palpitation, irregular heart rhythm, shortness of breath, or syncope.",
+     "label": "unrelated"
+    }
+   ]
+  },
+  {
+   "question": "Can erythromycin cause QT prolongation?",
+   "findings": [
+    {
+     "finding": "Erythromycin interacts with active order Efavirenz — Major. Efavirenz can cause significant QT interval prolongation in patients with the CYP450 2B6 *6/*6 genotype due to reduced metabolic clearance of the drug stemming from decreased levels of functional CYP450 2B6 isoenzyme.",
+     "label": "related"
+    },
+    {
+     "finding": "Erythromycin interacts with active order Rifampin — Moderate. The coadministration of clarithromycin and rifabutin at normally recommended dosages has been reported to have resulted in significantly altered pharmacokinetics for both drugs. This bidirectional interaction is consistent with rifabutin's cumulative inducing effect over time on the CYP450 enzymatic pathway as well as clarithromycin's immediate inhibiting effect on the pathway. Other macrolide antibiotics may interact in a similar manner with rifamycins.",
+     "label": "unrelated"
+    },
+    {
+     "finding": "Erythromycin interacts with active order Sulfamethoxazole — Minor. Limited data suggest that sulfamethoxazole-trimethoprim (SMX-TMP) may rarely prolong the QT interval of the electrocardiogram. Theoretically, coadministration with other agents that can prolong the QT interval may result in additive effects and increased risk of ventricular arrhythmias including torsade de pointes and sudden death. There have been isolated reports of QT prolongation and ventricular arrhythmias occurring in patients treated with SMX-TMP intravenously. Patients should be advised to seek prompt medical attention if they experience symptoms that could indicate the occurrence of torsade de pointes such as dizziness, lightheadedness, fainting, palpitation, irregular heart rhythm, shortness of breath, or syncope.",
+     "label": "related"
+    }
+   ]
+  },
+  {
+   "question": "Could co-trimoxazole cause hyperkalaemia?",
+   "findings": [
+    {
+     "finding": "Sulfamethoxazole interacts with active order Rifampin — Moderate. During coadministration of rifampin and sulfamethoxazole-trimethoprim (SMX-TMP), the serum concentrations of rifampin may be increased while those of SMX and TMP may be decreased.",
+     "label": "unrelated"
+    },
+    {
+     "finding": "Sulfamethoxazole interacts with active order Efavirenz — Moderate. Coadministration of efavirenz with other agents known to induce hepatotoxicity may potentiate the risk of liver injury. Efavirenz has been associated with hepatotoxicity during postmarketing use.",
+     "label": "unrelated"
+    },
+    {
+     "finding": "Sulfamethoxazole interacts with active order Lamivudine / zidovudine — Minor. Limited data indicate that zidovudine may significantly increase the serum half-life of both trimethoprim (TMP) and sulfamethoxazole (SMX). The mechanism is not known, but may be related to an increase in the volume of distribution of each drug. In addition, trimethoprim can decrease the renal clearance of zidovudine and its glucuronide metabolite by inhibiting their tubular secretion. However, net clearance is not affected because zidovudine is mostly metabolized and the glucuronide may be eliminated via biliary excretion. This interaction is not likely to be clinically important except when hepatic glucuronidation is also impaired by liver disease or drug inhibition.",
+     "label": "unrelated"
+    },
+    {
+     "finding": "Trimethoprim interacts with active order Rifampin — Moderate. During coadministration of rifampin and sulfamethoxazole-trimethoprim (SMX-TMP), the serum concentrations of rifampin may be increased while those of SMX and TMP may be decreased.",
+     "label": "unrelated"
+    },
+    {
+     "finding": "Trimethoprim interacts with active order Lamivudine / zidovudine — Minor. In a study with 14 HIV-positive patients, coadministration of trimethoprim/sulfamethoxazole (trimethoprim/sulfamethoxazole DS once a day for 5 days) and lamivudine (300 mg single dose on day 5) resulted in a mean decrease of 35% in lamivudine renal clearance and a mean increase of 43% in lamivudine area under the plasma concentration-time curve. The mechanism of interaction is thought to be competitive inhibition of tubular secretion by trimethoprim. Lamivudine did not affect the pharmacokinetic profile of trimethoprim/sulfamethoxazole. Given the favorable safety profile of lamivudine, this interaction is unlikely to be of clinical significance. However, patients with renal dysfunction should be monitored carefully and the lamivudine dose adjusted if necessary. In addition, it should be noted that the effect of higher dosages of trimethoprim/sulfamethoxazole on lamivudine pharmacokinetics has not been investigated.",
+     "label": "unrelated"
+    },
+    {
+     "finding": "Trimethoprim interacts with active order Lamivudine / zidovudine — Minor. Limited data indicate that zidovudine may significantly increase the serum half-life of both trimethoprim (TMP) and sulfamethoxazole (SMX). The mechanism is not known, but may be related to an increase in the volume of distribution of each drug. In addition, trimethoprim can decrease the renal clearance of zidovudine and its glucuronide metabolite by inhibiting their tubular secretion. However, net clearance is not affected because zidovudine is mostly metabolized and the glucuronide may be eliminated via biliary excretion. This interaction is not likely to be clinically important except when hepatic glucuronidation is also impaired by liver disease or drug inhibition.",
+     "label": "unrelated"
+    },
+    {
+     "finding": "Trimethoprim interacts with active order Efavirenz — Minor. Limited data suggest that sulfamethoxazole-trimethoprim (SMX-TMP) may rarely prolong the QT interval of the electrocardiogram. Theoretically, coadministration with other agents that can prolong the QT interval may result in additive effects and increased risk of ventricular arrhythmias including torsade de pointes and sudden death. There have been isolated reports of QT prolongation and ventricular arrhythmias occurring in patients treated with SMX-TMP intravenously. Patients should be advised to seek prompt medical attention if they experience symptoms that could indicate the occurrence of torsade de pointes such as dizziness, lightheadedness, fainting, palpitation, irregular heart rhythm, shortness of breath, or syncope.",
+     "label": "unrelated"
+    }
+   ]
+  },
+  {
+   "question": "Can isoniazid cause neuropathy?",
+   "findings": [
+    {
+     "finding": "Isoniazid interacts with active order Efavirenz — Moderate. Coadministration of efavirenz with other agents known to induce hepatotoxicity may potentiate the risk of liver injury. Efavirenz has been associated with hepatotoxicity during postmarketing use.",
+     "label": "unrelated"
+    },
+    {
+     "finding": "Isoniazid interacts with active order Rifampicin isoniazid pyrazinamide and ethambutol — Moderate. The risk of peripheral neuropathy may be increased during concurrent use of two or more agents that are associated with this adverse effect. Patient risk factors include diabetes and age older than 60 years.",
+     "label": "related"
+    },
+    {
+     "finding": "Isoniazid interacts with active order Rifampin — Minor. The risk of hepatotoxicity is greater when rifampin and isoniazid are given concomitantly than when either drug is given alone. Rifampin appears to alter the metabolism of isoniazid and increase the amount of toxic metabolites. Theoretically, a similar reaction may occur with rifabutin and isoniazid. Patients who are elderly, have hepatic impairment, are slow acetylators of isoniazid, drink alcohol daily, are female, or are taking other strong CYP450-inducing agents may be at greater risk of hepatotoxicity.",
+     "label": "unrelated"
+    }
+   ]
+  },
+  {
+   "question": "Should I stop his efavirenz because of the nightmares?",
+   "findings": [
+    {
+     "finding": "Efavirenz interacts with active order Lamivudine / zidovudine, Rifampicin isoniazid pyrazinamide and ethambutol and Sulfamethoxazole — Moderate. Coadministration of efavirenz with other agents known to induce hepatotoxicity may potentiate the risk of liver injury. Efavirenz has been associated with hepatotoxicity during postmarketing use.",
+     "label": "unrelated"
+    },
+    {
+     "finding": "Efavirenz interacts with active order Rifampin — Moderate. Coadministration of efavirenz with other agents known to induce hepatotoxicity such as rifampin may potentiate the risk of liver injury. Efavirenz has been associated with hepatotoxicity during postmarketing use. Coadministration with rifampin may decrease the plasma concentrations of efavirenz. The mechanism is rifampin induction of efavirenz metabolism via CYP450 3A4.",
+     "label": "unrelated"
+    },
+    {
+     "finding": "Efavirenz interacts with active order Trimethoprim — Minor. Limited data suggest that sulfamethoxazole-trimethoprim (SMX-TMP) may rarely prolong the QT interval of the electrocardiogram. Theoretically, coadministration with other agents that can prolong the QT interval may result in additive effects and increased risk of ventricular arrhythmias including torsade de pointes and sudden death. There have been isolated reports of QT prolongation and ventricular arrhythmias occurring in patients treated with SMX-TMP intravenously. Patients should be advised to seek prompt medical attention if they experience symptoms that could indicate the occurrence of torsade de pointes such as dizziness, lightheadedness, fainting, palpitation, irregular heart rhythm, shortness of breath, or syncope.",
+     "label": "unrelated"
+    }
+   ]
+  },
+  {
+   "question": "Can efavirenz cause dizziness?",
+   "findings": [
+    {
+     "finding": "Efavirenz interacts with active order Lamivudine / zidovudine, Rifampicin isoniazid pyrazinamide and ethambutol and Sulfamethoxazole — Moderate. Coadministration of efavirenz with other agents known to induce hepatotoxicity may potentiate the risk of liver injury. Efavirenz has been associated with hepatotoxicity during postmarketing use.",
+     "label": "unrelated"
+    },
+    {
+     "finding": "Efavirenz interacts with active order Rifampin — Moderate. Coadministration of efavirenz with other agents known to induce hepatotoxicity such as rifampin may potentiate the risk of liver injury. Efavirenz has been associated with hepatotoxicity during postmarketing use. Coadministration with rifampin may decrease the plasma concentrations of efavirenz. The mechanism is rifampin induction of efavirenz metabolism via CYP450 3A4.",
+     "label": "unrelated"
+    },
+    {
+     "finding": "Efavirenz interacts with active order Trimethoprim — Minor. Limited data suggest that sulfamethoxazole-trimethoprim (SMX-TMP) may rarely prolong the QT interval of the electrocardiogram. Theoretically, coadministration with other agents that can prolong the QT interval may result in additive effects and increased risk of ventricular arrhythmias including torsade de pointes and sudden death. There have been isolated reports of QT prolongation and ventricular arrhythmias occurring in patients treated with SMX-TMP intravenously. Patients should be advised to seek prompt medical attention if they experience symptoms that could indicate the occurrence of torsade de pointes such as dizziness, lightheadedness, fainting, palpitation, irregular heart rhythm, shortness of breath, or syncope.",
+     "label": "borderline"
+    }
+   ]
+  },
+  {
+   "question": "Should I stop his nevirapine because of the rash?",
+   "findings": [
+    {
+     "finding": "Nevirapine interacts with active order Lopinavir / ritonavir — Major. Coadministration with nevirapine may decrease the plasma concentrations of lopinavir, even in the presence of low-dose ritonavir as a pharmacokinetic booster. The proposed mechanism is nevirapine induction of lopinavir metabolism via CYP450 3A4.",
+     "label": "unrelated"
+    }
+   ]
+  },
+  {
+   "question": "Can nevirapine cause liver damage?",
+   "findings": [
+    {
+     "finding": "Nevirapine interacts with active order Lopinavir / ritonavir — Major. Coadministration with nevirapine may decrease the plasma concentrations of lopinavir, even in the presence of low-dose ritonavir as a pharmacokinetic booster. The proposed mechanism is nevirapine induction of lopinavir metabolism via CYP450 3A4.",
+     "label": "unrelated"
+    }
+   ]
+  },
+  {
+   "question": "Can fluconazole cause liver damage?",
+   "findings": [
+    {
+     "finding": "Fluconazole interacts with active order Lopinavir / ritonavir — Moderate. Lopinavir in combination with ritonavir may cause dose-related prolongation of the QT interval. Theoretically, coadministration with other agents that can prolong the QT interval may result in additive effects and increased risk of ventricular arrhythmias including torsade de pointes and sudden death.",
+     "label": "unrelated"
+    },
+    {
+     "finding": "Fluconazole interacts with active order Nevirapine — Moderate. Coadministration with fluconazole may increase the plasma concentrations of drugs that are substrates of CYP450 3A4. The mechanism is decreased clearance due to inhibition of CYP450 3A4-mediated metabolism by fluconazole, a moderate inhibitor of the isoenzyme.",
+     "label": "unrelated"
+    },
+    {
+     "finding": "Fluconazole interacts with active order Zidovudine — Moderate. Fluconazole may significantly reduce zidovudine clearance, and increase its elimination half-life and AUC. The mechanism is unknown but may be related to inhibition of its hepatic metabolism.",
+     "label": "unrelated"
+    },
+    {
+     "finding": "Fluconazole interacts with active order Lopinavir / ritonavir — Minor. The coadministration with fluconazole may slightly increase the plasma concentrations of ritonavir. The proposed mechanism is fluconazole inhibition of CYP450 3A4, the isoenzyme responsible for the metabolic clearance of ritonavir. Other azole antifungal agents are expected to affect ritonavir in a similar fashion but possibly to a greater extent, since fluconazole is a relatively weak inhibitor of CYP450 3A4. No special precautions are necessary when fluconazole is given with ritonavir.",
+     "label": "unrelated"
+    }
+   ]
+  },
+  {
+   "question": "Can tramadol cause serotonin syndrome?",
+   "findings": [
+    {
+     "finding": "Tramadol interacts with active order Lopinavir / ritonavir — Moderate. Lopinavir in combination with ritonavir may cause dose-related prolongation of the QT interval.  Theoretically, coadministration with other agents that can prolong the QT interval may result in additive effects and increased risk of ventricular arrhythmias including torsade de pointes and sudden death.",
+     "label": "unrelated"
+    },
+    {
+     "finding": "Tramadol interacts with active order Nevirapine — Moderate. Coadministration with inducers of CYP450 3A4 may decrease the plasma concentrations of tramadol, which is primarily metabolized by CYP450 3A4 and 2D6.  Reduced opioid efficacy can occur, including opioid withdrawal in physically dependent patients.",
+     "label": "unrelated"
+    },
+    {
+     "finding": "Tramadol interacts with active order Lopinavir / ritonavir — Moderate. Coadministration with ritonavir may increase the plasma concentrations of drugs that are substrates of the CYP450 2D6 isoenzyme. The mechanism is decreased clearance due to competitive inhibition of CYP450 2D6 activity by ritonavir.",
+     "label": "unrelated"
+    }
+   ]
+  },
+  {
+   "question": "Can erythromycin cause QT prolongation?",
+   "findings": [
+    {
+     "finding": "Erythromycin interacts with active order Lopinavir / ritonavir — Major. Coadministration with potent inhibitors of CYP450 3A4 may increase the plasma concentrations of erythromycin, which is primarily metabolized by the isoenzyme. The use of erythromycin has been associated with dose-related prolongation of the QT interval, thus elevated plasma levels of the drug may potentiate the risk of ventricular arrhythmias such as ventricular tachycardia and torsade de pointes. In addition, erythromycin may increase the plasma concentrations of drugs that are substrates of CYP450 3A4.",
+     "label": "related"
+    },
+    {
+     "finding": "Erythromycin interacts with active order Lopinavir / ritonavir — Moderate. Lopinavir in combination with ritonavir may cause dose-related prolongation of the QT interval.  Theoretically, coadministration with other agents that can prolong the QT interval may result in additive effects and increased risk of ventricular arrhythmias including torsade de pointes and sudden death.",
+     "label": "related"
+    },
+    {
+     "finding": "Erythromycin interacts with active order Nevirapine — Moderate. Coadministration with nevirapine may decrease the plasma concentrations and therapeutic efficacy of drugs that are substrates of CYP450 3A4. The proposed mechanism is increased clearance due to nevirapine-mediated induction of CYP450 3A4.",
+     "label": "unrelated"
+    }
+   ]
+  },
+  {
+   "question": "Could co-trimoxazole cause hyperkalaemia?",
+   "findings": [
+    {
+     "finding": "Sulfamethoxazole interacts with active order Lopinavir / ritonavir — Moderate. A disulfiram-like reaction has been reported in two patients who consumed alcohol while taking sulfamethoxazole-trimethoprim DS every 12 hours, although a causal relationship has not been established. The mechanism of interaction is unknown.",
+     "label": "unrelated"
+    },
+    {
+     "finding": "Sulfamethoxazole interacts with active order Lopinavir / ritonavir — Minor. Limited data suggest that sulfamethoxazole-trimethoprim (SMX-TMP) may rarely prolong the QT interval of the electrocardiogram.  Theoretically, coadministration with other agents that can prolong the QT interval may result in additive effects and increased risk of ventricular arrhythmias including torsade de pointes and sudden death.",
+     "label": "unrelated"
+    },
+    {
+     "finding": "Sulfamethoxazole interacts with active order Zidovudine — Minor. Limited data indicate that zidovudine may significantly increase the serum half-life of both trimethoprim (TMP) and sulfamethoxazole (SMX). The mechanism is not known, but may be related to an increase in the volume of distribution of each drug. In addition, trimethoprim can decrease the renal clearance of zidovudine and its glucuronide metabolite by inhibiting their tubular secretion. However, net clearance is not affected because zidovudine is mostly metabolized and the glucuronide may be eliminated via biliary excretion. This interaction is not likely to be clinically important except when hepatic glucuronidation is also impaired by liver disease or drug inhibition.",
+     "label": "unrelated"
+    },
+    {
+     "finding": "Trimethoprim interacts with active order Lopinavir / ritonavir — Moderate. A disulfiram-like reaction has been reported in two patients who consumed alcohol while taking sulfamethoxazole-trimethoprim DS every 12 hours, although a causal relationship has not been established. The mechanism of interaction is unknown.",
+     "label": "unrelated"
+    },
+    {
+     "finding": "Trimethoprim interacts with active order Lamivudine — Minor. In a study with 14 HIV-positive patients, coadministration of trimethoprim/sulfamethoxazole (trimethoprim/sulfamethoxazole DS once a day for 5 days) and lamivudine (300 mg single dose on day 5) resulted in a mean decrease of 35% in lamivudine renal clearance and a mean increase of 43% in lamivudine area under the plasma concentration-time curve. The mechanism of interaction is thought to be competitive inhibition of tubular secretion by trimethoprim. Lamivudine did not affect the pharmacokinetic profile of trimethoprim/sulfamethoxazole. Given the favorable safety profile of lamivudine, this interaction is unlikely to be of clinical significance. However, patients with renal dysfunction should be monitored carefully and the lamivudine dose adjusted if necessary. In addition, it should be noted that the effect of higher dosages of trimethoprim/sulfamethoxazole on lamivudine pharmacokinetics has not been investigated.",
+     "label": "unrelated"
+    },
+    {
+     "finding": "Trimethoprim interacts with active order Zidovudine — Minor. Limited data indicate that zidovudine may significantly increase the serum half-life of both trimethoprim (TMP) and sulfamethoxazole (SMX). The mechanism is not known, but may be related to an increase in the volume of distribution of each drug. In addition, trimethoprim can decrease the renal clearance of zidovudine and its glucuronide metabolite by inhibiting their tubular secretion. However, net clearance is not affected because zidovudine is mostly metabolized and the glucuronide may be eliminated via biliary excretion. This interaction is not likely to be clinically important except when hepatic glucuronidation is also impaired by liver disease or drug inhibition.",
+     "label": "unrelated"
+    }
+   ]
+  },
+  {
+   "question": "Can isoniazid cause neuropathy?",
+   "findings": [
+    {
+     "finding": "Isoniazid interacts with active order Stavudine and Didanosine — Moderate. The risk of peripheral neuropathy may be increased during concurrent use of two or more agents that are associated with this adverse effect. Patient risk factors include diabetes and age older than 60 years.",
+     "label": "related"
+    },
+    {
+     "finding": "Isoniazid interacts with active order Lopinavir / ritonavir — Minor. Coadministration with inhibitors of CYP450 3A4 may increase the plasma concentrations of lopinavir, which is primarily metabolized by the isoenzyme. The magnitude and clinical significance of this interaction are unknown, particularly when in the presence of ritonavir as a pharmacokinetic booster. Limited data indicate that ketoconazole, a potent CYP450 3A4 inhibitor, does not substantially alter the plasma concentrations of lopinavir administered as lopinavir-ritonavir in a 4:1 ratio.",
+     "label": "unrelated"
+    }
+   ]
+  },
+  {
+   "question": "Should I stop his efavirenz because of the nightmares?",
+   "findings": [
+    {
+     "finding": "Efavirenz interacts with active order Lopinavir / ritonavir — Major. Coadministration with efavirenz may decrease the plasma concentrations of lopinavir, even in the presence of low-dose ritonavir as a pharmacokinetic booster. The proposed mechanism is efavirenz induction of lopinavir metabolism via CYP450 3A4.",
+     "label": "unrelated"
+    },
+    {
+     "finding": "Efavirenz interacts with active order Nevirapine — Moderate. Coadministration of nevirapine and efavirenz has resulted in increased toxicity without additional therapeutic benefit over either agent alone. The mechanism of interaction has not been established, although this combination has exhibited strong antagonistic anti-HIV-1 activity in cell culture. Efavirenz is in the same ATC class (J05AG) as active order Nevirapine — possible duplicate therapy",
+     "label": "unrelated"
+    },
+    {
+     "finding": "Efavirenz interacts with active order Lamivudine, Stavudine, Zidovudine and Didanosine — Moderate. Coadministration of efavirenz with other agents known to induce hepatotoxicity may potentiate the risk of liver injury. Efavirenz has been associated with hepatotoxicity during postmarketing use.",
+     "label": "unrelated"
+    },
+    {
+     "finding": "Efavirenz interacts with active order Lopinavir / ritonavir — Moderate. Coadministration with efavirenz may variably affect the plasma concentrations of ritonavir. Specifically, ritonavir levels have been reported to increase when it is given therapeutically as an antiretroviral agent and decrease when it is used at low dosages as a pharmacokinetic booster.",
+     "label": "unrelated"
+    }
+   ]
+  },
+  {
+   "question": "Can efavirenz cause dizziness?",
+   "findings": [
+    {
+     "finding": "Efavirenz interacts with active order Lopinavir / ritonavir — Major. Coadministration with efavirenz may decrease the plasma concentrations of lopinavir, even in the presence of low-dose ritonavir as a pharmacokinetic booster. The proposed mechanism is efavirenz induction of lopinavir metabolism via CYP450 3A4.",
+     "label": "unrelated"
+    },
+    {
+     "finding": "Efavirenz interacts with active order Nevirapine — Moderate. Coadministration of nevirapine and efavirenz has resulted in increased toxicity without additional therapeutic benefit over either agent alone. The mechanism of interaction has not been established, although this combination has exhibited strong antagonistic anti-HIV-1 activity in cell culture. Efavirenz is in the same ATC class (J05AG) as active order Nevirapine — possible duplicate therapy",
+     "label": "unrelated"
+    },
+    {
+     "finding": "Efavirenz interacts with active order Lamivudine, Stavudine, Zidovudine and Didanosine — Moderate. Coadministration of efavirenz with other agents known to induce hepatotoxicity may potentiate the risk of liver injury. Efavirenz has been associated with hepatotoxicity during postmarketing use.",
+     "label": "unrelated"
+    },
+    {
+     "finding": "Efavirenz interacts with active order Lopinavir / ritonavir — Moderate. Coadministration with efavirenz may variably affect the plasma concentrations of ritonavir. Specifically, ritonavir levels have been reported to increase when it is given therapeutically as an antiretroviral agent and decrease when it is used at low dosages as a pharmacokinetic booster.",
+     "label": "unrelated"
+    }
+   ]
+  },
+  {
+   "question": "Should I stop her nevirapine because of the rash?",
+   "findings": [
+    {
+     "finding": "Nevirapine interacts with active order Fluconazole — Moderate. Coadministration with fluconazole may increase the plasma concentrations of drugs that are substrates of CYP450 3A4. The mechanism is decreased clearance due to inhibition of CYP450 3A4-mediated metabolism by fluconazole, a moderate inhibitor of the isoenzyme.",
+     "label": "unrelated"
+    }
+   ]
+  },
+  {
+   "question": "Can nevirapine cause liver damage?",
+   "findings": [
+    {
+     "finding": "Nevirapine interacts with active order Fluconazole — Moderate. Coadministration with fluconazole may increase the plasma concentrations of drugs that are substrates of CYP450 3A4. The mechanism is decreased clearance due to inhibition of CYP450 3A4-mediated metabolism by fluconazole, a moderate inhibitor of the isoenzyme.",
+     "label": "unrelated"
+    }
+   ]
+  },
+  {
+   "question": "Can fluconazole cause liver damage?",
+   "findings": [
+    {
+     "finding": "Fluconazole interacts with active order Nevirapine — Moderate. Coadministration with fluconazole may increase the plasma concentrations of drugs that are substrates of CYP450 3A4. The mechanism is decreased clearance due to inhibition of CYP450 3A4-mediated metabolism by fluconazole, a moderate inhibitor of the isoenzyme.",
+     "label": "unrelated"
+    }
+   ]
+  },
+  {
+   "question": "Can tramadol cause serotonin syndrome?",
+   "findings": [
+    {
+     "finding": "Tramadol interacts with active order Nevirapine — Moderate. Coadministration with inducers of CYP450 3A4 may decrease the plasma concentrations of tramadol, which is primarily metabolized by CYP450 3A4 and 2D6.  Reduced opioid efficacy can occur, including opioid withdrawal in physically dependent patients.",
+     "label": "unrelated"
+    },
+    {
+     "finding": "Tramadol interacts with active order Fluconazole — Moderate. Theoretically, concurrent use of two or more drugs that can cause QT interval prolongation may result in additive effects and increased risk of ventricular arrhythmias including torsade de pointes and sudden death. The risk of an individual agent or a combination of these agents causing ventricular arrhythmia in association with QT prolongation is largely unpredictable but may be increased by certain underlying risk factors such as congenital long QT syndrome, cardiac disease, and electrolyte disturbances.",
+     "label": "unrelated"
+    }
+   ]
+  },
+  {
+   "question": "Can erythromycin cause QT prolongation?",
+   "findings": [
+    {
+     "finding": "Erythromycin interacts with active order Fluconazole — Major. Coadministration with fluconazole may increase the plasma concentrations of erythromycin. The proposed mechanism is fluconazole inhibition of the CYP450 3A4-mediated metabolism of erythromycin. High dosages and plasma levels of erythromycin have been associated with QT interval prolongation and torsade de pointes arrhythmia. Fluconazole itself can also prolong the QT interval, thus an additive pharmacodynamic effect with erythromycin may occur as well.",
+     "label": "related"
+    },
+    {
+     "finding": "Erythromycin interacts with active order Nevirapine — Moderate. Coadministration with nevirapine may decrease the plasma concentrations and therapeutic efficacy of drugs that are substrates of CYP450 3A4. The proposed mechanism is increased clearance due to nevirapine-mediated induction of CYP450 3A4.",
+     "label": "unrelated"
+    }
+   ]
+  },
+  {
+   "question": "Could co-trimoxazole cause hyperkalaemia?",
+   "findings": [
+    {
+     "finding": "Sulfamethoxazole interacts with active order Fluconazole — Minor. Limited data suggest that sulfamethoxazole-trimethoprim (SMX-TMP) may rarely prolong the QT interval of the electrocardiogram. Theoretically, coadministration with other agents that can prolong the QT interval may result in additive effects and increased risk of ventricular arrhythmias including torsade de pointes and sudden death. There have been isolated reports of QT prolongation and ventricular arrhythmias occurring in patients treated with SMX-TMP intravenously. Patients should be advised to seek prompt medical attention if they experience symptoms that could indicate the occurrence of torsade de pointes such as dizziness, lightheadedness, fainting, palpitation, irregular heart rhythm, shortness of breath, or syncope.",
+     "label": "unrelated"
+    },
+    {
+     "finding": "Trimethoprim interacts with active order Lamivudine — Minor. In a study with 14 HIV-positive patients, coadministration of trimethoprim/sulfamethoxazole (trimethoprim/sulfamethoxazole DS once a day for 5 days) and lamivudine (300 mg single dose on day 5) resulted in a mean decrease of 35% in lamivudine renal clearance and a mean increase of 43% in lamivudine area under the plasma concentration-time curve. The mechanism of interaction is thought to be competitive inhibition of tubular secretion by trimethoprim. Lamivudine did not affect the pharmacokinetic profile of trimethoprim/sulfamethoxazole. Given the favorable safety profile of lamivudine, this interaction is unlikely to be of clinical significance. However, patients with renal dysfunction should be monitored carefully and the lamivudine dose adjusted if necessary. In addition, it should be noted that the effect of higher dosages of trimethoprim/sulfamethoxazole on lamivudine pharmacokinetics has not been investigated.",
+     "label": "unrelated"
+    }
+   ]
+  },
+  {
+   "question": "Can isoniazid cause neuropathy?",
+   "findings": [
+    {
+     "finding": "Isoniazid interacts with active order Stavudine — Moderate. The risk of peripheral neuropathy may be increased during concurrent use of two or more agents that are associated with this adverse effect. Patient risk factors include diabetes and age older than 60 years.",
+     "label": "related"
+    }
+   ]
+  },
+  {
+   "question": "Should I stop her efavirenz because of the nightmares?",
+   "findings": [
+    {
+     "finding": "Efavirenz interacts with active order Fluconazole — Major. Efavirenz can cause significant QT interval prolongation in patients with the CYP450 2B6 *6/*6 genotype due to reduced metabolic clearance of the drug stemming from decreased levels of functional CYP450 2B6 isoenzyme.",
+     "label": "unrelated"
+    },
+    {
+     "finding": "Efavirenz interacts with active order Nevirapine — Moderate. Coadministration of nevirapine and efavirenz has resulted in increased toxicity without additional therapeutic benefit over either agent alone. The mechanism of interaction has not been established, although this combination has exhibited strong antagonistic anti-HIV-1 activity in cell culture. Efavirenz is in the same ATC class (J05AG) as active order Nevirapine — possible duplicate therapy",
+     "label": "unrelated"
+    },
+    {
+     "finding": "Efavirenz interacts with active order Lamivudine and Stavudine — Moderate. Coadministration of efavirenz with other agents known to induce hepatotoxicity may potentiate the risk of liver injury. Efavirenz has been associated with hepatotoxicity during postmarketing use.",
+     "label": "unrelated"
+    }
+   ]
+  },
+  {
+   "question": "Can efavirenz cause dizziness?",
+   "findings": [
+    {
+     "finding": "Efavirenz interacts with active order Fluconazole — Major. Efavirenz can cause significant QT interval prolongation in patients with the CYP450 2B6 *6/*6 genotype due to reduced metabolic clearance of the drug stemming from decreased levels of functional CYP450 2B6 isoenzyme.",
+     "label": "unrelated"
+    },
+    {
+     "finding": "Efavirenz interacts with active order Nevirapine — Moderate. Coadministration of nevirapine and efavirenz has resulted in increased toxicity without additional therapeutic benefit over either agent alone. The mechanism of interaction has not been established, although this combination has exhibited strong antagonistic anti-HIV-1 activity in cell culture. Efavirenz is in the same ATC class (J05AG) as active order Nevirapine — possible duplicate therapy",
+     "label": "unrelated"
+    },
+    {
+     "finding": "Efavirenz interacts with active order Lamivudine and Stavudine — Moderate. Coadministration of efavirenz with other agents known to induce hepatotoxicity may potentiate the risk of liver injury. Efavirenz has been associated with hepatotoxicity during postmarketing use.",
+     "label": "unrelated"
+    }
+   ]
+  }
+ ]
+}

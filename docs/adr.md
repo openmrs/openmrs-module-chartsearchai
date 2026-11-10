@@ -28093,3 +28093,110 @@ Four wordings went to the model on every patient, and it answered them wrongly:
 
 Pinned by `ClinicianWordingsTest.allergyConflictsAndAProblemWithHerDrugAskTheModulesQuestion`, red without the change on
 its first wording.
+
+## Decision 613: A question asking what one drug does to her keeps only the findings the model judges to bear on it
+
+**Status: Accepted** (November 2026), on the owner's direction: *"I do not want anything that is not related to the
+question that a clinician asks. This is not an alert system for unsolicited information."*
+
+### Context
+
+On the demo replica, *"Should I stop her nevirapine because of the rash?"* got the model's *"No record addresses the
+reason for stopping nevirapine due to a rash"*. Beside it was a chip saying her nevirapine is in three of her orders.
+Every finding about a drug the question names went into the prompt and out as a chip, whatever the question asked of
+the drug. The model answered from those findings:
+
+- dd5558ed, the rash question: *"No — Nevirapine should not be given because it interacts with active order Rifampin"*.
+- dd796590, the nightmares question: *"No — do not stop the efavirenz: Efavirenz interacts with active order…"*.
+- *"Can nevirapine cause liver damage?"* got the module's own answer with nevirapine's interactions, under Decision 448's
+  reading as *"Could X cause problems?"*.
+
+The same probe asked 10 questions, each about what one drug causes or a reason to stop it, of 5 replica patients. It
+published 128 chips. Labelled by what each finding states, 13 bore on the question and 109 did not; 6 were borderline.
+
+### Rejected
+
+- **Stripping the findings of such a question by its wording**, as Decision 399 does for a drug's record. A fresh review
+  found it wrong both ways. *"Could amoxicillin cause anaphylaxis?"* would lose a recorded penicillin allergy. *"Can
+  erythromycin cause QT prolongation?"* and *"Can tramadol cause serotonin syndrome?"* name an interaction's own
+  mechanism. Decision 448 rests on *"Can fluconazole cause liver damage?"* beside methotrexate, related by liver injury.
+- **Matching the question's words against each finding's text.** It cannot relate "anaphylaxis" to an allergy. It kept a
+  tramadol finding for "syndrome", which was the long QT syndrome.
+- **A list of synonyms.** That is clinical knowledge in the module, which the owner rules out.
+- **Publishing only the chips the answer cites.** The model cites what it is handed: dd74dc61's rash answer cited the
+  duplicate-order finding.
+- **One yes/no call per finding.** On the demo's model (E2B) it kept 19 to 29 of the 109 unrelated findings. On the
+  module's default (E4B) it dropped 5 of the 13 related ones.
+
+### The decision
+
+For a question naming one drug and asking what it does to her (`QueryScopeRouter.asksWhatADrugDoesToHer`), the injector
+puts the findings about it to the model in one call (`LlmProvider.findingsBearingOn`). That reading covers an effect it
+causes, and a reason other than an interaction to stop or change it.
+
+- Only the findings the model names reach the prompt.
+- No reference record and no answer of the module's are handed with them.
+- `LlmInferenceService.aboutTheDrugAsked` publishes only those findings as chips, through
+  `PatientChart.getFindingsBearingOnTheQuestion`.
+- A finding that the drug is in her orders more than once (`SafetyWarning.isAboutItsOwnOrders`) describes no effect of
+  it, so it is never put to the model.
+- The clinical knowledge that relates "anaphylaxis" to an allergy is the model's.
+- The call runs under `chartsearchai.drugSafety.readQuestionsWithTheModel` (default on), as Decision 607's reading does. A failed call, an
+  unreadable reply or no engine keeps every finding as before.
+
+The reading is a trigger, never a verdict. An effect beside a second drug, or with a word of safety, of interaction or
+of her medications, is not read. Decision 448's answer therefore stands only where no judgement can be made.
+
+The injector stamps such a question (`PatientChart.asksWhatADrugDoesToHer`). Only then does `LlmInferenceService` inject
+a second time, through `DrugReferenceInjector.injectKeepingWhatBearsOn`, which carries the judgement. The judgement is
+not a second arity of `inject`, which `ArchitectureGuardTest.theInjectorExposesExactlyOneInjectArity` keeps at one (issue
+#247). Nor does it run on every question: the injectors the tests substitute would then have been passed over, and a
+first build with that shape failed 42 cases. A judged chart also never takes the injector's return of the chart as it came when nothing was resolved. On the
+replica, a patient whose orders all had records of their own got that chart back, naming no drug, for the rash question.
+Decision 607's reading then ran the screen of all his medications. `FindingRelevanceInjectionTest` pins it.
+
+### Measured
+
+`FindingRelevanceEvalTest` runs production's prompt and parsing over the replica's 44 answers. That is 92 unrelated and
+13 related findings once the duplicate-order findings are left out.
+
+| Model | Related kept | Unrelated removed |
+|---|---|---|
+| E4B (the module's default) | 10 of 13 | 92 of 92 |
+| E2B (the demo replica's) | 11 of 13 | 65 of 92 |
+
+Both models miss erythromycin's Major finding with efavirenz for *"Can erythromycin cause QT prolongation?"*. That
+finding states efavirenz's own QT effect. Erythromycin's other QT findings are kept, so the question is still answered.
+
+**On the replica, end to end**, the same 10 questions of the same 5 patients (50 answers):
+
+| | Chips | Related | Other | The module's own answer |
+|---|---|---|---|---|
+| Before | 128 | 13 | 115 | 10 |
+| After, E2B | 35 | 11 | 24 | 0 |
+| After, E4B | 11 | 9 | 2 | 0 |
+
+- On E4B, every answer to the rash and nightmares questions carries no chip, and the prose names no other interaction.
+- Both other chips on E4B are the borderline efavirenz–trimethoprim finding beside *"Can efavirenz cause dizziness?"*.
+  Its text lists dizziness among the symptoms of the arrhythmia it warns of.
+- On E4B, four related chips were dropped:
+  - erythromycin's QT findings, on three answers;
+  - isoniazid's neuropathy finding with stavudine and didanosine, on dd796590, which then carried no neuropathy chip.
+- On E2B, the rash answer still rests on a rifampin or lopinavir interaction for 3 of the 5 patients.
+
+**The cost, accepted by the owner:** a related finding can be dropped. On E2B, about a third of the unrelated findings
+still stand. The call adds one model read to these questions alone, a median of 2.4 s (E2B) and 4.2 s (E4B) per answer on this Mac, measured with the probe script before the prompt was split into system and user parts.
+
+**Left as found:** *"her nosebleeds"* is read as a drug she is said to take, named "nosebleeds", and the answer says no
+order of hers is named so. That is another reading's defect.
+
+Pinned by `AllergyQuestionConflictingOrderContextTest.search_aQuestionOfWhatADrugDoesToHerKeepsOnlyTheFindingsTheModelJudgesBearOnIt`,
+which reddens without the injector's and the service's change. It covers four cases:
+
+- the model judging none to bear: no finding, no reference record and no chip;
+- judging all: all stand;
+- no judgement: all stand;
+- a drug-safety question: never judged.
+
+The prompt is scored by `FindingRelevanceEvalTest`, opt-in, which asserts at least 75% related kept and 60% unrelated
+removed.

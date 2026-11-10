@@ -580,6 +580,34 @@ public class DrugReferenceInjector {
 	 */
 	public PatientChart inject(PatientChart chart, Patient patient, String question,
 			ChartReadStatus readStatus) {
+		return injectKeepingWhatBearsOn(chart, patient, question, readStatus, null);
+	}
+
+	/**
+	 * Which of the findings about the one drug a question names bear on what it asks of that drug — the rash it causes, a
+	 * reason to stop it — as the model judges them (ADR Decision 613). Supplied by {@code LlmInferenceService}, which holds
+	 * the model; the injector asks it only of a question {@link QueryScopeRouter#asksWhatADrugDoesToHer} reads.
+	 */
+	public interface FindingRelevance {
+
+		/**
+		 * @param question the clinician's question
+		 * @param findings each finding's detail, as the model will read it
+		 * @return the indexes into {@code findings} that bear on the question, or {@code null} where no judgement could be
+		 *         made — every finding then stands as before
+		 */
+		Set<Integer> bearingOn(String question, List<String> findings);
+	}
+
+	/**
+	 * {@link #inject(PatientChart, Patient, String, ChartReadStatus)}, keeping of the findings about the drug a question
+	 * asks what it does to her only those {@code relevance} judges to bear on it (ADR Decision 613). {@code null} judges
+	 * nothing. A name of its own and not a second arity of {@code inject}, which keeps one so a test double written
+	 * against a stale signature fails to compile (issue #247); {@code LlmInferenceService} calls it only for a chart
+	 * {@code inject} stamped {@link PatientChart#asksWhatADrugDoesToHer}, which a substituted injector never does.
+	 */
+	public PatientChart injectKeepingWhatBearsOn(PatientChart chart, Patient patient, String question,
+			ChartReadStatus readStatus, FindingRelevance relevance) {
 		try {
 			if (chart == null || !ChartSearchAiUtils.isDrugReferenceEnabled()) {
 				return chart;
@@ -594,7 +622,8 @@ public class DrugReferenceInjector {
 			}
 			// The order history is read only where a question asks whether she has ever taken a drug (ADR Decision 154),
 			// so every other question costs what it did.
-			return injectRecords(chart, context, question, () -> PatientClinicalContextBuilder.buildOrderHistory(patient));
+			return injectRecords(chart, context, question, () -> PatientClinicalContextBuilder.buildOrderHistory(patient),
+				relevance);
 		}
 		catch (RuntimeException e) {
 			log.warn("Drug-reference injection failed; leaving the chart unmodified — the answer path is never broken",
@@ -619,6 +648,13 @@ public class DrugReferenceInjector {
 	 */
 	PatientChart injectRecords(PatientChart chart, PatientClinicalContext rawContext, String question,
 			Supplier<PatientClinicalContext> orderHistory) {
+		return injectRecords(chart, rawContext, question, orderHistory, null);
+	}
+
+	/** {@link #injectRecords(PatientChart, PatientClinicalContext, String, Supplier)}, judging the findings of a question
+	 *  asking what one drug does to her with {@code relevance} (ADR Decision 613). */
+	PatientChart injectRecords(PatientChart chart, PatientClinicalContext rawContext, String question,
+			Supplier<PatientClinicalContext> orderHistory, FindingRelevance relevance) {
 		// A giving verb misspelt is the verb, for every reading of the question's text below (ADR Decision 527).
 		question = QueryScopeRouter.withMisspeltVerbsSpelled(question);
 		// The same resolution DrugSafetyValidator.validate applies, for the same reason
@@ -732,6 +768,38 @@ public class DrugReferenceInjector {
 			}
 			findings = kept;
 		}
+		// A question asking what one drug does to her — the rash it causes, a reason to stop it — keeps only the findings
+		// the model judges to bear on that, and hands the model no reference record and no answer of the module's (ADR
+		// Decision 613, the owner's direction that an answer carries nothing the question did not ask). "Should I stop his
+		// nevirapine because of the rash?" was answered "No — Nevirapine should not be given because it interacts with
+		// active order Rifampin". That the drug is in her orders more than once describes no effect of it, so it is never
+		// put to the model. No judgement — a failed or absent engine — leaves every finding as it was.
+		Set<String> bearing = null;
+		boolean asksWhatItDoes = !questionDrugs.isEmpty()
+				&& QueryScopeRouter.asksWhatADrugDoesToHer(wordsBesideItsNames(question, questionDrugs));
+		if (relevance != null && asksWhatItDoes) {
+			List<SafetyWarning> judged = new ArrayList<SafetyWarning>(findings.size());
+			List<String> details = new ArrayList<String>(findings.size());
+			for (SafetyWarning finding : findings) {
+				if (!finding.isAboutItsOwnOrders()) {
+					judged.add(finding);
+					details.add(finding.getDetail());
+				}
+			}
+			Set<Integer> kept = judged.isEmpty() ? Collections.<Integer> emptySet() : relevance.bearingOn(question, details);
+			if (kept != null) {
+				List<SafetyWarning> bearingFindings = new ArrayList<SafetyWarning>(kept.size());
+				bearing = new HashSet<String>();
+				for (int f = 0; f < judged.size(); f++) {
+					if (kept.contains(Integer.valueOf(f))) {
+						bearingFindings.add(judged.get(f));
+						bearing.add(judged.get(f).getDetail());
+					}
+				}
+				findings = bearingFindings;
+				matched = new LinkedHashMap<DrugReference, SubstanceRendering>();
+			}
+		}
 		List<PatientClinicalContext.ActiveDrugOrder> unrepresented = unrepresentedActiveOrders(chart, context);
 		// Whether the interaction SCREEN ran over a pair of this patient's own medications and related
 		// none of them — issue #401, and the one thing this injection has to say when it has nothing
@@ -825,7 +893,10 @@ public class DrugReferenceInjector {
 		if (nothingResolved && unrepresented.isEmpty() && !screenRelatedNothing && !screenOfNoMedications
 				&& !screenOfOneOrder && !allergyToHerMedications && !herDrugAllergiesAsked && !duplicateQuestion
 				&& listed.stated().isEmpty() && unrecognised == null
-				&& !stopOfHerOrderByName) {
+				&& !stopOfHerOrderByName
+				// Nor a question the model judged, whose findings it found none bear on: still the chart built for it, naming
+				// the drug asked about, or the model's reading takes it for one naming none (ADR Decision 613).
+				&& bearing == null) {
 			// The record each of her orders is, though nothing here resolved: it is a fact about her chart, and the
 			// statement after a model's answer naming an order her records directly conflict with cites it (ADR
 			// Decision 210). Every order has its own record here, so the chart's own index is the one to number off.
@@ -1699,8 +1770,18 @@ public class DrugReferenceInjector {
 					history == null ? Collections.<DrugReference> emptyList() : drugReferenceService.findForActiveOrders(history),
 					chart.getMappings(), context);
 		}
+		// A judged question is the model's, handed only what bears on it (ADR Decision 613).
+		if (bearing != null) {
+			moduleAnswer = null;
+		}
 		PatientChart injected = new PatientChart(text.toString(), Collections.unmodifiableList(mappings),
 				chart.getFocusIndices());
+		if (asksWhatItDoes) {
+			injected.markAsksWhatADrugDoesToHer();
+		}
+		if (bearing != null) {
+			injected.markFindingsBearingOnTheQuestion(bearing);
+		}
 		// Stamped on the chart the injector built and on no other, because only this pass knows what
 		// it resolved (issue #469). A chart this method returns early is one it resolved nothing on,
 		// and states none. Whether the answer is USED is LlmInferenceService's to decide.

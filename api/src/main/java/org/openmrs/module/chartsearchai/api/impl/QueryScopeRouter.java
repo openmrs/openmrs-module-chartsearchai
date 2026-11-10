@@ -3116,6 +3116,86 @@ public final class QueryScopeRouter {
 		"bad", "worse", "wrong",
 		"could", "should", "may", "might", "would", "will", "must", "need", "needs"));
 
+	/** A verb of what a drug does to her: "Can nevirapine cause liver damage?", "Is the rash caused by nevirapine?" (ADR
+	 *  Decision 613). */
+	private static final Set<String> EFFECT_VERBS = new HashSet<String>(Arrays.asList("cause", "causes", "causing", "caused",
+		"induce", "induces", "inducing", "induced", "trigger", "triggers", "triggering", "triggered"));
+
+	/** The words opening a reason: "… because of the rash", "… due to her nosebleeds" (ADR Decision 613). */
+	private static final Pattern A_REASON = Pattern.compile("\\b(?:because of|due to|owing to|on account of)\\b");
+
+	/**
+	 * Whether a question naming ONE drug asks what it does to her — an effect it causes, or a reason other than an
+	 * interaction to stop or change it (ADR Decision 613). Such a question asks of ONE thing — the rash, the liver damage
+	 * — and the findings about the drug are mostly about something else, so the injector keeps only those the model
+	 * judges to bear on it ({@code DrugReferenceInjector.FindingRelevance}). On the demo replica "Should I stop his
+	 * nevirapine because of the rash?" was answered "No — Nevirapine should not be given because it interacts with active
+	 * order Rifampin", and "Can nevirapine cause liver damage?" was answered by the module with nevirapine's interactions.
+	 * It is a TRIGGER for that judgement and never a verdict that the findings are unrelated: "Could amoxicillin cause
+	 * anaphylaxis?" beside a penicillin allergy, and "Can erythromycin cause QT prolongation?" beside her efavirenz, are
+	 * findings the judgement keeps. An effect or reason carrying a word of safety ({@link #SAFETY_STEMS}), of interaction
+	 * or of her medications is not read — "Will erythromycin cause problems?", "… because of interactions", "Could
+	 * rifampicin cause her contraceptive to fail?" — nor one beside a second drug, which asks of the pair (Decision 611).
+	 */
+	public static boolean asksWhatADrugDoesToHer(List<String> wordsWithTheDrugMarked) {
+		if (wordsWithTheDrugMarked == null || Collections.frequency(wordsWithTheDrugMarked, DRUG_NAME) != 1) {
+			return false;
+		}
+		String joined = String.join(" ", wordsWithTheDrugMarked);
+		int effect = -1;
+		for (int w = 0; w < wordsWithTheDrugMarked.size() && effect < 0; w++) {
+			if (EFFECT_VERBS.contains(wordsWithTheDrugMarked.get(w))) {
+				effect = w;
+			}
+		}
+		List<String> what;
+		if (effect >= 0) {
+			// Something named beside it makes the effect one of a pair or of her medications, whatever the data resolved of
+			// it: "Will aspirin cause bleeding with warfarin?" asks of the pair.
+			for (String word : wordsWithTheDrugMarked) {
+				if (BESIDE_WORDS.contains(word)) {
+					return false;
+				}
+			}
+			what = new ArrayList<String>(wordsWithTheDrugMarked);
+		} else {
+			Matcher reason = A_REASON.matcher(joined);
+			boolean ending = false;
+			for (String word : wordsWithTheDrugMarked) {
+				for (String stem : ENDED_STEMS) {
+					ending |= word.startsWith(stem);
+				}
+			}
+			if (!ending || !reason.find()) {
+				return false;
+			}
+			what = words(joined.substring(reason.end()));
+			if (what.isEmpty()) {
+				return false;
+			}
+		}
+		for (String word : what) {
+			if (DRUG_NAME.equals(word) && effect < 0 || MEDICATION_WORDS.contains(word)
+					|| ENDS_ON_A_MEDICATION_GROUP_NOUN.matcher(word).find()) {
+				return false;
+			}
+			for (String stem : SAFETY_STEMS) {
+				if (word.startsWith(stem)) {
+					return false;
+				}
+			}
+		}
+		return true;
+	}
+
+	/** Words naming something beside the drug an effect is asked of (ADR Decision 613). */
+	private static final Set<String> BESIDE_WORDS = new HashSet<String>(Arrays.asList("with", "alongside", "and", "plus",
+		"together", "combined", "beside", "while", "when", "if"));
+
+	/** Her medications named in a word: what an effect beside them asks of her medications, never of the drug alone. */
+	private static final Set<String> MEDICATION_WORDS = new HashSet<String>(Arrays.asList("medication", "medications", "meds",
+		"medicines", "medicine", "drugs", "drug", "regimen", "treatment", "therapy", "pills", "tablets"));
+
 	/**
 	 * Whether a question names ONE drug only to ask of its record in her chart — when it was started, who prescribed it,
 	 * whether it was stopped, what it is for, how long she has taken it (ADR Decision 399): it opens as a question of fact

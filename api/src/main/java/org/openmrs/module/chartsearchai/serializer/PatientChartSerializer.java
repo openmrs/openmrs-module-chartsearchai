@@ -568,6 +568,12 @@ public class PatientChartSerializer {
 		/** @see #asksOnlyAboutADrugsRecord() */
 		private boolean asksOnlyAboutADrugsRecord;
 
+		/** @see #getFindingsBearingOnTheQuestion() */
+		private Set<String> findingsBearingOnTheQuestion;
+
+		/** @see #asksWhatADrugDoesToHer() */
+		private boolean asksWhatADrugDoesToHer;
+
 		private boolean screenedHerOrders;
 
 		/** @see #getNamedClassAtcGroup() */
@@ -855,6 +861,34 @@ public class PatientChartSerializer {
 		 *  stopped (ADR Decision 399): it asks nothing of drug safety, and no chip answers it. */
 		public boolean asksOnlyAboutADrugsRecord() {
 			return asksOnlyAboutADrugsRecord;
+		}
+
+		/** Records that the question asks what one drug does to her — ADR Decision 613, and {@code DrugReferenceInjector} is
+		 *  the only caller. */
+		public void markAsksWhatADrugDoesToHer() {
+			this.asksWhatADrugDoesToHer = true;
+		}
+
+		/** Whether the question names one drug and asks what it does to her — an effect it causes, a reason other than an
+		 *  interaction to stop it (ADR Decision 613): its findings are then put to the model to judge which bear on it. */
+		public boolean asksWhatADrugDoesToHer() {
+			return asksWhatADrugDoesToHer;
+		}
+
+		/** Records the findings the model judged to bear on a question asking what one drug does to her — ADR Decision 613,
+		 *  and {@code DrugReferenceInjector} is the only caller. */
+		public void markFindingsBearingOnTheQuestion(Set<String> details) {
+			this.findingsBearingOnTheQuestion = Collections.unmodifiableSet(new HashSet<String>(details));
+		}
+
+		/**
+		 * The details of the findings the model judged to bear on a question asking what one drug does to her — the rash it
+		 * causes, a reason to stop it — which are the only findings the prompt carries and the only chips published (ADR
+		 * Decision 613); {@code null} where no such judgement was made, and then every finding stands as before. An empty set
+		 * is a judgement that none bears on it.
+		 */
+		public Set<String> getFindingsBearingOnTheQuestion() {
+			return findingsBearingOnTheQuestion;
 		}
 
 		/** The substances the question names, as the drug data keys them — ADR Decision 387 — or empty where it names none:

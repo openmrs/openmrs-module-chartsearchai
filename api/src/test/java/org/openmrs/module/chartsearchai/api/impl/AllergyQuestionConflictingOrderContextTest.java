@@ -18,7 +18,9 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.function.Consumer;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -268,6 +270,63 @@ public class AllergyQuestionConflictingOrderContextTest extends BaseModuleContex
 		service.setLlmProvider(recorder);
 		service.search(patient, "When can I give her aspirin?");
 		assertTrue(!unrelated.records.equals(recorder.records), "precondition: a safety question is handed more");
+	}
+
+	/**
+	 * A question asking what one drug does to her — a reason other than an interaction to stop it, an effect it causes —
+	 * keeps only the findings the model judges to bear on it (ADR Decision 613, the owner's direction that an answer carries
+	 * nothing the question did not ask). On the demo replica "Should I stop his nevirapine because of the rash?" was
+	 * answered "No — Nevirapine should not be given because it interacts with active order Rifampin", beside a chip that
+	 * his nevirapine is in three of his orders.
+	 */
+	@Test
+	public void search_aQuestionOfWhatADrugDoesToHerKeepsOnlyTheFindingsTheModelJudgesBearOnIt() throws IOException {
+		int number = theAspirinOrderRecordNumber(SLICE);
+		String modelAnswer = "No record addresses it for her aspirin [" + number + "].";
+		Recorder unrelated = new Recorder(modelAnswer);
+		TestableService plain = serviceAnswering(modelAnswer);
+		plain.setLlmProvider(unrelated);
+		plain.search(patient, "Summarize her chart.");
+		for (String question : Arrays.asList("Should I stop her aspirin because of the rash?",
+				"Should I hold her aspirin due to the nosebleeds?", "Can aspirin cause stomach bleeding?",
+				"Could her aspirin be causing her tinnitus?")) {
+			// The model judging none to bear on it: the model is handed no finding and no reference record, and no chip
+			// is published.
+			Recorder none = new Recorder(modelAnswer);
+			none.bearing = Collections.<Integer> emptySet();
+			TestableService service = serviceAnswering(modelAnswer);
+			service.setLlmProvider(none);
+			ChartAnswer answer = service.search(patient, question);
+			assertFalse(none.judged.isEmpty(), question + " — the model is asked which findings bear on it");
+			assertEquals(modelAnswer, answer.getAnswer(), question + " — the model's answer, as it wrote it");
+			assertTrue(answer.getSafetyWarnings().isEmpty(), question + " — no chip: " + answer.getSafetyWarnings());
+			assertEquals(unrelated.records, none.records, question + " — the model handed the chart a question asking "
+					+ "nothing of drug safety is handed");
+			// The model judging them all to bear on it: they stand, in the prompt and as chips.
+			Recorder all = new Recorder(modelAnswer);
+			all.bearing = new HashSet<Integer>();
+			for (int f = 0; f < 10; f++) {
+				all.bearing.add(Integer.valueOf(f));
+			}
+			service = serviceAnswering(modelAnswer);
+			service.setLlmProvider(all);
+			answer = service.search(patient, question);
+			assertFalse(answer.getSafetyWarnings().isEmpty(), question + " — the findings judged to bear on it are chips");
+			assertTrue(all.records.contains("recorded allergy"), question + " — and reach the model: " + all.records);
+			// No judgement — a failed engine — leaves every finding as it was.
+			Recorder failed = new Recorder(modelAnswer);
+			service = serviceAnswering(modelAnswer);
+			service.setLlmProvider(failed);
+			answer = service.search(patient, question);
+			assertFalse(answer.getSafetyWarnings().isEmpty(), question + " — no judgement keeps the chips");
+		}
+		// A question of the drug's safety is never judged: its findings are what it asks.
+		Recorder safety = new Recorder(modelAnswer);
+		safety.bearing = Collections.<Integer> emptySet();
+		TestableService service = serviceAnswering(modelAnswer);
+		service.setLlmProvider(safety);
+		service.search(patient, "Can I give her more aspirin?");
+		assertTrue(safety.judged.isEmpty(), "a drug-safety question is not judged: " + safety.judged);
 	}
 
 	/**
@@ -922,8 +981,19 @@ public class AllergyQuestionConflictingOrderContextTest extends BaseModuleContex
 		/** The records the last call was handed, as the model would read them. */
 		private String records;
 
+		/** What the judgement of ADR Decision 613 answers — {@code null} is no judgement — and what it was asked of. */
+		private Set<Integer> bearing;
+
+		private final List<String> judged = new ArrayList<String>();
+
 		private Recorder(String answer) {
 			this.answer = answer;
+		}
+
+		@Override
+		public Set<Integer> findingsBearingOn(String question, List<String> findings) {
+			judged.addAll(findings);
+			return bearing;
 		}
 
 		@Override

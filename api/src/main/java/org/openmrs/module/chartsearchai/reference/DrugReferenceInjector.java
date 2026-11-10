@@ -1121,6 +1121,8 @@ public class DrugReferenceInjector {
 		// Which two composers answered, for the sentence a client shows of them (ADR Decisions 600, 601).
 		boolean answeredAsASwitch = false;
 		boolean answeredAsAListedPair = false;
+		// Whether several drugs asked about together were answered, whose chips are the findings it states (ADR Decision 619).
+		boolean answeredAsSeveralTogether = false;
 		String pairAnswer;
 		String aboutThePair;
 		String twoOrdersByName;
@@ -1535,6 +1537,7 @@ public class DrugReferenceInjector {
 					orderRecordNumbers,
 					orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers,
 					pairExtent.stated(), context);
+			answeredAsSeveralTogether = moduleAnswer != null;
 		}
 		// A drug proposed beside one of hers that the data relates to her orders only without a rating, or to none: her drug is
 		// named, then the answer its proposal alone gets, over the drug-in-play arm's own statement of it (ADR Decision 306).
@@ -1791,8 +1794,11 @@ public class DrugReferenceInjector {
 		// answer carries nothing the question did not ask). "How do isoniazid and stavudine interact?" stated that pair's
 		// finding beside chips of each drug against her other medications. A drug of the two that is not hers is weighed for
 		// her, and its findings against her medications are lines of the answer (ADR Decision 425), so they stand.
+		// Several drugs asked about together publish what their answer states as well: its sections leave out what is about
+		// her own drugs alone, so their chips do too (ADR Decision 619).
 		if (bearing == null && moduleAnswer != null && !questionDrugs.isEmpty()
-				&& (QueryScopeRouter.asksAboutThePairsInteraction(wordsBesideItsNames(question, questionDrugs))
+				&& (answeredAsSeveralTogether
+						|| QueryScopeRouter.asksAboutThePairsInteraction(wordsBesideItsNames(question, questionDrugs))
 						|| QueryScopeRouter.asksWhetherOneDrugChangesTheOther(wordsBesideItsNames(question, questionDrugs))
 						// and whether the two interact, trimmed to the pair as well (ADR Decision 616)
 						|| QueryScopeRouter.asksWhetherTwoDrugsInteract(wordsBesideItsNames(question, questionDrugs)))) {
@@ -8789,7 +8795,6 @@ public class DrugReferenceInjector {
 			return null;
 		}
 		List<String> pairLines = new ArrayList<String>();
-		List<Integer> aboutHerOwn = new ArrayList<Integer>();
 		// A choice states each of the three under its own heading, one of hers too (ADR Decision 442).
 		List<AskedDrug> sectioned = choosing ? asked : others;
 		Map<AskedDrug, List<Integer>> ofEach = new LinkedHashMap<AskedDrug, List<Integer>>();
@@ -8838,9 +8843,10 @@ public class DrugReferenceInjector {
 					|| namesOnlyItsOwnOrders(finding, herOrderDisplays)) && !about.isEmpty()
 					&& unionOf(hers).containsAll(about)) {
 				// A contraindication to a drug of hers the question names — her allergy covering the aspirin she takes — is
-				// about her own medication, stated apart after the rest (ADR Decision 358); and so is that drug in several of
-				// her own orders, her rifampicin in two TB combinations (ADR Decision 495).
-				aboutHerOwn.add(i);
+				// about her own medication, and so is that drug in several of her own orders, her rifampicin in two TB
+				// combinations (ADR Decisions 358, 495): neither is what giving the others asks, so neither is stated (ADR
+				// Decision 619, the owner's direction that an answer carries nothing the question did not ask).
+				continue;
 			} else if (!Collections.disjoint(touched, unionOf(asked))) {
 				// About a drug asked about, in no way this answer knows how to state.
 				return null;
@@ -8899,12 +8905,6 @@ public class DrugReferenceInjector {
 				return null;
 			}
 			lines.add(composed);
-		}
-		if (!aboutHerOwn.isEmpty()) {
-			lines.add(ABOUT_HER_OTHER_MEDICATIONS_LEAD);
-			for (Integer i : aboutHerOwn) {
-				lines.add(findingLine(findings.get(i), numbers.get(i), orderRecordNumbers, herOrderRecords, true));
-			}
 		}
 		lines.add(BELOW_FLOOR_SCOPE);
 		return String.join("\n", lines);

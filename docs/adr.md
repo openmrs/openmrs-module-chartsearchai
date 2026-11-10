@@ -20378,7 +20378,7 @@ Pinned by `TerseDrugQuestionWordingsTest.fineToGiveItIsSafeToGiveIt`.
 ## Decision 358: Several drugs asked about together state a contraindication to one of hers apart
 
 **Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
-`docs/ddi-tested-questions.md` answer correctly for every patient. It completes [Decision 309](#decision-309-three-or-more-drugs-asked-about-together-are-answered-each-she-does-not-take-as-its-proposal)'s answer for a
+**Superseded in part by [Decision 619](#decision-619-several-drugs-asked-about-together-state-nothing-about-her-own-drug-alone):** the finding is no longer stated, and the answer's chips are the findings it states. `docs/ddi-tested-questions.md` answer correctly for every patient. It completes [Decision 309](#decision-309-three-or-more-drugs-asked-about-together-are-answered-each-she-does-not-take-as-its-proposal)'s answer for a
 finding about her own drug.
 
 ### Context
@@ -23871,7 +23871,7 @@ Pinned by `ClinicianWordingsTest.threeDrugsAskedTogetherWithNoVerbAreTheListAske
 ## Decision 495: Several drugs asked about together state apart that one of hers is in several of her orders
 
 **Status: Accepted** (October 2026) — found asking three-drug wordings of 15 patients on the 3.7.1 standalone on
-2026-10-27.
+2026-10-27. **Superseded in part by [Decision 619](#decision-619-several-drugs-asked-about-together-state-nothing-about-her-own-drug-alone):** the finding is no longer stated, and the answer's chips are the findings it states.
 
 ### Context
 
@@ -28397,3 +28397,38 @@ Pinned by `TwoDrugsListedBelowTheFloorTest.aFindingRelatingOneOfHersToAThirdOrde
 `TogetherWithHerOwnMedicationContextTest.aQuestionAboutHerDrugAndAnotherStatesNoAllergyCoveringTheOther`. Each reddens
 without the change. Removing the contraindication test from the first composer reddens the second test's kept half, and
 removing it from the second reddens `TerseDrugQuestionWordingsTest.whetherADrugIsContraindicatedWithHersMakingNoVerdictStatesWhatTheCheckFound`.
+
+## Decision 619: Several drugs asked about together state nothing about her own drug alone
+
+**Status: Accepted** (November 2026), on the owner's direction ("Yes i want", to applying Decision 618 to the sections
+left). It supersedes in part Decisions 358 and 495.
+
+### Context
+
+`DrugReferenceInjector.composeSeveralDrugsTogether` answers three or more drugs asked about together (Decision 309). Two
+kinds of finding about a drug of hers the question names were stated after the rest, under
+`ABOUT_HER_OTHER_MEDICATIONS_LEAD`. One was her allergy covering it (Decision 358), the other that drug already in several
+of her orders (Decision 495). On the demo replica *"Can I give fluconazole, rifampicin and efavirenz together?"* ended,
+for a patient on two fluconazole orders, with *"Fluconazole is already in active orders Fluconazole (2 orders) — possible
+duplicate therapy"*. Neither is what giving the others asks. The answer's chips were every finding raised, so the same
+answer also published a chip relating her fluconazole to her nevirapine, which it never stated.
+
+### The decision
+
+Both kinds are still classified, so a finding the composer cannot place still leaves the question to the model, but
+neither is stated. The chips are the findings the answer cites, through Decision 615's stamp, which this composer's
+answer now sets as well (`answeredAsSeveralTogether`).
+
+The other two places that use the lead are left alone. A finding Decision 296 draws apart after a single-drug answer, and
+her own orders sharing a substance under Decision 312's lead, reach it only where they name a substance the question asks
+about, since Decision 387 drops every finding naming none.
+
+Measured on the demo replica on 2026-11-10 (E2B): four three-drug wordings for five patients the earlier sweep found
+carrying the section, 20 answers. Answers carrying the section fell from 8 to 0. The module answered the same 13 both
+times, and the chips on those 13 fell from 114 to 81. The 16 answers Decision 618 was measured on did not change. One
+answer still publishes chips it never states, *"Can I give fluconazole, rifampicin and efavirenz together?"* for a patient
+on the other two, which Decision 196's composer answers rather than this one.
+
+Pinned by `TerseDrugQuestionWordingsTest.severalDrugsTogetherStateNoFindingAboutHerOwnDrugAlone` and
+`TerseDrugQuestionWordingsTest.severalDrugsTogetherDoNotStateThatOneOfHersIsAlreadyInSeveralOrders`. Each checks both the
+answer and the chips, and reddens without the change.

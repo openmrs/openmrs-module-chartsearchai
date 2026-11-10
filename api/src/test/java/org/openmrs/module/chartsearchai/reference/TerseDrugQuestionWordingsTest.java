@@ -10,7 +10,9 @@
 package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Arrays;
 import java.util.LinkedHashSet;
@@ -20,6 +22,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 
 /**
@@ -201,37 +204,39 @@ public class TerseDrugQuestionWordingsTest extends BaseModuleContextSensitiveTes
 
 	/**
 	 * Several drugs asked about together, one of them hers, where a finding is about her own drug — a contraindication to
-	 * the aspirin she takes — states it under its own lead after the rest (ADR Decision 358): on the 3.7.1 standalone "Can I
-	 * give her ibuprofen, naproxen and aspirin?" went to the model for Agnes Adams and Dorothy Odinga, on aspirin and
-	 * recorded allergic to the NSAID group or to ibuprofen, which answered "No — Ibuprofen and Naproxen should not be given".
+	 * the aspirin she takes — answer for the drugs proposed and do not state it (ADR Decisions 358, 619 — the owner's
+	 * direction that an answer carries nothing the question did not ask): on the 3.7.1 standalone "Can I give her ibuprofen,
+	 * naproxen and aspirin?" went to the model for Agnes Adams and Dorothy Odinga, on aspirin and recorded allergic to the
+	 * NSAID group or to ibuprofen, which answered "No — Ibuprofen and Naproxen should not be given". Its chips are those the
+	 * answer states.
 	 */
 	@Test
-	public void severalDrugsTogetherStateAFindingAboutHerOwnDrugApart() {
+	public void severalDrugsTogetherStateNoFindingAboutHerOwnDrugAlone() {
 		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
 			DrugReferenceTestSupport.activeOrder("order-asa", "Aspirin 81mg", "Aspirin"));
 		LinkedHashSet<String> names = new LinkedHashSet<String>(orders.get(0).getNames());
-		String answer = DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.shippedServiceWithGroups())
+		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.shippedServiceWithGroups())
 				.injectRecords(DrugReferenceTestSupport.oneRecordChart(), DrugReferenceTestSupport.ctx(45, null, names, null,
-					DrugReferenceTestSupport.set("ibuprofen"), null, orders), "Can I give her ibuprofen, naproxen and aspirin?")
-				.getModuleAnswer();
+					DrugReferenceTestSupport.set("ibuprofen"), null, orders), "Can I give her ibuprofen, naproxen and aspirin?");
+		String answer = chart.getModuleAnswer();
 		assertNotNull(answer, "the module answers");
 		String[] lines = answer.split("\n");
 		assertEquals("Acetylsalicylic acid (aspirin) is one of this patient's active medications; Ibuprofen and Naproxen are "
 				+ "not.", lines[0], "was: " + answer);
-		int lead = Arrays.asList(lines).indexOf(DrugReferenceInjector.ABOUT_HER_OTHER_MEDICATIONS_LEAD);
-		org.junit.jupiter.api.Assertions.assertTrue(lead > 0 && lines[lead + 1].startsWith("Acetylsalicylic acid (aspirin) is "
-				+ "in the same cross-reactivity group (NSAID) as the patient's allergy to Ibuprofen"), "was: " + answer);
-		org.junit.jupiter.api.Assertions.assertTrue(!answer.contains("No —") || answer.indexOf("No —") < answer.indexOf(
-			DrugReferenceInjector.ABOUT_HER_OTHER_MEDICATIONS_LEAD), "no verdict about her own drug: " + answer);
+		assertTrue(answer.contains("For Ibuprofen:") && answer.contains("For Naproxen:"), "was: " + answer);
+		assertFalse(answer.contains(DrugReferenceInjector.ABOUT_HER_OTHER_MEDICATIONS_LEAD) || answer.contains("Acetylsalicylic acid (aspirin) is in the same "
+				+ "cross-reactivity group"), "nothing about her aspirin alone: " + answer);
+		assertChipsAreTheAnswersOwn(chart, "Acetylsalicylic acid (aspirin) is in the same cross-reactivity group");
 	}
 
 	/**
-	 * Several drugs asked about together state apart that one of hers is already in several of her orders (ADR Decision
-	 * 495): on the 3.7.1 standalone a patient whose two TB combination orders both carry rifampicin, asked "Is it ok to give
-	 * fluconazole with rifampicin and nevirapine?", got the model's answer, which stated findings "Not stated above".
+	 * Several drugs asked about together do not state that one of hers is already in several of her orders (ADR Decisions
+	 * 495, 619): on the 3.7.1 standalone a patient whose two TB combination orders both carry rifampicin, asked "Is it ok to
+	 * give fluconazole with rifampicin and nevirapine?", got the model's answer, which stated findings "Not stated above";
+	 * the module then stated her rifampicin duplicate apart, which the question never asked.
 	 */
 	@Test
-	public void severalDrugsTogetherStateApartThatOneOfHersIsAlreadyInSeveralOrders() {
+	public void severalDrugsTogetherDoNotStateThatOneOfHersIsAlreadyInSeveralOrders() {
 		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
 			DrugReferenceTestSupport.activeOrder("order-efv", "Efavirenz 600mg", "Efavirenz"),
 			DrugReferenceTestSupport.activeOrder("order-hzr", "Isoniazid / pyrazinamide / rifampin 75/400/150mg",
@@ -244,20 +249,28 @@ public class TerseDrugQuestionWordingsTest extends BaseModuleContextSensitiveTes
 		}
 		for (String question : new String[] { "Is it ok to give fluconazole with rifampicin and nevirapine?",
 				"Fluconazole, rifampicin and nevirapine together?" }) {
-			String answer = DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.shippedServiceWithGroups())
+			PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.shippedServiceWithGroups())
 					.injectRecords(DrugReferenceTestSupport.oneRecordChart(),
-						DrugReferenceTestSupport.ctx(45, null, names, null, null, null, orders), question)
-					.getModuleAnswer();
+						DrugReferenceTestSupport.ctx(45, null, names, null, null, null, orders), question);
+			String answer = chart.getModuleAnswer();
 			assertNotNull(answer, "the module answers " + question);
 			String[] lines = answer.split("\n");
 			assertEquals("Rifampicin (rifampin) is one of this patient's active medications; Fluconazole and Nevirapine are not.",
 				lines[0], "was: " + answer);
-			int lead = Arrays.asList(lines).indexOf(DrugReferenceInjector.ABOUT_HER_OTHER_MEDICATIONS_LEAD);
-			org.junit.jupiter.api.Assertions.assertTrue(lead > 0 && lines[lead + 1].startsWith("Rifampicin (rifampin) is already in "
-					+ "active orders"), "was: " + answer);
-			int apart = answer.indexOf(DrugReferenceInjector.ABOUT_HER_OTHER_MEDICATIONS_LEAD);
-			org.junit.jupiter.api.Assertions.assertTrue(answer.lastIndexOf("No —") < apart && answer.indexOf("For Fluconazole:") < apart,
-				"no verdict about her own drug: " + answer);
+			assertTrue(answer.contains("For Fluconazole:") && answer.contains("For Nevirapine:"), "was: " + answer);
+			assertFalse(answer.contains(DrugReferenceInjector.ABOUT_HER_OTHER_MEDICATIONS_LEAD) || answer.contains("Rifampicin (rifampin) is already in active orders"),
+				question + " — nothing about her rifampicin alone: " + answer);
+			assertChipsAreTheAnswersOwn(chart, "Rifampicin (rifampin) is already in active orders");
+		}
+	}
+
+	/** The chips published are the findings the answer states, and none starting {@code unstated} (ADR Decisions 615, 619). */
+	private static void assertChipsAreTheAnswersOwn(PatientChart chart, String unstated) {
+		java.util.Set<String> bearing = chart.getFindingsBearingOnTheQuestion();
+		assertNotNull(bearing, "the chips follow the answer: " + chart.getModuleAnswer());
+		assertFalse(bearing.isEmpty(), "the answer states findings: " + chart.getModuleAnswer());
+		for (String detail : bearing) {
+			assertFalse(detail.startsWith(unstated), "a chip the answer does not state: " + detail);
 		}
 	}
 

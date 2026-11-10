@@ -2283,6 +2283,23 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		assertTrue(hers.contains("\nNo — this module's drug-safety check found a reason to withhold Warfarin.\n"), hers);
 	}
 
+	/**
+	 * ADR Decision 615: what happens if she takes two drugs together, or when you combine them, is what combining them does
+	 * (ADR Decision 251). On the demo replica both went to the model, which told one patient "No — Nevirapine interacts with
+	 * active order Rifampin" of a question asking what.
+	 */
+	@Test
+	public void whatHappensIfSheTakesTwoDrugsTogetherIsWhatCombiningThemDoes() {
+		String[][] pairs = { { "What happens if she takes warfarin with aspirin?", "What happens if I give her warfarin with aspirin?" },
+			{ "What happens when you combine warfarin and aspirin?", "What happens if I give her warfarin with aspirin?" },
+			{ "What would happen if he takes warfarin and aspirin?", "What happens if I give her warfarin with aspirin?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+	}
+
 	/** ADR Decision 536: screening a drug, and a drug messing, interfering or conflicting with her medications, ask its interactions. */
 	@Test
 	public void screeningADrugOrItMessingWithHerMedicationsAsksItsInteractions() {

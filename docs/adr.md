@@ -28231,3 +28231,43 @@ line about an order on dd74dc61 or dd5558ed.
 Pinned by the *"her nosebleeds"* case of
 `AllergyQuestionConflictingOrderContextTest.search_aQuestionOfWhatADrugDoesToHerKeepsOnlyTheFindingsTheModelJudgesBearOnIt`,
 which reddens without the change on exactly those two lines.
+
+## Decision 615: A question about two drugs' interaction publishes only the chips its answer states
+
+**Status: Accepted** (November 2026), on the owner's direction that an answer carries nothing the question did not ask.
+
+### Context
+
+On the demo replica, eight wordings of a question about two drugs were each asked of 4 patients, 32 answers in all. The
+answer's text was often scoped to the pair while its chips were not. *"How do isoniazid and stavudine interact?"* (Decision
+264) stated that pair's finding alone, beside six chips that were mostly each drug against the patient's other
+medications. On the five wordings asking what the interaction is, or whether one drug changes the other, 78 of 137 chips
+were findings the answer never states.
+
+*"What happens if he takes ibuprofen with zidovudine?"* and *"What happens when you combine rifampicin and nevirapine?"*
+fitted no shape, and the model answered them. It told one patient *"No — Nevirapine interacts with active order
+Rifampin"*, a verdict on a question asking what.
+
+### The decision
+
+- Where the module answers what the interaction of two drugs is (`QueryScopeRouter.asksAboutThePairsInteraction`) or
+  whether one changes the other (`asksWhetherOneDrugChangesTheOther`), the injector names the findings its answer cites
+  (`PatientChart.getFindingsBearingOnTheQuestion`, the stamp of Decision 613). Only those are published as chips.
+- A drug of the two that is not hers is weighed for her, and its findings against her medications are lines of the
+  answer (Decision 425). Those chips therefore stand.
+- *"Is there an interaction between X and Y?"* and *"Does X affect Y?"* of two drugs that are not hers are untouched.
+  They list each drug against her medications by Decision 220, and their chips match those lines.
+- A proposal of two drugs (*"Can he take fluconazole and rifampicin together?"*) is untouched.
+- `WHAT_COMBINING_THEM_DOES` reads *"what happens if / when she takes X with / and Y"* and *"what happens when you combine
+  X and Y"*.
+
+**On the replica**, the five wordings on the same 4 patients: 73 chips after, against 137, and none that the answer does
+not cite, against 78. Both *"what happens"* wordings are answered by the module on all 4 patients, with no verdict.
+
+Pinned by `TogetherWithHerOwnMedicationContextTest.aQuestionAboutTwoDrugsInteractionBearsOnlyOnTheFindingsItsAnswerStates`
+and `ClinicianWordingsTest.whatHappensIfSheTakesTwoDrugsTogetherIsWhatCombiningThemDoes`. Each reddens without its
+change. The chips are kept to the stamp by `LlmInferenceService.aboutTheDrugAsked`, which Decision 613's test pins.
+
+**Left for the owner:** Decision 220's answer to *"Is there an interaction between X and Y?"* still lists each drug against
+her other medications. That was the owner's own decision, and whether the newer direction now reaches it is the owner's
+to say.

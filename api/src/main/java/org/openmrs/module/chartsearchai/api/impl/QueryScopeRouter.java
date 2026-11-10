@@ -1877,6 +1877,12 @@ public final class QueryScopeRouter {
 			+ "|what (?:is|are) the (?:risks?|dangers?) (?:of|in) (?:giving|prescribing|adding|starting) " + HER_D + " (?:to|for|in) "
 			+ "(?:someone|somebody|anyone|a patient|a person|this patient|her|him|them) (?:on|taking|who is on|who is taking|who "
 			+ "takes) " + HER_D
+			// "What happens if she takes rifampicin with nevirapine?", "What happens when you combine rifampicin and
+			// nevirapine?" — the model answered the second "No — Nevirapine interacts with active order Rifampin" (ADR Decision
+			// 615)
+			+ "|what (?:happens|would happen|will happen) (?:if|when) (?:she|he|they|the patient|this patient|someone|you) "
+			+ "(?:takes?|is given|gets|uses?|combines?) " + HER_D + " (?:with|and|alongside|together with) " + HER_D + "(?: together)?"
+			+ "|what (?:happens|would happen|will happen) (?:if|when) (?:you|we|i) combine " + HER_D + " (?:and|with) " + HER_D
 			// "If she starts rifampicin, what happens to her nevirapine?" (ADR Decision 431)
 			+ "|if (?:i|we|she|he|they|the patient) (?:start|starts|give|add|take|takes|begin|begins) (?:" + PATIENT + " )?(?:on )?"
 			+ HER_D + " what (?:happens|will happen|would happen) (?:to|with) " + HER_D

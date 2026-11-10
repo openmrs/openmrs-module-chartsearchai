@@ -11,6 +11,7 @@ package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -19,12 +20,14 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
+import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 
 /**
@@ -509,6 +512,44 @@ public class TogetherWithHerOwnMedicationContextTest extends BaseModuleContextSe
 				+ "Nevirapine.\nClarithromycin interacts "
 				+ "with active order Nevirapine — Moderate."), "clarithromycin's own answer: " + answer);
 		assertTrue(!answer.contains("can be given"), "never a clearance: " + answer);
+	}
+
+	/**
+	 * A question about the interaction of two drugs, answered by the module, names as bearing on it only the findings its
+	 * answer states, which are the only chips published beside it (ADR Decision 615, the owner's direction that an answer
+	 * carries nothing the question did not ask). On the demo replica "How do isoniazid and stavudine interact?" was answered
+	 * with that pair's finding alone, beside six chips, most of them each drug against the patient's other medications.
+	 */
+	@Test
+	public void aQuestionAboutTwoDrugsInteractionBearsOnlyOnTheFindingsItsAnswerStates() {
+		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
+			DrugReferenceTestSupport.activeOrder("o-inh", "Isoniazid 300mg", "Isoniazid"),
+			DrugReferenceTestSupport.activeOrder("o-d4t", "Stavudine 30mg", "Stavudine"),
+			DrugReferenceTestSupport.activeOrder("o-efv", "Efavirenz 600mg", "Efavirenz"),
+			DrugReferenceTestSupport.activeOrder("o-3tc", "Lamivudine 150mg", "Lamivudine"));
+		LinkedHashSet<String> names = new LinkedHashSet<String>();
+		for (PatientClinicalContext.ActiveDrugOrder order : orders) {
+			names.addAll(order.getNames());
+		}
+		for (String question : Arrays.asList("How do isoniazid and stavudine interact?",
+				"What is the interaction between isoniazid and stavudine?", "Will isoniazid affect her stavudine levels?")) {
+			PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.shippedServiceWithGroups())
+					.injectRecords(DrugReferenceTestSupport.oneRecordChart(),
+						DrugReferenceTestSupport.ctx(40, null, names, null, null, null, orders), question);
+			assertNotNull(chart.getModuleAnswer(), "precondition: the module answers " + question);
+			Set<String> bearing = chart.getFindingsBearingOnTheQuestion();
+			assertNotNull(bearing, question + " — the findings its answer states are named");
+			assertFalse(bearing.isEmpty(), question + " — the pair's own finding among them");
+			int findings = 0;
+			for (RecordMapping mapping : chart.getMappings()) {
+				findings += ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING.equals(mapping.getResourceType()) ? 1 : 0;
+			}
+			assertTrue(findings > bearing.size(), "precondition: findings about other medications too — " + findings);
+			for (String detail : bearing) {
+				assertTrue(detail.toLowerCase().contains("isoniazid") && detail.toLowerCase().contains("stavudine"),
+					question + " — only findings about the pair: " + detail);
+			}
+		}
 	}
 
 	private static PatientChart askOverTheShippedData(String question, String display, String name) {

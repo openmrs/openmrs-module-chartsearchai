@@ -875,17 +875,19 @@ public class PatientChartSerializer {
 			return asksWhatADrugDoesToHer;
 		}
 
-		/** Records the findings the model judged to bear on a question asking what one drug does to her — ADR Decision 613,
-		 *  and {@code DrugReferenceInjector} is the only caller. */
+		/** Records the findings that bear on the question — those the model judged to bear on a question asking what one
+		 *  drug does to her (ADR Decision 613), or those the module's answer about two drugs' interaction states (ADR
+		 *  Decision 615); {@code DrugReferenceInjector} is the only caller. */
 		public void markFindingsBearingOnTheQuestion(Set<String> details) {
 			this.findingsBearingOnTheQuestion = Collections.unmodifiableSet(new HashSet<String>(details));
 		}
 
 		/**
-		 * The details of the findings the model judged to bear on a question asking what one drug does to her — the rash it
-		 * causes, a reason to stop it — which are the only findings the prompt carries and the only chips published (ADR
-		 * Decision 613); {@code null} where no such judgement was made, and then every finding stands as before. An empty set
-		 * is a judgement that none bears on it.
+		 * The details of the findings that bear on the question, which are the only chips published: those the model judged
+		 * to bear on a question asking what one drug does to her, the only findings its prompt carries too (ADR Decision
+		 * 613), or those the module's answer about two drugs' interaction states (ADR Decision 615). {@code null} where no
+		 * such statement was made, and then every finding stands as before. An empty set is a judgement that none bears on
+		 * it.
 		 */
 		public Set<String> getFindingsBearingOnTheQuestion() {
 			return findingsBearingOnTheQuestion;

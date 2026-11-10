@@ -1024,6 +1024,10 @@ public class DrugReferenceInjector {
 			text.append("[").append(index).append("] ").append(rendered).append("\n");
 			index++;
 		}
+		// Every finding rendered, by its record number, before the answer's composers narrow the list: what an answer to a
+		// question about two drugs cites is looked up here (ADR Decision 615).
+		List<SafetyWarning> renderedFindings = new ArrayList<SafetyWarning>(findings);
+		List<Integer> renderedNumbers = new ArrayList<Integer>(findingNumbers);
 
 		// LAST, after the findings: the note is about what this response could not RESOLVE, so it reads
 		// after everything it did — including a finding the screening arm may have raised on this same
@@ -1781,6 +1785,25 @@ public class DrugReferenceInjector {
 		}
 		if (bearing != null) {
 			injected.markFindingsBearingOnTheQuestion(bearing);
+		}
+		// What the interaction of two drugs is, or whether one changes the other, answered by the module: only the findings
+		// its answer states bear on it, and only they are published as chips (ADR Decision 615, the owner's direction that an
+		// answer carries nothing the question did not ask). "How do isoniazid and stavudine interact?" stated that pair's
+		// finding beside chips of each drug against her other medications. A drug of the two that is not hers is weighed for
+		// her, and its findings against her medications are lines of the answer (ADR Decision 425), so they stand.
+		if (bearing == null && moduleAnswer != null && !questionDrugs.isEmpty()
+				&& (QueryScopeRouter.asksAboutThePairsInteraction(wordsBesideItsNames(question, questionDrugs))
+						|| QueryScopeRouter.asksWhetherOneDrugChangesTheOther(wordsBesideItsNames(question, questionDrugs)))) {
+			Set<Integer> cited = ChartSearchAiUtils.citedIndexes(moduleAnswer);
+			Set<String> stated = new HashSet<String>();
+			for (int f = 0; f < renderedFindings.size(); f++) {
+				if (cited.contains(renderedNumbers.get(f))) {
+					stated.add(renderedFindings.get(f).getDetail());
+				}
+			}
+			if (!stated.isEmpty()) {
+				injected.markFindingsBearingOnTheQuestion(stated);
+			}
 		}
 		// Stamped on the chart the injector built and on no other, because only this pass knows what
 		// it resolved (issue #469). A chart this method returns early is one it resolved nothing on,

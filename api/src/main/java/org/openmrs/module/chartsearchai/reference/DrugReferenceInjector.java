@@ -883,7 +883,9 @@ public class DrugReferenceInjector {
 								? UnrecognisedDrugName.in(question, drugReferenceService.getAll()) : null;
 		// A word naming one of her orders is her drug, checked through the order (ADR Decision 265).
 		if (unrecognised != null && unrecognised.namesOneOfHerOrders(context)) {
-			unrecognised = null;
+			// Unless the other of two words names none: it stands beside her drug, and the pair was never checked (ADR
+			// Decision 628).
+			unrecognised = unrecognised.besideHerOrder(context);
 		}
 		// And a word near a name of one of her orders is offered that order (ADR Decision 623).
 		if (unrecognised != null) {

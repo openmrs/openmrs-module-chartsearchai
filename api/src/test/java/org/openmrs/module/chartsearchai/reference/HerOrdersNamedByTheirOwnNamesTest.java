@@ -154,6 +154,25 @@ public class HerOrdersNamedByTheirOwnNamesTest extends BaseModuleContextSensitiv
 		assertTrue(answer.contains("\nSimvastatin interacts with active order Clarithromycin — Major."), "was: " + answer);
 	}
 
+	/**
+	 * One of his drugs by its own name beside a word the data does not recognise: that pair was never checked, and the
+	 * answer is not his whole screen (ADR Decision 628). On the demo replica "Is Septrin safe with Rifafour?" of a patient
+	 * on Septrin and not Rifafour opened "2 Major interactions — Nevirapine with Lopinavir / ritonavir; …".
+	 */
+	@Test
+	public void oneOfHisDrugsByItsOwnNameBesideAnUnrecognisedWordIsNoScreen() {
+		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.shippedServiceWithGroups())
+				.injectRecords(DrugReferenceTestSupport.oneRecordChart(), DrugReferenceTestSupport.ctx(60, null,
+					DrugReferenceTestSupport.set("Zolvimix"), DrugReferenceTestSupport.set("C10AA01", "J01FA09"), null, null,
+					Arrays.asList(DrugReferenceTestSupport.activeOrder("order-zolvimix", "Zolvimix",
+						DrugReferenceTestSupport.set("Zolvimix"), DrugReferenceTestSupport.set("C10AA01", "J01FA09")))),
+					"Is Zolvimix safe with Zorbaflex?");
+
+		assertEquals(null, chart.getModuleAnswer(), "no screen answers a question about one pair");
+		assertEquals("No interaction check was run for \"Zorbaflex\" and Zolvimix: \"Zorbaflex\" is not a drug name the "
+				+ "interaction data recognises.", chart.getUncheckedWordStatement());
+	}
+
 	private static PatientChart ask(String question) {
 		return DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.shippedServiceWithGroups()).injectRecords(
 			DrugReferenceTestSupport.oneRecordChart(), DrugReferenceTestSupport.ctx(60, null,

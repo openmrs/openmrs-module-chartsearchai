@@ -433,6 +433,31 @@ final class UnrecognisedDrugName {
 		return DrugReference.foldedLower(display).equals(folded) ? display : folded;
 	}
 
+	/** Her order's name, as the question writes it, where the other word stands beside it (ADR Decision 628); else
+	 *  {@code null}. */
+	private String besideHers;
+
+	/**
+	 * Of two words in a two-drug question's places, where exactly one names one of her orders, the other as a word
+	 * standing beside her drug (ADR Decision 628); {@code null} otherwise. "Is Septrin safe with Rifafour?" of a patient on
+	 * Septrin and not Rifafour named his order and a word the data does not recognise: the first named her order, so the
+	 * reading was dropped whole, and the module answered with his whole screen.
+	 */
+	UnrecognisedDrugName besideHerOrder(PatientClinicalContext context) {
+		if (second == null) {
+			return null;
+		}
+		boolean firstIsHers = namesOneOfHerOrders(context, word);
+		boolean secondIsHers = namesOneOfHerOrders(context, second);
+		if (firstIsHers == secondIsHers) {
+			return null;
+		}
+		UnrecognisedDrugName other = firstIsHers ? new UnrecognisedDrugName(second, secondSuggestions)
+				: new UnrecognisedDrugName(word, suggestions);
+		other.besideHers = firstIsHers ? word : second;
+		return other;
+	}
+
 	/** Whether the unrecognised word names one of her active orders — her drug, checked through the order whatever the data
 	 *  calls it, so never said to be unrecognised (ADR Decisions 250, 265). */
 	boolean namesOneOfHerOrders(PatientClinicalContext context) {
@@ -843,6 +868,9 @@ final class UnrecognisedDrugName {
 					? "None of this patient's active orders is named \"" + word + "\" or \"" + second + "\".\n" : "")
 					.append("No interaction check was run for \"").append(word).append("\" and \"").append(second)
 					.append("\": neither is a drug name the interaction data recognises."), both);
+		}
+		if (besideHers != null) {
+			return statementBeside(besideHers);
 		}
 		if (inAStop) {
 			return withSuggestions(new StringBuilder("None of this patient's active orders is named \"").append(word)

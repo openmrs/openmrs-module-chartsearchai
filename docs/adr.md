@@ -28703,7 +28703,7 @@ check relates between them:"*, with chips 14 → 10, 16 → 9 and 17 → 12. Pin
 `HerOrdersNamedByTheirOwnNamesTest.twoOfHisDrugsByTheirOwnNamesOneOrderedTwiceAreAnsweredAsTwoDrugs`.
 
 Residue: a patient on only one of the two, the other unknown to the data, is still answered with the screen. One word
-names her order and the other is unrecognised, a shape neither `besideANamedDrug` nor this path reads.
+names her order and the other is unrecognised, a shape neither `besideANamedDrug` nor this path reads. **Closed by [Decision 628](#decision-628-her-drug-named-beside-an-unrecognised-word-is-a-pair-never-checked-not-her-screen).**
 
 ## Decision 626: A pair never checked publishes no chip of the drug named beside the unrecognised one
 
@@ -28738,3 +28738,25 @@ predicate back.
 
 For all four, measured together on 2026-11-11 over 230 answers (23 patients × 10 wordings): 39 changed, every one read,
 and Decision 622's 44-answer screen sample was unchanged (370 chips).
+
+## Decision 628: Her drug named beside an unrecognised word is a pair never checked, not her screen
+
+**Status: Accepted** (November 2026), on the owner's direction to fix the errors found and related ones. It carries
+[Decision 250](#decision-250-a-two-drug-question-whose-one-drug-the-data-does-not-recognise-says-the-pair-was-not-checked)
+to her drug named by its own name.
+
+On the demo replica *"Is Septrin safe with Rifafour?"* of a patient on Septrin and not Rifafour opened *"2 Major
+interactions — Nevirapine with Lopinavir / ritonavir; …"*: his whole screen and 14 chips. The question named two words the
+data does not recognise (Decision 382's reading), and because one named his order (Decision 265) the whole reading was
+dropped, so the no-pair screen answered. `UnrecognisedDrugName.besideHerOrder` now keeps the other word, beside her drug
+as the question names it, where exactly one of the two names one of her orders. Its statement is Decision 250's: *"No
+interaction check was run for "Rifafour" and Septrin: "Rifafour" is not a drug name the interaction data recognises."* A
+word near no name takes the chart answer with that statement after it, as Decision 384 has it; one near a name of hers is
+offered it (Decision 623).
+
+Measured on the demo replica on 2026-11-11 (E2B, model up), the 23 patients × "Is Septrin safe with Rifafour?", "Is
+Septrin safe with zorbaflex?" and "Does Septrin interact with Rifater?". 34 of 69 changed, every one from his whole screen
+(1 to 17 chips) to the pair's statement with none, whichever of the two words named his order. Patients on both drugs
+kept Decision 625's answer. Decision 622's 44-answer screen sample was unchanged (370 chips). Pinned by
+`HerOrdersNamedByTheirOwnNamesTest.oneOfHisDrugsByItsOwnNameBesideAnUnrecognisedWordIsNoScreen`, which reddens with the
+whole reading dropped again.

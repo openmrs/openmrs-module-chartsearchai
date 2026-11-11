@@ -4361,6 +4361,7 @@ Four keys instead of three on every chip, on all three emission surfaces. Nothin
 ## Decision 63: One response names one active order one way, so the reconciliation stops being the fold's
 
 **Status: Accepted** (August 2026) — implemented, issue [#339](https://github.com/openmrs/openmrs-module-chartsearchai/issues/339).
+**Superseded in part by [Decision 624](#decision-624-a-drug-asked-about-is-no-interaction-with-another-substance-of-its-own-combination-order):** a drug asked about is no longer related to another substance of its own combination order.
 
 ### Context
 
@@ -28352,6 +28353,8 @@ reddens without the change, and its proposal control keeps the lines.
 
 ## Decision 618: A question about two drugs states nothing about a third order of hers, nor an allergy it does not ask about
 
+**Narrowed by [Decision 627](#decision-627-how-one-drug-acts-on-another-asks-nothing-her-allergy-answers):** "change", "adjust", "clash" and "conflict" in a question about the pair no longer keep the allergy line.
+
 **Status: Accepted** (November 2026), on the owner's direction ("Can you fix that too?", of the sections Decisions 370
 and 371 add). It carries Decisions 616 and 617 to the rest of a two-drug answer, and supersedes in part Decisions 370,
 371 and 617.
@@ -28633,3 +28636,105 @@ concept is given a synonym and a short name (`AspirinConceptOtherNamesTestData.x
 Residue: a word one edit from a name of hers beside a named drug states the "no check was run" line, while the named
 drug's own chips are still published beside it. Two of her drugs asked together each by a name with repeat orders still
 go to the model, because `asksAboutTwoOfHerOrdersByName` counts orders, not drugs.
+
+## Decision 624: A drug asked about is no interaction with another substance of its own combination order
+
+**Status: Accepted** (November 2026), on the owner's direction. It supersedes in part
+[Decision 63](#decision-63-one-response-names-one-active-order-one-way-so-the-reconciliation-stops-being-the-folds),
+which kept such a chip as "not a false claim", and carries
+[Decision 622](#decision-622-repeat-orders-of-one-combination-are-not-a-pair-of-its-own-substances) from the screen to
+the drug-in-play arm.
+
+### Context
+
+On the demo replica patient dd5558ed's only rifampicin is three orders of "Rifampicin isoniazid pyrazinamide and
+ethambutol". *"Can I give him rifampicin?"* opened: *"Rifampicin (rifampin) is one of this patient's active medications
+(…). 6 interactions with this patient's other active medications: Rifampicin (rifampin) interacts with active order
+Rifampicin isoniazid pyrazinamide and ethambutol — Major. The interacting substance is Pyrazinamide."* The tablet's own
+constituents were counted as her other medications and led the answer as a Major. *"Can I stop his isoniazid?"* carried a
+Pyrazinamide Major chip from the same tablet. Decision 622 had stopped the screen relating them. The drug-in-play arm
+(`DrugSafetyValidator.addInteractionWarnings`) applies no `activeOrdersOtherThan` reduction, and Decision 63 accepted the
+lead that reads as a drug interacting with itself. The replica is the evidence that decision lacked: the pair is rated
+Major, it is the first finding, and the answer counts it among her other medications.
+
+### The decision
+
+`DrugSafetyValidator.onlyItsOwnProductCarries` drops a rule whose partner is carried only by orders that also carry the
+drug in play, all of one product, where every order carrying the drug in play carries the partner too. An order of
+either without the other is a different product, so her "Ibuprofen 400mg" still meets the celecoxib of her "Ibuprofen and
+celecoxib", and two different products both carrying the pair still relate it, as Decision 486 keeps for the screen. A
+drug she is not on is carried by none of her orders, so a proposal of a new drug is never this. The duplicate-therapy
+finding is untouched.
+
+Measured on the demo replica on 2026-11-11 (E2B, model up), 23 patients (Decision 622's 22 and dd8e64d8). Major chips
+fell from 21 to 16 on "Can I give him rifampicin?", from 21 to 16 on "Does rifampicin interact with his medications?",
+and from 7 to 3 on "Can I stop his isoniazid?". Every Major left was read against the patient's orders. Each is against a
+different drug (lopinavir/ritonavir, nevirapine, nelfinavir, a lamivudine/nevirapine/stavudine tablet), or between two
+different products both carrying rifampicin and pyrazinamide (dd556a73, dd7108c3, dd88589e). "Can I give him
+trimethoprim?" and "Can I give him lamivudine?" did not move: the data rates no pair inside those combinations. Every
+answer was still the module's.
+
+On the owner's direction, six tests take the new spec. Decision 63's
+`OneOrderNameAcrossOneResponseTest.twoSubjectsNameOneCombinationPrescriptionTheSameWay`,
+`.aCombinationOrderOnTheShippedKnowledgeBaseIsNamedOneWay` and
+`.aPrescriptionNamingTheSubjectAndThePartnerIsStillNamedOnceByItsOwnDisplay` add an order of the asked drug of its own,
+so the pair is two products and the naming they pin is still reached.
+`.aPartnerEntryTheLadderKeyedNoCoMedicationOnStillNamesItsPrescriptionOnce` now counts one chip: the one ketoconazole
+prescription's two entries are no pair of each other. `InteractionFindingChartOrderBridgeTest.
+aCombinationOrderCarryingBOTHSubstancesBridgesBothSides` adds a Klarizom order, and its bridge now attributes
+clarithromycin to both prescriptions. `SubstanceInSeveralActiveOrdersTest.oneOrderContainingItIsStillRestatingExistingTherapy`
+gives rifampicin a pyrazinamide order of its own as its partner. Pinned by
+`OwnCombinationConstituentTest.herDrugAskedAboutIsNoInteractionWithItsOwnTabletsOtherSubstances`, which reddens without
+the filter, and its two keep cases.
+
+## Decision 625: Two of her drugs each named by its own name are two drugs however many times each was ordered
+
+**Status: Accepted** (November 2026), on the owner's direction. It widens
+[Decision 265](#decision-265-a-question-naming-her-orders-by-their-own-names-is-about-those-orders) as Decision 623 widened
+Decision 273.
+
+*"Is Septrin safe with Rifafour?"* of a patient on five Septrin orders and three Rifafour ones was answered with his whole
+screen: *"No Major interactions; 4 possible duplicate therapies and 12 cautions"* and 14 chips.
+`asksAboutTwoOfHerOrdersByName` asked for exactly two named ORDERS. It now asks for two drugs, the named orders grouped by
+display (`DrugReferenceInjector.byDisplay`), and `composeTwoOfHerOrdersByName` relates each drug's orders together. On the
+replica the three patients on both (dd5558ed, dd556a73, dd7108c3) are now told *"Trimethoprim and sulfamethoxazole and
+Rifampicin isoniazid pyrazinamide and ethambutol are both among this patient's active medications. What the interaction
+check relates between them:"*, with chips 14 → 10, 16 → 9 and 17 → 12. Pinned by
+`HerOrdersNamedByTheirOwnNamesTest.twoOfHisDrugsByTheirOwnNamesOneOrderedTwiceAreAnsweredAsTwoDrugs`.
+
+Residue: a patient on only one of the two, the other unknown to the data, is still answered with the screen. One word
+names her order and the other is unrecognised, a shape neither `besideANamedDrug` nor this path reads.
+
+## Decision 626: A pair never checked publishes no chip of the drug named beside the unrecognised one
+
+**Status: Accepted** (November 2026), on the owner's direction. It carries
+[Decision 615](#decision-615-a-question-about-two-drugs-interaction-publishes-only-the-chips-its-answer-states) to
+[Decision 250](#decision-250-a-two-drug-question-whose-one-drug-the-data-does-not-recognise-says-the-pair-was-not-checked)'s
+answer.
+
+*"Is RHZE safe with his efavirenz?"* was answered *"No interaction check was run for "RHZE" and Efavirenz: … Did you mean
+RHEZ, …?"* beside four chips of efavirenz against his other orders, which the answer neither states nor was asked. Where
+that answer is the module's, `chipsFollowTheAnswer` is set, so only the findings it cites are published, as Decision 615
+does for a pair's interaction, and Decision 599's allergy lines, which it cites, stay. On the replica the five patients on
+the RHEZ concept went from 4, 4, 2, 3 and 4 chips to none. Pinned by
+`LlmInferenceServiceAnswerFromFindingsContextTest.noCheckOfThePairPublishesNoChipOfTheNamedDrugAlone`, which reddens
+without the flag.
+
+## Decision 627: How one drug acts on another asks nothing her allergy answers
+
+**Status: Accepted** (November 2026), on the owner's direction. It narrows
+[Decision 618](#decision-618-a-question-about-two-drugs-states-nothing-about-a-third-order-of-hers-nor-an-allergy-it-does-not-ask-about).
+
+Decision 618 states her allergy covering a drug of a two-drug question only where the question asks something a
+contraindication answers, by `QueryScopeRouter.MEDICATION_SAFETY_CUES`. That list carries "change", "adjust", "clash" and
+"conflict", rightly for routing a screen, so *"Will amoxicillin change his efavirenz levels?"* and *"Does amoxicillin clash
+with his efavirenz?"* kept his penicillin allergy line. For a question about the pair,
+`QueryScopeRouter.asksWhatAContraindicationAnswersOfThePair` counts a safety cue only where it is not one of
+`INTERPLAY_CUES`, which there say how the one acts on the other. The router's list is unchanged. On the replica both
+penicillin-allergic patients (dd5558ed, dd8e64d8) lost the allergy line on those two wordings, 2 → 0 each, and
+*"Is amoxicillin safe with his efavirenz?"* kept it for both. Pinned by
+`TogetherWithHerOwnMedicationContextTest.howTheOtherActsOnHerDrugStatesNoAllergyCoveringIt`, which reddens with the wider
+predicate back.
+
+For all four, measured together on 2026-11-11 over 230 answers (23 patients × 10 wordings): 39 changed, every one read,
+and Decision 622's 44-answer screen sample was unchanged (370 chips).

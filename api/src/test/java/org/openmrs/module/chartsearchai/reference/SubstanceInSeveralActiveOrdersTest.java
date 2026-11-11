@@ -149,8 +149,10 @@ public class SubstanceInSeveralActiveOrdersTest {
 		// The skip's own case, issue #185: one order carrying the substance is the drug itself, and
 		// saying it duplicates itself is the defect that issue removed. On a question that does not
 		// PROPOSE the drug: since issue #548 a proposal of it is told the order already carries it
-		// (the case below), and this question asks about the drug she is on.
-		PatientClinicalContext context = contextOf(DrugReferenceTestSupport.activeOrder("order-rhz", RHZ));
+		// (the case below), and this question asks about the drug she is on. Her pyrazinamide in an order of its own is
+		// the arm's partner: the combination's own constituents are no pair of it (ADR Decision 624).
+		PatientClinicalContext context = contextOf(DrugReferenceTestSupport.activeOrder("order-rhz", RHZ),
+				DrugReferenceTestSupport.activeOrder("order-pza", "Pyrazinamide"));
 
 		List<SafetyWarning> warnings = chips(FIXTURE, "What is her rifampicin dose?", context);
 		assertTrue(warnings.stream().anyMatch(w -> w.getDrug().startsWith("Rifampicin")),

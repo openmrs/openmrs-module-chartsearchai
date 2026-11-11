@@ -379,15 +379,21 @@ public class InteractionFindingChartOrderBridgeTest extends BaseModuleContextSen
 		// the order that resolves the SUBJECT is also the only witness the PARTNER has. Attributing the
 		// partner only to orders that do NOT resolve the subject left "active order Simvastatin"
 		// unbridged here, which is #349's own defect surviving inside the clause meant to close it.
-		String finding = onlyFinding(chartNaming("order-zolvimix", "Zolvimix"),
-			DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set("Zolvimix"),
+		// His clarithromycin in an order of its own too: the prescription's own clarithromycin is no partner of its
+		// simvastatin (ADR Decision 624), so the pair is Klarizom's clarithromycin against Zolvimix's simvastatin, and the
+		// clarithromycin Zolvimix also carries is still attributed to it.
+		String finding = onlyFinding(chartNaming("order-zolvimix", "Zolvimix", "order-klarizom", "Klarizom"),
+			DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set("Zolvimix", "Klarizom"),
 				DrugReferenceTestSupport.set("C10AA01", "J01FA09"), null, null,
 				Arrays.asList(DrugReferenceTestSupport.activeOrder("order-zolvimix", "Zolvimix",
 					DrugReferenceTestSupport.set("Zolvimix"),
-					DrugReferenceTestSupport.set("C10AA01", "J01FA09")))),
+					DrugReferenceTestSupport.set("C10AA01", "J01FA09")),
+					DrugReferenceTestSupport.activeOrder("order-klarizom", "Klarizom", DrugReferenceTestSupport.set("Klarizom"),
+						DrugReferenceTestSupport.set("J01FA09")))),
 			"Can I give him clarithromycin?");
 
-		assertEquals("Clarithromycin from Zolvimix [1]; Simvastatin from Zolvimix [1].", bridgeOf(finding),
+		assertEquals("Clarithromycin from Zolvimix [1]; Clarithromycin from Klarizom [2]; Simvastatin from Zolvimix [1].",
+			bridgeOf(finding),
 			"both sides of the pair are attributed to the one prescription that holds them, was: "
 					+ finding);
 	}

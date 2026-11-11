@@ -139,6 +139,28 @@ public class TogetherWithHerOwnMedicationContextTest extends BaseModuleContextSe
 	 * nothing of what relates the two. Asked whether she may be given the other with hers, it bears on giving it at all and
 	 * is stated.
 	 */
+	/**
+	 * Whether one changes the other, or whether they clash, asks how the one acts on the other, and states no allergy
+	 * covering it either (ADR Decision 627): Decision 618 kept the allergy on these two wordings, "change" and "clash" being
+	 * safety cues. Whether the other drug is safe with hers still states it.
+	 */
+	@Test
+	public void howTheOtherActsOnHerDrugStatesNoAllergyCoveringIt() {
+		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
+			DrugReferenceTestSupport.activeOrder("order-nvp", "Nevirapine 200mg", "Nevirapine"));
+		LinkedHashSet<String> names = new LinkedHashSet<String>(orders.get(0).getNames());
+		for (String question : Arrays.asList("Will rifampicin change her nevirapine levels?",
+			"Does rifampicin clash with her nevirapine?", "Is rifampicin safe with her nevirapine?")) {
+			String allergic = DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.shippedServiceWithGroups())
+					.injectRecords(DrugReferenceTestSupport.oneRecordChart(),
+						DrugReferenceTestSupport.ctx(40, null, names, null, DrugReferenceTestSupport.set("rifampicin"), null,
+							orders), question)
+					.getModuleAnswer();
+			assertNotNull(allergic, "the module answers " + question);
+			assertEquals(question.contains("safe"), allergic.contains("allergy"), question + ": " + allergic);
+		}
+	}
+
 	@Test
 	public void aQuestionAboutHerDrugAndAnotherStatesNoAllergyCoveringTheOther() {
 		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(

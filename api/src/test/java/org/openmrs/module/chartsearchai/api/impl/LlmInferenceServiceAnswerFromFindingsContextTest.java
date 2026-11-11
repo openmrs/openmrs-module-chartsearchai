@@ -3782,6 +3782,21 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		}
 	}
 
+	/**
+	 * A "no interaction check was run" answer beside a named drug publishes no chip of that drug against her medications
+	 * (ADR Decision 626): the question asked of the pair, and the pair was never checked. On the demo replica "Is RHZE safe
+	 * with his efavirenz?" said so, beside four chips of efavirenz against his other orders.
+	 */
+	@Test
+	public void noCheckOfThePairPublishesNoChipOfTheNamedDrugAlone() throws Exception {
+		executeDataSet(ASPIRIN_CONCEPT_OTHER_NAMES);
+		answerFromFindings(true);
+		ChartAnswer answer = serviceWith(new RecordingProvider(), shipped()).search(patient, "Is ZBXR safe with ibuprofen?");
+
+		assertTrue(answer.getAnswer().startsWith("No interaction check was run for \"ZBXR\" and Ibuprofen"), answer.getAnswer());
+		assertEquals(Collections.emptyList(), answer.getSafetyWarnings(), answer.getAnswer());
+	}
+
 	/** Two orders of one drug are not "one active medication order": the module does not say there is nothing to check. */
 	@Test
 	public void aScreenForAPatientWithTwoOrdersIsNotToldThereIsOnlyOne() throws Exception {

@@ -421,7 +421,15 @@ public class OneOrderNameAcrossOneResponseTest {
 				COMBINATION_DISPLAY, DrugReferenceTestSupport.set("isoniazid / rifapentine"), codes)));
 
 		// Beside issue #548's finding that the isoniazid proposed is already in this prescription, which
-		// names it by the same display: this case is about the interaction chip.
+		// names it by the same display: this case is about the interaction chip. Since ADR Decision 624 the
+		// prescription's own rifapentine is no partner of the isoniazid it carries, so the chip is about her
+		// isoniazid in an order of its own, against the prescription's rifapentine.
+		chart = DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set(COMBINATION_DISPLAY, "Isoniazid 300mg"),
+			DrugReferenceTestSupport.set("J04AC51", "J04AB05", "J04AC01"), null, null,
+			java.util.Arrays.asList(DrugReferenceTestSupport.activeOrder("order-combination", COMBINATION_DISPLAY,
+				DrugReferenceTestSupport.set("isoniazid / rifapentine"), codes), DrugReferenceTestSupport.activeOrder(
+					"order-isoniazid", "Isoniazid 300mg", DrugReferenceTestSupport.set("Isoniazid 300mg", "Isoniazid"),
+					DrugReferenceTestSupport.set("J04AC01"))));
 		List<SafetyWarning> warnings = DrugReferenceTestSupport.besideTheProposedDrugAlreadyOrdered(
 				DrugReferenceTestSupport.validator(service).validate("", "Can I give her isoniazid?", chart));
 
@@ -663,10 +671,12 @@ public class OneOrderNameAcrossOneResponseTest {
 		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service)
 				.validate("", "Can I give her abacavir and ketoconazole?", chart);
 
-		assertEquals(2, warnings.size(),
-			"precondition: two rule chips about the one prescription, or there are not two names to"
-					+ " reconcile, was: " + DrugReferenceTestSupport.details(warnings));
-		assertEquals(java.util.Arrays.asList("Ketoconazole", "Ketoconazole"), orderNames(warnings),
+		// Her one ketoconazole prescription resolves to both entries, so the second is no partner of the first: it is the
+		// prescription's own (ADR Decision 624). What is left is abacavir's chip, naming the prescription once.
+		assertEquals(1, warnings.size(),
+			"the one prescription's two entries are no pair of each other, was: "
+					+ DrugReferenceTestSupport.details(warnings));
+		assertEquals(java.util.Arrays.asList("Ketoconazole"), orderNames(warnings),
 			"one prescription resolving to two active-order entries must still be named once: a rule"
 					+ " whose partner entry the co-medication ladder keyed no partner on may not keep"
 					+ " the knowledge base's own match token beside a chip that reconciled (issue"
@@ -706,13 +716,18 @@ public class OneOrderNameAcrossOneResponseTest {
 		DrugReferenceService service = DrugReferenceTestSupport.serviceWith(
 			DrugReferenceTestSupport.fixtureEntries(TWO_SUBJECTS_COMBINATION_FIXTURE));
 		java.util.Set<String> codes = DrugReferenceTestSupport.set("J04AC51", "J04AB05");
+		// Her isoniazid in an order of its own too: the prescription's own isoniazid is no partner of its rifapentine
+		// (ADR Decision 624), so the subject the display names chips about it through this order.
 		PatientClinicalContext chart = DrugReferenceTestSupport.ctx(60, null,
-			DrugReferenceTestSupport.set(COMBINATION_DISPLAY), codes, null, null,
+			DrugReferenceTestSupport.set(COMBINATION_DISPLAY, "Isoniazid 300mg"),
+			DrugReferenceTestSupport.set("J04AC51", "J04AB05", "J04AC01"), null, null,
 			java.util.Arrays.asList(DrugReferenceTestSupport.activeOrder("order-combination",
-				COMBINATION_DISPLAY, DrugReferenceTestSupport.set("isoniazid / rifapentine"), codes)));
+				COMBINATION_DISPLAY, DrugReferenceTestSupport.set("isoniazid / rifapentine"), codes),
+				DrugReferenceTestSupport.activeOrder("order-isoniazid", "Isoniazid 300mg",
+					DrugReferenceTestSupport.set("Isoniazid 300mg", "Isoniazid"), DrugReferenceTestSupport.set("J04AC01"))));
 
-		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service)
-				.validate("", "Can I give her isoniazid and carbamazepine?", chart);
+		List<SafetyWarning> warnings = interactionsBetweenOrders(
+				DrugReferenceTestSupport.validator(service).validate("", "Can I give her isoniazid and carbamazepine?", chart));
 
 		assertEquals(2, warnings.size(),
 			"precondition: two subjects must chip about the one co-medication, or there are not two"
@@ -759,15 +774,20 @@ public class OneOrderNameAcrossOneResponseTest {
 		DrugReferenceService service = DrugReferenceTestSupport
 				.serviceWith(DrugReferenceTestSupport.shippedEntries());
 		java.util.Set<String> codes = DrugReferenceTestSupport.set("C09BA03", "C03AA03");
+		// And her lisinopril in an order of its own: the prescription's own lisinopril is no partner of its
+		// hydrochlorothiazide (ADR Decision 624).
 		PatientClinicalContext chart = service.withReferenceNames(DrugReferenceTestSupport.ctx(60, null,
-			DrugReferenceTestSupport.set(COMBINATION_ORDER_ON_SHIPPED_KB), codes, null, null,
+			DrugReferenceTestSupport.set(COMBINATION_ORDER_ON_SHIPPED_KB, "Lisinopril 10mg"),
+			DrugReferenceTestSupport.set("C09BA03", "C03AA03", "C09AA03"), null, null,
 			java.util.Arrays.asList(
 				DrugReferenceTestSupport.activeOrder("order-combination",
 					COMBINATION_ORDER_ON_SHIPPED_KB,
-					DrugReferenceTestSupport.set(COMBINATION_ORDER_ON_SHIPPED_KB), codes))));
+					DrugReferenceTestSupport.set(COMBINATION_ORDER_ON_SHIPPED_KB), codes),
+				DrugReferenceTestSupport.activeOrder("order-lisinopril", "Lisinopril 10mg",
+					DrugReferenceTestSupport.set("Lisinopril 10mg", "Lisinopril"), DrugReferenceTestSupport.set("C09AA03")))));
 
-		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service)
-				.validate("", "Can I give her lisinopril and amiodarone?", chart);
+		List<SafetyWarning> warnings = interactionsBetweenOrders(DrugReferenceTestSupport.validator(service)
+				.validate("", "Can I give her lisinopril and amiodarone?", chart));
 
 		assertEquals(2, warnings.size(),
 			"precondition: the shipped data must rule on this prescription from both subjects, or"
@@ -1248,5 +1268,18 @@ public class OneOrderNameAcrossOneResponseTest {
 				TWO_CONSTITUENT_DISPLAY,
 				DrugReferenceTestSupport.set(TWO_CONSTITUENT_DISPLAY.toLowerCase(java.util.Locale.ROOT)),
 				codes)));
+	}
+
+	/** {@code warnings} without the finding that her orders carry a drug twice, which names no partner: the cases that
+	 *  add an order of the drug asked about so its pair with a combination is no longer that combination's own (ADR
+	 *  Decision 624) raise it beside the chips they are about. */
+	private static List<SafetyWarning> interactionsBetweenOrders(List<SafetyWarning> warnings) {
+		List<SafetyWarning> out = new java.util.ArrayList<SafetyWarning>();
+		for (SafetyWarning warning : DrugReferenceTestSupport.besideTheProposedDrugAlreadyOrdered(warnings)) {
+			if (!warning.getDetail().contains(" is already in active order")) {
+				out.add(warning);
+			}
+		}
+		return out;
 	}
 }

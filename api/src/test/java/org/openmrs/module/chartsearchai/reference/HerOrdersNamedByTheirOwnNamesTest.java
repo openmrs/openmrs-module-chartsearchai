@@ -129,6 +129,31 @@ public class HerOrdersNamedByTheirOwnNamesTest extends BaseModuleContextSensitiv
 		assertTrue(!answer.contains("can be given"), "was: " + answer);
 	}
 
+	/**
+	 * Two of his drugs each by its own name, one of them ordered twice, are still two drugs (ADR Decision 625). On the demo
+	 * replica, which re-orders a drug at each visit, "Is Septrin safe with Rifafour?" of a patient on five Septrin orders and
+	 * three Rifafour ones was answered with his whole screen — "No Major interactions; 4 possible duplicate therapies and 12
+	 * cautions" and 14 chips — because the two-drug reading counted orders, not drugs.
+	 */
+	@Test
+	public void twoOfHisDrugsByTheirOwnNamesOneOrderedTwiceAreAnsweredAsTwoDrugs() {
+		String answer = DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.shippedServiceWithGroups())
+				.injectRecords(DrugReferenceTestSupport.oneRecordChart(), DrugReferenceTestSupport.ctx(60, null,
+					DrugReferenceTestSupport.set("Zolvimix", "Klarizom"), DrugReferenceTestSupport.set("C10AA01", "J01FA09"),
+					null, null, Arrays.asList(
+						DrugReferenceTestSupport.activeOrder("order-zolvimix-1", "Zolvimix",
+							DrugReferenceTestSupport.set("Zolvimix"), DrugReferenceTestSupport.set("C10AA01", "J01FA09")),
+						DrugReferenceTestSupport.activeOrder("order-zolvimix-2", "Zolvimix",
+							DrugReferenceTestSupport.set("Zolvimix"), DrugReferenceTestSupport.set("C10AA01", "J01FA09")),
+						DrugReferenceTestSupport.activeOrder("order-klarizom", "Klarizom", DrugReferenceTestSupport.set("Klarizom"),
+							DrugReferenceTestSupport.set("J01FA09")))),
+					"Is Zolvimix safe with Klarizom?").getModuleAnswer();
+
+		assertTrue(answer != null && answer.startsWith("Zolvimix and Klarizom are both among this patient's active "
+				+ "medications. What the interaction check relates between them:\n"), "was: " + answer);
+		assertTrue(answer.contains("\nSimvastatin interacts with active order Clarithromycin — Major."), "was: " + answer);
+	}
+
 	private static PatientChart ask(String question) {
 		return DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.shippedServiceWithGroups()).injectRecords(
 			DrugReferenceTestSupport.oneRecordChart(), DrugReferenceTestSupport.ctx(60, null,

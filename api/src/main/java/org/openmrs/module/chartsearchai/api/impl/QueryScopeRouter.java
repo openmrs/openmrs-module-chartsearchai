@@ -4337,6 +4337,34 @@ public final class QueryScopeRouter {
 				|| asksAboutConditions(question));
 	}
 
+	/** The safety cues a question about two drugs uses for how the one acts on the other — "Will amoxicillin change his
+	 *  efavirenz levels?", "Does amoxicillin clash with his efavirenz?" — which ask nothing her allergy answers (ADR
+	 *  Decision 627). */
+	private static final Pattern INTERPLAY_CUES = cues("change(?:d|s)?", "adjust(?:ed|ment|ments)?", "clash(?:es|ing)?",
+		"conflict(?:s|ing)?");
+
+	/**
+	 * {@link #asksWhatAContraindicationAnswers}, for a question about two drugs: a safety cue counts only where it is not
+	 * one of {@link #INTERPLAY_CUES}, which there say how the one acts on the other (ADR Decision 627). Decision 618 kept her
+	 * allergy line on "Will amoxicillin change his efavirenz levels?" and "Does amoxicillin clash with his efavirenz?"
+	 * because "change" and "clash" are safety cues; "Is amoxicillin safe with his efavirenz?" keeps it.
+	 */
+	public static boolean asksWhatAContraindicationAnswersOfThePair(String question) {
+		if (question == null) {
+			return false;
+		}
+		if (asksAboutAllergies(question) || asksAboutConditions(question)) {
+			return true;
+		}
+		Matcher cue = MEDICATION_SAFETY_CUES.matcher(question);
+		while (cue.find()) {
+			if (!INTERPLAY_CUES.matcher(cue.group()).matches()) {
+				return true;
+			}
+		}
+		return false;
+	}
+
 	public static boolean asksAboutAllergies(String question) {
 		return question != null && ALLERGIES_CUES.matcher(question).find();
 	}

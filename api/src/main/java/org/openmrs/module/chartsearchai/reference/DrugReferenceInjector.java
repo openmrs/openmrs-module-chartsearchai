@@ -1720,6 +1720,9 @@ public class DrugReferenceInjector {
 			}
 			if (beside != null && beside.hasSuggestions()) {
 				moduleAnswer = beside.statementFor(named.get(0).label);
+				// No check of the pair ran, so the named drug against her other orders is no chip of it either: only what
+				// the answer states is (ADR Decision 626).
+				chipsFollowTheAnswer = true;
 				// The word names a group this module carries — "penicillin", as Decision 363 reads it — so her recorded drug
 				// allergies in it are stated, as the question naming the group alone states them (ADR Decision 599).
 				CrossReactivityGroup group = DrugClassTerms.groupNamedBy(beside.word(),
@@ -8446,7 +8449,7 @@ public class DrugReferenceInjector {
 		// one of hers to a third order of hers, or her allergy to one she already takes, is about neither, and is never
 		// stated (ADR Decision 618, the owner's direction that an answer carries nothing the question did not ask). Each is
 		// still classified above, so a finding none of these covers still leaves the pair to the model.
-		if (!askedAboutLines.isEmpty() && (!asksAboutThePair(words) || QueryScopeRouter.asksWhatAContraindicationAnswers(
+		if (!askedAboutLines.isEmpty() && (!asksAboutThePair(words) || QueryScopeRouter.asksWhatAContraindicationAnswersOfThePair(
 			question))) {
 			lines.add(ABOUT_THE_DRUGS_ASKED_ABOUT_LEAD);
 			lines.addAll(findingLines(findings, numbers, askedAboutLines, orderRecordNumbers, herOrderRecords, true));
@@ -9161,7 +9164,9 @@ public class DrugReferenceInjector {
 		// her allergy covering it, a condition of hers: neither says what relates the two (ADR Decision 618). "Is naproxen
 		// contraindicated with her aspirin?" asks what her allergy answers, and keeps it (ADR Decision 359).
 		boolean aboutThePair = asksAboutThePair(words);
-		boolean keepsTheRest = QueryScopeRouter.asksWhatAContraindicationAnswers(question);
+		// Of the pair, how the one acts on the other asks nothing her allergy answers (ADR Decision 627).
+		boolean keepsTheRest = aboutThePair ? QueryScopeRouter.asksWhatAContraindicationAnswersOfThePair(question)
+				: QueryScopeRouter.asksWhatAContraindicationAnswers(question);
 		if (aboutThePair && !herAsked.isEmpty()) {
 			List<SafetyWarning> pairOnly = new ArrayList<SafetyWarning>();
 			List<Integer> pairOnlyNumbers = new ArrayList<Integer>();
@@ -9350,7 +9355,8 @@ public class DrugReferenceInjector {
 	static boolean asksAboutTwoOfHerOrdersByName(String question, PatientClinicalContext context,
 			DrugReferenceService service) {
 		Map<PatientClinicalContext.ActiveDrugOrder, String> named = herOrdersNamedIn(question, context, service);
-		if (named.size() != 2) {
+		// Two drugs, however many times each was ordered (ADR Decision 625).
+		if (byDisplay(named.keySet()).size() != 2) {
 			return false;
 		}
 		List<String> words = wordsMarking(question, named.values());
@@ -9393,11 +9399,20 @@ public class DrugReferenceInjector {
 
 	/** Whether {@code orders} are one order, or several of one drug: one display among them (ADR Decision 623). */
 	private static boolean oneDrugIn(Collection<PatientClinicalContext.ActiveDrugOrder> orders) {
-		Set<String> displays = new HashSet<String>();
+		return !orders.isEmpty() && byDisplay(orders).size() == 1;
+	}
+
+	/** {@code orders} grouped by display, in their order: one drug per group, however many times it was ordered (ADR
+	 *  Decisions 623, 625). */
+	private static Map<String, List<PatientClinicalContext.ActiveDrugOrder>> byDisplay(
+			Collection<PatientClinicalContext.ActiveDrugOrder> orders) {
+		Map<String, List<PatientClinicalContext.ActiveDrugOrder>> grouped =
+				new LinkedHashMap<String, List<PatientClinicalContext.ActiveDrugOrder>>();
 		for (PatientClinicalContext.ActiveDrugOrder order : orders) {
-			displays.add(order.getDisplay() == null ? "" : order.getDisplay().trim());
+			grouped.computeIfAbsent(order.getDisplay() == null ? "" : order.getDisplay().trim(),
+				d -> new ArrayList<PatientClinicalContext.ActiveDrugOrder>()).add(order);
 		}
-		return !orders.isEmpty() && displays.size() == 1;
+		return grouped;
 	}
 
 	/**
@@ -9682,13 +9697,16 @@ public class DrugReferenceInjector {
 		if (!asksAboutTwoOfHerOrdersByName(question, context, drugReferenceService) || orderEntries == null) {
 			return null;
 		}
-		List<PatientClinicalContext.ActiveDrugOrder> orders = new ArrayList<PatientClinicalContext.ActiveDrugOrder>(
-				herOrdersNamedIn(question, context, drugReferenceService).keySet());
+		// The two drugs, each its orders however many (ADR Decision 625).
+		Map<String, List<PatientClinicalContext.ActiveDrugOrder>> drugs = byDisplay(
+			herOrdersNamedIn(question, context, drugReferenceService).keySet());
+		List<String> displays = new ArrayList<String>(drugs.keySet());
 		List<Set<Object>> substances = new ArrayList<Set<Object>>();
-		for (PatientClinicalContext.ActiveDrugOrder order : orders) {
+		for (List<PatientClinicalContext.ActiveDrugOrder> itsOrders : drugs.values()) {
 			Set<Object> ofIt = new LinkedHashSet<Object>();
 			for (DrugReference entry : orderEntries) {
-				if (DrugSafetyValidator.ordersOfSubstance(drugReferenceService, entry, orderEntries, context).contains(order)) {
+				if (!Collections.disjoint(DrugSafetyValidator.ordersOfSubstance(drugReferenceService, entry, orderEntries,
+					context), itsOrders)) {
 					ofIt.add(entry.substanceGroupKey());
 				}
 			}
@@ -9730,7 +9748,7 @@ public class DrugReferenceInjector {
 			return null;
 		}
 		List<String> lines = findingLines(findings, numbers, relating, orderRecordNumbers, herOrderRecords, true);
-		lines.add(0, orders.get(0).getDisplay() + " and " + orders.get(1).getDisplay() + TWO_OF_HER_OWN_LEAD);
+		lines.add(0, displays.get(0) + " and " + displays.get(1) + TWO_OF_HER_OWN_LEAD);
 		lines.add(BELOW_FLOOR_SCOPE);
 		return String.join("\n", lines);
 	}

@@ -5287,6 +5287,13 @@ public class DrugSafetyValidator {
 		Date subjectStart = herOrder ? scheduledStartOf(rows, context.getActiveDrugOrders(), bridgedOrders) : null;
 		List<SubjectRule> rules = new ArrayList<SubjectRule>(
 				bestRulePerPartner(rows, context, severityFloor, orderEntries));
+		// Not a substance her own combination order carries beside this one (ADR Decision 624): the tablet carries them
+		// together by design, as Decision 622 keeps the screen from relating them.
+		for (java.util.Iterator<SubjectRule> it = rules.iterator(); it.hasNext();) {
+			if (onlyItsOwnProductCarries(rows, it.next().partner, context, orderEntries, bridgedOrders)) {
+				it.remove();
+			}
+		}
 		// Which rule row carries which class sentence, decided before anything is emitted: the class
 		// arm is walked per active-order CO-MEDICATION (issue #171 — it used to walk per CODE, so a
 		// substance filed under several codes reached this loop once per code) while the chips are one
@@ -9678,6 +9685,48 @@ public class DrugSafetyValidator {
 			}
 		}
 		return false;
+	}
+
+	/**
+	 * Whether every active order carrying {@code partner}'s substance or {@code subjectRows}' substance carries both, and
+	 * all of them are one product — the substances {@link #resolvesFrom} resolves from each, by
+	 * {@link DrugReference#substanceGroupKey()} (ADR Decision 624). The partner is then a constituent of the drug in play's
+	 * own combination order, carried beside it by design, and no interaction with her medications: on the demo replica
+	 * "Can I give him rifampicin?" of a patient whose only rifampicin is a four-drug tablet led with "Rifampicin
+	 * (rifampin) interacts with active order … — Major. The interacting substance is Pyrazinamide." A partner in an order
+	 * of its own, or in a different product carrying both, is still related, as {@link #ownOrdersWitnessAPartner} keeps
+	 * for the screen (ADR Decisions 486, 622). A drug she is not on is carried by none of her orders, so is never this.
+	 */
+	private static boolean onlyItsOwnProductCarries(List<DrugReference> subjectRows, DrugReference partner,
+			PatientClinicalContext context, List<DrugReference> orderEntries, BridgedOrders bridged) {
+		if (partner == null || context == null || orderEntries == null) {
+			return false;
+		}
+		List<DrugReference> partnerRows = rowsOfSubstance(orderEntries, partner);
+		if (partnerRows.isEmpty()) {
+			return false;
+		}
+		Set<Set<Object>> products = new HashSet<Set<Object>>();
+		for (PatientClinicalContext.ActiveDrugOrder order : context.getActiveDrugOrders()) {
+			boolean carriesPartner = resolvesFromAny(partnerRows, order, bridged);
+			boolean carriesSubject = resolvesFromAny(subjectRows, order, bridged);
+			if (!carriesPartner && !carriesSubject) {
+				continue;
+			}
+			// An order of the one without the other is a different product: her ibuprofen 400mg meets the celecoxib of her
+			// "Ibuprofen and celecoxib".
+			if (carriesPartner != carriesSubject) {
+				return false;
+			}
+			Set<Object> carried = new HashSet<Object>();
+			for (DrugReference entry : orderEntries) {
+				if (resolvesFrom(entry, order, bridged)) {
+					carried.add(entry.substanceGroupKey());
+				}
+			}
+			products.add(carried);
+		}
+		return products.size() == 1;
 	}
 
 	/**

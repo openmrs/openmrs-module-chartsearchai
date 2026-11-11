@@ -1758,8 +1758,8 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		assertEquals(0, provider.calls, "the module answers: " + answer.getAnswer());
 		assertTrue(answer.isAnsweredByTheModule());
 		String[] lines = answer.getAnswer().split("\n");
-		assertEquals("Warfarin is one of this patient's active medications (Warfarin [3]). 1 interaction with this patient's "
-				+ "other active medications:", lines[0], answer.getAnswer());
+		assertEquals("Warfarin is one of this patient's active medications (Warfarin [3], started 2008-08-15). 1 interaction "
+				+ "with this patient's other active medications:", lines[0], answer.getAnswer());
 		assertTrue(lines[1].startsWith("Warfarin interacts with active order Acetylsalicylic acid (aspirin) — Major. ["),
 			answer.getAnswer());
 		assertEquals(DrugReferenceInjector.LISTED_NOT_HERS_HEADING, lines[2], "not counted among hers: " + answer.getAnswer());
@@ -3698,6 +3698,19 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 			assertTrue(answer.getAnswer().matches("This patient has one active medication order, \\S.*, so there is no "
 					+ "other active medication to check it against\\."), question + " — was: " + answer.getAnswer());
 		}
+	}
+
+	/**
+	 * The one order is named with when it started, read off core's own order through the real context build (ADR Decision
+	 * 621): on the demo replica a 2006 isoniazid order, never stopped, was named with no date and read as a drug she takes
+	 * today. Patient 7's one active order was activated 2008-08-15.
+	 */
+	@Test
+	public void aScreenForAPatientWithOneActiveOrderSaysWhenItStarted() {
+		ChartAnswer answer = serviceWith(new RecordingProvider(), shipped()).search(patient, SCREEN);
+
+		assertTrue(answer.getAnswer().matches("This patient has one active medication order, \\S.* \\(started 2008-08-15\\), so "
+				+ "there is no other active medication to check it against\\."), answer.getAnswer());
 	}
 
 	/** Two orders of one drug are not "one active medication order": the module does not say there is nothing to check. */

@@ -28466,3 +28466,51 @@ Pinned by `TogetherWithHerOwnMedicationContextTest.aDrugProposedWithHersPublishe
 `TogetherWithHerOwnMedicationContextTest.twoOfHersAskedTogetherPublishOnlyTheFindingsRelatingThem` and the
 chip half of `TwoDrugsListedBelowTheFloorTest.aFindingRelatingOneOfHersToAThirdOrderIsNotStated`. Each reddens without
 the change.
+
+## Decision 621: A module answer naming her order as an active medication says when it started
+
+**Status: Accepted** (November 2026), on the owner's direction.
+
+### Context
+
+An order nobody stopped stays active in the record for as long as it is left. On the demo replica, patient dd80812e was
+asked *"any drug interactions?"*. Her chart has one visit, 2006-04-10, at which isoniazid preventive therapy was ordered.
+The order was never stopped, and nothing later is recorded. The module answered *"This patient has one active medication
+order, Isoniazid, so there is no other active medication to check it against."*, which is true of the record. A clinician
+reads it as a drug she takes today. The answer gave no date, and it cites no record that would show one. A scheduled order
+already says when it will start (issue #553). A started order said nothing.
+
+### The decision
+
+Each order now carries when it started, `PatientClinicalContext.ActiveDrugOrder.getStartedOn()`. It is written in one
+place, `PatientClinicalContextBuilder`, from `ChartSearchAiUtils.startedOnOf`. That is core's
+`Order.getEffectiveStartDate()` for an order core's `Order.isStarted()` calls started. It is the other half of
+`scheduledStartOf`, and the two are decided by the same calls. It is spelled by `PatientChartSerializer.startedOn`, with
+`DateFormatUtil.formatDate` like every other date the module publishes.
+
+Every module answer that names her orders as her active medications now gives that date:
+
+- The one-order screen (Decision 178), for example *"Isoniazid (started 2006-04-10)"*.
+- Several orders of one drug (Decision 228), for example *"are all Metronidazole (started 2006-04-10 and 2026-01-05)"*.
+- Her own drug asked about (Decisions 202, 316, 335 and 336), for example *"(Isoniazid 300mg [n], started 2006-04-10)"*.
+- A duplicate-therapy question about her one order (Decision 294).
+
+The line a client shows of a longer answer keeps the date. It is what the answer says of her order. Without this, the
+summary dropped it, because the summary drops any aside holding a digit as a count (Decision 529). An aside that cites an
+order and gives its start becomes *"(started 2006-04-10)"* in the summary. `PatientChartSerializer.STARTED_ON` is the
+pattern for those words.
+
+`DrugReferenceInjector.whenTheyStarted` states a start only when every order it names has one, never for some of them.
+A context built without starts names its orders exactly as before.
+
+Findings and chips are not changed. They name an order as a partner and cite its record. The class-membership answer
+(Decision 379) is not changed either: it counts orders by display, and dates per order would split those counts.
+
+Pinned by `OrderStartDateInAnswerTest` and
+`LlmInferenceServiceAnswerFromFindingsContextTest.aScreenForAPatientWithOneActiveOrderSaysWhenItStarted`. The second
+reads core's order through the real context build. Removing the start at each site reddens that site's test. Removing it
+in the builder reddens the context test. Removing the summary's keep reddens
+`OrderStartDateInAnswerTest.theSummaryInViewKeepsWhenHerOrderStarted` and
+`AnswerDetailsContextTest.aFoldedLeadStaysAndTheSummarysOwnLineLeaves`.
+`LlmInferenceServiceAnswerFromFindingsContextTest.aListQuestionProposingADrugSheAlreadyTakesIsAnsweredAsHerOwnMedication`
+now expects warfarin's start date, on the owner's direction.

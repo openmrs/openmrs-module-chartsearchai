@@ -390,10 +390,12 @@ final class PatientClinicalContextBuilder {
 		// getActiveOrders above admits an order on its dateActivated alone, so one scheduled for
 		// next month is on this list. Core's own two calls, never a reading of scheduledDate.
 		Date scheduledStart = ChartSearchAiUtils.scheduledStartOf(drugOrder);
+		// And when one that has started did, which a module answer naming it as hers states (ADR Decision 621).
+		Date startedOn = ChartSearchAiUtils.startedOnOf(drugOrder);
 		if (!orderNames.isEmpty()) {
 			orders.add(PatientClinicalContext.ActiveDrugOrder.named(drugOrder.getUuid(),
 					orderNames.iterator().next(), orderNames, orderAtcCodes, orderAdministration,
-					orderConceptUuid, scheduledStart));
+					orderConceptUuid, scheduledStart, startedOn));
 		} else if (!normalizedCodes.isEmpty()) {
 			String codeOnlyDisplay = codeOnlyDisplay(normalizedCodes);
 			log.warn(kind + " drug order {} has no readable name; it will be identified by its ATC "
@@ -402,7 +404,7 @@ final class PatientClinicalContextBuilder {
 					+ "chart text at all.", drugOrder.getUuid(), codeOnlyDisplay);
 			orders.add(PatientClinicalContext.ActiveDrugOrder.namedByCodesOnly(
 					drugOrder.getUuid(), codeOnlyDisplay, orderAtcCodes, orderAdministration,
-					orderConceptUuid, scheduledStart));
+					orderConceptUuid, scheduledStart, startedOn));
 		} else if (coded.unreadable) {
 			// Neither rung, and the reason is a read this pass could not make. The skip itself
 			// is older than issue #413 and is untouched below; what #413 adds is a way INTO it,

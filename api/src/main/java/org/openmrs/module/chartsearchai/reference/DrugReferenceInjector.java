@@ -3939,20 +3939,23 @@ public class DrugReferenceInjector {
 			Map<String, Integer> herOrderRecords) {
 		// Each display once, with how many of her orders carry it where that is more than one (ADR Decision 206) — the
 		// way the finding that her orders share the drug counts them.
-		Map<String, Integer> countByDisplay = new LinkedHashMap<String, Integer>();
+		Map<String, List<PatientClinicalContext.ActiveDrugOrder>> byDisplay =
+				new LinkedHashMap<String, List<PatientClinicalContext.ActiveDrugOrder>>();
 		for (PatientClinicalContext.ActiveDrugOrder order : orders) {
 			if (!order.hasStarted() || !DrugSafetyValidator.displayNamesADrug(order)) {
 				continue;
 			}
-			String display = order.getDisplay().trim();
-			Integer seen = countByDisplay.get(display);
-			countByDisplay.put(display, seen == null ? 1 : seen + 1);
+			byDisplay.computeIfAbsent(order.getDisplay().trim(), d -> new ArrayList<PatientClinicalContext.ActiveDrugOrder>())
+					.add(order);
 		}
 		List<String> named = new ArrayList<String>();
-		for (Map.Entry<String, Integer> display : countByDisplay.entrySet()) {
+		for (Map.Entry<String, List<PatientClinicalContext.ActiveDrugOrder>> display : byDisplay.entrySet()) {
 			Integer number = herOrderRecords.get(display.getKey());
-			named.add(display.getKey() + (number == null ? "" : " [" + number + "]")
-					+ (display.getValue() > 1 ? ", " + display.getValue() + " orders" : ""));
+			int count = display.getValue().size();
+			// And when they started (ADR Decision 621).
+			String start = whenTheyStarted(display.getValue());
+			named.add(display.getKey() + (number == null ? "" : " [" + number + "]") + (count > 1 ? ", " + count + " orders" : "")
+					+ (start == null ? "" : ", " + start));
 		}
 		return named.isEmpty() ? "" : " (" + DrugSafetyValidator.joinPartners(named) + ")";
 	}
@@ -6715,6 +6718,8 @@ public class DrugReferenceInjector {
 	 * matching only bracket-free asides kept <em>"(Hydrocortisone (topical))"</em> once its marker was gone. An aside citing
 	 * nothing, nested or not — <em>"(aspirin)"</em>, <em>"(Rifampicin (rifampin))"</em> — stays as written. Innermost
 	 * first: one that stays is set aside under a mark carrying no digit, so the aside around it is asked of its own words.
+	 * When her order started stays, the rest of its aside dropped (ADR Decision 621): <em>"(Isoniazid 300mg [3], started
+	 * 2006-04-10)"</em> is <em>"(started 2006-04-10)"</em>.
 	 */
 	private static String withoutCitingAsides(String s) {
 		List<String> kept = new ArrayList<String>();
@@ -6727,9 +6732,15 @@ public class DrugReferenceInjector {
 			StringBuffer out = new StringBuffer();
 			do {
 				String replacement = "";
+				Matcher start = PatientChartSerializer.STARTED_ON.matcher(aside.group(1));
 				if (!CITES_OR_COUNTS.matcher(aside.group(1)).find()) {
 					replacement = "\uE000" + (char) (0xE100 + kept.size());
 					kept.add(aside.group());
+				} else if (start.find()) {
+					// When her order started is what the sentence says of it, not detail: it stays, without the rest of
+					// the aside (ADR Decision 621).
+					replacement = "\uE000" + (char) (0xE100 + kept.size());
+					kept.add(" (" + start.group() + ")");
 				}
 				aside.appendReplacement(out, Matcher.quoteReplacement(replacement));
 			} while (aside.find());
@@ -7037,6 +7048,32 @@ public class DrugReferenceInjector {
 		return stated == null ? null : summary + opening + "\n" + stated;
 	}
 
+	/**
+	 * When {@code orders} started — <em>"started 2006-04-10"</em>, <em>"started 2006-04-10 and 2026-01-05"</em>, a day
+	 * several share said once — for a module answer naming them as her active medications (ADR Decision 621), or
+	 * {@code null} where any of them has not started or its start was not read: never a start for some of them only.
+	 */
+	static String whenTheyStarted(List<PatientClinicalContext.ActiveDrugOrder> orders) {
+		List<java.util.Date> starts = new ArrayList<java.util.Date>();
+		Set<String> days = new HashSet<String>();
+		for (PatientClinicalContext.ActiveDrugOrder order : orders) {
+			if (order.getStartedOn() == null) {
+				return null;
+			}
+			if (days.add(isoDay(order.getStartedOn()))) {
+				starts.add(order.getStartedOn());
+			}
+		}
+		return starts.isEmpty() ? null : PatientChartSerializer.startedOn(starts);
+	}
+
+	/** {@link #whenTheyStarted} of {@code order} alone, after its name and citation: <em>", started 2006-04-10"</em>, or
+	 *  nothing. */
+	private static String startedAfterIt(PatientClinicalContext.ActiveDrugOrder order) {
+		String start = whenTheyStarted(Collections.singletonList(order));
+		return start == null ? "" : ", " + start;
+	}
+
 	/** {@link #composeFromAScreenThatRelatedNothing}'s answer to what the screen found, her own conflicts set apart. */
 	private static String noPairOpening(Integer screenNoteIndex, int screened, PairChipExtent screen, List<SafetyWarning> findings,
 			List<Integer> findingNumbers, Map<String, Integer> orderRecordNumbers, Map<String, Integer> herOrderRecords,
@@ -7068,8 +7105,10 @@ public class DrugReferenceInjector {
 					: "recorded only by its codes";
 			// An order that has not started is a scheduled order, as every other sentence of the module's calls it
 			// (issue #553), and not one she is taking.
+			// A started order says when, so one left unstopped for years is not read as taken today (ADR Decision 621).
+			String start = whenTheyStarted(Collections.singletonList(order));
 			return order.hasStarted()
-					? "This patient has one active medication order, " + name
+					? "This patient has one active medication order, " + name + (start == null ? "" : " (" + start + ")")
 							+ ", so there is no other active medication to check it against."
 					: "This patient has one medication order, " + name + " ("
 							+ PatientChartSerializer.scheduledToStart(order.getScheduledStart())
@@ -7081,8 +7120,9 @@ public class DrugReferenceInjector {
 				&& onlyHerOwnOrdersSharingASubstance(findings) && context.activeDrugOrdersRead()
 				&& context.getActiveDrugOrders().size() > 1
 				&& !DrugSafetyValidator.anyHasNotStarted(context.getActiveDrugOrders())) {
+			String start = whenTheyStarted(context.getActiveDrugOrders());
 			return withHerOwnOrdersSharingASubstance("This patient's " + context.getActiveDrugOrders().size()
-					+ " active medication orders are all " + findings.get(0).getDrug()
+					+ " active medication orders are all " + findings.get(0).getDrug() + (start == null ? "" : " (" + start + ")")
 					+ ", so there is no other active medication to check it against.", findings, findingNumbers,
 					orderRecordNumbers, herOrderRecords);
 		}
@@ -9553,7 +9593,8 @@ public class DrugReferenceInjector {
 			for (PatientClinicalContext.ActiveDrugOrder each : context.getActiveDrugOrders()) {
 				others |= each != order;
 			}
-			String own = label + OWN_MEDICATION_LEAD + " (" + display + (number == null ? "" : " [" + number + "]") + ")";
+			String own = label + OWN_MEDICATION_LEAD + " (" + display + (number == null ? "" : " [" + number + "]")
+					+ startedAfterIt(order) + ")";
 			String body;
 			if (!others) {
 				body = own + ", and this patient has no other active medication to check it against.";
@@ -9581,7 +9622,8 @@ public class DrugReferenceInjector {
 				return null;
 			}
 			List<String> alone = new ArrayList<String>();
-			alone.add(label + OWN_MEDICATION_LEAD + " (" + display + (number == null ? "" : " [" + number + "]") + ")"
+			alone.add(label + OWN_MEDICATION_LEAD + " (" + display + (number == null ? "" : " [" + number + "]")
+					+ startedAfterIt(order) + ")"
 					+ (asked == OneOfHerOrdersAsked.PROPOSED ? ", so adding it would duplicate that order, and" : ", and")
 					+ " this patient has no other active medication to check it against.");
 			for (int i = 0; i < findings.size(); i++) {
@@ -9994,7 +10036,8 @@ public class DrugReferenceInjector {
 			String display = order.getDisplay();
 			String name = order.hasKnownName() && display != null && !display.trim().isEmpty() ? display.trim()
 					: "recorded only by its codes";
-			return "This patient has one active medication order, " + name
+			String start = whenTheyStarted(orders);
+			return "This patient has one active medication order, " + name + (start == null ? "" : " (" + start + ")")
 					+ ", so there is no other active medication to compare it with.";
 		}
 		if (screened == 0 || orders.size() - unidentified < 1) {

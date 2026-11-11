@@ -1096,6 +1096,9 @@ public class PatientClinicalContext {
 		/** @see #getScheduledStart() */
 		private final Date scheduledStart;
 
+		/** @see #getStartedOn() */
+		private final Date startedOn;
+
 		/** An order whose concept carries no ATC map — the majority in practice: only 85 of the 616
 		 *  Drug-class concepts in the 3.7.1 reference demo dictionary carry one (measured 2026-08-04,
 		 *  the same count {@code DrugReferenceService.findForActiveOrders} cites) — so the code-carrying
@@ -1172,8 +1175,17 @@ public class PatientClinicalContext {
 		 */
 		static ActiveDrugOrder namedByCodesOnly(String uuid, String display, Set<String> atcCodes,
 				Set<String> administrationTerms, String conceptUuid, Date scheduledStart) {
+			return namedByCodesOnly(uuid, display, atcCodes, administrationTerms, conceptUuid, scheduledStart, null);
+		}
+
+		/**
+		 * As {@link #namedByCodesOnly(String, String, Set, Set, String, Date)}, recording when a started order
+		 * started ({@link #getStartedOn()}, ADR Decision 621).
+		 */
+		static ActiveDrugOrder namedByCodesOnly(String uuid, String display, Set<String> atcCodes,
+				Set<String> administrationTerms, String conceptUuid, Date scheduledStart, Date startedOn) {
 			return new ActiveDrugOrder(uuid, display, null, atcCodes, administrationTerms, false,
-					conceptUuid, scheduledStart);
+					conceptUuid, scheduledStart, startedOn);
 		}
 
 		/**
@@ -1193,8 +1205,17 @@ public class PatientClinicalContext {
 		 */
 		static ActiveDrugOrder named(String uuid, String display, Set<String> names,
 				Set<String> atcCodes, Set<String> administrationTerms, String conceptUuid, Date scheduledStart) {
+			return named(uuid, display, names, atcCodes, administrationTerms, conceptUuid, scheduledStart, null);
+		}
+
+		/**
+		 * As {@link #named(String, String, Set, Set, Set, String, Date)}, recording when a started order started
+		 * ({@link #getStartedOn()}, ADR Decision 621).
+		 */
+		static ActiveDrugOrder named(String uuid, String display, Set<String> names, Set<String> atcCodes,
+				Set<String> administrationTerms, String conceptUuid, Date scheduledStart, Date startedOn) {
 			return new ActiveDrugOrder(uuid, display, names, atcCodes, administrationTerms, true,
-					conceptUuid, scheduledStart);
+					conceptUuid, scheduledStart, startedOn);
 		}
 
 		private ActiveDrugOrder(String uuid, String display, Set<String> names, Set<String> atcCodes,
@@ -1204,12 +1225,15 @@ public class PatientClinicalContext {
 
 		private ActiveDrugOrder(String uuid, String display, Set<String> names, Set<String> atcCodes,
 				Set<String> administrationTerms, boolean nameKnown, String conceptUuid) {
-			this(uuid, display, names, atcCodes, administrationTerms, nameKnown, conceptUuid, null);
+			this(uuid, display, names, atcCodes, administrationTerms, nameKnown, conceptUuid, null, null);
 		}
 
 		private ActiveDrugOrder(String uuid, String display, Set<String> names, Set<String> atcCodes,
-				Set<String> administrationTerms, boolean nameKnown, String conceptUuid, Date scheduledStart) {
+				Set<String> administrationTerms, boolean nameKnown, String conceptUuid, Date scheduledStart,
+				Date startedOn) {
 			this.scheduledStart = scheduledStart;
+			// A start is stated of a STARTED order alone; one that has not started states its scheduled start instead.
+			this.startedOn = scheduledStart == null ? startedOn : null;
 			this.conceptUuid = conceptUuid;
 			this.nameKnown = nameKnown;
 			this.administrationTerms = lower(administrationTerms);
@@ -1327,6 +1351,18 @@ public class PatientClinicalContext {
 		 */
 		public Date getScheduledStart() {
 			return scheduledStart;
+		}
+
+		/**
+		 * @return when this order started, for an order that HAS — core's {@code Order.getEffectiveStartDate()},
+		 *         where core's {@code Order.isStarted()} answers true — or {@code null} for one that has not, or
+		 *         whose start this context was not given (ADR Decision 621). Written in one place,
+		 *         {@link PatientClinicalContextBuilder}, off {@code ChartSearchAiUtils.startedOnOf}. A module answer
+		 *         naming the order as one of her active medications states it, so an order left unstopped for years
+		 *         is not read as one she takes today.
+		 */
+		public Date getStartedOn() {
+			return startedOn;
 		}
 
 		/** @return whether this order has started, which is every order {@link #getScheduledStart()}

@@ -211,6 +211,32 @@ public class PatientChartSerializer {
 		return SCHEDULED_TO_START_WORDS + DateFormatUtil.formatDate(startDate);
 	}
 
+	/** What {@link #startedOn} opens with. */
+	static final String STARTED_WORDS = "started ";
+
+	/**
+	 * What {@link #startedOn} writes, found in a text: the words and each {@code yyyy-MM-dd} date
+	 * {@code DateFormatUtil.formatDate} spells — read by an answer's summary, which keeps it (ADR Decision 621).
+	 */
+	public static final Pattern STARTED_ON = Pattern.compile(Pattern.quote(STARTED_WORDS)
+			+ "\\d{4}-\\d{2}-\\d{2}(?:(?:, | and )\\d{4}-\\d{2}-\\d{2})*");
+
+	/**
+	 * @return {@code "started <date>"} — {@code "started <date> and <date>"} of several — each date spelled as every date this module publishes
+	 *         ({@code DateFormatUtil.formatDate}) — what a module answer naming a started order as one of her active
+	 *         medications says of it (ADR Decision 621), the counterpart of {@link #scheduledToStart}
+	 */
+	public static String startedOn(List<Date> startDates) {
+		StringBuilder words = new StringBuilder(STARTED_WORDS);
+		for (int i = 0; i < startDates.size(); i++) {
+			if (i > 0) {
+				words.append(i == startDates.size() - 1 ? " and " : ", ");
+			}
+			words.append(DateFormatUtil.formatDate(startDates.get(i)));
+		}
+		return words.toString();
+	}
+
 	/**
 	 * Serialize a pre-filtered list of records into numbered text lines.
 	 *

@@ -1309,6 +1309,15 @@ public class ChartSearchAiUtils {
 	}
 
 	/**
+	 * @return when {@code order} started, for an order that HAS — core's {@code Order.getEffectiveStartDate()}, where
+	 *         core's {@code Order.isStarted()} answers true — or {@code null} for one that has not: the other half of
+	 *         {@link #scheduledStartOf}, decided by the same two calls (ADR Decision 621).
+	 */
+	public static Date startedOnOf(Order order) {
+		return order.isStarted() ? order.getEffectiveStartDate() : null;
+	}
+
+	/**
 	 * @return whether {@code text} states {@code word} as a WORD rather than merely containing its
 	 *         letters — case-insensitively, with no letter or digit against either end of it.
 	 *

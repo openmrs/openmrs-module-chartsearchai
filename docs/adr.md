@@ -23507,7 +23507,8 @@ Pinned by `ClinicianWordingsTest.herDrugsDoseAskedSafeIsHerDrugAskedSafeWithTheD
 ## Decision 486: Two substances from two different orders are a pair, even where each order carries both
 
 **Status: Accepted** (October 2026) — found asking *"Does he have any drug contraindications?"* of the public demo's patient
-`dd88589e-1691-11df-97a5-7038c432aabf` on 2026-10-27.
+`dd88589e-1691-11df-97a5-7038c432aabf` on 2026-10-27. **Superseded in part by [Decision 622](#decision-622-repeat-orders-of-one-combination-are-not-a-pair-of-its-own-substances):**
+repeat orders of one combination no longer relate its own substances.
 
 ### Context
 
@@ -28514,3 +28515,52 @@ in the builder reddens the context test. Removing the summary's keep reddens
 `AnswerDetailsContextTest.aFoldedLeadStaysAndTheSummarysOwnLineLeaves`.
 `LlmInferenceServiceAnswerFromFindingsContextTest.aListQuestionProposingADrugSheAlreadyTakesIsAnsweredAsHerOwnMedication`
 now expects warfarin's start date, on the owner's direction.
+
+## Decision 622: Repeat orders of one combination are not a pair of its own substances
+
+**Status: Accepted** (November 2026), on the owner's direction. It supersedes the part of Decision 486 that kept such
+pairs.
+
+### Context
+
+Decision 486 lets the screen relate a pair whose two substances come from two different orders, even where every order
+carrying one also carries the other. Its second pass turns on for any substance two or more orders carry, where one of
+them carries another substance. Repeat orders of one combination always meet that. Decision 486 recorded the
+consequence: two "Rifampicin and isoniazid" orders relate isoniazid against rifampicin, "a second statement of what the
+duplicate finding already says".
+
+On the demo replica it was not a second statement. It was the first line. The demo re-orders a drug at each visit.
+Patient dd5558ed has three orders of one "Rifampicin isoniazid pyrazinamide and ethambutol" tablet and no other
+rifampicin. The patient was told *"1 Major interaction — Pyrazinamide with Rifampin"*, which names an order "Rifampin"
+the patient does not have. The Major's own text is about a two-month rifampin and pyrazinamide regimen for latent
+tuberculosis.
+
+### The decision
+
+`DrugSafetyValidator.ownOrdersWitnessAPartner` also asks whether the subject's orders are more than one product. An
+order's product is the set of substances `resolvesFrom` resolves from it, by `substanceGroupKey()`. Where every order
+carrying the subject carries the same substances, the second pass does not run for it. The pair is that product's own
+constituents however many times it was ordered. The orders repeating it are still the duplicate-therapy finding.
+
+Two different products carrying a pair still relate it, which is Decision 486's own case. Where some carrier orders
+differ, any partner they carry comes from an order of a different product than one of the subject's, so the gate needs
+no per-partner test. Two orders of one product that the data resolves differently stay two products, so no pair is lost
+to that.
+
+Measured on the demo replica on 2026-11-11 (E2B) with "any drug interactions?" and "Does he have any drug
+contraindications?". The sample was 22 patients: three for each repeated combination, ADR 486's patient dd88589e, and
+two controls. Chips fell from 394 to 370, and 20 of the 44 answers changed. Every lost pair was read against the
+patient's active orders. Each lay inside the only product carrying both substances: four-drug tablets repeated, "Isoniazid
+/ pyrazinamide / rifampin" twice, "Ethambutol and isoniazid" three times, "Rifampicin and isoniazid" twice, and
+"Lamivudine / zidovudine" twice (an unrated pair, so it left only that list). Five patients' answers lost the "1 Major
+interaction — Pyrazinamide with Rifampin" lead. Three patients kept it: dd88589e, dd556a73 and dd7108c3, each on two
+different products carrying the pair. One answer gained two Minor chips, for zidovudine with co-trimoxazole and
+efavirenz with trimethoprim. They had been capped as "4 more interactions, rated no higher, are not shown", and the two
+freed places let them in. Every answer was still the module's.
+
+Pinned by `SubstanceInSeveralOrdersPairTest.repeatOrdersOfOneCombinationAreNotAPairOfItsOwnSubstances`, which reddens
+without the product test, and `SubstanceInSeveralOrdersPairTest.repeatsOfOneCombinationBesideAnotherStillRelateThem`,
+which reddens without the second pass. On the owner's direction, Decision 486's
+`twoOrdersOfOneCombinationRelateItsSubstancesAcrossThem` is replaced by the first. `BriefScreenAnswerTest`'s demo
+patient, on two orders of "Rifampicin and isoniazid", now counts 11 cautions, not 12, without rifampicin against
+isoniazid.

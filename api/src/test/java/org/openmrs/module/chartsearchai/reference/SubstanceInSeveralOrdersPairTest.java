@@ -44,6 +44,8 @@ public class SubstanceInSeveralOrdersPairTest extends BaseModuleContextSensitive
 
 	private static final String RHZ = "Isoniazid / pyrazinamide / rifampin";
 
+	private static final String RHZE = "Rifampicin isoniazid pyrazinamide and ethambutol";
+
 	@BeforeEach
 	public void answerFromFindings() {
 		Context.getAdministrationService().setGlobalProperty(
@@ -68,12 +70,33 @@ public class SubstanceInSeveralOrdersPairTest extends BaseModuleContextSensitive
 		assertEquals(0, extent.getFound(), "one tablet is not an interacting pair: " + extent);
 	}
 
+	/**
+	 * Repeat orders of one combination are not a pair of its own substances (ADR Decision 622, superseding that part of
+	 * Decision 486): the tablet carries them together by design, and the finding that the orders repeat it is the
+	 * duplicate-therapy one. On the demo replica patient dd5558ed, on three orders of "Rifampicin isoniazid pyrazinamide
+	 * and ethambutol" and no other rifampicin, was told "1 Major interaction — Pyrazinamide with Rifampin".
+	 */
 	@Test
-	public void twoOrdersOfOneCombinationRelateItsSubstancesAcrossThem() {
-		PairChipExtent extent = screenExtent(order("order-rh-1", RH), order("order-rh-2", RH));
+	public void repeatOrdersOfOneCombinationAreNotAPairOfItsOwnSubstances() {
+		for (PatientClinicalContext.ActiveDrugOrder[] orders : Arrays.asList(
+			new PatientClinicalContext.ActiveDrugOrder[] { order("order-rhze-1", RHZE), order("order-rhze-2", RHZE),
+				order("order-rhze-3", RHZE) },
+			new PatientClinicalContext.ActiveDrugOrder[] { order("order-rh-1", RH), order("order-rh-2", RH) })) {
+			PairChipExtent extent = screenExtent(orders);
+
+			assertNotNull(extent, "the screen stated its extent");
+			assertEquals(0, extent.getFound(), orders[0].getDisplay() + " repeated is not an interacting pair: " + extent);
+		}
+	}
+
+	/** Repeats of one combination beside a DIFFERENT one still relate what the two products carry (ADR Decision 486). */
+	@Test
+	public void repeatsOfOneCombinationBesideAnotherStillRelateThem() {
+		PairChipExtent extent = screenExtent(order("order-rh-1", RH), order("order-rh-2", RH), order("order-rhz", RHZ));
 
 		assertNotNull(extent, "the screen stated its extent");
-		assertEquals(1, extent.getFound(), "isoniazid in one order, rifampicin in the other: " + extent);
+		assertEquals(2, extent.getFound(),
+			"pyrazinamide-rifampicin (Major) and isoniazid-rifampicin (Minor): " + extent);
 	}
 
 	/** The demo's own chart, as its REST API lists his active drug orders. */

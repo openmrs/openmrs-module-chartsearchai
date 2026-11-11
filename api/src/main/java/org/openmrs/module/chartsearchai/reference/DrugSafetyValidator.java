@@ -9646,21 +9646,34 @@ public class DrugSafetyValidator {
 	 * such order the pair is that order's own constituents and stays unrelated; with several carrying
 	 * nothing else there is nothing for a second pass to find, and the demo seed's re-ordered drugs are
 	 * that shape, so they are not screened twice.
+	 *
+	 * <p>Nor are repeat orders of ONE combination (ADR Decision 622): where every order carrying the subject
+	 * carries the same substances, the pair is that product's own constituents however many times it was
+	 * ordered, and the orders repeating it are the duplicate-therapy finding. On the demo replica three
+	 * orders of one rifampicin, isoniazid, pyrazinamide and ethambutol tablet led a screen with "1 Major
+	 * interaction — Pyrazinamide with Rifampin". The substances an order carries are those
+	 * {@link #resolvesFrom} resolves from it, by {@link DrugReference#substanceGroupKey()}; two orders of
+	 * one product the data resolves differently stay two products, so a pair is never lost to that.
 	 */
 	private static boolean ownOrdersWitnessAPartner(List<DrugReference> subjectRows, List<DrugReference> orderDrugs,
 			PatientClinicalContext context, BridgedOrders bridged) {
 		int carriers = 0;
 		boolean carriesAnother = false;
+		Set<Set<Object>> products = new HashSet<Set<Object>>();
 		for (PatientClinicalContext.ActiveDrugOrder order : context.getActiveDrugOrders()) {
 			if (!resolvesFromAny(subjectRows, order, bridged)) {
 				continue;
 			}
 			carriers++;
-			for (int n = 0; !carriesAnother && n < orderDrugs.size(); n++) {
-				DrugReference coResolved = orderDrugs.get(n);
-				carriesAnother = !subjectRows.contains(coResolved) && resolvesFrom(coResolved, order, bridged);
+			Set<Object> carried = new HashSet<Object>();
+			for (DrugReference coResolved : orderDrugs) {
+				if (resolvesFrom(coResolved, order, bridged)) {
+					carried.add(coResolved.substanceGroupKey());
+					carriesAnother |= !subjectRows.contains(coResolved);
+				}
 			}
-			if (carriers > 1 && carriesAnother) {
+			products.add(carried);
+			if (carriers > 1 && carriesAnother && products.size() > 1) {
 				return true;
 			}
 		}

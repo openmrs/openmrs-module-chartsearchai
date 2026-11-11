@@ -1099,6 +1099,9 @@ public class PatientClinicalContext {
 		/** @see #getStartedOn() */
 		private final Date startedOn;
 
+		/** @see #getConceptNames() */
+		private final Set<String> conceptNames;
+
 		/** An order whose concept carries no ATC map — the majority in practice: only 85 of the 616
 		 *  Drug-class concepts in the 3.7.1 reference demo dictionary carry one (measured 2026-08-04,
 		 *  the same count {@code DrugReferenceService.findForActiveOrders} cites) — so the code-carrying
@@ -1231,6 +1234,15 @@ public class PatientClinicalContext {
 		private ActiveDrugOrder(String uuid, String display, Set<String> names, Set<String> atcCodes,
 				Set<String> administrationTerms, boolean nameKnown, String conceptUuid, Date scheduledStart,
 				Date startedOn) {
+			this(uuid, display, names, atcCodes, administrationTerms, nameKnown, conceptUuid, scheduledStart, startedOn,
+					null);
+		}
+
+		private ActiveDrugOrder(String uuid, String display, Set<String> names, Set<String> atcCodes,
+				Set<String> administrationTerms, boolean nameKnown, String conceptUuid, Date scheduledStart,
+				Date startedOn, Set<String> conceptNames) {
+			this.conceptNames = conceptNames == null ? Collections.<String> emptySet()
+					: Collections.unmodifiableSet(new LinkedHashSet<String>(conceptNames));
 			this.scheduledStart = scheduledStart;
 			// A start is stated of a STARTED order alone; one that has not started states its scheduled start instead.
 			this.startedOn = scheduledStart == null ? startedOn : null;
@@ -1363,6 +1375,28 @@ public class PatientClinicalContext {
 		 */
 		public Date getStartedOn() {
 			return startedOn;
+		}
+
+		/**
+		 * @return every name the concept this order was written against publishes, as the dictionary writes it — its
+		 *         synonyms and short name as well as the one {@code Concept.getName()} elects, in every locale — or empty
+		 *         where none could be read, and on every order built through this class's public constructors (ADR
+		 *         Decision 623). Written in one place, {@link PatientClinicalContextBuilder}.
+		 *
+		 *         <p>Read only to tell whether a QUESTION names this order — the demo dictionary files "Rifafour" and "RHEZ"
+		 *         under "Rifampicin isoniazid pyrazinamide and ethambutol", and a clinician asks by either. Deliberately NOT
+		 *         one of {@link #getNames()}: that set is matched against chart prose and decides which reference entries an
+		 *         order reaches ({@code DrugReferenceService.findImpliedByDrugName}), which is the change to drug matching
+		 *         {@code PatientClinicalContextBuilder.addConceptNames} declines to make.
+		 */
+		public Set<String> getConceptNames() {
+			return conceptNames;
+		}
+
+		/** This order, carrying {@code conceptNames} as {@link #getConceptNames()} (ADR Decision 623). */
+		ActiveDrugOrder withConceptNames(Set<String> conceptNames) {
+			return new ActiveDrugOrder(uuid, display, names, atcCodes, administrationTerms, nameKnown, conceptUuid,
+					scheduledStart, startedOn, conceptNames);
 		}
 
 		/** @return whether this order has started, which is every order {@link #getScheduledStart()}

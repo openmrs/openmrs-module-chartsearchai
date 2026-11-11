@@ -1,0 +1,10 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!-- Two more names of concept 88 (ASPIRIN), the concept behind patient 7's active order 111, as the demo dictionary files
+     "Rifafour" and "RHEZ" beside "Rifampicin isoniazid pyrazinamide and ethambutol" (ADR Decision 623). -->
+<dataset>
+	<concept_name concept_name_id="962301" concept_id="88" name="Asprolin" locale="en" locale_preferred="false"
+		creator="1" date_created="2008-08-15 00:00:00.0" voided="false" uuid="96230100-0000-4000-8000-000000962301" />
+	<concept_name concept_name_id="962302" concept_id="88" name="ZBRX" locale="en" locale_preferred="false"
+		concept_name_type="SHORT" creator="1" date_created="2008-08-15 00:00:00.0" voided="false"
+		uuid="96230200-0000-4000-8000-000000962302" />
+</dataset>

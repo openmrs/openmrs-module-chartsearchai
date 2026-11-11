@@ -18177,6 +18177,7 @@ Pinned by `CombinationNamedAsOneDrugTest`.
 ## Decision 273: One of her orders named alone by its own name is answered as her medication
 
 **Status: Accepted** (October 2026) — the owner's request of 2026-10-15 to fix the errors left after Decision 271.
+**Superseded in part by [Decision 623](#decision-623-a-question-may-name-her-order-by-any-name-its-concept-publishes-and-a-word-near-one-is-offered-that-order):** several orders of one drug are answered too, counted.
 
 ### Context
 
@@ -20963,7 +20964,8 @@ answer from every phrase that routes a question to the drug-safety subsystem, th
 run kept after that answer. It narrows
 [Decision 183](#decision-183-a-drug-name-the-data-does-not-recognise-is-said-to-be-unrecognised-with-the-names-it-carries-and-never-guessed)
 and the decisions that carried it to a word beside a drug (250), in a stop (335), named as hers (308, 374) and in pairs
-(382).
+(382). **Superseded in part by [Decision 623](#decision-623-a-question-may-name-her-order-by-any-name-its-concept-publishes-and-a-word-near-one-is-offered-that-order):** a word within an edit of a name of one of her orders is offered that
+order, and the module answers.
 
 ### Context
 
@@ -22296,6 +22298,7 @@ Pinned by `ClinicianWordingsTest.aDrugNamedWithWhatItIsTakenAsIsTheProposalOfThe
 ## Decision 439: A word of five letters is offered no misspelling's near name
 
 **Status: Accepted** (October 2026) — found asking 40 further wordings of 15 patients on the 3.7.1 standalone on 2026-10-25.
+**Superseded in part by [Decision 623](#decision-623-a-question-may-name-her-order-by-any-name-its-concept-publishes-and-a-word-near-one-is-offered-that-order):** against her own orders' names a word of four letters is read for a misspelling.
 It narrows [Decision 183](#decision-183-a-drug-name-the-data-does-not-recognise-is-said-to-be-unrecognised-with-the-names-it-carries-and-never-guessed).
 
 ### Context
@@ -28548,7 +28551,8 @@ no per-partner test. Two orders of one product that the data resolves differentl
 to that.
 
 Measured on the demo replica on 2026-11-11 (E2B) with "any drug interactions?" and "Does he have any drug
-contraindications?". The sample was 22 patients: three for each repeated combination, ADR 486's patient dd88589e, and
+contraindications?". The model was not running for that sweep (an orphaned llama-server held its port), so every reading
+fell back to the router's; re-run the same day with the model up, none of the 44 answers changed. The sample was 22 patients: three for each repeated combination, ADR 486's patient dd88589e, and
 two controls. Chips fell from 394 to 370, and 20 of the 44 answers changed. Every lost pair was read against the
 patient's active orders. Each lay inside the only product carrying both substances: four-drug tablets repeated, "Isoniazid
 / pyrazinamide / rifampin" twice, "Ethambutol and isoniazid" three times, "Rifampicin and isoniazid" twice, and
@@ -28564,3 +28568,68 @@ which reddens without the second pass. On the owner's direction, Decision 486's
 `twoOrdersOfOneCombinationRelateItsSubstancesAcrossThem` is replaced by the first. `BriefScreenAnswerTest`'s demo
 patient, on two orders of "Rifampicin and isoniazid", now counts 11 cautions, not 12, without rifampicin against
 isoniazid.
+
+## Decision 623: A question may name her order by any name its concept publishes, and a word near one is offered that order
+
+**Status: Accepted** (November 2026), on the owner's direction. It narrows
+[Decision 384](#decision-384-a-word-in-a-drug-questions-place-that-the-drug-data-has-no-near-name-for-takes-the-chart-answer-with-the-unchecked-statement-after-it)
+and [Decision 439](#decision-439-a-word-of-five-letters-is-offered-no-misspellings-near-name) for her own orders' names,
+and widens [Decision 273](#decision-273-one-of-her-orders-named-alone-by-its-own-name-is-answered-as-her-medication) to
+several orders of one drug.
+
+### Context
+
+On the demo replica patient dd5558ed has three active orders of "Rifampicin isoniazid pyrazinamide and ethambutol". The
+demo dictionary also names that concept "Rifafour" and, as its short name, "RHEZ". *"Can I give him RHZE?"* went to the
+model as a word near no drug, and the model answered *"No — the records do not address the safety of giving RHZE."*: a
+"No" about a drug he already takes, from a check that never ran. *"Can I give him Rifafour?"* was answered *"The records do
+not address the safety of giving Rifafour."* beside *"not a drug name the interaction data recognises"*. An order's names
+(`ActiveDrugOrder.getNames()`) carry only the name `Concept.getName()` elects, so Decision 265's match of a question to her
+orders never saw the others.
+
+### The decision
+
+- **Her order's other dictionary names.** `PatientClinicalContextBuilder` records every name the order's concept
+  publishes as `ActiveDrugOrder.getConceptNames()`. They are kept apart from `getNames()`, which is matched against chart
+  prose and decides which reference entries an order reaches. `DrugReferenceInjector.herOrdersNamedIn` and
+  `UnrecognisedDrugName.namesOneOfHerOrders` read both, so *"Can I give him Rifafour?"* names her order.
+- **Several orders of one drug.** `asksAboutOneOfHerOrdersByName` also answers where every order named has one display.
+  The demo re-orders a drug at each visit, and Decision 273's one-order answer declined two orders or more and left the
+  question to the model. The lead counts them and says when they started, as Decisions 206 and 621 do:
+  *"Rifafour is one of this patient's active medications (Rifampicin isoniazid pyrazinamide and ethambutol, 3 orders,
+  started 2006-04-26, 2006-05-11 and 2006-05-18), so adding it would duplicate those orders."* The two leads that relate
+  findings now carry the start too, which Decision 621 had left out. `whenTheyStarted` lists starts oldest first.
+- **A word near a name of hers.** Where the data finds no near name for the one word, `UnrecognisedDrugName.
+  offerHerOrdersNear` offers the names of her started orders within one edit of it (two from eight letters), each with
+  the order it names, and the module answers: *"No interaction check was run: "RHZE" is not a drug name the interaction
+  data recognises. Did you mean RHEZ, this patient's active order Rifampicin isoniazid pyrazinamide and ethambutol? Ask
+  again with the name it carries."* A stop and a word beside a named drug say it the same way. A word of four letters is
+  read here, where Decision 439 waits for six against the data's thousands of names: her orders carry a few. It is never a
+  guess. No check runs, and the clinician asks again.
+
+Not done: "RHZE" itself is in no dictionary name of that concept, and teaching the module the regimen abbreviation would
+put medical knowledge in the algorithm. The suggestion reaches it only through the dictionary's own "RHEZ".
+
+Measured on the demo replica on 2026-11-11 (E2B, model up throughout), 22 patients × "Can I give him RHZE?", "Can I give
+him Rifafour?", "Does RHZE interact with his medications?", "Can I stop his RHZE?", "Can I give him Septrin?" and the
+control "Can I give him zorbaflex?". Before, none of the 132 was module-answered, and one RHZE answer opened "No —". After,
+32 changed. The RHZE suggestion reached exactly the five patients with an active order of the RHEZ concept, in all three
+RHZE wordings. Rifafour was answered as her medication for the same five, and Septrin for exactly the 12 patients with an
+active order of the concept named Septrin, which the replica database lists. No answer opened "No —". The zorbaflex control
+and the other patients' answers kept the model's answer and the unrecognised-name line. The 44 answers of Decision 622's
+screen sample were unchanged, 370 chips before and after.
+
+A first build without the several-orders change made Septrin and Rifafour worse for patients with repeat orders: their
+names were recognised, so the unrecognised-name line went, but the one-order answer declined, and the model answered
+*"The records do not address Septrin"* for 14 of the 17. That is why the two changes ship together.
+
+Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.herOrderAskedAboutByAnotherNameItsConceptPublishesIsHerOrder`,
+which reddens without the concept names in `herOrdersNamedIn`,
+`.severalOrdersOfHerDrugAskedAboutByAnotherNameAreHerDrugCounted`, which reddens with the one-order gate back, and
+`.aWordOneEditFromANameOfHerOrderIsOfferedThatOrder`, which reddens without `offerHerOrdersNear`. Patient 7's aspirin
+concept is given a synonym and a short name (`AspirinConceptOtherNamesTestData.xml`) and a second order
+(`SecondAspirinOrderTestData.xml`).
+
+Residue: a word one edit from a name of hers beside a named drug states the "no check was run" line, while the named
+drug's own chips are still published beside it. Two of her drugs asked together each by a name with repeat orders still
+go to the model, because `asksAboutTwoOfHerOrdersByName` counts orders, not drugs.

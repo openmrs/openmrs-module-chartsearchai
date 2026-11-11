@@ -3713,6 +3713,75 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 				+ "there is no other active medication to check it against\\."), answer.getAnswer());
 	}
 
+	/** Two more names concept 88 publishes beside its own (ADR Decision 623): a synonym and a short name. */
+	private static final String ASPIRIN_CONCEPT_OTHER_NAMES = "AspirinConceptOtherNamesTestData.xml";
+
+	/**
+	 * Her order asked about by another name its concept publishes is her order (ADR Decision 623). On the demo replica
+	 * "Can I give him Rifafour?" of a patient with three active orders of "Rifampicin isoniazid pyrazinamide and
+	 * ethambutol" — a concept the dictionary also names "Rifafour" and "RHEZ" — was answered by the model, "The records do
+	 * not address the safety of giving Rifafour", beside "not a drug name the interaction data recognises".
+	 */
+	@Test
+	public void herOrderAskedAboutByAnotherNameItsConceptPublishesIsHerOrder() throws Exception {
+		executeDataSet(ASPIRIN_CONCEPT_OTHER_NAMES);
+		answerFromFindings(true);
+		for (String question : Arrays.asList("Can I give him Asprolin?", "Can I give him ZBRX?")) {
+			RecordingProvider provider = new RecordingProvider();
+			ChartAnswer answer = serviceWith(provider, shipped()).search(patient, question);
+
+			String named = question.substring("Can I give him ".length(), question.length() - 1);
+			assertTrue(answer.getAnswer().startsWith(named + " is one of this patient's active medications ("),
+				question + " — " + answer.getAnswer());
+			assertFalse(answer.getAnswer().contains("No interaction check was run"), question + " — " + answer.getAnswer());
+			assertEquals(0, provider.calls, question + " — " + answer.getAnswer());
+		}
+	}
+
+	/**
+	 * Several orders of one drug asked about by another name its concept publishes are her drug, counted (ADR Decision 623).
+	 * On the demo replica, which re-orders a drug at each visit, "Can I give him Septrin?" of a patient on five orders of
+	 * "Trimethoprim and sulfamethoxazole" — a concept also named Septrin — was answered by the model, "The records do not
+	 * address Septrin": the one-order answer of Decision 273 declined two orders or more.
+	 */
+	@Test
+	public void severalOrdersOfHerDrugAskedAboutByAnotherNameAreHerDrugCounted() throws Exception {
+		executeDataSet(ASPIRIN_CONCEPT_OTHER_NAMES);
+		executeDataSet("SecondAspirinOrderTestData.xml");
+		answerFromFindings(true);
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider, shipped()).search(patient, "Can I give him Asprolin?");
+
+		// Her two orders are one drug, which the screen finds as a possible duplicate therapy: the finding it relates.
+		assertEquals("Asprolin is one of this patient's active medications (ASPIRIN, 2 orders, started 2008-08-15 and "
+				+ "2009-01-10), so adding it would duplicate those orders. What the interaction check relates it to:",
+			answer.getAnswer().split("\n")[0], answer.getAnswer());
+		assertTrue(answer.getAnswer().split("\n")[1].startsWith("Acetylsalicylic acid (aspirin) is in active orders ASPIRIN "
+				+ "(2 orders) — possible duplicate therapy."), answer.getAnswer());
+		assertEquals(0, provider.calls, answer.getAnswer());
+	}
+
+	/**
+	 * A word one edit from a name of one of her orders is offered that order, and the module answers (ADR Decision 623).
+	 * On the demo replica "Can I give him RHZE?" of a patient on "Rifampicin isoniazid pyrazinamide and ethambutol", short
+	 * name RHEZ, went to the model, which answered "No — the records do not address the safety of giving RHZE": a "No" of
+	 * a drug he already takes, from a check that never ran.
+	 */
+	@Test
+	public void aWordOneEditFromANameOfHerOrderIsOfferedThatOrder() throws Exception {
+		executeDataSet(ASPIRIN_CONCEPT_OTHER_NAMES);
+		answerFromFindings(true);
+		for (String question : Arrays.asList("Can I give him ZBXR?", "Does ZBXR interact with his medications?")) {
+			RecordingProvider provider = new RecordingProvider();
+			ChartAnswer answer = serviceWith(provider, shipped()).search(patient, question);
+
+			assertTrue(answer.getAnswer().matches("No interaction check was run: \"ZBXR\" is not a drug name the interaction "
+					+ "data recognises\\. Did you mean ZBRX, this patient's active order \\S[^?\\n]*\\? Ask again with the "
+					+ "name it carries\\."), question + " — " + answer.getAnswer());
+			assertEquals(0, provider.calls, question + " — " + answer.getAnswer());
+		}
+	}
+
 	/** Two orders of one drug are not "one active medication order": the module does not say there is nothing to check. */
 	@Test
 	public void aScreenForAPatientWithTwoOrdersIsNotToldThereIsOnlyOne() throws Exception {

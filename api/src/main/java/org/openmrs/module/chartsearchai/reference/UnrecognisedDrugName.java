@@ -368,9 +368,69 @@ final class UnrecognisedDrugName {
 	}
 
 	/** Whether the data finds a near name for the word — or, of two, for either (ADR Decision 384): a word it finds none for
-	 *  may be no drug at all ("oranges"), and the question takes the chart answer, this statement after it. */
+	 *  may be no drug at all ("oranges"), and the question takes the chart answer, this statement after it — or whether a
+	 *  name of one of her orders is near it (ADR Decision 623). */
 	boolean hasSuggestions() {
-		return !suggestions.isEmpty() || !secondSuggestions.isEmpty();
+		return !suggestions.isEmpty() || !secondSuggestions.isEmpty() || !herOrdersNear.isEmpty();
+	}
+
+	/** Her orders a name of which the word is near, each as {@link #offerHerOrdersNear} words it (ADR Decision 623). */
+	private final List<String> herOrdersNear = new ArrayList<String>();
+
+	/**
+	 * Where the data finds no near name for the one word, the names of her started orders — their own, or another their
+	 * concept publishes — within an edit of it, each offered with the order it names: <em>"Did you mean RHEZ, this
+	 * patient's active order Rifampicin isoniazid pyrazinamide and ethambutol?"</em> (ADR Decision 623). On the demo replica
+	 * "Can I give him RHZE?" of a patient on that order, short name RHEZ, went to the model as a word near no drug, and the
+	 * model answered "No — the records do not address the safety of giving RHZE": a "No" of a drug he already takes.
+	 *
+	 * <p>Her orders' few names, not the data's thousands, so a word of four letters is read for a misspelling here where
+	 * {@link #suggestionsFor} waits for six (ADR Decision 439): one edit of a four-letter word reaches many of the data's
+	 * names, and rarely one of hers. Never a guess either: no check runs, and the clinician asks again by the name.
+	 */
+	void offerHerOrdersNear(PatientClinicalContext context, String question) {
+		if (context == null || second != null || hasSuggestions() || toEatOrDrink(question, word)) {
+			return;
+		}
+		String w = DrugReference.foldedLower(word).trim();
+		if (w.length() < 4 || w.indexOf(' ') >= 0) {
+			return;
+		}
+		int most = w.length() >= 8 ? 2 : 1;
+		Map<String, String> near = new LinkedHashMap<String, String>();
+		for (PatientClinicalContext.ActiveDrugOrder order : context.getActiveDrugOrders()) {
+			if (!order.hasStarted() || !order.hasKnownName() || order.getDisplay() == null) {
+				continue;
+			}
+			for (String name : herNamesFor(order)) {
+				String n = name == null ? "" : DrugReference.foldedLower(name).trim();
+				if (n.length() < 4 || n.indexOf(' ') >= 0) {
+					continue;
+				}
+				int distance = editDistance(w, n);
+				if (distance > 0 && distance <= most) {
+					String asWritten = conceptNameAsWritten(order, n);
+					near.putIfAbsent(asWritten + "\n" + order.getDisplay().trim(),
+						asWritten + ", this patient's active order " + order.getDisplay().trim());
+				}
+			}
+		}
+		for (String offered : near.values()) {
+			if (herOrdersNear.size() < MAX_SUGGESTIONS) {
+				herOrdersNear.add(offered);
+			}
+		}
+	}
+
+	/** The name of {@code order} folding to {@code folded}, as the dictionary or the order writes it. */
+	private static String conceptNameAsWritten(PatientClinicalContext.ActiveDrugOrder order, String folded) {
+		for (String name : order.getConceptNames()) {
+			if (DrugReference.foldedLower(name).trim().equals(folded)) {
+				return name.trim();
+			}
+		}
+		String display = order.getDisplay().trim();
+		return DrugReference.foldedLower(display).equals(folded) ? display : folded;
 	}
 
 	/** Whether the unrecognised word names one of her active orders — her drug, checked through the order whatever the data
@@ -394,19 +454,27 @@ final class UnrecognisedDrugName {
 		return POSSESSIVES.contains(before) || "her".equals(before) && !(i > 1 && GIVING.contains(words.get(i - 2)));
 	}
 
-	/** Whether one of her active orders' names carries {@code word} as a word of it. */
+	/** Whether one of her active orders' names — or another its concept publishes (ADR Decision 623) — carries
+	 *  {@code word} as a word of it. */
 	private static boolean namesOneOfHerOrders(PatientClinicalContext context, String word) {
 		if (context == null) {
 			return false;
 		}
 		for (PatientClinicalContext.ActiveDrugOrder order : context.getActiveDrugOrders()) {
-			for (String name : order.getNames()) {
-				if (name != null && DrugReference.containsWord(name, word)) {
+			for (String name : herNamesFor(order)) {
+				if (name != null && DrugReference.containsWord(DrugReference.foldedLower(name), DrugReference.foldedLower(word))) {
 					return true;
 				}
 			}
 		}
 		return false;
+	}
+
+	/** The names {@code order} is known by: its own, and every other its concept publishes (ADR Decision 623). */
+	private static Set<String> herNamesFor(PatientClinicalContext.ActiveDrugOrder order) {
+		Set<String> names = new java.util.LinkedHashSet<String>(order.getNames());
+		names.addAll(order.getConceptNames());
+		return names;
 	}
 
 	/** Whether one of {@code entries}' names carries {@code word} as a word of it. */
@@ -777,7 +845,8 @@ final class UnrecognisedDrugName {
 					.append("\": neither is a drug name the interaction data recognises."), both);
 		}
 		if (inAStop) {
-			return "None of this patient's active orders is named \"" + word + "\", so there is no order of it to stop.";
+			return withSuggestions(new StringBuilder("None of this patient's active orders is named \"").append(word)
+					.append("\", so there is no order of it to stop."), herOrdersNear);
 		}
 		return withSuggestions(new StringBuilder(namedAsHersAlone
 				? "None of this patient's active orders is named \"" + word + "\".\n" : "")
@@ -803,7 +872,7 @@ final class UnrecognisedDrugName {
 	}
 
 	private String withSuggestions(StringBuilder sb) {
-		return withSuggestions(sb, suggestions);
+		return withSuggestions(sb, herOrdersNear.isEmpty() ? suggestions : herOrdersNear);
 	}
 
 	private static String withSuggestions(StringBuilder sb, List<String> suggestions) {

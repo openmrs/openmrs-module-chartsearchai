@@ -393,9 +393,13 @@ final class PatientClinicalContextBuilder {
 		// And when one that has started did, which a module answer naming it as hers states (ADR Decision 621).
 		Date startedOn = ChartSearchAiUtils.startedOnOf(drugOrder);
 		if (!orderNames.isEmpty()) {
+			// And every name its concept publishes, which a question may name it by — "Rifafour", "RHEZ" — kept apart from
+			// the names above, which decide what the order resolves to (ADR Decision 623).
+			Set<String> conceptNames = new LinkedHashSet<String>();
+			addConceptNames(conceptNames, concept);
 			orders.add(PatientClinicalContext.ActiveDrugOrder.named(drugOrder.getUuid(),
 					orderNames.iterator().next(), orderNames, orderAtcCodes, orderAdministration,
-					orderConceptUuid, scheduledStart, startedOn));
+					orderConceptUuid, scheduledStart, startedOn).withConceptNames(conceptNames));
 		} else if (!normalizedCodes.isEmpty()) {
 			String codeOnlyDisplay = codeOnlyDisplay(normalizedCodes);
 			log.warn(kind + " drug order {} has no readable name; it will be identified by its ATC "

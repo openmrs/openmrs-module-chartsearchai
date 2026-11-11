@@ -885,6 +885,10 @@ public class DrugReferenceInjector {
 		if (unrecognised != null && unrecognised.namesOneOfHerOrders(context)) {
 			unrecognised = null;
 		}
+		// And a word near a name of one of her orders is offered that order (ADR Decision 623).
+		if (unrecognised != null) {
+			unrecognised.offerHerOrdersNear(context, question);
+		}
 		// Nor does whether to stop one of her orders named by its own name, answered where nothing was found too — her only
 		// order raises nothing to pair it with (ADR Decision 335).
 		// And one of her orders named by its own name, proposed or asked whether it interacts (ADR Decision 336).
@@ -1711,6 +1715,9 @@ public class DrugReferenceInjector {
 			List<AskedDrug> named = askedDrugs(question, questionDrugs, context, false);
 			UnrecognisedDrugName beside = named.size() == 1
 					? UnrecognisedDrugName.besideANamedDrug(question, questionDrugs, drugReferenceService.getAll(), context) : null;
+			if (beside != null) {
+				beside.offerHerOrdersNear(context, question);
+			}
 			if (beside != null && beside.hasSuggestions()) {
 				moduleAnswer = beside.statementFor(named.get(0).label);
 				// The word names a group this module carries — "penicillin", as Decision 363 reads it — so her recorded drug
@@ -7064,14 +7071,9 @@ public class DrugReferenceInjector {
 				starts.add(order.getStartedOn());
 			}
 		}
+		// Oldest first, whatever order the orders came in.
+		Collections.sort(starts);
 		return starts.isEmpty() ? null : PatientChartSerializer.startedOn(starts);
-	}
-
-	/** {@link #whenTheyStarted} of {@code order} alone, after its name and citation: <em>", started 2006-04-10"</em>, or
-	 *  nothing. */
-	private static String startedAfterIt(PatientClinicalContext.ActiveDrugOrder order) {
-		String start = whenTheyStarted(Collections.singletonList(order));
-		return start == null ? "" : ", " + start;
 	}
 
 	/** {@link #composeFromAScreenThatRelatedNothing}'s answer to what the screen found, her own conflicts set apart. */
@@ -9200,6 +9202,9 @@ public class DrugReferenceInjector {
 				continue;
 			}
 			Set<String> names = new LinkedHashSet<String>(order.getNames());
+			// And every other name its concept publishes: "Can I give him Rifafour?" of an order the dictionary also names
+			// so (ADR Decision 623).
+			names.addAll(order.getConceptNames());
 			if (order.hasKnownName() && order.getDisplay() != null) {
 				names.add(order.getDisplay());
 				// And the display's first word alone, a brand's name before a form or strength — "Clarithromycine" of
@@ -9372,7 +9377,8 @@ public class DrugReferenceInjector {
 	static OneOfHerOrdersAsked asksAboutOneOfHerOrdersByName(String question, PatientClinicalContext context,
 			DrugReferenceService service) {
 		Map<PatientClinicalContext.ActiveDrugOrder, String> named = herOrdersNamedIn(question, context, service);
-		if (named.size() != 1) {
+		// One order, or several of one drug — the demo re-orders a drug at each visit (ADR Decision 623).
+		if (!oneDrugIn(named.keySet())) {
 			return null;
 		}
 		List<String> words = wordsMarking(question, named.values());
@@ -9383,6 +9389,15 @@ public class DrugReferenceInjector {
 				: QueryScopeRouter.asksWhichOfHerMedicationsInteractWith(words)
 						|| QueryScopeRouter.asksWhetherADrugIsSafeWithHerMedications(words) ? OneOfHerOrdersAsked.ABOUT_IT
 				: QueryScopeRouter.asksWhetherToStopHerDrug(words) ? OneOfHerOrdersAsked.STOPPED : null;
+	}
+
+	/** Whether {@code orders} are one order, or several of one drug: one display among them (ADR Decision 623). */
+	private static boolean oneDrugIn(Collection<PatientClinicalContext.ActiveDrugOrder> orders) {
+		Set<String> displays = new HashSet<String>();
+		for (PatientClinicalContext.ActiveDrugOrder order : orders) {
+			displays.add(order.getDisplay() == null ? "" : order.getDisplay().trim());
+		}
+		return !orders.isEmpty() && displays.size() == 1;
 	}
 
 	/**
@@ -9554,11 +9569,14 @@ public class DrugReferenceInjector {
 		if (asked == null || orderEntries == null) {
 			return null;
 		}
-		PatientClinicalContext.ActiveDrugOrder order = herOrdersNamedIn(question, context, drugReferenceService).keySet()
-				.iterator().next();
+		// Each of her orders the question named, one drug however many times it was ordered (ADR Decision 623).
+		List<PatientClinicalContext.ActiveDrugOrder> theOrders = new ArrayList<PatientClinicalContext.ActiveDrugOrder>(
+				herOrdersNamedIn(question, context, drugReferenceService).keySet());
+		PatientClinicalContext.ActiveDrugOrder order = theOrders.get(0);
 		Set<Object> ofIt = new LinkedHashSet<Object>();
 		for (DrugReference entry : orderEntries) {
-			if (DrugSafetyValidator.ordersOfSubstance(drugReferenceService, entry, orderEntries, context).contains(order)) {
+			if (!Collections.disjoint(DrugSafetyValidator.ordersOfSubstance(drugReferenceService, entry, orderEntries, context),
+				theOrders)) {
 				ofIt.add(entry.substanceGroupKey());
 			}
 		}
@@ -9586,15 +9604,19 @@ public class DrugReferenceInjector {
 		Integer number = herOrderRecords.get(display);
 		String name = herOrdersNamedIn(question, context, drugReferenceService).get(order);
 		String label = Character.toUpperCase(name.charAt(0)) + name.substring(1);
+		// Her orders of it, cited once, and how many where more than one (ADR Decisions 206, 623).
+		String start = whenTheyStarted(theOrders);
+		String citedWithStart = display + (number == null ? "" : " [" + number + "]")
+				+ (theOrders.size() > 1 ? ", " + theOrders.size() + " orders" : "") + (start == null ? "" : ", " + start);
+		String duplicated = theOrders.size() > 1 ? "those orders" : "that order";
 		if (asked == OneOfHerOrdersAsked.STOPPED) {
 			// Whether to stop it: what relates it to her other medications, which stopping it would end, under the lead for
 			// a stop where it asks whether stopping is safe; with no other order, that there is none (ADR Decision 335).
 			boolean others = false;
 			for (PatientClinicalContext.ActiveDrugOrder each : context.getActiveDrugOrders()) {
-				others |= each != order;
+				others |= !theOrders.contains(each);
 			}
-			String own = label + OWN_MEDICATION_LEAD + " (" + display + (number == null ? "" : " [" + number + "]")
-					+ startedAfterIt(order) + ")";
+			String own = label + OWN_MEDICATION_LEAD + " (" + citedWithStart + ")";
 			String body;
 			if (!others) {
 				body = own + ", and this patient has no other active medication to check it against.";
@@ -9616,15 +9638,14 @@ public class DrugReferenceInjector {
 			// Decision 336).
 			boolean others = false;
 			for (PatientClinicalContext.ActiveDrugOrder each : context.getActiveDrugOrders()) {
-				others |= each != order;
+				others |= !theOrders.contains(each);
 			}
 			if (others) {
 				return null;
 			}
 			List<String> alone = new ArrayList<String>();
-			alone.add(label + OWN_MEDICATION_LEAD + " (" + display + (number == null ? "" : " [" + number + "]")
-					+ startedAfterIt(order) + ")"
-					+ (asked == OneOfHerOrdersAsked.PROPOSED ? ", so adding it would duplicate that order, and" : ", and")
+			alone.add(label + OWN_MEDICATION_LEAD + " (" + citedWithStart + ")"
+					+ (asked == OneOfHerOrdersAsked.PROPOSED ? ", so adding it would duplicate " + duplicated + ", and" : ", and")
 					+ " this patient has no other active medication to check it against.");
 			for (int i = 0; i < findings.size(); i++) {
 				SafetyWarning finding = findings.get(i);
@@ -9639,11 +9660,10 @@ public class DrugReferenceInjector {
 		// Whether it is safe, or what interacts with it: her medication and what the check relates it to — never "Yes —",
 		// which beside "Is his Klarizom safe?" reads as a clearance (ADR Decision 378).
 		lines.add(0, asked == OneOfHerOrdersAsked.PROPOSED
-				? label + OWN_MEDICATION_LEAD + " (" + display + (number == null ? "" : " [" + number + "]")
-						+ "), so adding it would duplicate that order. What the interaction check relates it to:"
+				? label + OWN_MEDICATION_LEAD + " (" + citedWithStart + "), so adding it would duplicate " + duplicated
+						+ ". What the interaction check relates it to:"
 				: asked == OneOfHerOrdersAsked.ABOUT_IT
-						? label + OWN_MEDICATION_LEAD + " (" + display + (number == null ? "" : " [" + number + "]")
-								+ "). What the interaction check relates it to:"
+						? label + OWN_MEDICATION_LEAD + " (" + citedWithStart + "). What the interaction check relates it to:"
 						: "Yes — " + label + " interacts with this patient's other active medications.");
 		lines.add(BELOW_FLOOR_SCOPE);
 		return String.join("\n", lines);

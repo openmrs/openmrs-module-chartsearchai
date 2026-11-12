@@ -28834,4 +28834,82 @@ again without lopinavir's membership. Disabling the composer's call reddens the 
 Residues:
 - A mechanism chip collapsed by Decision 99 can name partners outside the groups asked about.
 - Streptomycin, filed under J01GA, is an antibiotic here, not a TB drug.
-- A group word outside the vocabulary (*"his antihypertensives"*) still gets the screen.
+- A group word outside the vocabulary (*"his antihypertensives"*) still gets the screen. Resolved by
+  [Decision 631](#decision-631-a-class-of-her-medications-is-answered-over-that-class-and-a-group-the-module-cannot-resolve-is-said-to-be-unresolved).
+
+## Decision 631: A class of her medications is answered over that class, and a group the module cannot resolve is said to be unresolved
+
+**Status: Accepted** (November 2026), on the owner's direction that an answer carries nothing beyond what was asked. It
+extends [Decision 630](#decision-630-a-group-of-her-medications-asked-about-by-name-is-answered-over-that-group).
+
+### Context
+
+On the demo replica on 2026-11-12, 8 patients × 17 wordings: *"Do his antifungals interact with his ARVs?"*, *"Do his
+vaccines interact with his other medications?"*, *"Do his antihypertensives interact with anything?"*, *"Any interactions
+with his BP meds?"*, *"… his diabetes medications?"*, *"Do his painkillers interact with his ARVs?"*, *"Any interactions
+with his antimalarials?"*, *"Do his statins interact with his ARVs?"*, *"Any interactions with his heart medications?"* and
+*"Do his psych meds interact with his ARVs?"* were each answered with the whole screen for all 8 patients (80 answers,
+every chip of the screen). *"Any interactions with his blood thinners?"* was the model's answer beside the whole screen's
+chips (8 answers). Decision 630 read only antiretrovirals, TB drugs and antibiotics as her groups; every other group word
+fell back to the screen.
+
+### The decision
+
+One reading of what a question names as hers, `DrugClassTerms.thingsOfHers`, after a possessive or joined to one by
+*"and"*:
+- a group this module resolves to the drug data's codes — Decision 630's three, a class of `DrugClassTerms`' table whose
+  ATC group is the class (Decision 275), or a curated group (Decision 298) — answered by `composeHerMedicationGroups` as
+  Decision 630 answers its groups. A class read by its ATC group says so, *"This patient's statins in ATC group C10AA
+  (Simvastatin)"*, *"No opioid in ATC group N02A is among …"*, because a group is not always the whole class: methadone is
+  filed outside N02A, nystatin outside the antifungal groups.
+- a group of her medications nothing here resolves — *"his BP meds"*, *"his antihypertensives"*, *"his vaccines"*, a word
+  narrowing a group (*"his previous ARVs"*, *"his inhaled steroids"*, *"his steroid inhaler"*) — answered *"This check
+  cannot tell which of this patient's active medications are the "BP meds" the question names. Ask about a drug by name to
+  have it checked."*, with no chip. Which of her orders such words mean is medical knowledge the module does not hold.
+- her medications as a whole (*"his own medications"*), or something else of hers (*"her diet"*), as before.
+
+A question naming Decision 630's groups alone is read as that decision reads it, so nothing it answered changes. One
+naming a class or an unresolved group is answered over it only where it asks of the groups' interactions and of nothing
+else (`DrugReferenceInjector.asksOfTheSafetyOfAGroupOfHers`): read with each group replaced by *"medications"*, it names
+no other class, no word in a drug's place, nothing joined to them as a second subject (*"Do klarizom and his statins
+interact?"*, *"Does grapefruit clash with his statins?"*) or object (*"… interact with food?"*); it carries a word asking
+of interactions; and a class after *"give her"* or *"restart his"* is proposed, not hers. Where those hold and no screen
+shape reads the class word, `DrugSafetyValidator.screensHerOrders` runs the screen the answer is drawn from, and no group
+answer is composed where the screen did not run. An order the data identifies under no code at all is named: *"This
+check cannot tell whether X is among the statins the question names"*. A word of her groups is no unrecognised drug name:
+*"Do his TB drugs and ARVs interact?"* was told *"ARVs"* is not one.
+
+### Measured
+
+On the demo replica on 2026-11-12 (E2B, model up), the deployed build against the runs before it:
+- The 17 wordings over 8 patients: no answer is the whole screen (80 before). Each group word the module cannot resolve
+  — vaccines, antihypertensives, BP meds, diabetes medications, painkillers, antimalarials, heart medications, psych meds —
+  gets the unresolved statement with no chip, for all 8 patients. *"his blood thinners"* carries no chip of the screen (63
+  before). Each *"No antifungal …"*, *"No statin …"*, *"No antiretroviral …"* answer was checked against the patient's
+  active orders in the database. The control *"Any interactions with his medications?"* is still the screen.
+- Decision 630's 23 patients × 9 group wordings: all 207 answers and their 579 chips unchanged.
+- Decision 622's 44-answer screen sample: all 44 answers and their 370 chips unchanged.
+
+Through `injectRecords` on 586 wordings a reviewer wrote, over a patient on seven orders, against the build before this
+change: questions answered with every finding of her screen as chips went from 53 to 23, and none went from a narrower
+answer to that screen.
+
+Pinned by `HerMedicationGroupByClassTest`, which failed in all four of its first cases before the change. Each check on
+what else the question names reddens `aQuestionAskingOfMoreThanTheInteractionsOfAGroupOfHisIsNotAnsweredOverIt` when
+disabled: the subject (*"Does a glass of grapefruit juice interact with his statins?"*), the joined thing (*"Do
+grapefruit & his statins interact?"*), the object of *"with"* (*"Do his statins interact with food?"*) and another class
+named (*"Is there an interaction risk if NSAIDs are added to his blood thinners?"*).
+
+Fourteen rounds of review by agents given the code alone found the wordings this decision now pins. Reading what else a
+question names beside her groups is done by words, so a wording no rule reads can still be answered over the group
+alone. Residues:
+- Three or more groups named at once fall back to the screen.
+- Something asked of in a clause after the group (*"… with his statins if he drinks grapefruit juice?"*) is answered over
+  the group, its clause left unsaid.
+- A group asked of in words the router reads as no safety question (*"Are his TB drugs ok with his ARVs?"*) keeps the
+  screen, as under Decision 630.
+- Decision 630's own readings stand where they were imperfect: *"Why were his ARVs and TB drugs stopped?"* and *"Do his
+  ARVs and grapefruit interact?"* are answered over the groups.
+- A drug the data resolves named beside a group keeps Decision 313's lead, *"cannot tell which … are the "ARVs" …"*, though
+  the group may now be resolved.
+

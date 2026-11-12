@@ -19,9 +19,13 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.openmrs.module.chartsearchai.api.impl.DrugClassMembersStatement;
+
 /**
  * Which drug CLASS a question names, when it names one — the vocabulary behind
- * {@link DrugReferenceService#namedDrugClass}, and nothing else (issue #354).
+ * {@link DrugReferenceService#namedDrugClass}, and nothing else (issue #354) — save that it also reads which groups of
+ * HER medications a question names and which of her orders' codes are in one ({@link #herMedicationGroupsNamed}, {@link
+ * #membersOf}; ADR Decisions 275, 630, 631): her orders sorted by their own codes, never substances put in play.
  *
  * <p>It classifies a STRING, not a substance: the answer is a class NAME and never a member set.
  * That boundary is the whole of the issue's design decision and is argued at
@@ -229,85 +233,414 @@ final class DrugClassTerms {
 		// A noun two groups share: "her TB and HIV meds", "his HIV and TB drugs".
 		String hiv = "(?:hiv|arv|antiretroviral)";
 		String tb = "(?:tb|tuberculosis|anti-?tb|anti-?tuberculosis|antitubercular)";
-		words.put("antiretroviral", Pattern.compile("\\b(?:arvs?|anti-?retrovirals?|haart|" + hiv + " " + noun + "|" + hiv
+		words.put("antiretroviral", Pattern.compile("\\b(?:arvs?|art|anti-?retrovirals?|haart|" + hiv + " " + noun + "|" + hiv
 				+ "(?= and " + tb + " " + noun + "))\\b", Pattern.CASE_INSENSITIVE));
-		words.put("TB drug", Pattern.compile("\\b(?:" + tb + " " + noun + "|anti-?tbs?|" + tb + "(?= and " + hiv + " " + noun
-				+ "))\\b", Pattern.CASE_INSENSITIVE));
+		words.put("TB drug", Pattern.compile("\\b(?:" + tb + " " + noun + "|anti-?tbs?|" + tb + "(?= and (?:" + hiv + " " + noun
+				+ "|(?:his |her |their )?(?:arts?|arvs?|haart|anti-?retrovirals?)\\b)))\\b", Pattern.CASE_INSENSITIVE));
 		words.put("antibiotic", Pattern.compile("\\b(?:antibiotics?|antibacterials?)\\b", Pattern.CASE_INSENSITIVE));
 		WORDS_OF_HER_MEDICATION_GROUP = Collections.unmodifiableMap(words);
 	}
 
-	/** Her own: a possessive before the group's words, anywhere earlier in the question — "his ARVs and TB drugs". */
-	private static final Pattern POSSESSIVE = Pattern.compile("\\b(?:his|her|their|the patient's|this patient's)\\b",
+	/** A possessive and where the words after it start: "her diet", "his other meds", "her TB treatment". */
+	private static final Pattern A_THING_OF_HERS = Pattern.compile("\\b(?:(?i:his|her|their|the patient's|this patient's)|"
+		// and her own name's: "Do Mary's ARVs interact with her TB drugs?"
+		+ "\\p{Lu}\\p{Ll}+'s) (?=[\\p{L}])");
+
+	/** A verb giving her something, before which "her" and a drug class is the class proposed for her and never one of her
+	 *  groups: "give her statins with her ARVs" proposes statins (ADR Decision 631). Her ARVs and TB drugs given her stay
+	 *  hers, "Is it safe to give her ARVs and TB drugs together?". */
+	private static final Pattern GIVEN_TO_HER = Pattern.compile("\\b(?:give|giving|gave|start|starting|prescribe|prescribing|"
+			+ "put|putting|offer|offering|recommend|recommending) $", Pattern.CASE_INSENSITIVE);
+
+	/** A verb putting her back on something, before which a class of hers is one she is not taking now, proposed again —
+	 *  "restart his statins with his ARVs" — whoever's it is (ADR Decision 631). */
+	private static final Pattern RESTARTED = Pattern.compile("\\b(?:restart|restarting|re-start|resume|resuming|reintroduce|"
+			+ "reintroducing|back on) $", Pattern.CASE_INSENSITIVE);
+
+	/** The words saying her medications as a whole, however a question qualifies them: "his own medications", "his home
+	 *  meds", "his prescribed drugs" (ADR Decision 631). */
+	private static final Pattern ALL_OF_THEM = Pattern.compile("(?i)(?:(?:own|home|prescribed|outpatient|discharge|listed|"
+			+ "ordered|recorded|other|current|active|usual|regular|daily|present|existing|all) ){1,2}(?:medications?|meds|"
+			+ "medicines?|drugs?|pills|tablets|prescriptions|treatments?|regimens?)");
+
+	/** An aspect of a group, after its words, that a question asks of rather than the group: "his statin dose", "his ARV
+	 *  levels", "his TB drug side effects" (ADR Decision 631). */
+	private static final Pattern AN_ASPECT = Pattern.compile("(?i) (?:doses?|dosages?|dosing|levels?|side|adherence|refills?|"
+			+ "schedules?|timing|costs?|supply|stock|duration|course)\\b");
+
+	/** A form of a drug after a group's words, which narrows the group to that form: "his steroid inhaler", "his antifungal
+	 *  cream", "his antibiotic eye drops" — a group nothing here resolves (ADR Decision 631). */
+	private static final Pattern A_FORM = Pattern.compile("(?i) (?:inhalers?|puffers?|pumps?|creams?|ointments?|gels?|lotions?|"
+			+ "sprays?|patch(?:es)?|drops|eye|ear|nasal|topical|injections?|shots?|suppositor\\w+|pessar\\w+)\\b");
+
+	/** Her vaccines, a group of her medications nothing here resolves: "Do his vaccines interact with his other medications?"
+	 *  was given his whole screen (ADR Decision 631). Read here, not among the router's nouns, which other rules share. */
+	private static final Pattern HER_VACCINES = Pattern.compile("(?i)(?:[\\p{L}-]+ )?(?:vaccines|vaccinations|immuni[sz]ations)");
+
+	/** The words a group of hers may open with that leave it the group it names, her orders as they stand: "his current
+	 *  ARVs". Never one that narrows or moves it — "his previous ARVs", "his inhaled steroids", "his TB antibiotics" — which
+	 *  is then a group nothing here resolves (ADR Decision 631). */
+	private static final Pattern AS_THEY_STAND = Pattern.compile("(?i)current|active|usual|regular|daily|present|ongoing|"
+			+ "existing|all");
+
+	/** "TB" or "HIV" alone, joined to another group of hers that shares its noun: "his ARVs and TB", "his ART and TB". */
+	private static final Map<String, Pattern> BARE_GROUP_WORD;
+
+	static {
+		Map<String, Pattern> bare = new LinkedHashMap<String, Pattern>();
+		bare.put("antiretroviral", Pattern.compile("(?i)hiv\\b"));
+		bare.put("TB drug", Pattern.compile("(?i)(?:tb|tuberculosis)\\b"));
+		BARE_GROUP_WORD = Collections.unmodifiableMap(bare);
+	}
+
+	/** Words joining a second thing to one of hers under its possessive: "his ARVs and TB drugs", "his statins and his BP
+	 *  meds". Never a bare comma: "His TB drugs, do they interact with each other?". */
+	private static final Pattern JOINED = Pattern.compile("^(?:,? and|,? or| &|,) (?:(?:his|her|their) )?(?=[\\p{L}])",
 		Pattern.CASE_INSENSITIVE);
 
+	/** What makes a group's word a nutrient or a food rather than her medications: "vitamin K rich foods", "vitamin B12
+	 *  levels" (ADR Decision 631). */
+	private static final Pattern A_NUTRIENT_AFTER = Pattern.compile("(?: \\p{Lu}\\d*\\b| (?i:rich|foods?|containing|levels?|"
+			+ "deficien\\w*|intake)\\b)");
+
+	/** Words naming medicines not ordered for her, before which a group's words are no group of hers: "his over-the-counter
+	 *  drugs", "his herbal supplements" (ADR Decision 631). */
+	private static final Pattern NOT_ORDERED = Pattern.compile("(?i)over-the-counter|otc|herbal|traditional|natural|"
+			+ "alternative|homeopathic|homoeopathic|recreational|street|illicit|non-prescription|nonprescription");
+
+	/** A word opening a phrase that asks or chooses rather than names a group of hers: "any other meds", "which ARV". */
+	private static final Pattern ASKING_OR_CHOOSING = Pattern.compile("(?i)(?:any|which|what|whichever|some|these|those|other|"
+			+ "another|each|every|no|more|safer|alternative|alternatives|new)\\b");
+
+	/** A word opening a possessive, never one of a thing's words: "his statins and his BP meds" is two things. */
+	private static final Pattern A_POSSESSIVE_WORD = Pattern.compile("(?i)his|her|their|the|this|and|or|with|to|for|of|in|on");
+
 	/**
-	 * The groups of her own medications {@code question} names, in one fixed order whatever order it names them in, so two
-	 * wordings of one question are answered alike (ADR Decision 449) — each a key of
-	 * {@link #atcGroupOfHerMedications} — where each is named after a possessive ("his ARVs", "his ARVs and TB drugs"); empty
-	 * where it names none (ADR Decision 630). "Can I give him an antibiotic?" names no group of hers.
+	 * What each thing a question names as hers is, in the order it names them (ADR Decisions 630, 631) — after a possessive,
+	 * or joined to one by "and": one of {@link #ATC_GROUP_OF_HER_MEDICATIONS}' groups by its words; a drug class this module
+	 * resolves to the drug data's codes, by a term of {@link #TERMS} or a curated group's name — "his antifungals", "his
+	 * statins", "his NSAIDs"; her medications as a whole; a group of her medications by a noun of medication that nothing
+	 * here resolves — "his BP meds", "his antihypertensives", or a class whose members no code names, "her oral
+	 * contraceptives"; or something else, "her diet". Never after "her" given something: "give her statins".
 	 */
-	static List<String> herMedicationGroupsNamed(String question) {
-		List<String> named = new ArrayList<String>();
+	private static List<ThingOfHers> thingsOfHers(String question, List<CrossReactivityGroup> groups) {
+		List<ThingOfHers> things = new ArrayList<ThingOfHers>();
 		if (question == null) {
-			return named;
+			return things;
 		}
-		Matcher possessive = POSSESSIVE.matcher(question);
-		int firstPossessive = possessive.find() ? possessive.start() : -1;
-		if (firstPossessive < 0) {
-			return named;
-		}
-		for (Map.Entry<String, Pattern> group : WORDS_OF_HER_MEDICATION_GROUP.entrySet()) {
-			Matcher m = group.getValue().matcher(question);
-			while (m.find()) {
-				if (m.start() > firstPossessive) {
-					named.add(group.getKey());
+		Matcher possessive = A_THING_OF_HERS.matcher(question);
+		int from = 0;
+		while (possessive.find(from)) {
+			from = possessive.end();
+			String before = question.substring(0, possessive.start());
+			boolean givenHer = possessive.group().toLowerCase(Locale.ROOT).startsWith("her") && GIVEN_TO_HER.matcher(before).find()
+					|| RESTARTED.matcher(before).find();
+			int at = possessive.start();
+			int start = possessive.end();
+			String joinedTo = null;
+			boolean own = true;
+			while (start >= 0) {
+				ThingOfHers thing = thingAt(question, at, start, groups, joinedTo);
+				thing.ownPossessive = own;
+				// After a bare comma, only a group: "His TB drugs, do they interact with each other?" asks of them. Nor a joined
+				// phrase naming nothing of hers at all: "his ARVs and the rest of his meds".
+				if (joinedTo != null && thing.kind == ThingOfHers.Kind.SOMETHING_ELSE
+						&& (question.charAt(start - 2) == ',' || thing.name.isEmpty())) {
 					break;
+				}
+				// A class after "give her" is proposed for her, not hers: never one of her groups.
+				// Her ARVs and TB drugs stay hers (ADR Decision 630's "give her ARVs and TB drugs together").
+				boolean proposed = givenHer && (thing.kind == ThingOfHers.Kind.UNRESOLVED
+						|| thing.kind == ThingOfHers.Kind.GROUP && !"antiretroviral".equals(thing.name)
+								&& !"TB drug".equals(thing.name));
+				if (!proposed) {
+					things.add(thing);
+				}
+				from = Math.max(from, thing.end);
+				Matcher joined = JOINED.matcher(question.substring(thing.end));
+				start = thing.kind != ThingOfHers.Kind.SOMETHING_ELSE && joined.find() ? thing.end + joined.end() : -1;
+				own = start >= 0 && joined.group().matches("(?is).*\\b(?:his|her|their) $");
+				// Never a phrase joined without its own possessive that opens on a word asking or choosing — "his ARVs and
+				// any other meds", "… and which TB drugs are safer?" — which is no group of hers.
+				if (start >= 0 && !joined.group().matches("(?i).*\\b(?:his|her|their) $")
+						&& ASKING_OR_CHOOSING.matcher(question.substring(start)).lookingAt()) {
+					start = -1;
+				}
+				joinedTo = thing.kind == ThingOfHers.Kind.GROUP ? thing.name : null;
+			}
+		}
+		return things;
+	}
+
+	/**
+	 * The thing of hers whose words start at {@code start} of {@code question}, its possessive at {@code at}, joined to the
+	 * group {@code joinedTo} where it follows one: its group's words where they open it or follow a word of its own ("his
+	 * current ARVs", "his oral antibiotics"), else what its first one to three words, each one space from the last, name.
+	 */
+	private static ThingOfHers thingAt(String question, int at, int start, List<CrossReactivityGroup> groups,
+			String joinedTo) {
+		String from = question.substring(start);
+		Matcher word = Pattern.compile("[\\p{L}-]+").matcher(from);
+		List<String> each = new ArrayList<String>();
+		List<Integer> starts = new ArrayList<Integer>();
+		List<Integer> ends = new ArrayList<Integer>();
+		Matcher notOrdered = Pattern.compile("[\\p{L}-]+").matcher(from);
+		if (notOrdered.lookingAt() && NOT_ORDERED.matcher(notOrdered.group()).matches()) {
+			return new ThingOfHers(ThingOfHers.Kind.SOMETHING_ELSE, notOrdered.group(), at, start, start + notOrdered.end());
+		}
+		while (each.size() < 3 && word.find() && (each.isEmpty() ? word.start() == 0
+				: word.start() == ends.get(ends.size() - 1) + 1 && from.charAt(word.start() - 1) == ' ')
+				&& !A_POSSESSIVE_WORD.matcher(word.group()).matches()) {
+			each.add(word.group());
+			starts.add(word.start());
+			ends.add(word.end());
+		}
+		for (int k = 0; k < Math.max(1, each.size()); k++) {
+			if (k > 0 && !AS_THEY_STAND.matcher(each.get(k - 1)).matches()) {
+				break;
+			}
+			String rest = from.substring(each.isEmpty() ? 0 : starts.get(k));
+			for (Map.Entry<String, Pattern> group : WORDS_OF_HER_MEDICATION_GROUP.entrySet()) {
+				Matcher m = group.getValue().matcher(rest);
+				if (m.lookingAt()) {
+					int end = start + (each.isEmpty() ? 0 : starts.get(k)) + m.end();
+					return withItsForm(question, new ThingOfHers(ThingOfHers.Kind.GROUP, group.getKey(), at, start, end));
+				}
+			}
+			for (int n = k + 1; n <= each.size(); n++) {
+				String words = String.join(" ", each.subList(k, n));
+				String named = namedIn(words, groups);
+				if (named != null && termsOf(named, groups).contains(words.toLowerCase(Locale.ROOT))) {
+					int end = start + ends.get(n - 1);
+					return withItsForm(question, membersOf(named, groups) != null
+							? new ThingOfHers(ThingOfHers.Kind.GROUP, named, at, start, end)
+							: new ThingOfHers(ThingOfHers.Kind.UNRESOLVED, String.join(" ", each.subList(0, n)), at, start, end));
 				}
 			}
 		}
+		// Alone, or before what is asked of the two: never "his ARVs and TB infection".
+		if (joinedTo != null && !each.isEmpty() && (each.size() == 1
+				|| each.get(1).matches("(?i)interact\\w*|clash\\w*|together|safe|ok|okay|fine"))) {
+			for (Map.Entry<String, Pattern> bare : BARE_GROUP_WORD.entrySet()) {
+				if (!bare.getKey().equals(joinedTo) && bare.getValue().matcher(each.get(0)).matches()) {
+					return new ThingOfHers(ThingOfHers.Kind.GROUP, bare.getKey(), at, start, start + ends.get(0));
+				}
+			}
+		}
+		for (int n = 1; n <= each.size(); n++) {
+			String words = String.join(" ", each.subList(0, n));
+			int end = start + ends.get(n - 1);
+			if (org.openmrs.module.chartsearchai.api.impl.QueryScopeRouter.namesEveryMedicationSheTakes(words)
+					|| ALL_OF_THEM.matcher(words).matches()) {
+				return new ThingOfHers(ThingOfHers.Kind.EVERY_MEDICATION, words, at, start, end);
+			}
+			if ((org.openmrs.module.chartsearchai.api.impl.QueryScopeRouter.namesAMedicationGroup(words)
+					|| HER_VACCINES.matcher(words).matches()) && !A_NUTRIENT_AFTER.matcher(question.substring(end)).lookingAt()) {
+				return new ThingOfHers(ThingOfHers.Kind.UNRESOLVED, words, at, start, end);
+			}
+		}
+		return new ThingOfHers(ThingOfHers.Kind.SOMETHING_ELSE, String.join(" ", each), at, start,
+			each.isEmpty() ? start : start + ends.get(ends.size() - 1));
+	}
+
+	/** {@code thing}, or where a form of a drug follows its words, the group of that form, which nothing here resolves. */
+	private static ThingOfHers withItsForm(String question, ThingOfHers thing) {
+		// Its dose, level or schedule is no group: "Is his statin dose safe?"
+		Matcher aspect = AN_ASPECT.matcher(question.substring(thing.end));
+		if (aspect.lookingAt() && !ATC_GROUP_OF_HER_MEDICATIONS.containsKey(thing.name)) {
+			return new ThingOfHers(ThingOfHers.Kind.SOMETHING_ELSE, question.substring(thing.start, thing.end + aspect.end()),
+				thing.at, thing.start, thing.end + aspect.end());
+		}
+		Matcher form = A_FORM.matcher(question.substring(thing.end));
+		if (!form.lookingAt()) {
+			return thing;
+		}
+		int end = thing.end + form.end();
+		// and a second word of the form: "eye drops"
+		Matcher more = A_FORM.matcher(question.substring(end));
+		end += more.lookingAt() ? more.end() : 0;
+		return new ThingOfHers(ThingOfHers.Kind.UNRESOLVED, question.substring(thing.start, end), thing.at, thing.start, end);
+	}
+
+	/** Whether {@code groups} are all of {@link #ATC_GROUP_OF_HER_MEDICATIONS}' — Decision 630's own — and so read as that
+	 *  decision reads them (ADR Decision 631). */
+	static boolean onlyGroupsOfDecision630(List<String> groups) {
+		return ATC_GROUP_OF_HER_MEDICATIONS.keySet().containsAll(groups);
+	}
+
+	/** One thing a question names as hers, and what {@link #thingsOfHers} found it to be. */
+	private static final class ThingOfHers {
+
+		enum Kind { GROUP, EVERY_MEDICATION, UNRESOLVED, SOMETHING_ELSE }
+
+		final Kind kind;
+
+		/** The group's key, or the question's own words for an unresolved group or something else. */
+		final String name;
+
+		/** Where its possessive starts, and where its own words start and end, in the question. */
+		final int at;
+
+		final int start;
+
+		final int end;
+
+		/** Whether its own possessive opens it, rather than "and" joining it to one. */
+		boolean ownPossessive = true;
+
+		ThingOfHers(Kind kind, String name, int at, int start, int end) {
+			this.kind = kind;
+			this.name = name;
+			this.at = at;
+			this.start = start;
+			this.end = end;
+		}
+	}
+
+	/**
+	 * The groups of her own medications {@code question} names and this module resolves — each a key {@link #membersOf}
+	 * answers — in one fixed order whatever order it names them in, so two wordings of one question are answered alike (ADR
+	 * Decision 449): {@link #ATC_GROUP_OF_HER_MEDICATIONS}' groups first, then the classes, by name, a class once however
+	 * many of its names the question uses ("his steroids and corticosteroids"). Each is named as hers, after a possessive or
+	 * joined to one ("his ARVs and TB drugs"); empty where it names none (ADR Decisions 630, 631). "Can I give him an
+	 * antibiotic?" names no group of hers.
+	 */
+	static List<String> herMedicationGroupsNamed(String question, List<CrossReactivityGroup> groups) {
+		List<String> named = new ArrayList<String>();
+		List<ThingOfHers> things = thingsOfHers(question, groups);
+		for (String group : ATC_GROUP_OF_HER_MEDICATIONS.keySet()) {
+			for (ThingOfHers thing : things) {
+				if (thing.kind == ThingOfHers.Kind.GROUP && thing.name.equals(group) && !named.contains(group)) {
+					named.add(group);
+				}
+			}
+		}
+		java.util.TreeMap<String, String> classes = new java.util.TreeMap<String, String>(String.CASE_INSENSITIVE_ORDER);
+		for (ThingOfHers thing : things) {
+			if (thing.kind == ThingOfHers.Kind.GROUP && !named.contains(thing.name)) {
+				String sameAs = atcGroupOf(thing.name) == null ? thing.name : atcGroupOf(thing.name);
+				// One name per class whichever the question uses first: the first by name.
+				String already = null;
+				for (Map.Entry<String, String> named2 : classes.entrySet()) {
+					already = named2.getValue().equals(sameAs) ? named2.getKey() : already;
+				}
+				if (already == null) {
+					classes.put(thing.name, sameAs);
+				} else if (String.CASE_INSENSITIVE_ORDER.compare(thing.name, already) < 0) {
+					classes.remove(already);
+					classes.put(thing.name, sameAs);
+				}
+			}
+		}
+		named.addAll(classes.keySet());
 		return named;
 	}
 
-	/** The ATC group key ({@code DrugClassMembersStatement.atcPrefixes}) of a group {@link #herMedicationGroupsNamed}
-	 *  returns, or {@code null}. */
-	static String atcGroupOfHerMedications(String group) {
-		return group == null ? null : ATC_GROUP_OF_HER_MEDICATIONS.get(group);
+	/**
+	 * The first group of her medications {@code question} names by words nothing here resolves to the drug data's codes —
+	 * "BP meds" of "Any interactions with his BP meds?", "antihypertensives", "painkillers" — as the question writes it; or
+	 * {@code null} where it names none (ADR Decision 631). Which of her orders such words mean is medical knowledge the
+	 * module does not hold.
+	 */
+	static String unresolvedGroupOfHers(String question, List<CrossReactivityGroup> groups) {
+		List<ThingOfHers> things = thingsOfHers(question, groups);
+		boolean onlyDecision630s = true;
+		for (ThingOfHers thing : things) {
+			onlyDecision630s &= thing.kind != ThingOfHers.Kind.GROUP || ATC_GROUP_OF_HER_MEDICATIONS.containsKey(thing.name);
+		}
+		for (ThingOfHers thing : things) {
+			// One joined to Decision 630's groups alone, with no possessive of its own, is read as that decision reads it —
+			// "his ARVs and vitamin supplements" is about his ARVs — so nothing it answered changes.
+			if (thing.kind == ThingOfHers.Kind.UNRESOLVED && (thing.ownPossessive || !onlyDecision630s)) {
+				return thing.name;
+			}
+		}
+		return null;
 	}
 
-	/** A possessive and the words after it: "her diet", "his other meds", "her TB treatment". */
-	private static final Pattern A_THING_OF_HERS = Pattern.compile("\\b(?:his|her|their|the patient's|this patient's) "
-		+ "((?:[\\p{L}-]+)(?: [\\p{L}-]+){0,2})", Pattern.CASE_INSENSITIVE);
+	/**
+	 * Whether a set of normalized codes is in {@code group}, a key {@link #herMedicationGroupsNamed} returns: an {@link
+	 * #ATC_GROUP_OF_HER_MEDICATIONS} group, a curated group this module carries, or a class whose ATC group IS the class
+	 * ({@link #ATC_GROUP_OF_CLASS}) — the one use of a class's group, to say which of HER orders are in it (ADR Decisions
+	 * 275, 298, 631); or {@code null} for a name none of them resolves.
+	 */
+	static java.util.function.Predicate<Set<String>> membersOf(String group, List<CrossReactivityGroup> groups) {
+		if (group == null) {
+			return null;
+		}
+		String herGroup = ATC_GROUP_OF_HER_MEDICATIONS.get(group);
+		if (herGroup != null) {
+			return codes -> DrugClassMembersStatement.filedUnder(codes, herGroup);
+		}
+		CrossReactivityGroup carried = groupNamedBy(group, groups);
+		if (carried != null) {
+			return carried::containsAnyCodeForDuplicateTherapy;
+		}
+		String atc = atcGroupOf(group);
+		return atc == null ? null : codes -> DrugClassMembersStatement.filedUnder(codes, atc);
+	}
 
 	/**
-	 * Whether {@code question} names, after a possessive, something of hers that is neither one of her medication groups nor
-	 * her medications as a whole — "her diet" of "Does her diet interact with her ARVs?" — which an answer over the group
-	 * would leave unsaid (ADR Decision 630).
+	 * Whether {@code question} names, after a possessive, something of hers that is neither a group of her medications —
+	 * resolved or not — nor her medications as a whole: "her diet" of "Does her diet interact with her ARVs?", which an
+	 * answer over the group would leave unsaid (ADR Decisions 630, 631).
 	 */
-	static boolean namesSomethingElseOfHers(String question) {
-		if (question == null) {
-			return false;
-		}
-		Matcher thing = A_THING_OF_HERS.matcher(question);
-		while (thing.find()) {
-			String words = thing.group(1);
-			boolean known = false;
-			// Against the question from there, so a noun two groups share is seen: "her TB and HIV meds".
-			String from = question.substring(thing.start(1));
-			for (Pattern group : WORDS_OF_HER_MEDICATION_GROUP.values()) {
-				Matcher m = group.matcher(from);
-				known |= m.find() && m.start() == 0;
-			}
-			String[] each = words.split(" ");
-			for (int n = 1; !known && n <= each.length; n++) {
-				known = org.openmrs.module.chartsearchai.api.impl.QueryScopeRouter.namesEveryMedicationSheTakes(
-					String.join(" ", java.util.Arrays.copyOf(each, n)));
-			}
-			if (!known) {
+	static boolean namesSomethingElseOfHers(String question, List<CrossReactivityGroup> groups) {
+		return namesSomethingElseOfHers(question, groups, true);
+	}
+
+	/** As above; with {@code joinedToo} false, only what follows a possessive of its own — Decision 630's reading, by which
+	 *  its own groups' questions are read unchanged (ADR Decision 631). */
+	static boolean namesSomethingElseOfHers(String question, List<CrossReactivityGroup> groups, boolean joinedToo) {
+		for (ThingOfHers thing : thingsOfHers(question, groups)) {
+			if (thing.kind == ThingOfHers.Kind.SOMETHING_ELSE && (joinedToo || thing.ownPossessive)) {
 				return true;
 			}
 		}
 		return false;
+	}
+
+	/**
+	 * {@code question} with every group of her medications it names as hers, resolved or not, read as her medications —
+	 * "Does grapefruit juice interact with his medications?" of "Does grapefruit juice interact with his statins?" — so
+	 * whether it asks of anything beside those groups is read by the rules that read a question about her medications (ADR
+	 * Decision 631). A group's words it does not name as hers stay: "Are his ARVs safe with antibiotics?" proposes them.
+	 */
+	static String withHerGroupsAsHerMedications(String question, List<CrossReactivityGroup> groups) {
+		if (question == null) {
+			return null;
+		}
+		List<ThingOfHers> things = thingsOfHers(question, groups);
+		StringBuilder out = new StringBuilder(question);
+		for (int t = things.size() - 1; t >= 0; t--) {
+			ThingOfHers thing = things.get(t);
+			if (thing.kind == ThingOfHers.Kind.GROUP || thing.kind == ThingOfHers.Kind.UNRESOLVED) {
+				out.replace(thing.start, thing.end, "medications");
+			}
+		}
+		return out.toString();
+	}
+
+	/**
+	 * The ATC group by which the answer says it read {@code group}, where that is how this module reads the class — " in ATC
+	 * group N02A" for the opioids, whose group leaves out methadone — so a statement that none of her orders is in it is
+	 * true as said (ADR Decisions 275, 631); empty for her groups and for a curated group.
+	 */
+	static String readAs(String group, List<CrossReactivityGroup> groups) {
+		if (group == null || ATC_GROUP_OF_HER_MEDICATIONS.containsKey(group) || groupNamedBy(group, groups) != null
+				|| atcGroupOf(group) == null) {
+			return "";
+		}
+		return " in " + DrugClassMembersStatement.groupPhrase(atcGroupOf(group));
+	}
+
+	/** How an answer names {@code group}, a key {@link #herMedicationGroupsNamed} returns, as one of her orders ({@code
+	 *  plural} false: "No statin is among …") or as several: "This patient's statins …", "This patient's penicillins …". */
+	static String spokenName(String group, boolean plural) {
+		String name = group.length() > 1 && Character.isLowerCase(group.charAt(1))
+				? Character.toLowerCase(group.charAt(0)) + group.substring(1) : group;
+		boolean endsPlural = name.endsWith("s") && !ATC_GROUP_OF_HER_MEDICATIONS.containsKey(group);
+		return plural ? (endsPlural ? name : name + "s") : endsPlural ? name.substring(0, name.length() - 1) : name;
 	}
 
 	/** Whether {@code question} asks of one group's members among themselves — "with each other", "between his TB drugs" —

@@ -11568,8 +11568,16 @@ public class DrugSafetyValidator {
 		// Two words in a two-drug question's drug places stand in them too (ADR Decision 382): where they are two of her
 		// orders by their own names, the screen is still what relates them.
 		boolean twoOfHerOrdersByName = DrugReferenceInjector.asksAboutTwoOfHerOrdersByName(question, context, service);
-		return (QueryScopeRouter.isInteractionScreening(question) || twoOfHerOrdersByName || oneOfHerOrdersByName)
-				&& (oneOfHerOrdersByName || twoOfHerOrdersByName || !wordInADrugsPlace);
+		// And a question of the interactions of a group of her medications named by a class, "Do his statins interact with
+		// anything?", whose class word neither the router's screen shapes nor its cues know as hers, nor is a word in a
+		// drug's place: it is answered over the screen's findings among that group (ADR Decision 631).
+		// Only where the module answers it over that group, from the findings of her read chart.
+		boolean aGroupOfHersAsked = service != null && context != null && context.chartReadForSafety()
+				&& ChartSearchAiUtils.getBooleanGlobalProperty(ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
+					ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS)
+				&& DrugReferenceInjector.screensAGroupOfHers(question, service);
+		return (QueryScopeRouter.isInteractionScreening(question) || twoOfHerOrdersByName || oneOfHerOrdersByName
+				|| aGroupOfHersAsked) && (oneOfHerOrdersByName || twoOfHerOrdersByName || !wordInADrugsPlace || aGroupOfHersAsked);
 	}
 
 	private static final Comparator<ScreenedPair> SCREENED_PAIR_SEVERITY_DESCENDING = new Comparator<ScreenedPair>() {

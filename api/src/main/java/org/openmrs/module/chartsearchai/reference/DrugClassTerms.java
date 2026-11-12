@@ -16,6 +16,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Which drug CLASS a question names, when it names one — the vocabulary behind
@@ -199,6 +201,120 @@ final class DrugClassTerms {
 		groups.put("beta blocker", "C07");
 		groups.put("antifungal", "antifungal: J02A, D01B");
 		ATC_GROUP_OF_CLASS = Collections.unmodifiableMap(groups);
+	}
+
+	/**
+	 * The groups of her own medications a question may ask about by name — "his ARVs", "her TB drugs", "his antibiotics" —
+	 * each the WHO ATC codes it covers, read with the shipped knowledge base's {@code atc} arrays on 2026-11-12 (ADR Decision
+	 * 630, the owner's direction that an answer carries nothing beyond what was asked). The antiretrovirals: J05AE, J05AG,
+	 * J05AJ and J05AR whole, every member HIV; of J05AF the HIV members only, not entecavir or telbivudine; of J05AX
+	 * enfuvirtide, maraviroc, ibalizumab, fostemsavir and lenacapavir, not maribavir, letermovir, tecovirimat or baloxavir.
+	 * The TB drugs: J04A, which also files rifamycin; streptomycin, filed under J01GA, is the residue. The antibiotics: J01,
+	 * the antibacterials for systemic use, which does not file the TB drugs.
+	 */
+	private static final Map<String, String> ATC_GROUP_OF_HER_MEDICATIONS;
+
+	/** The words naming each of {@link #ATC_GROUP_OF_HER_MEDICATIONS}' groups. */
+	private static final Map<String, Pattern> WORDS_OF_HER_MEDICATION_GROUP;
+
+	static {
+		Map<String, String> groups = new LinkedHashMap<String, String>();
+		groups.put("antiretroviral", "antiretroviral: J05AE, J05AF01, J05AF02, J05AF03, J05AF04, J05AF05, J05AF06, J05AF07, "
+				+ "J05AF09, J05AF13, J05AG, J05AJ, J05AR, J05AX07, J05AX09, J05AX23, J05AX29, J05AX31");
+		groups.put("TB drug", "J04A");
+		groups.put("antibiotic", "J01");
+		ATC_GROUP_OF_HER_MEDICATIONS = Collections.unmodifiableMap(groups);
+		String noun = "(?:drugs?|meds?|medications?|medicines?|treatments?|therapy|therapies|regimens?|pills|tablets)";
+		Map<String, Pattern> words = new LinkedHashMap<String, Pattern>();
+		// A noun two groups share: "her TB and HIV meds", "his HIV and TB drugs".
+		String hiv = "(?:hiv|arv|antiretroviral)";
+		String tb = "(?:tb|tuberculosis|anti-?tb|anti-?tuberculosis|antitubercular)";
+		words.put("antiretroviral", Pattern.compile("\\b(?:arvs?|anti-?retrovirals?|haart|" + hiv + " " + noun + "|" + hiv
+				+ "(?= and " + tb + " " + noun + "))\\b", Pattern.CASE_INSENSITIVE));
+		words.put("TB drug", Pattern.compile("\\b(?:" + tb + " " + noun + "|anti-?tbs?|" + tb + "(?= and " + hiv + " " + noun
+				+ "))\\b", Pattern.CASE_INSENSITIVE));
+		words.put("antibiotic", Pattern.compile("\\b(?:antibiotics?|antibacterials?)\\b", Pattern.CASE_INSENSITIVE));
+		WORDS_OF_HER_MEDICATION_GROUP = Collections.unmodifiableMap(words);
+	}
+
+	/** Her own: a possessive before the group's words, anywhere earlier in the question — "his ARVs and TB drugs". */
+	private static final Pattern POSSESSIVE = Pattern.compile("\\b(?:his|her|their|the patient's|this patient's)\\b",
+		Pattern.CASE_INSENSITIVE);
+
+	/**
+	 * The groups of her own medications {@code question} names, in one fixed order whatever order it names them in, so two
+	 * wordings of one question are answered alike (ADR Decision 449) — each a key of
+	 * {@link #atcGroupOfHerMedications} — where each is named after a possessive ("his ARVs", "his ARVs and TB drugs"); empty
+	 * where it names none (ADR Decision 630). "Can I give him an antibiotic?" names no group of hers.
+	 */
+	static List<String> herMedicationGroupsNamed(String question) {
+		List<String> named = new ArrayList<String>();
+		if (question == null) {
+			return named;
+		}
+		Matcher possessive = POSSESSIVE.matcher(question);
+		int firstPossessive = possessive.find() ? possessive.start() : -1;
+		if (firstPossessive < 0) {
+			return named;
+		}
+		for (Map.Entry<String, Pattern> group : WORDS_OF_HER_MEDICATION_GROUP.entrySet()) {
+			Matcher m = group.getValue().matcher(question);
+			while (m.find()) {
+				if (m.start() > firstPossessive) {
+					named.add(group.getKey());
+					break;
+				}
+			}
+		}
+		return named;
+	}
+
+	/** The ATC group key ({@code DrugClassMembersStatement.atcPrefixes}) of a group {@link #herMedicationGroupsNamed}
+	 *  returns, or {@code null}. */
+	static String atcGroupOfHerMedications(String group) {
+		return group == null ? null : ATC_GROUP_OF_HER_MEDICATIONS.get(group);
+	}
+
+	/** A possessive and the words after it: "her diet", "his other meds", "her TB treatment". */
+	private static final Pattern A_THING_OF_HERS = Pattern.compile("\\b(?:his|her|their|the patient's|this patient's) "
+		+ "((?:[\\p{L}-]+)(?: [\\p{L}-]+){0,2})", Pattern.CASE_INSENSITIVE);
+
+	/**
+	 * Whether {@code question} names, after a possessive, something of hers that is neither one of her medication groups nor
+	 * her medications as a whole — "her diet" of "Does her diet interact with her ARVs?" — which an answer over the group
+	 * would leave unsaid (ADR Decision 630).
+	 */
+	static boolean namesSomethingElseOfHers(String question) {
+		if (question == null) {
+			return false;
+		}
+		Matcher thing = A_THING_OF_HERS.matcher(question);
+		while (thing.find()) {
+			String words = thing.group(1);
+			boolean known = false;
+			// Against the question from there, so a noun two groups share is seen: "her TB and HIV meds".
+			String from = question.substring(thing.start(1));
+			for (Pattern group : WORDS_OF_HER_MEDICATION_GROUP.values()) {
+				Matcher m = group.matcher(from);
+				known |= m.find() && m.start() == 0;
+			}
+			String[] each = words.split(" ");
+			for (int n = 1; !known && n <= each.length; n++) {
+				known = org.openmrs.module.chartsearchai.api.impl.QueryScopeRouter.namesEveryMedicationSheTakes(
+					String.join(" ", java.util.Arrays.copyOf(each, n)));
+			}
+			if (!known) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/** Whether {@code question} asks of one group's members among themselves — "with each other", "between his TB drugs" —
+	 *  rather than of the group against anything (ADR Decision 630). */
+	static boolean asksAmongThemselves(String question) {
+		return question != null && Pattern.compile("\\b(?:each other|one another|among (?:them|themselves)|between (?:his|her|"
+				+ "their|the patient's|this patient's) |together)\\b", Pattern.CASE_INSENSITIVE).matcher(question).find();
 	}
 
 	private DrugClassTerms() {

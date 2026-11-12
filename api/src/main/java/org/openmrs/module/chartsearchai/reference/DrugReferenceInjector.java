@@ -1765,6 +1765,24 @@ public class DrugReferenceInjector {
 		}
 		findings = allFindings;
 		findingNumbers = allFindingNumbers;
+		// A group of her medications asked about by name — "his ARVs and TB drugs", "his TB drugs", "his ARVs with each
+		// other" — is answered over that group alone, and its chips are what the answer states (ADR Decision 630, the
+		// owner's direction that an answer carries nothing beyond what was asked; it supersedes Decisions 221 and 572).
+		Set<String> groupStated = null;
+		if (questionDrugs.isEmpty() && namedClass == null && uncheckedWord == null && !noCheckWasRun && context != null
+				&& context.chartReadForSafety()
+				&& ChartSearchAiUtils.getBooleanGlobalProperty(ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
+					ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS)) {
+			Set<String> stated = new HashSet<String>();
+			String groupAnswer = composeHerMedicationGroups(question, findings, findingNumbers, orderRecordNumbers,
+				orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers, orderEntries,
+				context, stated);
+			if (groupAnswer != null) {
+				moduleAnswer = groupAnswer;
+				summary = null;
+				groupStated = stated;
+			}
+		}
 		// An order the drug data does not identify no longer gives the question up (ADR Decision 161): the answer says
 		// which, and that it was not checked. History questions are answered below under their own gate, unchanged.
 		// On a screen, stated with what else it did not check, on one line, below (ADR Decision 496).
@@ -1833,6 +1851,10 @@ public class DrugReferenceInjector {
 			}
 			// An answer stating no finding — two drugs the data does not relate — publishes none (ADR Decision 618).
 			injected.markFindingsBearingOnTheQuestion(stated);
+		}
+		// A group of her medications asked about: only what its answer states (ADR Decision 630).
+		if (groupStated != null) {
+			injected.markFindingsBearingOnTheQuestion(groupStated);
 		}
 		// Stamped on the chart the injector built and on no other, because only this pass knows what
 		// it resolved (issue #469). A chart this method returns early is one it resolved nothing on,
@@ -9397,6 +9419,138 @@ public class DrugReferenceInjector {
 				: QueryScopeRouter.asksWhichOfHerMedicationsInteractWith(words)
 						|| QueryScopeRouter.asksWhetherADrugIsSafeWithHerMedications(words) ? OneOfHerOrdersAsked.ABOUT_IT
 				: QueryScopeRouter.asksWhetherToStopHerDrug(words) ? OneOfHerOrdersAsked.STOPPED : null;
+	}
+
+	/** How the answer names each group of her medications a question may ask about (ADR Decision 630). */
+	private static final Map<String, String> PLURAL_OF_GROUP;
+
+	static {
+		Map<String, String> plural = new HashMap<String, String>();
+		plural.put("antiretroviral", "antiretrovirals");
+		plural.put("TB drug", "TB drugs");
+		plural.put("antibiotic", "antibiotics");
+		PLURAL_OF_GROUP = Collections.unmodifiableMap(plural);
+	}
+
+	/**
+	 * The module's answer to a question about one or two groups of her own medications named by their words — "Any
+	 * interactions between his ARVs and TB drugs?", "Any interactions between his TB drugs?", "Do any of his ARVs interact with
+	 * each other?", "Any interactions with her TB treatment?" — over the orders the data files in each group
+	 * ({@link #activeOrdersFiledUnder}, Decision 275's reading), adding to {@code stated} each finding it states; or
+	 * {@code null} where the question names no such group, or two that are one, or more than two, or her orders were not
+	 * read (ADR Decision 630). Two groups: what the check relates between them. One group among itself: what it relates
+	 * among them. One group otherwise: what it relates them to. A group none of her orders is in is said to be absent, and
+	 * nothing else stands in for it. On the demo replica each of these was answered with his whole screen — a patient on no
+	 * TB drug asked "Any interactions between his TB drugs?" was given his antiretrovirals against each other.
+	 */
+	private String composeHerMedicationGroups(String question, List<SafetyWarning> findings, List<Integer> numbers,
+			Map<String, Integer> orderRecordNumbers, Map<String, Integer> herOrderRecords, List<DrugReference> orderEntries,
+			PatientClinicalContext context, Set<String> stated) {
+		List<String> groups = DrugClassTerms.herMedicationGroupsNamed(question);
+		// A question of their interactions or safety, by its own words: "ARVs" is no word of medication the router reads a
+		// screen by, so "Do any of his ARVs interact with each other?" is none of its screens. Never one asking of her
+		// allergies or conditions as well, which this answer would leave unsaid.
+		boolean ofTheirSafety = QueryScopeRouter.isInteractionScreening(question)
+				|| QueryScopeRouter.asksOnlyToScreenHerMedications(question) || QueryScopeRouter.asksOnlyAboutInteractions(question)
+				|| QueryScopeRouter.asksWhatAContraindicationAnswers(question);
+		if (groups.isEmpty() || groups.size() > 2 || orderEntries == null || !ofTheirSafety
+				|| QueryScopeRouter.asksAboutAllergies(question) || QueryScopeRouter.asksAboutConditions(question)
+				// nor something else asked beside them: "Does her diet interact with her ARVs?" (ADR Decision 492)
+				|| QueryScopeRouter.asksOfSomethingElseWithHerMedications(question)
+				|| DrugClassTerms.namesSomethingElseOfHers(question)) {
+			return null;
+		}
+		// Only where the data files each of her identified orders under some ATC code: an order it files under none may be
+		// in the group, and nothing could be said of the group's members or its absence.
+		for (PatientClinicalContext.ActiveDrugOrder order : context.getActiveDrugOrders()) {
+			boolean coded = !order.getAtcCodes().isEmpty();
+			boolean identified = false;
+			for (DrugReference entry : orderEntries) {
+				if (DrugSafetyValidator.ordersOfSubstance(drugReferenceService, entry, orderEntries, context).contains(order)) {
+					identified = true;
+					coded |= !entry.normalizedAtcCodes().isEmpty();
+				}
+			}
+			if (identified && !coded) {
+				return null;
+			}
+		}
+		List<Set<Object>> substances = new ArrayList<Set<Object>>();
+		List<String> members = new ArrayList<String>();
+		List<String> absent = new ArrayList<String>();
+		for (String group : groups) {
+			String key = DrugClassTerms.atcGroupOfHerMedications(group);
+			Predicate<Set<String>> inGroup = codes -> DrugClassMembersStatement.filedUnder(codes, key);
+			List<PatientClinicalContext.ActiveDrugOrder> orders = activeOrdersFiledUnder(inGroup, orderEntries, context);
+			List<String> each = eachOrderFiledUnder(inGroup, orderEntries, context);
+			if (orders == null) {
+				return null;
+			}
+			Set<Object> ofIt = new LinkedHashSet<Object>();
+			for (DrugReference entry : orderEntries) {
+				// A substance the data files under no code at all is the group's where its order is: lopinavir, coded under
+				// nothing, of "Lopinavir / ritonavir", whose ritonavir is an antiretroviral.
+				if (!Collections.disjoint(DrugSafetyValidator.ordersOfSubstance(drugReferenceService, entry, orderEntries,
+					context), orders) && (entry.normalizedAtcCodes().isEmpty()
+						|| DrugClassMembersStatement.filedUnder(entry.normalizedAtcCodes(), key))) {
+					ofIt.add(entry.substanceGroupKey());
+				}
+			}
+			substances.add(ofIt);
+			members.add(each == null || each.isEmpty() ? "" : DrugSafetyValidator.joinPartners(collapsedByName(each)));
+			if (orders.isEmpty()) {
+				absent.add("No " + group + " is among this patient's active medications the drug data identifies.");
+			}
+		}
+		if (!absent.isEmpty()) {
+			return String.join("\n", absent);
+		}
+		boolean between = groups.size() == 2;
+		boolean among = !between && DrugClassTerms.asksAmongThemselves(question);
+		List<Integer> relating = new ArrayList<Integer>();
+		for (int i = 0; i < findings.size(); i++) {
+			SafetyWarning finding = findings.get(i);
+			if (!SafetyWarning.TYPE_INTERACTION.equals(finding.getType())) {
+				continue;
+			}
+			Set<Object> subject = subjectSubstances(finding, orderEntries);
+			Set<Object> partners = new LinkedHashSet<Object>();
+			for (List<DrugReference> rows : finding.partnerRows().values()) {
+				for (DrugReference row : rows) {
+					partners.add(row.substanceGroupKey());
+				}
+			}
+			boolean sharing = finding.statesOrdersSharingASubstance();
+			Set<Object> first = substances.get(0);
+			boolean relates;
+			if (between) {
+				Set<Object> second = substances.get(1);
+				relates = !sharing && (!Collections.disjoint(subject, first) && !Collections.disjoint(partners, second)
+						|| !Collections.disjoint(subject, second) && !Collections.disjoint(partners, first));
+			} else if (among) {
+				relates = sharing ? !Collections.disjoint(subject, first)
+						: !Collections.disjoint(subject, first) && !Collections.disjoint(partners, first);
+			} else {
+				relates = !Collections.disjoint(subject, first) || !sharing && !Collections.disjoint(partners, first);
+			}
+			if (relates) {
+				relating.add(i);
+				stated.add(finding.getDetail());
+			}
+		}
+		String one = "this patient's " + PLURAL_OF_GROUP.get(groups.get(0)) + " (" + members.get(0) + ")";
+		String other = between ? "this patient's " + PLURAL_OF_GROUP.get(groups.get(1)) + " (" + members.get(1) + ")" : null;
+		if (relating.isEmpty()) {
+			return "The interaction check relates none of " + one + (between ? " to " + other
+					: among ? " to each other" : " to this patient's other active medications") + ".\n" + BELOW_FLOOR_SCOPE;
+		}
+		List<String> lines = findingLines(findings, numbers, relating, orderRecordNumbers, herOrderRecords, true);
+		String lead = Character.toUpperCase(one.charAt(0)) + one.substring(1) + (between ? " and " + other.substring(
+			"this patient's ".length()) + ": what the interaction check relates between them:"
+				: among ? ": what the interaction check relates among them:" : ": what the interaction check relates them to:");
+		lines.add(0, lead);
+		lines.add(BELOW_FLOOR_SCOPE);
+		return String.join("\n", lines);
 	}
 
 	/** Whether {@code orders} are one order, or several of one drug: one display among them (ADR Decision 623). */

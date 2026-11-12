@@ -153,9 +153,12 @@ public class CombinationOrderLineContextTest extends BaseModuleContextSensitiveT
 				"1131AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", "Rifampicin isoniazid pyrazinamide and ethambutol", "RHEZ", "Rifafour"),
 			order("order-d4t", "Stavudine 30mg", "J05AF04", "1ae08332-8f70-4345-a793-3b6c9b0ff6bd", "Stavudine", "d4T", "Zerit"));
 		String answer = askOver("Do her TB drugs interact with her ARVs?", orders);
-		assertTrue(answer.contains(" interacts with active order Rifampin — "), "precondition: was: " + answer);
+		// The order may be counted, "Rifampin (2 orders)", as the answer over her two groups names it (ADR Decision 630).
+		assertTrue(answer.matches("(?s).* interacts with active order Rifampin(?: \\(\\d+ orders\\))? — .*"),
+			"precondition: was: " + answer);
 		for (String line : answer.split("\n")) {
-			assertTrue(!(line.contains("active order Rifampin — ") && line.contains(NAMED + "Rifampicin.")), "was: " + answer);
+			assertTrue(!(line.matches(".*active order Rifampin(?: \\(\\d+ orders\\))? — .*") && line.contains(NAMED
+					+ "Rifampicin.")), "was: " + answer);
 		}
 	}
 

@@ -52,7 +52,8 @@ final class UnrecognisedDrugName {
 	/** Words that stand in a drug's place without naming one. */
 	private static final Set<String> NOT_A_NAME = new HashSet<String>(Arrays.asList("this", "that", "these", "those",
 		"the", "a", "an", "it", "them", "drug", "drugs", "medication", "medications", "medicine", "medicines", "something",
-		"anything", "another", "other", "same", "new", "one", "some", "any", "more", "her", "his", "their", "him", "you",
+		"anything", "everything", "nothing", "another", "other", "same", "new", "one", "some", "any", "more", "her", "his",
+		"their", "him", "you",
 		"she", "all", "too", "now", "two", "pain", "help", "food", "water", "fluids", "oxygen", "blood",
 		// the verbs giving or stopping a drug, which "Give fluconazole?" put in a bare pair's first place (ADR Decision 502)
 		"give", "start", "prescribe", "administer", "add", "use", "go", "ahead", "stop", "hold", "continue", "switch",
@@ -673,6 +674,9 @@ final class UnrecognisedDrugName {
 				// ok with her meds?" (ADR Decision 551).
 				if (!QueryScopeRouter.fitsAProposalShape(marked)
 						&& !QueryScopeRouter.fitsAnInteractsShape(marked)
+						// Or whether it is safe with her medications, a closed shape of its own, of any name (ADR Decision 629):
+						// "Is vitamin C safe with his medications?" was answered by the model beside every chip of his screen.
+						&& !(!group && QueryScopeRouter.asksWhetherADrugIsSafeWithHerMedications(marked))
 						&& !QueryScopeRouter.asksWhetherToStopHerDrug(marked)
 						&& !(QueryScopeRouter.asksAboutHerNamedDrug(marked)
 								&& !QueryScopeRouter.namesAMedicationGroup(String.join(" ", span)))
@@ -747,8 +751,11 @@ final class UnrecognisedDrugName {
 	}
 
 	private static boolean isAName(List<String> span) {
-		for (String w : span) {
-			if (NOT_A_NAME.contains(w) || !w.matches("\\p{L}[\\p{L}\\-]*")) {
+		for (int k = 0; k < span.size(); k++) {
+			String w = span.get(k);
+			// A word after the first may carry a digit after its letter — "vitamin B6", "vitamin B12", "vitamin D3" (ADR
+			// Decision 629): the digit kept "Can I give him vitamin B6?" from reading as a name, and his screen answered it.
+			if (NOT_A_NAME.contains(w) || !w.matches(k == 0 ? "\\p{L}[\\p{L}\\-]*" : "\\p{L}[\\p{L}\\p{N}\\-]*")) {
 				return false;
 			}
 		}

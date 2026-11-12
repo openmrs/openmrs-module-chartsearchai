@@ -1409,12 +1409,18 @@ public final class QueryScopeRouter {
 					+ "starting|adding) " + D + " (?:with|to|alongside) what (?:she's|he's|they're|(?:she|he|the patient) is|they are) "
 					+ "(?:already |currently )?(?:taking|on)");
 
-	/** The screen shapes naming no medication word the trigger's own cues know (ADR Decisions 221, 254). */
+	/** "Do any of his ARVs interact with each other?", "Do his ARVs interact?" — whether one group of her own medications
+	 *  interacts, among itself or at all (ADR Decision 630). Without it no shape read "his ARVs" as his medications, and the
+	 *  screen's findings were dropped as about nothing the question named. */
+	private static final String ONE_GROUP_OF_HERS_INTERACTS = "(?:does|do|will|would) (?:any of )?" + HER_MEDICATION_GROUP
+			+ " (?:interact|clash)(?: with (?:each other|one another))?";
+
+	/** The screen shapes naming no medication word the trigger's own cues know (ADR Decisions 221, 254, 630). */
 	private static final List<Pattern> MEDICATION_GROUPS_SHAPES = shapes(TWO_OF_HER_MEDICATION_GROUPS_INTERACT,
-			HER_MEDICATION_GROUP_SAFE_TOGETHER);
+			HER_MEDICATION_GROUP_SAFE_TOGETHER, ONE_GROUP_OF_HERS_INTERACTS);
 
 	private static final List<Pattern> SCREEN_SHAPES = shapes(
-			TWO_OF_HER_MEDICATION_GROUPS_INTERACT, HER_MEDICATION_GROUP_SAFE_TOGETHER,
+			TWO_OF_HER_MEDICATION_GROUPS_INTERACT, HER_MEDICATION_GROUP_SAFE_TOGETHER, ONE_GROUP_OF_HERS_INTERACTS,
 			// "Any interactions with her TB treatment?", "Any interactions involving her ARVs?" — one group of hers, the screen
 			// of all of them as two groups are (ADR Decision 572)
 			"(?:(?:are|is) there )?any (?:drug )?interactions? (?:with|involving|in) " + HER_MEDICATION_GROUP,

@@ -3064,14 +3064,18 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	 */
 	@Test
 	public void whetherAGroupOfHerMedicationsIsSafeTogetherIsAScreen() throws Exception {
+		// Since ADR Decision 630 (the owner's direction that an answer carries nothing beyond what was asked) a group is
+		// answered over that group: she is on warfarin and aspirin, no antiretroviral and no TB drug, so her screen of those
+		// two answers neither question, and the group's absence does.
 		executeDataSet(WARFARIN_ORDER);
-		for (String question : new String[] { "Is it safe to continue all her ARVs together?", "Are her ARVs safe together?",
-				"Is it safe to give her TB drugs together?" }) {
+		for (String[] asked : new String[][] { { "Is it safe to continue all her ARVs together?", "antiretroviral" },
+				{ "Are her ARVs safe together?", "antiretroviral" }, { "Is it safe to give her TB drugs together?", "TB drug" } }) {
 			RecordingProvider provider = new RecordingProvider();
-			ChartAnswer answer = serviceWith(provider).search(patient, question);
-			assertEquals(0, provider.calls, question + " — the module answers: " + answer.getAnswer());
-			assertTrue(answer.getAnswer().startsWith(WARFARIN_BOTTOM_LINE + "\n" + WARFARIN_SCREEN_OPENING),
-					question + " — the screen's bottom line, then its Major: " + answer.getAnswer());
+			ChartAnswer answer = serviceWith(provider).search(patient, asked[0]);
+			assertEquals(0, provider.calls, asked[0] + " — the module answers: " + answer.getAnswer());
+			assertEquals("No " + asked[1] + " is among this patient's active medications the drug data identifies.",
+				answer.getAnswer(), asked[0]);
+			assertTrue(answer.getSafetyWarnings().isEmpty(), asked[0] + " — no chip of her screen: " + answer.getSafetyWarnings());
 		}
 	}
 
@@ -3426,8 +3430,16 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	public void aScreenNamingSomethingTheDatasetDoesNotResolveStillAsksTheModel() throws Exception {
 		executeDataSet(WARFARIN_ORDER);
 		assertFalse(findingsInThePromptFor(SCREEN).isEmpty(), "precondition: her own orders interact");
-		for (String question : new String[] { "Is grapefruit juice safe with her medications?",
-				"Do NSAIDs interact with any of her medications?",
+		// Whether a thing the data does not recognise is safe with her medications is said to be unrecognised, and her own
+		// findings are no material for it (ADR Decision 629, the owner's direction that an answer carries nothing beyond what
+		// was asked): the model is still asked, handed none of them.
+		RecordingProvider grapefruit = new RecordingProvider();
+		ChartAnswer juice = serviceWith(grapefruit).search(patient, "Is grapefruit juice safe with her medications?");
+		assertEquals(1, grapefruit.calls, "the model must be asked about grapefruit juice");
+		assertFalse(juice.isAnsweredByTheModule());
+		assertTrue(findingsInThePromptFor("Is grapefruit juice safe with her medications?").isEmpty(),
+			"no finding of her own medications is handed the model for grapefruit juice");
+		for (String question : new String[] { "Do NSAIDs interact with any of her medications?",
 				"Which drugs interact with her medications?",
 				"Is there anything that interacts with her medications?",
 				"Does this drug interact with any of her medications?",

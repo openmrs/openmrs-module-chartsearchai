@@ -16808,7 +16808,8 @@ and `.aQuestionWhetherTwoDrugsNeitherOfThemHersInteractIsLeftToTheModelWhereTheD
 
 ## Decision 221: Whether two groups of her own medications interact is a screen of her medications
 
-**Status: Accepted** (October 2026) — the owner's request of 2026-10-14.
+**Status: Accepted** (October 2026) — the owner's request of 2026-10-14. **Superseded in part by [Decision 630](#decision-630-a-group-of-her-medications-asked-about-by-name-is-answered-over-that-group)**: the groups
+it names are answered over those groups, not by her whole screen.
 
 ### Context
 
@@ -17698,7 +17699,8 @@ Pinned by `SwitchingHerDrugContextTest.aSwapIsASwitch`.
 
 ## Decision 254: Whether a group of her medications is safe together is a screen of them
 
-**Status: Accepted** (October 2026) — the owner's standing request of 2026-10-15 to fix what misleads a clinician. It
+**Status: Accepted** (October 2026) — the owner's standing request of 2026-10-15 to fix what misleads a clinician.
+**Superseded in part by [Decision 630](#decision-630-a-group-of-her-medications-asked-about-by-name-is-answered-over-that-group)**: the group is answered over what the check relates among its members. It
 widens [Decision 221](#decision-221-whether-two-groups-of-her-own-medications-interact-is-a-screen-of-her-medications)'s
 grammar.
 
@@ -26704,6 +26706,7 @@ cases redden without the change, and whose with-food control is still the model'
 **Status: Accepted** (November 2026). Found by a fourth sweep of 6 patients by 30 drug-safety questions on the demo
 replica on 2026-11-04. It extends
 [Decision 221](#decision-221-whether-two-groups-of-her-own-medications-interact-is-a-screen-of-her-medications).
+**Superseded in part by [Decision 630](#decision-630-a-group-of-her-medications-asked-about-by-name-is-answered-over-that-group)**: the shape stays, and the answer is over the group, not the screen.
 
 ### Context
 
@@ -26721,8 +26724,8 @@ treatment.
 `QueryScopeRouter.HER_MEDICATION_GROUP`, is a `SCREEN_SHAPES` member, as Decision 221's two-group shape is. The answer is
 the same screen, word for word. *"Any interactions with her diet?"* names no medication group and is still the model's.
 
-Pinned by `MedicationGroupsScreenContextTest.aQuestionWhetherOneGroupOfHerMedicationsInteractsIsAnsweredByTheScreen`,
-which reddens without the change.
+Pinned by a test that reddened without the change, rewritten by Decision 630 as
+`MedicationGroupsScreenContextTest.aQuestionWhetherOneGroupOfHerMedicationsInteractsIsAnsweredOverThatGroup`.
 
 ## Decision 573: No answer closes on what kinds of finding the check does not cover
 
@@ -28760,3 +28763,75 @@ Septrin safe with zorbaflex?" and "Does Septrin interact with Rifater?". 34 of 6
 kept Decision 625's answer. Decision 622's 44-answer screen sample was unchanged (370 chips). Pinned by
 `HerOrdersNamedByTheirOwnNamesTest.oneOfHisDrugsByItsOwnNameBesideAnUnrecognisedWordIsNoScreen`, which reddens with the
 whole reading dropped again.
+
+## Decision 629: A vitamin named with its letter and number, or asked whether it is safe with her medications, is a word the data does not recognise
+
+**Status: Accepted** (November 2026), on the owner's direction that an answer carries nothing beyond what was asked. It
+carries [Decision 384](#decision-384-a-word-in-a-drug-questions-place-that-the-drug-data-has-no-near-name-for-takes-the-chart-answer-with-the-unchecked-statement-after-it)
+to two wordings it missed.
+
+On the demo replica *"Can I give him vitamin B6?"* was answered with his whole screen for 21 of 23 patients (186 chips), and
+*"Is vitamin C safe with his medications?"* by the model beside the same 186 chips. The data recognises neither name, so
+neither question was checked, and the screen answered what was not asked. `UnrecognisedDrugName.isAName` refused "B6" for
+its digit, so the question named no drug and fell to the screen; and no shape `wordInADrugsPlace` asks read *"Is X safe
+with her medications?"*. Now a word after a name's first may carry a digit after its letter, the closed shape
+`QueryScopeRouter.asksWhetherADrugIsSafeWithHerMedications` is asked for a name that is no group of hers, and "everything"
+and "nothing" are no name. Both questions take Decision 384's answer: the chart answer, then *"No interaction check was
+run: "vitamin B6" is not a drug name the interaction data recognises."* Vitamin B12 is recognised, as cyanocobalamin.
+
+Measured on the demo replica on 2026-11-12 (E2B, model up), 23 patients: both wordings went from the screen's 186 chips to
+none in 23 of 23, each with the unchecked statement; folic acid, ORS and multivitamins, already right, were unchanged.
+Pinned by `UnrecognisedVitaminNameTest`.
+
+## Decision 630: A group of her medications asked about by name is answered over that group
+
+**Status: Accepted** (November 2026), on the owner's direction that an answer carries nothing beyond what was asked (*"I
+do not want information beyond what was asked"*). It supersedes in part
+[Decision 221](#decision-221-whether-two-groups-of-her-own-medications-interact-is-a-screen-of-her-medications),
+[Decision 254](#decision-254-whether-a-group-of-her-medications-is-safe-together-is-a-screen-of-them) and
+[Decision 572](#decision-572-one-group-of-her-medications-asked-about-alone-is-the-screen-as-two-groups-are), which
+answered such a question with her whole screen.
+
+### Context
+
+On the demo replica, measured on 2026-11-12 over 23 patients, *"Any interactions between his ARVs and TB drugs?"*, *"Do
+his antibiotics interact with his ARVs?"*, *"Any interactions between his TB drugs?"*, *"Do any of his ARVs interact with
+each other?"*, *"Are his TB and HIV meds safe together?"*, *"Any interactions with his TB treatment?"* and *"Are his ARVs
+safe together?"* were each answered with the whole screen for 21 of 23 patients, beside all 186 of its chips. A patient on
+no TB drug, asked about his TB drugs, was given his antiretrovirals against each other.
+
+### The decision
+
+`DrugClassTerms.herMedicationGroupsNamed` reads, after a possessive, the groups a question names: antiretrovirals, TB
+drugs and antibiotics, each a set of WHO ATC codes (`ATC_GROUP_OF_HER_MEDICATIONS`), read against the shipped data's
+`atc` arrays. `DrugReferenceInjector.composeHerMedicationGroups` answers where the question asks of their interactions or
+safety, and not of her allergies, her conditions, or something else of hers beside them (`namesSomethingElseOfHers`).
+- Two groups: what the check relates between them.
+- One group with *"each other"*, *"together"* or *"between his …"*: what it relates among its members.
+- One group otherwise: what it relates its members to.
+- A group none of her orders is in: *"No TB drug is among this patient's active medications the drug data identifies."*
+
+The chips are the findings the answer states. A substance the data files under no code is its order's group's: lopinavir,
+coded under nothing, is an antiretroviral by its order *"Lopinavir / ritonavir"*. Where an order the data identifies
+carries no code at all, the group cannot be told and the answer is the screen, as before. `QueryScopeRouter`'s
+`ONE_GROUP_OF_HERS_INTERACTS` reads *"Do any of his ARVs interact with each other?"* and *"Do his ARVs interact?"* as her
+medications. Without it the screen's findings were dropped as about nothing the question named, and the model's reading
+of the question ran the whole medication check instead.
+
+### Measured
+
+On the demo replica on 2026-11-12 (E2B, model up), the 23 patients × the seven wordings above plus *"Do his ARVs
+interact?"* and *"Do his ARVs clash with each other?"*: no answer is the whole screen (21 of 23 per wording before). Each
+answer whose group the patient has none of says so: 5 for the ARV wordings, 8 for the TB ones, 13 and 12 for the two-group
+ones. Every one of the 579 chips is a finding its answer states. Decision 622's 44-answer screen sample was unchanged (370
+chips).
+
+Pinned by `MedicationGroupsScreenContextTest`: `aQuestionWhetherTwoGroupsOfHerMedicationsInteractIsAnsweredOverThoseGroups`,
+`aGroupAskedAboutAmongItselfIsAnsweredAmongItsMembers`, `aGroupNoneOfHerOrdersIsInIsSaidToBeAbsent` and
+`herARVsAskedWhetherTheyInteractAreAnsweredOverWhatTheCheckRelatesAmongThem`, which reddened without the router shape and
+again without lopinavir's membership. Disabling the composer's call reddens the group tests.
+
+Residues:
+- A mechanism chip collapsed by Decision 99 can name partners outside the groups asked about.
+- Streptomycin, filed under J01GA, is an antibiotic here, not a TB drug.
+- A group word outside the vocabulary (*"his antihypertensives"*) still gets the screen.

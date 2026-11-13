@@ -549,8 +549,8 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		assertNotNull(together, "precondition: the module answers it");
 		assertEquals(together, ask("Can warfarin and ibuprofen be co-administered?"));
 		String withArt = ask("Is warfarin safe with her ART?");
-		assertTrue(withArt != null && withArt.startsWith("This check cannot tell which of this patient's active medications are "
-				+ "the \"ART\" the question names"), "was: " + withArt);
+		// over her antiretrovirals, which the module resolves (ADR Decision 632)
+		assertTrue(withArt != null && withArt.startsWith("Warfarin and this patient's antiretrovirals ("), "was: " + withArt);
 		assertEquals(withArt, ask("Is it ok to combine warfarin with her ART?"));
 		String affects = ask("Does warfarin affect her ART levels?");
 		assertTrue(affects != null && !affects.contains("\nYes") && !affects.contains("\nNo"), "was: " + affects);
@@ -701,10 +701,10 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		assertEquals(dose, ask("Does she need a dose change of efavirenz with rifampicin?"));
 		String alternative = ask("Is there a safer alternative to warfarin?");
 		assertNotNull(alternative, "precondition: the module answers it");
-		// and under the lead naming the group, which no order is (ADR Decision 221)
-		assertEquals(alternative.replaceFirst("\n", "\nThis check cannot tell which of this patient's active medications are the "
-				+ "\"ARVs\" the question names, so it checked Warfarin against all of them.\n"),
-			ask("Is there an alternative to warfarin that doesn't interact with her ARVs?"));
+		// and over her antiretrovirals, the group it names, which the module resolves (ADR Decision 632)
+		String alternativeBesideHerArvs = ask("Is there an alternative to warfarin that doesn't interact with her ARVs?");
+		assertTrue(alternativeBesideHerArvs.startsWith(alternative.split("\n")[0] + "\nWarfarin and this patient's antiretrovirals (")
+				&& !alternativeBesideHerArvs.contains("aspirin"), alternativeBesideHerArvs);
 		String screen = ask("Is her regimen safe?");
 		assertNotNull(screen, "precondition: the module answers it");
 		assertEquals(screen, ask("Can she safely take all her medicines together?"));
@@ -896,7 +896,8 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		}
 		String group = ask("Which of her ARVs interact with warfarin?");
 		assertNotNull(group, "the module answers which of a group of hers interact");
-		assertTrue(group.startsWith("This check cannot tell which of this patient's active medications are the \"ARVs\"")
+		// over her antiretrovirals, which the module resolves (ADR Decision 632)
+		assertTrue(group.startsWith("Warfarin and this patient's antiretrovirals (")
 				&& !group.contains("Yes —") && !group.contains("No —"), "which, never yes or no: " + group);
 	}
 
@@ -2279,8 +2280,10 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		// Her drug named as hers beside a group of hers is the same question, and says when it is not hers.
 		String hers = ask("Is her warfarin safe with her ARVs?");
 		assertNotNull(hers, "the module answers it");
-		assertTrue(hers.contains("\nWarfarin is not one of this patient's active medications.\n"), hers);
-		assertTrue(hers.contains("\nNo — this module's drug-safety check found a reason to withhold Warfarin.\n"), hers);
+		// first, now that no lead naming the group comes before it (ADR Decision 632)
+		assertTrue(hers.startsWith("Warfarin is not one of this patient's active medications.\n"), hers);
+		// over her antiretrovirals alone, which the module resolves: her aspirin is no ARV (ADR Decision 632)
+		assertTrue(hers.contains("\nWarfarin and this patient's antiretrovirals (") && !hers.contains("aspirin"), hers);
 	}
 
 	/**

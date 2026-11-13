@@ -19349,7 +19349,9 @@ the model's; it now asserts the module states what the check found, with no "No"
 ## Decision 313: One drug asked about beside a named group of her medications says the check cannot tell which orders the group means
 
 **Status: Accepted** (October 2026) — the owner's request of 2026-10-18 that every question on
-`docs/ddi-tested-questions.md` answer correctly for every patient. It extends
+`docs/ddi-tested-questions.md` answer correctly for every patient. **Superseded in part by
+[Decision 632](#decision-632-one-drug-asked-about-beside-a-group-of-her-medications-the-module-resolves-is-answered-over-that-group)**:
+a group the module resolves is answered over that group; the lead stays for one it does not. It extends
 [Decision 271](#decision-271-one-drug-asked-about-beside-a-group-of-her-medications-is-asked-as-whether-it-interacts-with-them)
 and [Decision 281](#decision-281-whether-one-drug-changes-an-effect-of-a-group-of-her-medications-is-answered-with-neither-yes-nor-no).
 
@@ -28912,4 +28914,64 @@ alone. Residues:
   ARVs and grapefruit interact?"* are answered over the groups.
 - A drug the data resolves named beside a group keeps Decision 313's lead, *"cannot tell which … are the "ARVs" …"*, though
   the group may now be resolved.
+
+## Decision 632: One drug asked about beside a group of her medications the module resolves is answered over that group
+
+**Status: Accepted** (November 2026), on the owner's direction that an answer carries nothing beyond what was asked. It
+supersedes in part
+[Decision 313](#decision-313-one-drug-asked-about-beside-a-named-group-of-her-medications-says-the-check-cannot-tell-which-orders-the-group-means),
+whose lead stays for a group the module does not resolve.
+
+### Context
+
+Decision 313 answered *"Does fluconazole interact with his TB drugs?"* under the lead *"This check cannot tell which of
+this patient's active medications are the "TB drugs" the question names, so it checked Fluconazole against all of them"*,
+with every finding of the drug against all her orders. Since Decisions 630 and 631 the module resolves such groups. On
+the demo replica on 2026-11-13, over 12 patients, each answer to *"Does fluconazole interact with his TB drugs?"*,
+*"Is fluconazole safe with his ARVs?"* and *"Does fluconazole interact with his antibiotics?"* carried exactly the chips of
+*"Does fluconazole interact with his medications?"*; *"Is ketoconazole safe with his statins?"* was told *"None of this
+patient's active orders is named "statins""*.
+
+### The decision
+
+Where one drug is asked about beside one group of her medications the module resolves (Decisions 630, 631), and the
+question, its group read as her medications, asks whether the drug interacts with them or is safe with them,
+`DrugReferenceInjector.composeHerMedicationGroups` answers over the drug and that group:
+- *"Fluconazole and this patient's TB drugs (…): what the interaction check relates between them:"* and each finding;
+- *"The interaction check relates Amoxicillin to none of this patient's TB drugs (…)."*;
+- *"No blood thinner in ATC group B01A is among this patient's active medications the drug data identifies."*
+
+Its chips are the findings it states. Decision 313's answer stays — the drug against all her medications — wherever
+narrowing would leave out what the question asks of:
+- a group the module does not resolve (*"his TB preventive therapy"*, *"his cold medicine"*), or anything of hers named
+  beside the group (*"her ARVs and her other medications"*, *"her ARVs and BP meds"*);
+- a drug that is itself one of the group's members, or a product she takes part of that the question does not name as
+  hers — that she already takes part of it is stated of it (Decision 421);
+- one of Decision 630's groups she has none of: its line names no code group, and *"No antibiotic is among …"* of a patient
+  on rifampicin, which ATC files outside J01, dropped the Major finding asked about. A class's absent line names its ATC
+  group and stays. What leads or follows the answer for the drug itself — that it is
+not one of her medications, that the check does not choose an alternative — stays.
+
+### Measured
+
+On the demo replica on 2026-11-13 (E2B, model up), 12 patients × 10 wordings against the build before this change:
+- Where the patient has the group, the drug is answered over it and its chips fall to what the answer states: *"Will
+  rifampicin interact with his ARVs?"* 60 → 29 chips, *"Is cotrimoxazole safe with his ARVs?"* 52 → 40, *"Is fluconazole
+  safe with his ARVs?"* 30 → 22. Where the patient has none of Decision 630's group the answer is Decision 313's, as above.
+- *"Is ketoconazole safe with his statins?"*, told *"None of this patient's active orders is named "statins""* beside 41
+  chips, is told no statin in ATC group C10AA is among his medications, with none.
+- *"Does his cotrimoxazole interact with his ARVs?"*, the model's *"No — there are cautions …"* for 7 of 8 patients, is the
+  module's answer: that cotrimoxazole is not his, then the drug against his ARVs.
+- Decision 630's 207 group answers and 579 chips, and Decision 622's 44-answer screen sample, unchanged.
+
+Through `injectRecords` on 750 wordings over a patient on seven orders, against the build before: 49 answers change, each
+to the drug over the group asked about; none newly carries every finding of her screen.
+
+Pinned by `DrugBesideAResolvedGroupTest`, all four of whose cases failed before the change. `DrugBesideHerMedicationGroupTest`
+and four cases of `ClinicianWordingsTest` asserted Decision 313's lead for her TB drugs, her TB treatment, her ARVs and her
+ART, groups the module now resolves; they now assert the answer over the group, and that nothing outside it is named.
+
+Residues:
+- A group the module does not resolve still has the drug checked against all her medications, under Decision 313's lead.
+- Two groups beside one drug, or two drugs beside a group, keep Decision 313's answer.
 

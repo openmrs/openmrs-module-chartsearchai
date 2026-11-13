@@ -462,6 +462,29 @@ final class DrugClassTerms {
 		return new ThingOfHers(ThingOfHers.Kind.UNRESOLVED, question.substring(thing.start, end), thing.at, thing.start, end);
 	}
 
+	/** Her other medications, however joined: "her ARVs and other drugs", "the rest of her meds" (ADR Decision 632). */
+	private static final Pattern HER_OTHER_MEDICATIONS = Pattern.compile("(?i)\\b(?:(?:any |all |the )?other|rest of (?:his|her|"
+			+ "their)) (?:(?:current|active) )?(?:medications?|meds|drugs?|medicines?|orders|prescriptions|tablets|pills)\\b");
+
+	/** Whether every thing {@code question} names as hers is a group this module resolves — never her medications as a
+	 *  whole beside it, "her ARVs and her other medications", nor a group it does not resolve, "her ARVs and BP meds" (ADR
+	 *  Decision 632). */
+	static boolean namesOnlyGroupsOfHers(String question, List<CrossReactivityGroup> groups,
+			java.util.function.Predicate<String> namesTheDrugAsked) {
+		if (question == null || HER_OTHER_MEDICATIONS.matcher(question).find()) {
+			return false;
+		}
+		boolean aGroup = false;
+		for (ThingOfHers thing : thingsOfHers(question, groups)) {
+			aGroup |= thing.kind == ThingOfHers.Kind.GROUP;
+			// The drug asked about, named as hers, is no other thing: "Is her warfarin safe with her ARVs?"
+			if (thing.kind != ThingOfHers.Kind.GROUP && !namesTheDrugAsked.test(thing.name)) {
+				return false;
+			}
+		}
+		return aGroup;
+	}
+
 	/** Whether {@code groups} are all of {@link #ATC_GROUP_OF_HER_MEDICATIONS}' — Decision 630's own — and so read as that
 	 *  decision reads them (ADR Decision 631). */
 	static boolean onlyGroupsOfDecision630(List<String> groups) {

@@ -46,10 +46,10 @@ public class DrugBesideHerMedicationGroupTest extends BaseModuleContextSensitive
 			String question = each[0];
 			String answer = ask(question);
 			assertNotNull(answer, question + ": the module answers");
-			// Under the lead naming the group, which no drug name identifies (ADR Decision 313).
-			assertTrue(answer.startsWith(groupLead(each[1], "Fluconazole")
-					+ "Yes — Fluconazole interacts with this patient's active medications."),
-				question + " was: " + answer);
+			// Over the drug and her TB drugs, which the module now resolves (ADR Decision 632, superseding Decision 313 for
+			// such a group).
+			assertTrue(answer.startsWith("Fluconazole and this patient's TB drugs (Rifampicin isoniazid pyrazinamide and "
+					+ "ethambutol 150/75/400/275mg): what the interaction check relates between them:\n"), question + " was: " + answer);
 			assertTrue(answer.contains("\nFluconazole interacts with active order Rifampicin (rifampin) — Major."),
 				question + " was: " + answer);
 			assertTrue(!answer.contains("No —"), question + " was: " + answer);
@@ -72,18 +72,14 @@ public class DrugBesideHerMedicationGroupTest extends BaseModuleContextSensitive
 			String answer = ask(question, DrugReferenceTestSupport.activeOrder("order-lpv", "Lopinavir / ritonavir 200mg/50mg",
 				"Lopinavir / ritonavir"), DrugReferenceTestSupport.activeOrder("order-nvp", "Nevirapine 200mg"));
 			assertNotNull(answer, question + ": the module answers");
-			assertTrue(answer.startsWith(groupLead(each[1], "Rifampicin (rifampin)")
-					+ DrugReferenceInjector.NEUTRAL_WITHHOLD_LEAD_OPENING + "Rifampicin (rifampin).\n"),
-				question + " was: " + answer);
+			// Over the drug and her antiretrovirals, which the module now resolves (ADR Decision 632).
+			assertTrue(answer.startsWith("Rifampicin (rifampin) and this patient's antiretrovirals (Lopinavir / ritonavir "
+					+ "200mg/50mg and Nevirapine 200mg): what the interaction check relates between them:\n"), question + " was: "
+					+ answer);
 			assertTrue(answer.contains("\nRifampicin (rifampin) interacts with active order Nevirapine — Major."),
 				question + " was: " + answer);
 			assertTrue(!answer.contains("No —") && !answer.contains("Yes —"), question + " was: " + answer);
 		}
-	}
-
-	private static String groupLead(String group, String drug) {
-		return DrugReferenceInjector.GROUP_NOT_IDENTIFIED_OPENING + group + DrugReferenceInjector.GROUP_NOT_IDENTIFIED_CLOSING
-				+ drug + " against all of them.\n";
 	}
 
 	private static String ask(String question) {

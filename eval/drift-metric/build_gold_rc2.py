@@ -3,14 +3,12 @@
 reproduce the original betty/richard/karen/mark personas (remap_gold_standalone.py matched only
 1 of 4 — see remap_audit). Instead of porting record-by-record, this inherits the ORIGINAL
 human gold's per-topic category boundaries (the ontopic texts in metric_gold.json define what
-the human counted for each topic, e.g. trauma broadly under "fractures", renal labs + test
+the human counted for each topic, e.g. fracture-related concepts under "fractures", renal labs + test
 orders under "kidney", plain hypertension NOT under "heart") and applies them to rc.2 records
 by concept identity. rc.2-specific concepts with no original-gold precedent are surfaced as
 CANDIDATES in the audit and resolved by the explicit ADJUDICATIONS table below — every
 inclusion/exclusion is reviewable in the emitted audit file.
-
 DB access from env (as remap_gold_standalone.py): MARIADB_BIN, MYSQL_PWD, MARIADB_PORT.
-
 Outputs (rc.2-suffixed; the committed .standalone.json gold of the previous install is untouched):
   metric_gold.rc2.json   offtopic_adj.rc2.json   gold_audit.rc2.md
 """
@@ -19,20 +17,16 @@ import os
 import re
 import subprocess
 from collections import defaultdict
-
 # DB config is read lazily inside sql() (not at import), so the module can be imported
 # without a live DB — e.g. for the --selftest that exercises classify() offline.
 PORT = os.environ.get("MARIADB_PORT", "3316")
 HERE = os.path.dirname(os.path.abspath(__file__))
-
 # The four rc.2 eval patients (chosen by profile_patients(): topic spread — several present
 # topics with >=2 on-topic records AND several genuinely-absent topics — plus chart size).
 # Filled in after the profiling pass; see main().
 EVAL_PATIENTS = {}  # name -> (uuid, person_id), set by profile or overridden via GOLD_PATIENTS env
-
 TOPICS = ["programs", "allergies", "medications", "eye", "heart", "fractures", "kidney", "mental",
           "drug-allergies"]
-
 # Category boundaries inherited from the ORIGINAL human gold (metric_gold.json ontopic texts).
 # "names": exact concept names the human counted (normalized). "stems": regex fragments that
 # surface rc.2 CANDIDATES with no original precedent; a candidate is on-topic only if accepted
@@ -60,14 +54,16 @@ BOUNDARIES = {
         "auto": True,
     },
     "fractures": {
-        # The human counted trauma broadly for "fractures or broken bones": fractures,
-        # dislocations, injuries, wounds, burns, bites, assault, bone destruction, post-trauma.
-        # But NOT surgical/iatrogenic injuries: the original gold put "Intra-operative injury to
-        # ureter" under kidney only, never fractures — exclude that family here.
-        "stems": [r"fractur", r"broken", r"dislocation", r"\binjur", r"\bwound\b", r"\bburn\b",
-                  r"bite by", r"assault", r"destruction of bone", r"post-?traumatic", r"nonunion",
-                  r"crushing", r"sprain", r"contusion", r"laceration", r"trauma"],
-        "exclude": [r"intra-?operative"],
+        # The question asks specifically about fractures or broken bones.
+        # Do not include unrelated trauma, wounds, burns, bites, or soft-tissue injuries.
+        "stems": [
+            r"fractur",
+            r"broken",
+            r"dislocation",
+            r"destruction of bone",
+            r"nonunion",
+        ],
+        "exclude": [r"intra-?operative", r"dislocation of tooth"],
         "auto": True,
     },
     "kidney": {
@@ -123,7 +119,6 @@ BOUNDARIES = {
     "medications": {"stems": [], "auto": True},  # drug orders + dispenses; obs med-mentions via drug-name scan
     "programs": {"stems": [], "auto": True},
 }
-
 # Explicit calls for candidates the stems surface but the original gold has no precedent for.
 # name (normalized) -> topic -> True (on-topic) / False (off). Reviewed entries only.
 ADJUDICATIONS = {
@@ -147,8 +142,6 @@ ADJUDICATIONS = {
     "dander (animal) allergy": {"drug-allergies": False},
     "food allergy": {"drug-allergies": False},
 }
-
-
 def sql(q):
     M = os.environ["MARIADB_BIN"]
     out = subprocess.run([M, "--skip-ssl", "-h127.0.0.1", "-P" + PORT, "-uopenmrs", "openmrs",
@@ -158,12 +151,8 @@ def sql(q):
     if out.returncode != 0:
         raise RuntimeError(out.stderr[:300])
     return [line.split("\t") for line in out.stdout.splitlines() if line]
-
-
 def norm(s):
     return re.sub(r"\s+", " ", (s or "").strip().lower())
-
-
 def fetch_universe(pid):
     """(uuid, kind, name, display) for every unvoided citable record of the patient."""
     recs = []
@@ -232,18 +221,12 @@ def fetch_universe(pid):
     for u, in sql(f"SELECT uuid FROM person WHERE person_id={pid}"):
         recs.append((u, "patient", "patient demographics", "Patient demographics record", ""))
     return recs
-
-
 def drug_names():
     return {norm(n) for (n,) in sql(
         "SELECT cn.name FROM drug d JOIN concept_name cn ON cn.concept_id=d.concept_id"
         " AND cn.locale='en' AND cn.concept_name_type='FULLY_SPECIFIED' AND cn.voided=0")} | {
         norm(n) for (n,) in sql("SELECT name FROM drug")}
-
-
 DRUGS = None
-
-
 def classify(topic, kind, name, display, textval=""):
     """True/False/None(candidate-not-covered). Inherits the original gold's boundaries."""
     global DRUGS
@@ -288,8 +271,6 @@ def classify(topic, kind, name, display, textval=""):
             return adj
         return bool(any(re.search(s, name) for s in b["stems"]))
     return False
-
-
 def profile_patients():
     """Per-topic on-topic counts for every patient, to choose the eval four."""
     rows = sql("""SELECT p.person_id, p.uuid, CONCAT(pn.given_name,' ',pn.family_name)
@@ -301,8 +282,6 @@ def profile_patients():
         counts = {t: sum(1 for (_, k, n, d, tv) in uni if classify(t, k, n, d, tv) is True) for t in TOPICS}
         profiles.append((name, uuid, int(pid), len(uni), counts))
     return profiles
-
-
 # Pinned 2026-07-16: the five patients whose 40 cells were captured for the fullChart-vs-
 # queryScoped A/B. Selection greed depends on boundary stems, so re-running after an
 # adjudication round must NOT swap patients out from under already-taken captures.
@@ -323,14 +302,9 @@ PINNED = ["bc4ba445-a35c-4996-b804-4d5b68387571", "1128c659-2d0a-4314-af23-91bac
           "0563178c-e107-43a0-be05-2a179ab02dbe", "3d6b5ada-c402-4f3f-9c70-6a17f4d2a339",
           "ec6af3d5-3082-45f4-8f14-cf42dad41ed2", "47028119-e1e0-467c-b807-a23d1a81fb2b",
           "e9712a18-c181-46c5-8a17-46b02e39b23b"]
-
-
 RESELECT_ENV = "GOLD_ALLOW_RESELECT"
-
-
 def resolve_cohort(profiles):
     """Returns the PINNED cohort, or refuses. Never silently re-picks.
-
     This used to fall straight through to the greedy selection below whenever a single pinned
     patient was absent from the DB, and then overwrite `metric_gold.rc2.json` keyed to FOUR
     different patients with no warning — contradicting the PINNED comment directly above, which
@@ -339,7 +313,6 @@ def resolve_cohort(profiles):
     been replaced, so on today's DB every one of them is missing and the old code would have
     rewritten the 7 MB gold that `score_directness.py` loads by default, silently, keyed to a
     cohort no committed capture matches.
-
     Re-selection is still reachable, because bootstrapping a gold on a fresh install is what the
     greedy pass is for — but only as a deliberate act, via GOLD_ALLOW_RESELECT=1, and it says what
     it is overwriting. Returns None to mean "caller may re-select"."""
@@ -361,8 +334,6 @@ def resolve_cohort(profiles):
         "  Missing: %s\n"
         "  If you really are bootstrapping a gold for a new install, re-run with %s=1."
         % (len(missing), len(PINNED), missing[:6], RESELECT_ENV))
-
-
 def main():
     profiles = profile_patients()
     pinned = resolve_cohort(profiles)
@@ -392,8 +363,6 @@ def main():
             chosen.append(cand)
             break
     write_outputs(chosen)
-
-
 def write_outputs(chosen):
     audit = ["# rc.2 gold audit — boundaries inherited from the original human gold", ""]
     gold = {}
@@ -424,8 +393,6 @@ def write_outputs(chosen):
     for name, uuid, pid, unisize, counts in chosen:
         print(f"  {name} pid={pid} uuid={uuid} records={unisize} {counts}")
     print(f"cells={len(gold)} -> metric_gold.rc2.json / offtopic_adj.rc2.json / gold_audit.rc2.md")
-
-
 def selftest():
     """Offline regression guard for the classify() boundaries (no DB). Locks the two
     substring bug-fixes (adrenal !-> kidney, reducing-substance !-> mental) and the
@@ -435,6 +402,16 @@ def selftest():
     C = classify
     # kidney: "renal" is broad but the adrenal/suprarenal ENDOCRINE glands are excluded; genuine
     # renal-prefixed terms (prerenal/perirenal/intrarenal) still count.
+    # fractures: count fracture-related concepts, not unrelated trauma.
+    assert C("fractures", "condition", "fracture of femur", "") is True
+    assert C("fractures", "condition", "broken bone of arm", "") is True
+    assert C("fractures", "condition", "dislocation of shoulder", "") is True
+    assert C("fractures", "condition", "nonunion of fracture", "") is True
+    assert C("fractures", "condition", "burn of lower limb", "") is False
+    assert C("fractures", "condition", "bite by dog", "") is False
+    assert C("fractures", "condition", "laceration of leg", "") is False
+    assert C("fractures", "condition", "contusion of knee", "") is False
+    assert C("fractures", "condition", "intra-operative injury to ureter", "") is False
     assert C("kidney", "condition", "malignant tumor of adrenal gland", "") is False, "adrenal is endocrine, not kidney"
     assert C("kidney", "condition", "malignant tumor of suprarenal gland", "") is False, "suprarenal is endocrine, not kidney"
     assert C("kidney", "condition", "prerenal azotemia", "") is True, "prerenal IS a renal term"
@@ -461,16 +438,20 @@ def selftest():
     assert C("programs", "program", "pmtct", "") is True
     assert C("programs", "condition", "chronic kidney disease", "") is False
     assert C("medications", "drug_order", "warfarin", "") is True
-
+    assert C("fractures", "condition", "crushing injury of thigh", "") is False
+    assert C("fractures", "condition", "open wound of head", "") is False
+    assert C("fractures", "condition", "injury of extensor tendon of hand", "") is False
+    assert C("fractures", "condition", "traumatic amputation of foot at ankle level", "") is False
+    assert C("fractures", "condition", "disruption of operation wound", "") is False
+    assert C("fractures", "condition", "dislocation of tooth", "") is False
+    assert C("fractures", "condition", "dislocation of shoulder", "") is True
     # The pinned-cohort guard (#179 item 8), which needs no DB: profile tuples are built from the
     # real PINNED constant, so this cannot pass by testing invented UUIDs. Tuple shape matches
     # profile_patients(): (name, uuid, person_id, chart_size, per-topic counts).
     def prof(uuids):
         return [("p%d" % i, u, i, 500, {t: 1 for t in TOPICS}) for i, u in enumerate(uuids)]
-
     full = resolve_cohort(prof(PINNED))
     assert [p[1] for p in full] == PINNED, "a complete cohort must come back in PINNED order"
-
     # One patient short must REFUSE, not fall through to greedy re-selection.
     saved = os.environ.pop(RESELECT_ENV, None)
     try:
@@ -497,8 +478,6 @@ def selftest():
         if saved is not None:
             os.environ[RESELECT_ENV] = saved
     print("selftest OK")
-
-
 if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1 and sys.argv[1] == "--selftest":

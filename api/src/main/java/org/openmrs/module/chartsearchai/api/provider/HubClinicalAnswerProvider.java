@@ -107,7 +107,8 @@ public class HubClinicalAnswerProvider implements ClinicalAnswerProvider {
 				: ChartSearchAiConstants.GP_HUB_ENDPOINT_URL + " must end with /v1/chat/completions";
 		boolean ready = unavailableReason == null;
 		Set<ProviderCapability> capabilities = EnumSet.of(ProviderCapability.ANSWER,
-				ProviderCapability.ANSWER_CHECK, ProviderCapability.ANSWER_REVIEW, ProviderCapability.INDEPTH,
+				ProviderCapability.TOKEN_STREAMING, ProviderCapability.ANSWER_CHECK,
+				ProviderCapability.ANSWER_REVIEW, ProviderCapability.INDEPTH,
 				ProviderCapability.GROUNDING, ProviderCapability.DRUG_SAFETY,
 				ProviderCapability.STRUCTURED_BLOCKS, ProviderCapability.MULTI_TURN_CONTEXT);
 		return new ProviderDescriptor(PROVIDER_ID, "Med-Agent Hub", true, ready, false,
@@ -320,6 +321,18 @@ public class HubClinicalAnswerProvider implements ClinicalAnswerProvider {
 		if (type == null) {
 			return;
 		}
+		if (type == TurnEventType.REASONING_DELTA || type == TurnEventType.ANSWER_DELTA) {
+			if (emitted.contains(TurnEventType.ANSWER_DONE)
+					|| (type == TurnEventType.REASONING_DELTA && emitted.contains(TurnEventType.ANSWER_DELTA))) {
+				return;
+			}
+			Object deltaObj = wire.getPayload() == null ? null : wire.getPayload().get("delta");
+			if (deltaObj instanceof String && !((String) deltaObj).isEmpty()) {
+				events.accept(TurnEvent.delta(type, sequence.getAndIncrement(), PROVIDER_ID, (String) deltaObj));
+				emitted.add(type);
+			}
+			return;
+		}
 		AnswerEnvelope answer = envelopeOrNull(wire.getPayload());
 		if (answer != null) {
 			latestAnswer.set(answer);
@@ -365,6 +378,10 @@ public class HubClinicalAnswerProvider implements ClinicalAnswerProvider {
 
 	private static TurnEventType mapEvent(String hubEvent) {
 		switch (hubEvent) {
+			case "reasoning_delta":
+				return TurnEventType.REASONING_DELTA;
+			case "answer_delta":
+				return TurnEventType.ANSWER_DELTA;
 			case "answer_done":
 				return TurnEventType.ANSWER_DONE;
 			case "heartbeat":

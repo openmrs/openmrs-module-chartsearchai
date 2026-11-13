@@ -1387,4 +1387,29 @@ public class LlmProviderTest {
 				+ "hash to a filename no warmup ever wrote");
 	}
 
+	@Test
+	public void resolveReferenceDate_prefersConfiguredValueThenSystemPropertyThenEnvThenUtcToday() {
+		assertEquals("2026-06-20",
+				LlmProvider.resolveReferenceDate(" 2026-06-20 ", "2026-01-01", "2025-12-01", "2025-11-01"));
+		assertEquals("2026-01-01",
+				LlmProvider.resolveReferenceDate("   ", " 2026-01-01 ", "2025-12-01", "2025-11-01"));
+		assertEquals("2025-12-01",
+				LlmProvider.resolveReferenceDate(null, "", " 2025-12-01 ", "2025-11-01"));
+		assertEquals("2025-11-01",
+				LlmProvider.resolveReferenceDate(null, null, " ", " 2025-11-01 "));
+		String fallback = LlmProvider.resolveReferenceDate(null, null, null, null);
+		assertTrue(fallback.matches("\\d{4}-\\d{2}-\\d{2}"),
+				"when no reference date override is set, resolveReferenceDate must fall back to an ISO YYYY-MM-DD date");
+	}
+
+	@Test
+	public void withReferenceDate_appendsTodayDateAndRelativeTimeGuidanceToSystemPrompt() {
+		String anchored = LlmProvider.withReferenceDate(LlmProvider.DEFAULT_SYSTEM_PROMPT, "2026-06-20");
+		assertTrue(anchored.startsWith(LlmProvider.DEFAULT_SYSTEM_PROMPT));
+		assertTrue(anchored.contains("Today's date is 2026-06-20."));
+		assertTrue(anchored.contains("relative to 2026-06-20."));
+		assertEquals(LlmProvider.DEFAULT_SYSTEM_PROMPT,
+				LlmProvider.withReferenceDate(LlmProvider.DEFAULT_SYSTEM_PROMPT, "   "));
+	}
+
 }

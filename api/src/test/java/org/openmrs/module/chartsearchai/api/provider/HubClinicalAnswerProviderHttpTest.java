@@ -18,6 +18,7 @@ import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -158,5 +159,36 @@ public class HubClinicalAnswerProviderHttpTest extends BaseModuleContextSensitiv
 				() -> provider.execute(request, event -> {}, CancellationSignal.NONE).toCompletableFuture().join());
 		assertEquals("provider_not_permitted", result.getProblemCode());
 		assertNull(receivedRequest.get());
+	}
+
+	@Test
+	public void answerAndReasoningDeltasOverHttpRelayBeforeAnswerDoneAndIgnoreLateDeltas() throws Exception {
+		String answerPayload = "{\"answer\":\"Aspirin 81mg.\",\"references\":[],"
+				+ "\"answerValidation\":{\"status\":\"checking\"}}";
+		String donePayload = "{\"answer\":\"Aspirin 81mg.\",\"references\":[],"
+				+ "\"answerValidation\":{\"status\":\"checked\"}}";
+		String sseBody = "event: reasoning_delta\ndata: {\"delta\":\"Checking medication list. \"}\n\n"
+				+ "event: answer_delta\ndata: {\"delta\":\"Aspirin \"}\n\n"
+				+ "event: answer_delta\ndata: {\"delta\":\"81mg.\"}\n\n"
+				+ "event: answer_done\ndata: " + answerPayload + "\n\n"
+				+ "event: answer_delta\ndata: {\"delta\":\"late delta ignored\"}\n\n"
+				+ "event: done\ndata: " + donePayload + "\n\n";
+		List<TurnEvent> events = new ArrayList<>();
+		TurnResult result = executeOverHttp(sseBody, events);
+
+		List<TurnEventType> types = events.stream().map(TurnEvent::getType).collect(Collectors.toList());
+		assertEquals(Arrays.asList(
+				TurnEventType.TURN_STARTED,
+				TurnEventType.REASONING_DELTA,
+				TurnEventType.ANSWER_DELTA,
+				TurnEventType.ANSWER_DELTA,
+				TurnEventType.ANSWER_DONE,
+				TurnEventType.EVIDENCE_UPDATED,
+				TurnEventType.TURN_DONE), types);
+		assertEquals("Checking medication list. ", events.get(1).getTextDelta());
+		assertEquals("Aspirin ", events.get(2).getTextDelta());
+		assertEquals("81mg.", events.get(3).getTextDelta());
+		assertEquals(TurnEventType.TURN_DONE, result.getTerminalState());
+		assertEquals("Aspirin 81mg.", result.getAnswer().getText());
 	}
 }

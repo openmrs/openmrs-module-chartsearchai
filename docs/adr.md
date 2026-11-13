@@ -29019,3 +29019,34 @@ one stated.
 
 Pinned by `GroupAnswerNamesOnlyTheGroupTest`, both of whose cases redden when the composer keeps the merged finding whole.
 
+## Decision 634: Her antibiotics count her TB drugs, and her TB drugs count streptomycin
+
+**Status: Accepted** (November 2026), decided by the implementer on the owner's direction to fix the open defects without
+asking; reversible by restoring the two ATC lists. It changes the groups of
+[Decision 630](#decision-630-a-group-of-her-medications-asked-about-by-name-is-answered-over-that-group).
+
+### Context
+
+Decision 630 read *"her antibiotics"* as ATC J01, the antibacterials for systemic use, and *"her TB drugs"* as J04A. ATC
+files the TB drugs outside J01 and streptomycin, used against tuberculosis, under J01GA. So a patient on rifampicin asked
+of his antibiotics was told *"No antibiotic is among this patient's active medications"*, false to a clinician, for whom
+rifampicin is an antibiotic; beside a drug (Decision 632) that statement dropped the Major warfarin–rifampicin finding
+asked about. And a patient on streptomycin asked of his TB drugs was told none is among his medications.
+
+### The decision
+
+`DrugClassTerms.ATC_GROUP_OF_HER_MEDICATIONS` reads her antibiotics as J01 and J04A, and her TB drugs as J04A and
+streptomycin (J01GA01). A question of her antibiotics and her TB drugs together relates groups that share members, as
+it relates any two groups.
+
+### Measured
+
+On the demo replica on 2026-11-13 (E2B, model up), against the build before: *"Do his antibiotics interact with his
+ARVs?"* names his TB combination among his antibiotics for the 12 of 23 patients on one (chips 579 → 603 over Decision
+630's 207 answers), and the patient on streptomycin has it among his TB drugs in each TB wording. Decision 622's
+44-answer screen sample and Decision 631's 136 answers are unchanged.
+
+Pinned by `AntibioticsAndTbDrugsTest`, both of whose cases failed before the change, and by
+`DrugBesideAResolvedGroupTest.aDrugBesideHisAntibioticsIsAnsweredOverHisTbDrugsAmongThem`, which replaces Decision 632's
+fallback for that wording.
+

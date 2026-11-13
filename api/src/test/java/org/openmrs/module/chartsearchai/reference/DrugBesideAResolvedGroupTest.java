@@ -91,14 +91,25 @@ public class DrugBesideAResolvedGroupTest extends BaseModuleContextSensitiveTest
 		assertTrue(chart.getFindingsBearingOnTheQuestion().isEmpty(), String.valueOf(chart.getFindingsBearingOnTheQuestion()));
 	}
 
+	/** His rifampicin is among his antibiotics (ADR Decision 634): the drug is answered over them, the Major finding asked
+	 *  about stated. Under ADR Decision 632 alone "No antibiotic is among …" dropped it. */
+	@Test
+	public void aDrugBesideHisAntibioticsIsAnsweredOverHisTbDrugsAmongThem() {
+		String answer = ask("Is warfarin safe with his antibiotics?").getModuleAnswer();
+
+		assertNotNull(answer);
+		assertTrue(answer.startsWith("Warfarin and this patient's antibiotics (Rifampicin): what the interaction check relates "
+				+ "between them:"), answer);
+		assertTrue(answer.contains("Warfarin interacts with active order Rifampicin") && answer.contains("— Major."), answer);
+	}
+
 	/** What else the question names beside the group keeps the drug's answer over all his medications, as does a group of
-	 *  Decision 630's he has no member of: "No antibiotic is among …" of a patient on rifampicin dropped the Major finding
-	 *  asked about (ADR Decision 632). */
+	 *  Decision 630's he has no member of (ADR Decision 632). */
 	@Test
 	public void aDrugBesideMoreThanAResolvedGroupKeepsItsAnswerOverAllHisMedications() {
 		for (String question : Arrays.asList("Is fluconazole safe with his TB drugs and his other medications?",
 			"Is fluconazole safe with his TB drugs and BP meds?",
-			"Is fluconazole safe with his TB drugs and other drugs?", "Is warfarin safe with his antibiotics?")) {
+			"Is fluconazole safe with his TB drugs and other drugs?")) {
 			String answer = ask(question).getModuleAnswer();
 			assertNotNull(answer, question);
 			assertTrue(answer.startsWith(DrugReferenceInjector.GROUP_NOT_IDENTIFIED_OPENING)

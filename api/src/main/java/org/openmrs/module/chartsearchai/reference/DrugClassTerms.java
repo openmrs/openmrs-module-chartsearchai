@@ -213,8 +213,8 @@ final class DrugClassTerms {
 	 * 630, the owner's direction that an answer carries nothing beyond what was asked). The antiretrovirals: J05AE, J05AG,
 	 * J05AJ and J05AR whole, every member HIV; of J05AF the HIV members only, not entecavir or telbivudine; of J05AX
 	 * enfuvirtide, maraviroc, ibalizumab, fostemsavir and lenacapavir, not maribavir, letermovir, tecovirimat or baloxavir.
-	 * The TB drugs: J04A, which also files rifamycin; streptomycin, filed under J01GA, is the residue. The antibiotics: J01,
-	 * the antibacterials for systemic use, which does not file the TB drugs.
+	 * The TB drugs: J04A, which also files rifamycin, and streptomycin, which ATC files under J01GA. The antibiotics: J01, the
+	 * antibacterials for systemic use, and J04A, the TB drugs, which a clinician counts among them (ADR Decision 634).
 	 */
 	private static final Map<String, String> ATC_GROUP_OF_HER_MEDICATIONS;
 
@@ -225,8 +225,10 @@ final class DrugClassTerms {
 		Map<String, String> groups = new LinkedHashMap<String, String>();
 		groups.put("antiretroviral", "antiretroviral: J05AE, J05AF01, J05AF02, J05AF03, J05AF04, J05AF05, J05AF06, J05AF07, "
 				+ "J05AF09, J05AF13, J05AG, J05AJ, J05AR, J05AX07, J05AX09, J05AX23, J05AX29, J05AX31");
-		groups.put("TB drug", "J04A");
-		groups.put("antibiotic", "J01");
+		// Streptomycin, used against tuberculosis, which ATC files among the aminoglycosides (J01GA01); and the TB drugs among
+		// her antibiotics, which ATC files outside the antibacterials of J01 (ADR Decision 634).
+		groups.put("TB drug", "TB drug: J04A, J01GA01");
+		groups.put("antibiotic", "antibiotic: J01, J04A");
 		ATC_GROUP_OF_HER_MEDICATIONS = Collections.unmodifiableMap(groups);
 		String noun = "(?:drugs?|meds?|medications?|medicines?|treatments?|therapy|therapies|regimens?|pills|tablets)";
 		Map<String, Pattern> words = new LinkedHashMap<String, Pattern>();

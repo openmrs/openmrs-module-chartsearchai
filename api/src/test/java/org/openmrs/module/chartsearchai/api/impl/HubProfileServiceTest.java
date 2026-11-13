@@ -39,11 +39,11 @@ public class HubProfileServiceTest extends BaseModuleContextSensitiveTest {
 
 	@org.junit.jupiter.api.BeforeEach
 	public void enableTheHub() {
-		Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_PROVIDERS_ENABLED, "bundled,hub");
+		Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_PROVIDERS_ENABLED, "hub");
 	}
 
-	// The picker would offer profiles of a provider that require() refuses, so a Hub that is configured but not
-	// enabled lists nothing and is not asked.
+	// The picker would offer profiles of a provider that require() refuses, so a Hub that is not
+	// the active system provider lists nothing and is not asked.
 	@Test
 	public void profilesAreNotListedForAHubThatIsNotEnabled() throws Exception {
 		java.util.concurrent.atomic.AtomicInteger asked = new java.util.concurrent.atomic.AtomicInteger();
@@ -66,6 +66,15 @@ public class HubProfileServiceTest extends BaseModuleContextSensitiveTest {
 					() -> new HubProfileService().listProfiles());
 			assertTrue(failure.getMessage().contains(ChartSearchAiConstants.GP_PROVIDERS_ENABLED), failure.getMessage());
 			assertEquals(0, asked.get(), "a Hub that is not enabled is not asked for its profiles");
+
+			// Even if both appear in providers.enabled, bundled wins when default is bundled.
+			Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_PROVIDERS_ENABLED, "bundled,hub");
+			Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_DEFAULT_PROVIDER, "bundled");
+			org.openmrs.api.APIException inactiveFailure = assertThrows(org.openmrs.api.APIException.class,
+					() -> new HubProfileService().listProfiles());
+			assertTrue(inactiveFailure.getMessage().contains(ChartSearchAiConstants.GP_PROVIDERS_ENABLED),
+					inactiveFailure.getMessage());
+			assertEquals(0, asked.get(), "a Hub that is not active is not asked for its profiles");
 		}
 		finally {
 			server.stop(0);

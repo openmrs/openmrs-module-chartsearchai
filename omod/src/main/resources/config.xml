@@ -47,13 +47,13 @@
 	<globalProperty>
 		<property>chartsearchai.providers.enabled</property>
 		<defaultValue>bundled</defaultValue>
-		<description>Comma-separated provider ids enabled for clinical answers, in display order. The bundled provider is enabled by default. Add hub only when its adapter and endpoint are configured. Unavailable providers remain visible but cannot serve turns.</description>
+		<description>Configured provider id for this deployment (bundled or hub). Only one system-wide provider is active at a time; when multiple entries are supplied, chartsearchai.providers.default selects the active provider (falling back to bundled if present, otherwise the first entry). Add hub only when its adapter and endpoint are configured. Unavailable providers remain visible in discovery but cannot serve turns.</description>
 	</globalProperty>
 
 	<globalProperty>
 		<property>chartsearchai.providers.default</property>
 		<defaultValue>bundled</defaultValue>
-		<description>Provider preselected for new conversations. Must name an enabled provider. If invalid, selection uses bundled when enabled, otherwise the first enabled provider. Existing conversations retain their provider.</description>
+		<description>Active system-wide provider id when chartsearchai.providers.enabled lists more than one entry. Must name an entry in chartsearchai.providers.enabled. If invalid, selection uses bundled when present, otherwise the first entry.</description>
 	</globalProperty>
 
 	<globalProperty>

@@ -62,12 +62,15 @@ public class HubProfileService {
 			.build();
 
 	public Map<String, Object> listProfiles() {
-		// Profiles of a provider require() refuses would offer the picker choices no turn can use.
-		if (!ClinicalAnswerProviderRegistry.enabledProviderIds(Context.getAdministrationService().getGlobalProperty(
-				ChartSearchAiConstants.GP_PROVIDERS_ENABLED, ChartSearchAiConstants.DEFAULT_PROVIDER))
-				.contains(HubClinicalAnswerProvider.PROVIDER_ID)) {
-			throw new APIException("Cannot list profiles: the Hub provider is not in "
-					+ ChartSearchAiConstants.GP_PROVIDERS_ENABLED + ".");
+		String activeProvider = ClinicalAnswerProviderRegistry.activeProviderId(
+				Context.getAdministrationService().getGlobalProperty(
+						ChartSearchAiConstants.GP_PROVIDERS_ENABLED, ChartSearchAiConstants.DEFAULT_PROVIDER),
+				Context.getAdministrationService().getGlobalProperty(
+						ChartSearchAiConstants.GP_DEFAULT_PROVIDER, ChartSearchAiConstants.DEFAULT_PROVIDER));
+		if (!HubClinicalAnswerProvider.PROVIDER_ID.equals(activeProvider)) {
+			throw new APIException("Cannot list profiles: the Hub provider is not the active provider in "
+					+ ChartSearchAiConstants.GP_PROVIDERS_ENABLED + "/"
+					+ ChartSearchAiConstants.GP_DEFAULT_PROVIDER + ".");
 		}
 		String endpoint = Context.getAdministrationService()
 				.getGlobalProperty(ChartSearchAiConstants.GP_HUB_ENDPOINT_URL);
@@ -112,6 +115,45 @@ public class HubProfileService {
 			// The exception, not its message: a refused connection's carries none on Java 17 and 21.
 			throw new APIException("Hub profile discovery failed: " + e, e);
 		}
+	}
+
+	/**
+	 * Resolves the Hub's default product profile id when a request omits {@code profile}, preferring
+	 * an available product profile marked {@code default=true} and falling back to the first
+	 * available product profile, or {@code null} when none is usable.
+	 */
+	public String resolveDefaultProfileId() {
+		Map<String, Object> payload = listProfiles();
+		Object dataObj = payload.get("data");
+		if (!(dataObj instanceof List)) {
+			return null;
+		}
+		String firstAvailable = null;
+		for (Object item : (List<?>) dataObj) {
+			if (!(item instanceof Map)) {
+				continue;
+			}
+			Map<?, ?> entry = (Map<?, ?>) item;
+			Object idObj = entry.get("id");
+			if (!(idObj instanceof String) || ((String) idObj).trim().isEmpty()) {
+				continue;
+			}
+			Object visibility = entry.get("visibility");
+			if (visibility != null && !"product".equals(visibility)) {
+				continue;
+			}
+			if (Boolean.FALSE.equals(entry.get("available"))) {
+				continue;
+			}
+			String id = ((String) idObj).trim();
+			if (Boolean.TRUE.equals(entry.get("default"))) {
+				return id;
+			}
+			if (firstAvailable == null) {
+				firstAvailable = id;
+			}
+		}
+		return firstAvailable;
 	}
 
 	/** Parses the body on its own thread and gives up, closing the body, when the deadline passes. */

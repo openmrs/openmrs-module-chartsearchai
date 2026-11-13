@@ -9,6 +9,7 @@ package org.openmrs.module.chartsearchai.web.rest;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -24,17 +25,20 @@ import javax.servlet.ServletOutputStream;
 import com.sun.net.httpserver.HttpServer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.function.Consumer;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.AfterEach;
 import org.openmrs.module.chartsearchai.api.impl.DefaultPatientAccessCheck;
+import org.openmrs.module.chartsearchai.api.provider.BundledClinicalAnswerProvider;
 import org.openmrs.module.chartsearchai.api.provider.HubClinicalAnswerProvider;
 import org.openmrs.module.chartsearchai.api.provider.HttpHubStreamTransport;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -246,6 +250,11 @@ public class ProviderStreamPersistenceTest extends BaseModuleWebContextSensitive
 
 	private volatile int peerStatus = 503;
 
+	private volatile String modelsBody = "{\"object\":\"list\",\"data\":[{\"id\":\"single-e4b-checked\","
+			+ "\"visibility\":\"product\",\"available\":true,\"default\":true}]}";
+
+	private volatile int modelsStatus = 200;
+
 	private volatile JsonNode receivedRequest;
 
 	private final AtomicInteger peerRequests = new AtomicInteger();
@@ -330,6 +339,16 @@ public class ProviderStreamPersistenceTest extends BaseModuleWebContextSensitive
 				exchange.close();
 			}
 		});
+		peer.createContext("/v1/models", exchange -> {
+			byte[] bytes = modelsBody.getBytes(StandardCharsets.UTF_8);
+			exchange.getResponseHeaders().set("Content-Type", "application/json");
+			exchange.sendResponseHeaders(modelsStatus, bytes.length == 0 ? -1 : bytes.length);
+			try {
+				exchange.getResponseBody().write(bytes);
+			} finally {
+				exchange.close();
+			}
+		});
 		peer.start();
 		Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_PROVIDERS_ENABLED, "hub");
 		Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_HUB_ENDPOINT_URL,
@@ -338,6 +357,7 @@ public class ProviderStreamPersistenceTest extends BaseModuleWebContextSensitive
 		controller.setConversationService(conversations);
 		controller.setAuditLogService(auditLogs);
 		controller.setPatientAccessCheck(new DefaultPatientAccessCheck());
+		controller.setHubProfileService(new org.openmrs.module.chartsearchai.api.impl.HubProfileService());
 		controller.setProviderRegistry(new ClinicalAnswerProviderRegistry(Collections.singletonList(
 				new HubClinicalAnswerProvider(new HttpHubStreamTransport()))));
 		return controller;
@@ -690,6 +710,232 @@ public class ProviderStreamPersistenceTest extends BaseModuleWebContextSensitive
 		return new ProviderDescriptor("bundled", "Bundled", true, true, true,
 				Collections.singletonList(ProviderMode.QUERY_SCOPED),
 				Collections.singleton(ProviderCapability.ANSWER), null);
+	}
+
+	@Test
+	@SuppressWarnings("unchecked")
+	public void legacySearchWarmupAndOverridesEnforceSingleSystemProvider() throws Exception {
+		ChartSearchAiRestController controller = requestController();
+		Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_PROVIDERS_ENABLED, "bundled,hub");
+		Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_DEFAULT_PROVIDER, "hub");
+		controller.setProviderRegistry(new ClinicalAnswerProviderRegistry(Arrays.asList(
+				new BundledClinicalAnswerProvider(null),
+				new HubClinicalAnswerProvider(new HttpHubStreamTransport()))));
+		Patient patient = Context.getPatientService().getPatient(2);
+
+		ResponseEntity<Object> providersResponse = controller.listProviders();
+		assertEquals(200, providersResponse.getStatusCode().value());
+		Map<String, Object> providersBody = (Map<String, Object>) providersResponse.getBody();
+		assertEquals(Boolean.FALSE, providersBody.get("pickerVisible"));
+		assertEquals("hub", providersBody.get("defaultProvider"));
+		assertEquals(1, ((List<?>) providersBody.get("providers")).size());
+
+		Map<String, String> searchBody = new HashMap<>();
+		searchBody.put("patient", patient.getUuid());
+		searchBody.put("question", "What meds?");
+		ResponseEntity<Object> searchResponse = controller.search(searchBody);
+		assertEquals(409, searchResponse.getStatusCode().value());
+		assertEquals("provider_not_enabled",
+				new ObjectMapper().valueToTree(searchResponse.getBody()).path("problemCode").asText());
+
+		MockHttpServletResponse searchStreamResponse = new MockHttpServletResponse();
+		controller.searchStream(searchBody, searchStreamResponse);
+		assertEquals(409, searchStreamResponse.getStatus());
+		assertEquals("provider_not_enabled",
+				new ObjectMapper().readTree(searchStreamResponse.getContentAsString()).path("problemCode").asText());
+
+		Map<String, String> warmupBody = new HashMap<>();
+		warmupBody.put("patient", patient.getUuid());
+		assertEquals(204, controller.warmup(warmupBody).getStatusCode().value());
+
+		Map<String, String> bundledOverride = new HashMap<>();
+		bundledOverride.put("patient", patient.getUuid());
+		bundledOverride.put("provider", "bundled");
+		ResponseEntity<Object> chatNewOverride = controller.chatNew(bundledOverride);
+		assertEquals(400, chatNewOverride.getStatusCode().value());
+		assertEquals("provider_not_enabled",
+				new ObjectMapper().valueToTree(chatNewOverride.getBody()).path("problemCode").asText());
+
+		bundledOverride.put("question", "Any allergies?");
+		MockHttpServletResponse chatStreamOverride = new MockHttpServletResponse();
+		controller.chatStream(bundledOverride, chatStreamOverride);
+		assertTrue(chatStreamOverride.getContentAsString().contains("event: turn_error"));
+		assertTrue(chatStreamOverride.getContentAsString().contains("provider_not_enabled"),
+				chatStreamOverride.getContentAsString());
+	}
+
+	@Test
+	public void omittedHubProfileResolvesDefaultAndFailsExplicitlyWhenUnavailable() throws Exception {
+		ChartSearchAiRestController controller = requestController();
+		Patient patient = Context.getPatientService().getPatient(2);
+		modelsStatus = 200;
+		modelsBody = "{\"object\":\"list\",\"data\":["
+				+ "{\"id\":\"secondary-profile\",\"visibility\":\"product\",\"available\":true,\"default\":false},"
+				+ "{\"id\":\"single-e4b-checked\",\"visibility\":\"product\",\"available\":true,\"default\":true}]}";
+		peerStatus = 200;
+		peerBody = "event: done\ndata: {\"answer\":\"Resolved default answer.\",\"references\":[]}\n\n";
+
+		Map<String, String> noProfileBody = new HashMap<>();
+		noProfileBody.put("patient", patient.getUuid());
+		noProfileBody.put("question", "What conditions?");
+		MockHttpServletResponse response = new MockHttpServletResponse();
+		controller.chatStream(noProfileBody, response);
+
+		assertEquals(1, peerRequests.get(), response.getContentAsString());
+		assertEquals("single-e4b-checked", receivedRequest.path("model").asText());
+		assertTrue(response.getContentAsString().contains("Resolved default answer."));
+
+		peerRequests.set(0);
+		modelsBody = "{\"object\":\"list\",\"data\":["
+				+ "{\"id\":\"secondary-profile\",\"visibility\":\"product\",\"available\":true,\"default\":false}]}";
+		MockHttpServletResponse fallbackProfileResponse = new MockHttpServletResponse();
+		controller.chatStream(noProfileBody, fallbackProfileResponse);
+		assertEquals(1, peerRequests.get(), fallbackProfileResponse.getContentAsString());
+		assertEquals("secondary-profile", receivedRequest.path("model").asText());
+
+		peerRequests.set(0);
+		modelsBody = "{\"object\":\"list\",\"data\":[]}";
+		MockHttpServletResponse emptyModelsResponse = new MockHttpServletResponse();
+		controller.chatStream(noProfileBody, emptyModelsResponse);
+
+		assertEquals(0, peerRequests.get(), "unavailable Hub models must fail before calling completions");
+		assertTrue(emptyModelsResponse.getContentAsString().contains("event: turn_error"));
+		assertTrue(emptyModelsResponse.getContentAsString().contains("profiles_unavailable"),
+				emptyModelsResponse.getContentAsString());
+	}
+
+	@Test
+	public void ephemeralChatTurnStreamsWithoutSessionOrHistoryWhileAuditing() throws Exception {
+		ChartSearchAiRestController controller = requestController();
+		Patient patient = Context.getPatientService().getPatient(2);
+		peerStatus = 200;
+		peerBody = "event: done\ndata: {\"answer\":\"Prior chat answer.\",\"references\":[]}\n\n";
+
+		Map<String, String> initialTurn = requestBody(patient);
+		initialTurn.put("question", "Earlier chat question?");
+		MockHttpServletResponse initialResponse = new MockHttpServletResponse();
+		controller.chatStream(initialTurn, initialResponse);
+		assertEquals(1, peerRequests.get());
+		ClinicalConversation existing = conversations.getLatestActiveConversation(patient);
+		assertNotNull(existing);
+		assertEquals(1, conversations.getTurns(existing).size());
+
+		peerRequests.set(0);
+		receivedRequest = null;
+		peerBody = "event: done\ndata: {\"answer\":\"Ephemeral hub answer.\",\"references\":[],\"inputTokens\":42,\"outputTokens\":12}\n\n";
+		Map<String, Object> ephemeralJson = new ObjectMapper().readValue(
+				"{\"patient\":\"" + patient.getUuid()
+						+ "\",\"question\":\"Transient omnibar question?\",\"ephemeral\":true}",
+				new TypeReference<Map<String, Object>>() {});
+		MockHttpServletResponse ephemeralResponse = new MockHttpServletResponse();
+		ChartSearchAiRestController.class
+				.getMethod("chatStream", Map.class, javax.servlet.http.HttpServletResponse.class)
+				.invoke(controller, ephemeralJson, ephemeralResponse);
+
+		assertEquals(1, peerRequests.get(), ephemeralResponse.getContentAsString());
+		assertEquals("single-e4b-checked", receivedRequest.path("model").asText());
+		assertEquals(1, receivedRequest.path("messages").size(), "ephemeral turn must send no prior turns");
+		assertTrue(receivedRequest.path("context").path("session").isNull());
+
+		ByteArrayOutputStream sseBytes = new ByteArrayOutputStream();
+		sseBytes.write(ephemeralResponse.getContentAsByteArray());
+		JsonNode started = eventPayload(sseBytes, "turn_started");
+		assertNotNull(started);
+		assertTrue(started.has("session") && started.get("session").isNull(), started.toString());
+		assertFalse(started.path("messageId").asText().isEmpty(), started.toString());
+
+		List<JsonNode> terminals = terminalPayloads(sseBytes);
+		assertEquals(1, terminals.size());
+		JsonNode done = terminals.get(0);
+		assertTrue(done.has("session") && done.get("session").isNull(), done.toString());
+		assertEquals(started.path("messageId").asText(), done.path("messageId").asText());
+		assertTrue(done.path("auditLogId").isIntegralNumber(), done.toString());
+		int auditId = done.path("auditLogId").asInt();
+
+		Context.flushSession();
+		Context.clearSession();
+		ClinicalConversation after = conversations.getLatestActiveConversation(patient);
+		assertEquals(existing.getUuid(), after.getUuid());
+		assertEquals(1, conversations.getTurns(after).size(), "ephemeral turn must not append conversation turns");
+
+		ChartSearchAuditLog audit = auditLogs.getAuditLog(auditId);
+		assertNotNull(audit);
+		assertNull(audit.getConversationUuid());
+		assertNotNull(audit.getRequestId());
+		assertEquals("hub", audit.getProviderId());
+		assertEquals("query_scoped", audit.getProviderMode());
+		assertEquals("Transient omnibar question?", audit.getQuestion());
+		assertEquals("Ephemeral hub answer.", audit.getAnswer());
+		assertEquals(Integer.valueOf(42), audit.getInputTokens());
+		assertEquals(Integer.valueOf(12), audit.getOutputTokens());
+	}
+
+	@Test
+	public void ephemeralBundledTurnAuditsWithoutCreatingConversationHistory() throws Exception {
+		Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_PROVIDERS_ENABLED, "bundled");
+		Patient patient = Context.getPatientService().getPatient(2);
+		BundledClinicalAnswerProvider bundled = new BundledClinicalAnswerProvider(null) {
+			@Override
+			public ProviderDescriptor descriptor() {
+				return readyDescriptor();
+			}
+
+			@Override
+			public CompletionStage<TurnResult> execute(TurnRequest request, TurnEventSink events,
+					CancellationSignal cancellation) {
+				assertNull(request.getConversationId());
+				assertTrue(request.getPriorClinicalTurns().isEmpty());
+				AnswerEnvelope answer = AnswerEnvelope.fromPayload(
+						Collections.singletonMap("answer", "Ephemeral bundled answer."),
+						new ChartAnswer("Ephemeral bundled answer.", Collections.emptyList()));
+				events.accept(TurnEvent.of(TurnEventType.TURN_STARTED, 0, "bundled"));
+				events.accept(TurnEvent.withAnswer(TurnEventType.ANSWER_DONE, 1, "bundled", answer));
+				events.accept(TurnEvent.withAnswer(TurnEventType.TURN_DONE, 2, "bundled", answer));
+				return CompletableFuture.completedFuture(
+						TurnResult.done("bundled", request.getMode(), answer));
+			}
+		};
+		ChartSearchAiRestController controller = new ChartSearchAiRestController();
+		controller.setConversationService(conversations);
+		controller.setAuditLogService(auditLogs);
+		controller.setPatientAccessCheck(new DefaultPatientAccessCheck());
+		controller.setProviderRegistry(new ClinicalAnswerProviderRegistry(Collections.singletonList(bundled)));
+
+		Map<String, String> body = new HashMap<>();
+		body.put("patient", patient.getUuid());
+		body.put("question", "What labs exist?");
+		body.put("ephemeral", "true");
+		MockHttpServletResponse response = new MockHttpServletResponse();
+		controller.chatStream(body, response);
+
+		ByteArrayOutputStream sseBytes = new ByteArrayOutputStream();
+		sseBytes.write(response.getContentAsByteArray());
+		List<JsonNode> terminals = terminalPayloads(sseBytes);
+		assertEquals(1, terminals.size());
+		JsonNode done = terminals.get(0);
+		assertTrue(done.has("session") && done.get("session").isNull(), done.toString());
+		assertTrue(done.path("auditLogId").isIntegralNumber(), done.toString());
+		int auditId = done.path("auditLogId").asInt();
+
+		Context.flushSession();
+		Context.clearSession();
+		assertNull(conversations.getLatestActiveConversation(patient));
+		ChartSearchAuditLog audit = auditLogs.getAuditLog(auditId);
+		assertNotNull(audit);
+		assertNull(audit.getConversationUuid());
+		assertNotNull(audit.getRequestId());
+		assertEquals("bundled", audit.getProviderId());
+		assertEquals("Ephemeral bundled answer.", audit.getAnswer());
+	}
+
+	private static JsonNode eventPayload(ByteArrayOutputStream output, String eventType) throws Exception {
+		String target = "event: " + eventType + "\n";
+		for (String frame : output.toString(StandardCharsets.UTF_8.name()).split("\n\n")) {
+			if (frame.startsWith(target)) {
+				return new ObjectMapper().readTree(frame.substring(frame.indexOf("data: ") + 6).trim());
+			}
+		}
+		return null;
 	}
 
 	private static List<JsonNode> terminalPayloads(ByteArrayOutputStream output) throws Exception {

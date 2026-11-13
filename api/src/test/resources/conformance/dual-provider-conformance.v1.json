@@ -135,12 +135,11 @@
     {
       "id": "provider.capabilities.configured-hub-visible-when-unready",
       "providers": [
-        "bundled",
         "hub"
       ],
-      "default_provider": "bundled",
+      "default_provider": "hub",
       "hub_ready": false,
-      "expected_picker": true,
+      "expected_picker": false,
       "expected_hub_state": "disabled"
     },
     {

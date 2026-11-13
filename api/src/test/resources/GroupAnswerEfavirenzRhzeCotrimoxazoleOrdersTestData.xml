@@ -1,0 +1,69 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!--
+  ADR Decision 633: patient 7 of the standard test dataset (whose own active order is order 111, ASPIRIN) on the orders of
+  the demo replica's patient dd5558ed — efavirenz, lamivudine / zidovudine, an RHZE combination and co-trimoxazole — one
+  of whose findings states one efavirenz mechanism over orders of several of his medication groups. The encounter is
+  order 111's own (3, patient 7).
+-->
+<dataset>
+	<concept concept_id="9633" retired="false" datatype_id="4" class_id="3" is_set="false" creator="1"
+	         date_created="2008-08-15 00:00:00.0" uuid="9633aaaa-0000-4000-8000-000000009633" />
+	<concept_name concept_name_id="9633" concept_id="9633" name="Efavirenz"
+	              locale="en_GB" locale_preferred="1" concept_name_type="FULLY_SPECIFIED" creator="1"
+	              date_created="2008-08-15 00:00:00.0" voided="false" uuid="9633bbbb-0000-4000-8000-000000009633" />
+	<drug drug_id="9633" concept_id="9633" name="Efavirenz" combination="false"
+	      creator="1" date_created="2008-08-15 00:00:00.0" retired="false" uuid="9633cccc-0000-4000-8000-000000009633" />
+	<orders order_id="9633" order_type_id="1" order_number="ORD-9633" urgency="ROUTINE"
+	        order_action="NEW" concept_id="9633" orderer="1" instructions="1x daily"
+	        date_activated="2008-08-15 00:00:00.0" creator="1" date_created="2008-08-15 00:00:00.0"
+	        voided="false" patient_id="7" uuid="9633dddd-0000-4000-8000-000000009633"
+	        care_setting="1" encounter_id="3" />
+	<drug_order order_id="9633" drug_inventory_id="9633" dose="1.0" dose_units="51" as_needed="false"
+	            frequency="1" dosing_type="org.openmrs.SimpleDosingInstructions" route="22"
+	            quantity="1.0" quantity_units="51" num_refills="0" dispense_as_written="0" />
+	<concept concept_id="9634" retired="false" datatype_id="4" class_id="3" is_set="false" creator="1"
+	         date_created="2008-08-15 00:00:00.0" uuid="9634aaaa-0000-4000-8000-000000009634" />
+	<concept_name concept_name_id="9634" concept_id="9634" name="Lamivudine / zidovudine"
+	              locale="en_GB" locale_preferred="1" concept_name_type="FULLY_SPECIFIED" creator="1"
+	              date_created="2008-08-15 00:00:00.0" voided="false" uuid="9634bbbb-0000-4000-8000-000000009634" />
+	<drug drug_id="9634" concept_id="9634" name="Lamivudine / zidovudine" combination="true"
+	      creator="1" date_created="2008-08-15 00:00:00.0" retired="false" uuid="9634cccc-0000-4000-8000-000000009634" />
+	<orders order_id="9634" order_type_id="1" order_number="ORD-9634" urgency="ROUTINE"
+	        order_action="NEW" concept_id="9634" orderer="1" instructions="1x daily"
+	        date_activated="2008-08-15 00:00:00.0" creator="1" date_created="2008-08-15 00:00:00.0"
+	        voided="false" patient_id="7" uuid="9634dddd-0000-4000-8000-000000009634"
+	        care_setting="1" encounter_id="3" />
+	<drug_order order_id="9634" drug_inventory_id="9634" dose="1.0" dose_units="51" as_needed="false"
+	            frequency="1" dosing_type="org.openmrs.SimpleDosingInstructions" route="22"
+	            quantity="1.0" quantity_units="51" num_refills="0" dispense_as_written="0" />
+	<concept concept_id="9635" retired="false" datatype_id="4" class_id="3" is_set="false" creator="1"
+	         date_created="2008-08-15 00:00:00.0" uuid="9635aaaa-0000-4000-8000-000000009635" />
+	<concept_name concept_name_id="9635" concept_id="9635" name="Rifampicin isoniazid pyrazinamide and ethambutol"
+	              locale="en_GB" locale_preferred="1" concept_name_type="FULLY_SPECIFIED" creator="1"
+	              date_created="2008-08-15 00:00:00.0" voided="false" uuid="9635bbbb-0000-4000-8000-000000009635" />
+	<drug drug_id="9635" concept_id="9635" name="Rifampicin isoniazid pyrazinamide and ethambutol" combination="true"
+	      creator="1" date_created="2008-08-15 00:00:00.0" retired="false" uuid="9635cccc-0000-4000-8000-000000009635" />
+	<orders order_id="9635" order_type_id="1" order_number="ORD-9635" urgency="ROUTINE"
+	        order_action="NEW" concept_id="9635" orderer="1" instructions="1x daily"
+	        date_activated="2008-08-15 00:00:00.0" creator="1" date_created="2008-08-15 00:00:00.0"
+	        voided="false" patient_id="7" uuid="9635dddd-0000-4000-8000-000000009635"
+	        care_setting="1" encounter_id="3" />
+	<drug_order order_id="9635" drug_inventory_id="9635" dose="1.0" dose_units="51" as_needed="false"
+	            frequency="1" dosing_type="org.openmrs.SimpleDosingInstructions" route="22"
+	            quantity="1.0" quantity_units="51" num_refills="0" dispense_as_written="0" />
+	<concept concept_id="9636" retired="false" datatype_id="4" class_id="3" is_set="false" creator="1"
+	         date_created="2008-08-15 00:00:00.0" uuid="9636aaaa-0000-4000-8000-000000009636" />
+	<concept_name concept_name_id="9636" concept_id="9636" name="Trimethoprim and sulfamethoxazole"
+	              locale="en_GB" locale_preferred="1" concept_name_type="FULLY_SPECIFIED" creator="1"
+	              date_created="2008-08-15 00:00:00.0" voided="false" uuid="9636bbbb-0000-4000-8000-000000009636" />
+	<drug drug_id="9636" concept_id="9636" name="Trimethoprim and sulfamethoxazole" combination="true"
+	      creator="1" date_created="2008-08-15 00:00:00.0" retired="false" uuid="9636cccc-0000-4000-8000-000000009636" />
+	<orders order_id="9636" order_type_id="1" order_number="ORD-9636" urgency="ROUTINE"
+	        order_action="NEW" concept_id="9636" orderer="1" instructions="1x daily"
+	        date_activated="2008-08-15 00:00:00.0" creator="1" date_created="2008-08-15 00:00:00.0"
+	        voided="false" patient_id="7" uuid="9636dddd-0000-4000-8000-000000009636"
+	        care_setting="1" encounter_id="3" />
+	<drug_order order_id="9636" drug_inventory_id="9636" dose="1.0" dose_units="51" as_needed="false"
+	            frequency="1" dosing_type="org.openmrs.SimpleDosingInstructions" route="22"
+	            quantity="1.0" quantity_units="51" num_refills="0" dispense_as_written="0" />
+</dataset>

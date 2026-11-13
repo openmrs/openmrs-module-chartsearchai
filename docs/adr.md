@@ -28975,3 +28975,47 @@ Residues:
 - A group the module does not resolve still has the drug checked against all her medications, under Decision 313's lead.
 - Two groups beside one drug, or two drugs beside a group, keep Decision 313's answer.
 
+## Decision 633: A finding merging one mechanism over several of her orders is stated, in a group answer, over the orders the group relates
+
+**Status: Accepted** (November 2026), on the owner's direction that an answer carries nothing beyond what was asked. It
+amends [Decision 99](#decision-99-one-mechanism-is-stated-once-naming-every-active-order-it-covers) for the answers of
+Decisions 630 to 632 alone.
+
+### Context
+
+Decision 99 states one mechanism once, naming every active order it covers. In an answer over a group of her medications
+that list carried orders outside the group. On the demo replica, of 187 group answers, 104 lines named several orders; a
+patient on efavirenz, an RHZE combination and co-trimoxazole, asked *"Any interactions with his TB treatment?"*, was told
+*"Efavirenz interacts with active order Rifampicin isoniazid pyrazinamide and ethambutol (3 orders) and Sulfamethoxazole
+(5 orders)"*, and *"Any interactions between his TB drugs?"* named his stavudine. Over the same orders, *"Any interactions
+between his ARVs and TB drugs?"* read *"Efavirenz interacts with active order Lamivudine, Pyrazinamide, Sulfamethoxazole,
+Zidovudine, Ethambutol and Isoniazid"*.
+
+### The decision
+
+A merged chip keeps its members (`DrugSafetyValidator.mergedChip`), and `SafetyWarning.restrictedTo` states it over only
+those a predicate admits: the one member where it admits one, Decision 99's own collapse over the members it admits where
+it admits several, so a rating never moves and no admitted order is lost. `DrugReferenceInjector.composeHerMedicationGroups`
+admits each member by the test it already put to a whole finding — between the two groups, among one, or one group's to
+anything — and states the restricted finding. The chip published is the one stated: the chart records it by the merged
+chip's detail (`markFindingsAsStated`), and `LlmInferenceService` publishes it in the merged chip's place
+(`DrugReferenceInjector.asStated`). Every other answer, the screen of all her medications among them, states the merged
+chip whole, as Decision 99 does.
+
+### Measured
+
+On the demo replica on 2026-11-13 (E2B, model up), against the build before:
+- Decision 630's 23 patients × 9 group wordings: 35 of 207 answers change, each a line naming fewer of his orders; the
+  chips stay 579, one restricted chip in each merged one's place. In the answers between two groups or among one, lines
+  naming his co-trimoxazole, dapsone or fluconazole fell from 21 to 0, and chips naming them from 21 to 0.
+- *"Can I give him efavirenz with his TB drugs?"* no longer names his own antiretrovirals; *"Any interactions with his
+  ARVs?"* no longer names his TB combination beside stavudine.
+- Decision 622's 44-answer screen sample: unchanged.
+
+A module answer whose findings are restricted gets no "Also covered by those findings and not named above" sentence
+(Decision 100): it named his co-trimoxazole after the line had left it out. Pinned through the service by
+`GroupAnswerThroughTheServiceContextTest`, which reddens without that exception and without the published chip being the
+one stated.
+
+Pinned by `GroupAnswerNamesOnlyTheGroupTest`, both of whose cases redden when the composer keeps the merged finding whole.
+

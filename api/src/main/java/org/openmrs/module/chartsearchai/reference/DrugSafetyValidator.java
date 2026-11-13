@@ -5625,48 +5625,68 @@ public class DrugSafetyValidator {
 				out.add(group.get(0).chip);
 				continue;
 			}
-			List<String> partners = new ArrayList<String>();
-			List<SafetyWarning.ChartOrderBridge> bridges =
-					new ArrayList<SafetyWarning.ChartOrderBridge>();
-			Set<String> seenBridges = new HashSet<String>();
-			Set<String> matchedNames = new LinkedHashSet<String>();
-			Map<String, List<DrugReference>> partnerRows = new LinkedHashMap<String, List<DrugReference>>();
-			Map<String, Integer> partnerOrderCounts = new LinkedHashMap<String, Integer>();
-			for (MechanismStatement member : group) {
-				if (!partners.contains(member.partnerName)) {
-					partners.add(member.partnerName);
-				}
-				partnerOrderCounts.putAll(member.chip.partnerOrderCounts());
-				matchedNames.addAll(member.chip.matchedOrderNames());
-				for (Map.Entry<String, List<DrugReference>> rows : member.chip.partnerRows().entrySet()) {
-					unionPartnerRows(partnerRows, rows.getKey(), rows.getValue());
-				}
-				if (member.bridges != null) {
-					for (SafetyWarning.ChartOrderBridge bridge : member.bridges) {
-						if (seenBridges.add(bridge.toString())) {
-							bridges.add(bridge);
-						}
+			out.add(mergedChip(ref, group, herOrder, subjectStart));
+		}
+		return out;
+	}
+
+	/**
+	 * The one chip stating {@code group}'s shared mechanism, naming each of its partners — and able to state it over only
+	 * those of its members a predicate admits, by this same method over fewer members (ADR Decision 633): a group answer
+	 * naming his ARVs never names his fluconazole because one mechanism covers both.
+	 */
+	private static SafetyWarning mergedChip(DrugReference ref, List<MechanismStatement> group, boolean herOrder,
+			Date subjectStart) {
+		List<String> partners = new ArrayList<String>();
+		List<SafetyWarning.ChartOrderBridge> bridges =
+				new ArrayList<SafetyWarning.ChartOrderBridge>();
+		Set<String> seenBridges = new HashSet<String>();
+		Set<String> matchedNames = new LinkedHashSet<String>();
+		Map<String, List<DrugReference>> partnerRows = new LinkedHashMap<String, List<DrugReference>>();
+		Map<String, Integer> partnerOrderCounts = new LinkedHashMap<String, Integer>();
+		for (MechanismStatement member : group) {
+			if (!partners.contains(member.partnerName)) {
+				partners.add(member.partnerName);
+			}
+			partnerOrderCounts.putAll(member.chip.partnerOrderCounts());
+			matchedNames.addAll(member.chip.matchedOrderNames());
+			for (Map.Entry<String, List<DrugReference>> rows : member.chip.partnerRows().entrySet()) {
+				unionPartnerRows(partnerRows, rows.getKey(), rows.getValue());
+			}
+			if (member.bridges != null) {
+				for (SafetyWarning.ChartOrderBridge bridge : member.bridges) {
+					if (seenBridges.add(bridge.toString())) {
+						bridges.add(bridge);
 					}
 				}
 			}
-			// Through the ONE render site, handing it the partner LIST where it takes a partner name:
-			// the merged chip is the same sentence with more names in it, so it must not be assembled
-			// by a second concatenation of ACTIVE_ORDER_INTERACTION_PHRASE — that constant is shared
-			// with the check recognising this claim in an ANSWER (issue #377), and a second spelling
-			// would unpick the pairing. ActiveOrderInteractionPhraseTest counts the render sites.
-			//
-			// No note name and no rule travel with it: a chip covering several partners has no single
-			// answer for either, so the injected note falls back to partnerLabel, the documented
-			// pre-#297 behaviour rather than a new one.
-			// The one render site, told BOTH what to print and which orders it is naming — so the list
-			// travels structurally and nothing downstream recovers it by parsing the string this just
-			// wrote it into (the two-resolutions-that-agree shape issue #151 forbids).
-			// No member names a not-started order (collapseKey), so the merged chip names active orders only.
-			out.add(interactionWarning(ref, group.get(0).rule, joinPartners(partners), null, null, false,
-				bridges, herOrder, partners, subjectStart, null).withMatchedOrderNames(matchedNames).withPartnerRows(partnerRows)
-				.withPartnerOrderCounts(partnerOrderCounts));
 		}
-		return out;
+		// Through the ONE render site, handing it the partner LIST where it takes a partner name:
+		// the merged chip is the same sentence with more names in it, so it must not be assembled
+		// by a second concatenation of ACTIVE_ORDER_INTERACTION_PHRASE — that constant is shared
+		// with the check recognising this claim in an ANSWER (issue #377), and a second spelling
+		// would unpick the pairing. ActiveOrderInteractionPhraseTest counts the render sites.
+		//
+		// No note name and no rule travel with it: a chip covering several partners has no single
+		// answer for either, so the injected note falls back to partnerLabel, the documented
+		// pre-#297 behaviour rather than a new one.
+		// The one render site, told BOTH what to print and which orders it is naming — so the list
+		// travels structurally and nothing downstream recovers it by parsing the string this just
+		// wrote it into (the two-resolutions-that-agree shape issue #151 forbids).
+		// No member names a not-started order (collapseKey), so the merged chip names active orders only.
+		SafetyWarning merged = interactionWarning(ref, group.get(0).rule, joinPartners(partners), null, null, false,
+				bridges, herOrder, partners, subjectStart, null).withMatchedOrderNames(matchedNames).withPartnerRows(partnerRows)
+				.withPartnerOrderCounts(partnerOrderCounts);
+		return merged.withRestrictor(keep -> {
+			List<MechanismStatement> kept = new ArrayList<MechanismStatement>();
+			for (MechanismStatement member : group) {
+				if (keep.test(member.chip)) {
+					kept.add(member);
+				}
+			}
+			return kept.isEmpty() ? null : kept.size() == 1 ? kept.get(0).chip
+					: kept.size() == group.size() ? merged : mergedChip(ref, kept, herOrder, subjectStart);
+		});
 	}
 
 	/** {@code a}, {@code a and b}, {@code a, b and c} — the list form a collapsed chip names its

@@ -1127,7 +1127,9 @@ public class LlmInferenceService implements ChartSearchService {
 				mappings), chart, question);
 		// The orders of the findings it states, never of those it only counts: the chips beside it name those (ADR
 		// Decision 493).
-		String answer = FindingPartnerCoverageCheck.withUnstatedPartnersNamed(composed,
+		// Never where the answer states its findings over fewer orders than their records name: those it left out are left out
+		// because the question did not ask of them (ADR Decision 633).
+		String answer = !chart.getFindingsAsStated().isEmpty() ? composed : FindingPartnerCoverageCheck.withUnstatedPartnersNamed(composed,
 				extractCitedReferences(DrugReferenceInjector.withoutCountingLines(composed), null, mappings), mappings,
 				drugSafetyValidator);
 		// Issue #472's statement too, so the two paths cannot differ: a question proposing nothing about a drug
@@ -1360,7 +1362,9 @@ public class LlmInferenceService implements ChartSearchService {
 		// 613): the duplicate order beside "Should I stop his nevirapine because of the rash?" was not what was asked.
 		Set<String> bearing = chart.getFindingsBearingOnTheQuestion();
 		List<SafetyWarning> published = new ArrayList<SafetyWarning>(chips.size());
-		for (SafetyWarning chip : chips) {
+		for (SafetyWarning each : chips) {
+			// As the module's answer stated it: over the orders asked about alone (ADR Decision 633).
+			SafetyWarning chip = DrugReferenceInjector.asStated(chart, each);
 			if (bearing != null && !bearing.contains(chip.getDetail())) {
 				continue;
 			}

@@ -16,6 +16,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
@@ -597,6 +598,9 @@ public class PatientChartSerializer {
 		/** @see #getFindingsBearingOnTheQuestion() */
 		private Set<String> findingsBearingOnTheQuestion;
 
+		/** @see #getFindingsAsStated() */
+		private Map<String, Object> findingsAsStated = Collections.emptyMap();
+
 		/** @see #asksWhatADrugDoesToHer() */
 		private boolean asksWhatADrugDoesToHer;
 
@@ -917,6 +921,18 @@ public class PatientChartSerializer {
 		 */
 		public Set<String> getFindingsBearingOnTheQuestion() {
 			return findingsBearingOnTheQuestion;
+		}
+
+		/** Records, by each finding's detail, the finding as the module's answer stated it, over fewer of her orders than it
+		 *  names (ADR Decision 633); {@code DrugReferenceInjector} is the only caller. Untyped here so this package names no
+		 *  drug-safety type: {@code DrugReferenceInjector.asStated} is its one reader. */
+		public void markFindingsAsStated(Map<String, Object> stated) {
+			this.findingsAsStated = Collections.unmodifiableMap(new HashMap<String, Object>(stated));
+		}
+
+		/** @see #markFindingsAsStated; never null */
+		public Map<String, Object> getFindingsAsStated() {
+			return findingsAsStated;
 		}
 
 		/** The substances the question names, as the drug data keys them — ADR Decision 387 — or empty where it names none:

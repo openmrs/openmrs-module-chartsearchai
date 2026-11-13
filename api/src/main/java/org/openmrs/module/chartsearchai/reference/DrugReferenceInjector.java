@@ -1708,6 +1708,8 @@ public class DrugReferenceInjector {
 		// One drug asked about beside a group of hers the module resolves, answered over the two (ADR Decision 632).
 		boolean besideAResolvedGroup = false;
 		Set<String> besideTheGroupStated = null;
+		// Each finding a group answer states over fewer of her orders than it names, as stated (ADR Decision 633).
+		Map<String, SafetyWarning> findingsAsStated = new HashMap<String, SafetyWarning>();
 		// Whether the answer is that no interaction check was run, which names no order as not checked (ADR Decision 567).
 		boolean noCheckWasRun = false;
 		if (moduleAnswer == null && unrecognised != null) {
@@ -1778,7 +1780,7 @@ public class DrugReferenceInjector {
 					&& !screenedSubstances.containsAll(asked.get(0).substances) && !namedAsHers(question, asked.get(0));
 			String besideTheGroup = asked.size() != 1 || partlyHers ? null : composeHerMedicationGroups(question, findings, findingNumbers,
 				orderRecordNumbers, orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context)
-						: orderRecordNumbers, orderEntries, context, stated, asked.get(0));
+						: orderRecordNumbers, orderEntries, context, stated, findingsAsStated, asked.get(0));
 			if (besideTheGroup != null) {
 				moduleAnswer = besideTheGroup;
 				summary = null;
@@ -1816,7 +1818,7 @@ public class DrugReferenceInjector {
 			Set<String> stated = new HashSet<String>();
 			String groupAnswer = composeHerMedicationGroups(question, findings, findingNumbers, orderRecordNumbers,
 				orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers, orderEntries,
-				context, stated);
+				context, stated, findingsAsStated);
 			if (groupAnswer != null) {
 				moduleAnswer = groupAnswer;
 				summary = null;
@@ -1899,6 +1901,9 @@ public class DrugReferenceInjector {
 		}
 		if (groupStated != null) {
 			injected.markFindingsBearingOnTheQuestion(groupStated);
+		}
+		if ((besideTheGroupStated != null || groupStated != null) && !findingsAsStated.isEmpty()) {
+			injected.markFindingsAsStated(new HashMap<String, Object>(findingsAsStated));
 		}
 		// Stamped on the chart the injector built and on no other, because only this pass knows what
 		// it resolved (issue #469). A chart this method returns early is one it resolved nothing on,
@@ -9656,9 +9661,48 @@ public class DrugReferenceInjector {
 	 */
 	private String composeHerMedicationGroups(String question, List<SafetyWarning> findings, List<Integer> numbers,
 			Map<String, Integer> orderRecordNumbers, Map<String, Integer> herOrderRecords, List<DrugReference> orderEntries,
-			PatientClinicalContext context, Set<String> stated) {
+			PatientClinicalContext context, Set<String> stated, Map<String, SafetyWarning> asStated) {
 		return composeHerMedicationGroups(question, findings, numbers, orderRecordNumbers, herOrderRecords, orderEntries, context,
-			stated, null);
+			stated, asStated, null);
+	}
+
+	/**
+	 * {@code chip} as the module's answer stated it — over only the orders the question asked about, where it merged one
+	 * mechanism over more of them (ADR Decision 633) — or {@code chip} itself. The one reader of what {@code
+	 * markFindingsAsStated} recorded.
+	 */
+	public static SafetyWarning asStated(PatientChart chart, SafetyWarning chip) {
+		Object stated = chart == null || chip == null ? null : chart.getFindingsAsStated().get(chip.getDetail());
+		if (!(stated instanceof SafetyWarning)) {
+			return chip;
+		}
+		// Stated in the answer as the chip it replaces was, so a client does not repeat it beneath the answer.
+		return chip.isStatedInTheAnswer() ? ((SafetyWarning) stated).asStatedInTheAnswer() : (SafetyWarning) stated;
+	}
+
+	/** Whether {@code finding}, a chip of one partner or one merging several, relates the groups' {@code substances} as
+	 *  the question asks of them: between two, among one, or one to anything (ADR Decisions 630, 633). */
+	private static boolean relatesToTheGroups(SafetyWarning finding, List<DrugReference> orderEntries,
+			List<Set<Object>> substances, boolean between, boolean among) {
+		Set<Object> subject = subjectSubstances(finding, orderEntries);
+		Set<Object> partners = new LinkedHashSet<Object>();
+		for (List<DrugReference> rows : finding.partnerRows().values()) {
+			for (DrugReference row : rows) {
+				partners.add(row.substanceGroupKey());
+			}
+		}
+		boolean sharing = finding.statesOrdersSharingASubstance();
+		Set<Object> first = substances.get(0);
+		if (between) {
+			Set<Object> second = substances.get(1);
+			return !sharing && (!Collections.disjoint(subject, first) && !Collections.disjoint(partners, second)
+					|| !Collections.disjoint(subject, second) && !Collections.disjoint(partners, first));
+		}
+		if (among) {
+			return sharing ? !Collections.disjoint(subject, first)
+					: !Collections.disjoint(subject, first) && !Collections.disjoint(partners, first);
+		}
+		return !Collections.disjoint(subject, first) || !sharing && !Collections.disjoint(partners, first);
 	}
 
 	/**
@@ -9669,7 +9713,7 @@ public class DrugReferenceInjector {
 	 */
 	private String composeHerMedicationGroups(String question, List<SafetyWarning> findings, List<Integer> numbers,
 			Map<String, Integer> orderRecordNumbers, Map<String, Integer> herOrderRecords, List<DrugReference> orderEntries,
-			PatientClinicalContext context, Set<String> stated, AskedDrug asked) {
+			PatientClinicalContext context, Set<String> stated, Map<String, SafetyWarning> asStated, AskedDrug asked) {
 		List<CrossReactivityGroup> carried = drugReferenceService.getCrossReactivityGroups();
 		List<String> groups = DrugClassTerms.herMedicationGroupsNamed(question, carried);
 		String unresolved = DrugClassTerms.unresolvedGroupOfHers(question, carried);
@@ -9754,36 +9798,27 @@ public class DrugReferenceInjector {
 		boolean between = groups.size() == 2 || asked != null;
 		boolean among = !between && DrugClassTerms.asksAmongThemselves(question);
 		List<Integer> relating = new ArrayList<Integer>();
+		// Each finding over only the orders the groups asked about: a chip stating one mechanism over several of her orders
+		// (Decision 99) is stated over those of them it relates to the groups (ADR Decision 633) — "Efavirenz interacts with
+		// active order Rifampicin … and Sulfamethoxazole" named his co-trimoxazole in an answer about his TB drugs.
+		List<SafetyWarning> shown = new ArrayList<SafetyWarning>(findings);
+		Predicate<SafetyWarning> relates = finding -> relatesToTheGroups(finding, orderEntries, substances, between, among);
 		for (int i = 0; i < findings.size(); i++) {
 			SafetyWarning finding = findings.get(i);
 			if (!SafetyWarning.TYPE_INTERACTION.equals(finding.getType())) {
 				continue;
 			}
-			Set<Object> subject = subjectSubstances(finding, orderEntries);
-			Set<Object> partners = new LinkedHashSet<Object>();
-			for (List<DrugReference> rows : finding.partnerRows().values()) {
-				for (DrugReference row : rows) {
-					partners.add(row.substanceGroupKey());
+			SafetyWarning scoped = finding.restrictedTo(relates);
+			if (scoped != null) {
+				relating.add(i);
+				shown.set(i, scoped);
+				stated.add(scoped.getDetail());
+				if (scoped != finding && asStated != null) {
+					asStated.put(finding.getDetail(), scoped);
 				}
 			}
-			boolean sharing = finding.statesOrdersSharingASubstance();
-			Set<Object> first = substances.get(0);
-			boolean relates;
-			if (between) {
-				Set<Object> second = substances.get(1);
-				relates = !sharing && (!Collections.disjoint(subject, first) && !Collections.disjoint(partners, second)
-						|| !Collections.disjoint(subject, second) && !Collections.disjoint(partners, first));
-			} else if (among) {
-				relates = sharing ? !Collections.disjoint(subject, first)
-						: !Collections.disjoint(subject, first) && !Collections.disjoint(partners, first);
-			} else {
-				relates = !Collections.disjoint(subject, first) || !sharing && !Collections.disjoint(partners, first);
-			}
-			if (relates) {
-				relating.add(i);
-				stated.add(finding.getDetail());
-			}
 		}
+		findings = shown;
 		if (asked != null) {
 			String group = "this patient's " + DrugClassTerms.spokenName(groups.get(0), true)
 					+ DrugClassTerms.readAs(groups.get(0), carried) + " (" + members.get(0) + ")";

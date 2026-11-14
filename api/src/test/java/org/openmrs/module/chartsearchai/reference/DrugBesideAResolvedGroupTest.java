@@ -44,7 +44,10 @@ public class DrugBesideAResolvedGroupTest extends BaseModuleContextSensitiveTest
 	@Test
 	public void aDrugBesideAGroupOfHisIsAnsweredOverThatGroup() {
 		for (String question : Arrays.asList("Does fluconazole interact with his TB drugs?", "Is fluconazole safe with his TB "
-				+ "drugs?", "Can I give him fluconazole with his TB treatment?")) {
+				+ "drugs?", "Can I give him fluconazole with his TB treatment?",
+			// proposed beside them (ADR Decision 635)
+			"Is it safe to give fluconazole with his TB treatment?", "Is it ok to add fluconazole to his TB drugs?",
+			"Is it safe to start fluconazole with his TB drugs?", "Can I prescribe fluconazole alongside his TB drugs?")) {
 			PatientChart chart = ask(question);
 			String answer = chart.getModuleAnswer();
 

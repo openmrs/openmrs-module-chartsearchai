@@ -9556,8 +9556,18 @@ public class DrugReferenceInjector {
 	 *  313, 632). */
 	private boolean asksOfADrugBesideHerMedications(String asHers, List<DrugReference> questionDrugs) {
 		return asksWhetherItInteracts(asHers, questionDrugs)
-				|| QueryScopeRouter.asksWhetherADrugIsSafeWithHerMedications(wordsBesideItsNames(asHers, questionDrugs));
+				|| QueryScopeRouter.asksWhetherADrugIsSafeWithHerMedications(wordsBesideItsNames(asHers, questionDrugs))
+				// and the drug proposed beside them, "Is it safe to give dolutegravir with his TB treatment?", "Is it ok to add
+				// dolutegravir to his TB drugs?" (ADR Decision 635)
+				|| BESIDE_HER_MEDICATIONS.matcher(asHers).find()
+						&& QueryScopeRouter.asksWhetherToGiveADrug(wordsBesideItsNames(asHers, questionDrugs));
 	}
+
+	/** Her medications joined to a drug a question proposes: "with his medications", "to his medications", "between
+	 *  warfarin and her medications" (ADR Decision 635). */
+	private static final Pattern BESIDE_HER_MEDICATIONS = Pattern.compile("(?i)\\b(?:with|alongside|beside|to|plus|and|"
+			+ "together with|on top of|while (?:he is |she is |they are )?(?:on|taking)) (?:(?:any|all) of )?(?:his|her|their) "
+			+ "medications\\b");
 
 	/**
 	 * Whether {@code question} asks of the interactions of a group of hers named by a class or by words nothing resolves —

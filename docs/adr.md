@@ -29050,3 +29050,38 @@ Pinned by `AntibioticsAndTbDrugsTest`, both of whose cases failed before the cha
 `DrugBesideAResolvedGroupTest.aDrugBesideHisAntibioticsIsAnsweredOverHisTbDrugsAmongThem`, which replaces Decision 632's
 fallback for that wording.
 
+## Decision 635: A drug proposed beside a group of her medications is answered over that group
+
+**Status: Accepted** (November 2026), on the owner's direction that an answer carries nothing beyond what was asked. It
+extends [Decision 632](#decision-632-one-drug-asked-about-beside-a-group-of-her-medications-the-module-resolves-is-answered-over-that-group).
+
+### Context
+
+Decision 632 answered a drug beside a group of her medications where the question asked whether it interacts with them
+or is safe with them. A drug PROPOSED beside them — *"Is it safe to give dolutegravir with his TB treatment?"*, *"Is it ok
+to add dolutegravir to his TB drugs?"*, *"Is it safe to start dolutegravir with his TB drugs?"* — took the proposal's
+answer over all her medications: on the demo replica, *"No — this module's drug-safety check found a reason to withhold
+Dolutegravir."* for all 12 patients asked, whether or not the reason was a TB drug.
+
+### The decision
+
+`DrugReferenceInjector.asksOfADrugBesideHerMedications` also admits a question proposing the drug
+(`QueryScopeRouter.asksWhetherToGiveADrug`) that joins it to her group — *"with"*, *"alongside"*, *"to"*, *"on top of"*,
+*"while on"* her group — read with the group as her medications. Everything else Decision 632 decided stands, its
+fallbacks among it.
+
+### Measured
+
+On the demo replica on 2026-11-15 (E2B, model up), against the build before: *"Is it safe to give dolutegravir with his TB
+treatment?"* is answered over his TB drugs for the 4 of 12 patients on one (chips 22 → 19 over the 12); the 8 on none keep
+the proposal's answer, as Decision 632's fallback has them. Decisions 630 and 631's answers and Decision 622's screen sample
+are unchanged. Through `injectRecords` on 750 wordings, 8 change, each a proposal beside a group now answered over it.
+
+`ClinicianWordingsTest` held *"Is it safe to start rifampicin with her ARVs?"* equal to *"Can I give her rifampicin?"*, and
+*"Should warfarin be avoided with her ARVs?"*, *"Is she at risk if she takes warfarin with her ARVs?"* and *"Is there a
+serious interaction between warfarin and her ARVs?"* equal to *"Should I avoid warfarin?"*; they now assert the answer
+over her ARVs, naming none of her aspirin or diclofenac.
+
+Pinned by `DrugBesideAResolvedGroupTest.aDrugBesideAGroupOfHisIsAnsweredOverThatGroup`, whose four proposal wordings
+redden without the new clause.
+

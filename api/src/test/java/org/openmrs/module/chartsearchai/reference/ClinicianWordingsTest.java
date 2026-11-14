@@ -112,7 +112,6 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 			{ "ciprofloxacin ok?", "Can I give her ciprofloxacin?" },
 			{ "Can fluconazole be given with her current treatment?", "Can I give her fluconazole?" },
 			{ "Is warfarin compatible with her medications?", "Can I give her warfarin?" },
-			{ "Is it safe to start rifampicin with her ARVs?", "Can I give her rifampicin?" },
 			{ "Is there a drug interaction if I give her rifampicin?", "Does rifampicin interact with her medications?" },
 			{ "Would giving her clarithromycin interact with anything?",
 					"Does clarithromycin interact with her medications?" },
@@ -124,6 +123,10 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
 			assertEquals(canonical, ask(pair[0]), pair[0]);
 		}
+		// Proposed beside her ARVs, it is answered over her ARVs (ADR Decision 635).
+		String besideHerArvs = ask("Is it safe to start rifampicin with her ARVs?");
+		assertTrue(besideHerArvs.startsWith("Rifampicin (rifampin) and this patient's antiretrovirals (")
+				&& !besideHerArvs.contains("Diclofenac"), besideHerArvs);
 		// A word outside that vocabulary is a question of its own, and the model answers it.
 		for (String other : new String[] { "Is her blood pressure ok on warfarin?", "When should I give her warfarin?",
 				"Did warfarin cause any problems for her?", "Is warfarin ok for her kidneys?" }) {
@@ -955,15 +958,22 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 	public void anAvoidedMistakenOrRuledOutDrugIsAnsweredWithNoLead() {
 		String avoid = ask("Should I avoid warfarin?");
 		assertNotNull(avoid, "precondition: the module answers Should I avoid warfarin?");
-		for (String question : Arrays.asList("Should warfarin be avoided with her ARVs?", "Does warfarin have to be avoided?",
+		for (String question : Arrays.asList("Does warfarin have to be avoided?",
 				"Is warfarin unsafe with her meds?", "Would it be a mistake to give her warfarin?",
 				"Is it a bad idea to give her warfarin?", "Should I not give warfarin?", "Is there no problem giving her warfarin?",
-				"Does giving warfarin put her at risk?", "Is she at risk if she takes warfarin with her ARVs?",
+				"Does giving warfarin put her at risk?",
 				"Would you avoid warfarin in this patient?", "Is it better to avoid warfarin?", "Should we hold off on warfarin?",
 				"Do her medications rule out warfarin?", "Does she have anything that rules out warfarin?",
 				"Is there a reason to be careful with warfarin?", "Are there any red flags with warfarin for her?",
-				"Any warnings for warfarin?", "Is there a serious interaction between warfarin and her ARVs?")) {
+				"Any warnings for warfarin?")) {
 			assertEquals(avoid, ask(question), question);
+		}
+		// Asked beside her ARVs, it is answered over her ARVs: her aspirin and diclofenac are no ARVs (ADR Decision 635).
+		for (String question : Arrays.asList("Should warfarin be avoided with her ARVs?",
+				"Is she at risk if she takes warfarin with her ARVs?", "Is there a serious interaction between warfarin and her ARVs?")) {
+			String answer = ask(question);
+			assertTrue(answer != null && answer.startsWith("Warfarin and this patient's antiretrovirals (")
+					&& !answer.contains("Diclofenac") && !answer.contains("aspirin"), question + ": " + answer);
 		}
 		String[][] pairs = {
 			{ "Is it contraindicated to give warfarin with nevirapine?", "Is warfarin contraindicated with her nevirapine?" },

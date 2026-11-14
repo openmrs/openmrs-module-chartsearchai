@@ -660,7 +660,7 @@ public class ProviderRestContractTest {
 		controller.setProviderRegistry(stubRegistry(provider));
 
 		controller.streamProviderTurn(new FailOnEventOutputStream("answer_done"), patient(), "What meds?",
-				"hub", ProviderMode.QUERY_SCOPED, "standard", null, AccountContext.unavailable());
+				"hub", ProviderMode.QUERY_SCOPED, "gemma-4-12b", null, AccountContext.unavailable());
 
 		assertEquals(1, conversations.finished,
 				"the final answer must persist after the browser disconnects during its staged tail");
@@ -754,7 +754,7 @@ public class ProviderRestContractTest {
 
 		ByteArrayOutputStream out = new ByteArrayOutputStream();
 		controller.streamProviderTurn(out, patient(), "Any known drug allergies?", "hub",
-				ProviderMode.QUERY_SCOPED, "standard", null, AccountContext.unavailable());
+				ProviderMode.QUERY_SCOPED, "gemma-4-12b", null, AccountContext.unavailable());
 
 		assertEquals(0, hubCalls.get());
 		assertEquals(Arrays.asList("turn_started", "turn_error"), sseTypes(out));

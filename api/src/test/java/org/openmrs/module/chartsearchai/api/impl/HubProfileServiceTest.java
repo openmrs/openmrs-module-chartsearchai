@@ -87,6 +87,7 @@ public class HubProfileServiceTest extends BaseModuleContextSensitiveTest {
 		String response = "{\"object\":\"list\","
 				+ "\"data\":["
 				+ "{\"id\":\"gemma-4-12b\",\"available\":true,\"backend_metadata\":{\"context_window\":16384}},"
+				+ "{\"id\":\"gemma-e4b\",\"available\":true,\"backend_metadata\":{\"context_window\":16384}},"
 				+ "{\"id\":\"qwen3.5-9b\",\"available\":true}"
 				+ "],"
 				+ "\"execution_modes\":{"
@@ -112,28 +113,34 @@ public class HubProfileServiceTest extends BaseModuleContextSensitiveTest {
 			Map<String, Object> payload = new HubProfileService().listProfiles();
 			List<Map<String, Object>> profiles = (List<Map<String, Object>>) payload.get("data");
 			assertEquals(3, profiles.size());
-			assertEquals("quick", profiles.get(0).get("id"));
-			assertEquals("Quick answer", profiles.get(0).get("label"));
-			assertFalse((Boolean) profiles.get(0).get("default"));
+			assertEquals("gemma-4-12b", profiles.get(0).get("id"));
+			assertEquals("Gemma 4 12B", profiles.get(0).get("label"));
+			assertTrue((Boolean) profiles.get(0).get("default"));
 			assertTrue((Boolean) profiles.get(0).get("available"));
-			assertEquals("standard", profiles.get(1).get("id"));
-			assertEquals("Standard answer", profiles.get(1).get("label"));
-			assertTrue((Boolean) profiles.get(1).get("default"));
+			assertFalse((Boolean) profiles.get(0).get("indepth"));
+			assertFalse((Boolean) profiles.get(0).get("validation"));
+			assertEquals(16384, profiles.get(0).get("context_window"));
+			assertEquals("gemma-4-e4b", profiles.get(1).get("id"));
+			assertEquals("Gemma 4 E4B (Fast)", profiles.get(1).get("label"));
+			assertFalse((Boolean) profiles.get(1).get("default"));
 			assertTrue((Boolean) profiles.get(1).get("available"));
-			assertEquals(16384, profiles.get(1).get("context_window"));
-			assertEquals("verified", profiles.get(2).get("id"));
-			assertEquals("Cross-checked answer", profiles.get(2).get("label"));
+			assertFalse((Boolean) profiles.get(1).get("indepth"));
+			assertFalse((Boolean) profiles.get(1).get("validation"));
+			assertEquals("qwen-3.5-9b", profiles.get(2).get("id"));
+			assertEquals("Qwen 3.5 9B", profiles.get(2).get("label"));
 			assertFalse((Boolean) profiles.get(2).get("default"));
 			assertTrue((Boolean) profiles.get(2).get("available"));
-			assertEquals("standard", new HubProfileService().resolveDefaultProfileId());
+			assertFalse((Boolean) profiles.get(2).get("indepth"));
+			assertFalse((Boolean) profiles.get(2).get("validation"));
+			assertEquals("gemma-4-12b", new HubProfileService().resolveDefaultProfileId());
 
 			// Custom catalog where the default preset is unavailable: discovery keeps default=true on
 			// the configured default preset (never promotes fallback), while runtime default falls back.
 			String customPresets = "["
-					+ "{\"id\":\"quick\",\"label\":\"Quick answer\",\"default\":false,\"model\":\"gemma-4-12b\","
-					+ "\"execution\":{\"mode\":\"quick\",\"preset_id\":\"quick\"}},"
+					+ "{\"id\":\"gemma-4-12b\",\"label\":\"Gemma 4 12B\",\"default\":false,\"model\":\"gemma-4-12b\","
+					+ "\"execution\":{\"mode\":\"quick\",\"preset_id\":\"gemma-4-12b\"}},"
 					+ "{\"id\":\"unavailable-default\",\"label\":\"Primary\",\"default\":true,\"model\":\"missing-model\","
-					+ "\"execution\":{\"mode\":\"standard\",\"preset_id\":\"unavailable-default\"}}"
+					+ "\"execution\":{\"mode\":\"quick\",\"preset_id\":\"unavailable-default\"}}"
 					+ "]";
 			Context.getAdministrationService().setGlobalProperty("chartsearchai.hub.presets", customPresets);
 			Map<String, Object> fallbackPayload = new HubProfileService().listProfiles();
@@ -144,9 +151,8 @@ public class HubProfileServiceTest extends BaseModuleContextSensitiveTest {
 					"discovery metadata must not promote fallback presets to default=true");
 			assertFalse((Boolean) fallbackProfiles.get(1).get("available"));
 			assertTrue((Boolean) fallbackProfiles.get(1).get("default"));
-			assertEquals("quick", new HubProfileService().resolveDefaultProfileId());
+			assertEquals("gemma-4-12b", new HubProfileService().resolveDefaultProfileId());
 
-			// Missing verifier model marks verified unavailable while keeping quick/standard ready.
 			Context.getAdministrationService().setGlobalProperty("chartsearchai.hub.presets", "");
 		}
 		finally {
@@ -157,10 +163,10 @@ public class HubProfileServiceTest extends BaseModuleContextSensitiveTest {
 
 	@SuppressWarnings("unchecked")
 	@Test
-	public void missingVerifierModelMarksVerifiedPresetUnavailableWithoutBlockingSingleModelPresets() throws Exception {
+	public void missingBackingOrVerifierModelMarksAffectedPresetUnavailableWithoutBlockingReadyPresets() throws Exception {
 		String response = "{\"object\":\"list\","
-				+ "\"data\":[{\"id\":\"gemma-4-12b\",\"available\":true}],"
-				+ "\"execution_modes\":{\"quick\":{},\"standard\":{},\"verified\":{}}}";
+				+ "\"data\":[{\"id\":\"gemma-4-12b\",\"available\":true},{\"id\":\"gemma-e4b\",\"available\":true}],"
+				+ "\"execution_modes\":{\"quick\":{},\"verified\":{}}}";
 		HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
 		server.createContext("/v1/models", exchange -> {
 			byte[] body = response.getBytes(StandardCharsets.UTF_8);
@@ -182,9 +188,25 @@ public class HubProfileServiceTest extends BaseModuleContextSensitiveTest {
 			assertTrue((Boolean) profiles.get(1).get("available"));
 			assertFalse((Boolean) profiles.get(2).get("available"));
 			assertTrue(((List<?>) profiles.get(2).get("unavailable_reasons"))
+					.contains("model_unavailable:qwen3.5-9b"));
+
+			String verifiedPresets = "["
+					+ "{\"id\":\"gemma-4-12b\",\"label\":\"Gemma 4 12B\",\"default\":true,\"model\":\"gemma-4-12b\","
+					+ "\"execution\":{\"mode\":\"quick\",\"preset_id\":\"gemma-4-12b\"}},"
+					+ "{\"id\":\"verified\",\"label\":\"Verified\",\"default\":false,\"model\":\"gemma-4-12b\","
+					+ "\"execution\":{\"mode\":\"verified\",\"preset_id\":\"verified\",\"verifier_model\":\"qwen3.5-9b\"}}"
+					+ "]";
+			Context.getAdministrationService().setGlobalProperty("chartsearchai.hub.presets", verifiedPresets);
+			Map<String, Object> verifiedPayload = new HubProfileService().listProfiles();
+			List<Map<String, Object>> verifiedProfiles = (List<Map<String, Object>>) verifiedPayload.get("data");
+			assertEquals(2, verifiedProfiles.size());
+			assertTrue((Boolean) verifiedProfiles.get(0).get("available"));
+			assertFalse((Boolean) verifiedProfiles.get(1).get("available"));
+			assertTrue(((List<?>) verifiedProfiles.get(1).get("unavailable_reasons"))
 					.contains("verifier_model_unavailable:qwen3.5-9b"));
 		}
 		finally {
+			Context.getAdministrationService().setGlobalProperty("chartsearchai.hub.presets", "");
 			server.stop(0);
 		}
 	}

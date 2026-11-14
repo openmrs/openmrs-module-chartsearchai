@@ -22,14 +22,16 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 /**
  * Parses and owns the OpenMRS clinician Hub preset catalog configured via
  * {@link org.openmrs.module.chartsearchai.ChartSearchAiConstants#GP_HUB_PRESETS}, falling back to
- * the validated three-preset baseline ({@code quick}, {@code standard}, {@code verified}) when the
- * global property is unset or empty.
+ * the three single-call model-named baseline presets ({@code gemma-4-12b}, {@code gemma-4-e4b},
+ * {@code qwen-3.5-9b}) when the global property is unset or empty.
  */
 public final class HubPresetCatalog {
 
 	public static final String DEFAULT_BACKING_MODEL = "gemma-4-12b";
 
-	public static final String DEFAULT_VERIFIER_MODEL = "qwen3.5-9b";
+	public static final String FAST_BACKING_MODEL = "gemma-e4b";
+
+	public static final String ALTERNATIVE_BACKING_MODEL = "qwen3.5-9b";
 
 	private static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -132,31 +134,27 @@ public final class HubPresetCatalog {
 
 	private static HubPresetCatalog buildDefaultCatalog() {
 		List<HubPreset> defaults = new ArrayList<>(3);
-		defaults.add(new HubPreset("quick", "Quick answer", "Single fast pass over the chart", false,
-				DEFAULT_BACKING_MODEL, executionSpec("quick", "quick", null, false)));
-		defaults.add(new HubPreset("standard", "Standard answer", "Fast answer plus detailed background explanation",
-				true, DEFAULT_BACKING_MODEL, executionSpec("standard", "standard", null, false)));
-		defaults.add(new HubPreset("verified", "Cross-checked answer",
-				"Fast answer, detailed view, and independent clinical cross-check", false, DEFAULT_BACKING_MODEL,
-				executionSpec("verified", "verified", DEFAULT_VERIFIER_MODEL, true)));
+		defaults.add(new HubPreset("gemma-4-12b", "Gemma 4 12B",
+				"Balanced clinical chart synthesis (Gemma 4 12B, single pass)", true,
+				DEFAULT_BACKING_MODEL, singleCallExecutionSpec("gemma-4-12b")));
+		defaults.add(new HubPreset("gemma-4-e4b", "Gemma 4 E4B (Fast)",
+				"Fast clinical chart synthesis (Gemma 4 E4B, single pass)", false,
+				FAST_BACKING_MODEL, singleCallExecutionSpec("gemma-4-e4b")));
+		defaults.add(new HubPreset("qwen-3.5-9b", "Qwen 3.5 9B",
+				"Alternative clinical chart synthesis (Qwen 3.5 9B, single pass)", false,
+				ALTERNATIVE_BACKING_MODEL, singleCallExecutionSpec("qwen-3.5-9b")));
 		return new HubPresetCatalog(defaults);
 	}
 
-	private static Map<String, Object> executionSpec(String mode, String presetId, String verifierModel,
-			boolean foldedGrounding) {
+	private static Map<String, Object> singleCallExecutionSpec(String presetId) {
 		Map<String, Object> checks = new LinkedHashMap<>();
 		checks.put("temporal", "enforce");
-		if (foldedGrounding) {
-			checks.put("grounding", "folded");
-		}
-		checks.put("confidence", "levels");
+		checks.put("confidence", "findings");
+		checks.put("drug_safety", Boolean.TRUE);
 
 		Map<String, Object> spec = new LinkedHashMap<>();
-		spec.put("mode", mode);
+		spec.put("mode", "quick");
 		spec.put("preset_id", presetId);
-		if (verifierModel != null) {
-			spec.put("verifier_model", verifierModel);
-		}
 		spec.put("checks", checks);
 		return spec;
 	}

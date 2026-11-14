@@ -68,7 +68,7 @@ public class HubClinicalAnswerProviderTest {
 			}
 		});
 		TurnRequest request = new TurnRequest(patient(), "Question", "conversation", "request",
-				ProviderMode.QUERY_SCOPED, "standard", Collections.emptyList(), account);
+				ProviderMode.QUERY_SCOPED, "gemma-4-12b", Collections.emptyList(), account);
 		ScriptedHubTransport transport = new ScriptedHubTransport();
 		transport.events = Collections.singletonList(wire("done", answerPayload("Answer")));
 		provider(transport, "http://hub.example/v1/chat/completions")
@@ -169,14 +169,14 @@ public class HubClinicalAnswerProviderTest {
 				"http://hub.example/v1/chat/completions");
 		CollectingSink sink = new CollectingSink();
 
-		TurnResult result = provider.execute(request("standard"), sink,
+		TurnResult result = provider.execute(request("gemma-4-12b"), sink,
 				CancellationSignal.NONE).toCompletableFuture().get();
 
 		assertEquals(TurnEventType.TURN_ERROR, result.getTerminalState());
 		assertEquals("hub_stream_incomplete", result.getProblemCode());
 		assertNull(result.getAnswer());
 		TurnEvent validation = sink.events.stream().filter(event -> event.getType() == TurnEventType.ANSWER_VALIDATION)
-				.findFirst().orElseThrow(AssertionError::new);
+				.findFirst().orElseThrow(() -> new AssertionError("expected ANSWER_VALIDATION event"));
 		assertEquals("Aspirin 81mg.", validation.getAnswer().getText());
 		assertEquals("unavailable",
 				((Map<?, ?>) validation.getAnswer().getPayload().get("answerValidation")).get("status"));
@@ -194,12 +194,12 @@ public class HubClinicalAnswerProviderTest {
 				"http://hub.example/v1/chat/completions");
 		CollectingSink sink = new CollectingSink();
 
-		TurnResult result = provider.execute(request("standard"), sink,
+		TurnResult result = provider.execute(request("gemma-4-12b"), sink,
 				CancellationSignal.NONE).toCompletableFuture().get();
 
 		assertEquals(TurnEventType.TURN_ERROR, result.getTerminalState());
 		TurnEvent validation = sink.events.stream().filter(event -> event.getType() == TurnEventType.ANSWER_VALIDATION)
-				.findFirst().orElseThrow(AssertionError::new);
+				.findFirst().orElseThrow(() -> new AssertionError("expected ANSWER_VALIDATION event"));
 		assertEquals("unavailable",
 				((Map<?, ?>) validation.getAnswer().getPayload().get("answerValidation")).get("status"));
 		assertEquals(Arrays.asList(TurnEventType.TURN_STARTED, TurnEventType.ANSWER_DONE,
@@ -222,14 +222,14 @@ public class HubClinicalAnswerProviderTest {
 				"http://hub.example/v1/chat/completions");
 		CollectingSink sink = new CollectingSink();
 
-		TurnResult result = provider.execute(request("standard"), sink,
+		TurnResult result = provider.execute(request("gemma-4-12b"), sink,
 				CancellationSignal.NONE).toCompletableFuture().get();
 
 		assertEquals(TurnEventType.TURN_ERROR, result.getTerminalState());
 		assertEquals(Arrays.asList(TurnEventType.TURN_STARTED, TurnEventType.ANSWER_DONE,
 				TurnEventType.INDEPTH_PENDING, TurnEventType.INDEPTH_ERROR, TurnEventType.TURN_ERROR), sink.types());
 		TurnEvent settled = sink.events.stream().filter(event -> event.getType() == TurnEventType.INDEPTH_ERROR)
-				.findFirst().orElseThrow(AssertionError::new);
+				.findFirst().orElseThrow(() -> new AssertionError("expected INDEPTH_ERROR event"));
 		assertNotEquals("pending", ((Map<?, ?>) settled.getAnswer().getPayload().get("inDepth")).get("status"));
 		assertTrue(TurnLifecycleValidator
 				.violations(provider.descriptor().getCapabilities(), sink.types()).isEmpty());
@@ -245,7 +245,7 @@ public class HubClinicalAnswerProviderTest {
 				"http://hub.example/v1/chat/completions");
 		CollectingSink sink = new CollectingSink();
 
-		TurnResult result = provider.execute(request("standard"), sink,
+		TurnResult result = provider.execute(request("gemma-4-12b"), sink,
 				CancellationSignal.NONE).toCompletableFuture().get();
 
 		assertEquals(TurnEventType.TURN_DONE, result.getTerminalState());
@@ -266,7 +266,7 @@ public class HubClinicalAnswerProviderTest {
 				"http://hub.example/v1/chat/completions");
 		CollectingSink sink = new CollectingSink();
 
-		TurnResult result = provider.execute(request("standard"), sink,
+		TurnResult result = provider.execute(request("gemma-4-12b"), sink,
 				CancellationSignal.NONE).toCompletableFuture().get();
 
 		assertEquals(TurnEventType.TURN_ERROR, result.getTerminalState());
@@ -290,7 +290,7 @@ public class HubClinicalAnswerProviderTest {
 			transport.errorBody = "{\"detail\":\"Metformin 500 mg twice daily\"}";
 			try (LogCapture capture = LogCapture.on(HubClinicalAnswerProvider.class.getName(), Level.DEBUG)) {
 				TurnResult result = provider(transport, "http://hub.example/v1/chat/completions")
-						.execute(request("standard"), new CollectingSink(), CancellationSignal.NONE)
+						.execute(request("gemma-4-12b"), new CollectingSink(), CancellationSignal.NONE)
 						.toCompletableFuture().get();
 
 				assertEquals(TurnEventType.TURN_ERROR, result.getTerminalState());
@@ -316,7 +316,7 @@ public class HubClinicalAnswerProviderTest {
 		transport.cancelOnFailure = false;
 		try (LogCapture capture = LogCapture.on(HubClinicalAnswerProvider.class.getName(), Level.DEBUG)) {
 			TurnResult result = provider(transport, "http://hub.example/v1/chat/completions")
-					.execute(request("standard"), new CollectingSink(), CancellationSignal.NONE)
+					.execute(request("gemma-4-12b"), new CollectingSink(), CancellationSignal.NONE)
 					.toCompletableFuture().get();
 
 			assertEquals("provider_failure", result.getProblemCode());
@@ -373,7 +373,7 @@ public class HubClinicalAnswerProviderTest {
 		assertFalse(descriptor.isReady());
 		assertNotNull(descriptor.getUnavailableReason());
 		assertTrue(descriptor.getCapabilities().contains(ProviderCapability.ANSWER));
-		assertFalse(descriptor.getCapabilities().contains(ProviderCapability.TOKEN_STREAMING));
+		assertTrue(descriptor.getCapabilities().contains(ProviderCapability.TOKEN_STREAMING));
 		assertTrue(descriptor.getCapabilities().contains(ProviderCapability.INDEPTH));
 		assertTrue(descriptor.getCapabilities().contains(ProviderCapability.ANSWER_REVIEW));
 	}
@@ -394,7 +394,7 @@ public class HubClinicalAnswerProviderTest {
 		CollectingSink sink = new CollectingSink();
 		TurnRequest fullChartRequest = new TurnRequest(patient(),
 				"What medications is this patient on?", "conversation-1", "request-1",
-				ProviderMode.FULL_CHART_STABLE, "standard", Collections.emptyList(), AccountContext.unavailable());
+				ProviderMode.FULL_CHART_STABLE, "gemma-4-12b", Collections.emptyList(), AccountContext.unavailable());
 
 		TurnResult result = provider.execute(fullChartRequest, sink,
 				CancellationSignal.NONE).toCompletableFuture().get();
@@ -432,18 +432,22 @@ public class HubClinicalAnswerProviderTest {
 		HubClinicalAnswerProvider provider = provider(transport,
 				"http://hub.example/v1/chat/completions");
 		CollectingSink sink = new CollectingSink();
-		TurnResult result = provider.execute(request("standard"), sink, CancellationSignal.NONE)
+		TurnResult result = provider.execute(request("gemma-4-12b"), sink, CancellationSignal.NONE)
 				.toCompletableFuture().get();
 
 		assertEquals(1, transport.calls.get(), "exactly one hub call per turn");
 		assertEquals("gemma-4-12b", transport.lastRequest.getProfileId());
 		try {
 			@SuppressWarnings("unchecked")
-			Map<String, String> execution = (Map<String, String>) HubCallRequest.class
+			Map<String, Object> execution = (Map<String, Object>) HubCallRequest.class
 					.getMethod("getExecution")
 					.invoke(transport.lastRequest);
-			assertEquals("standard", execution.get("mode"));
-			assertEquals("standard", execution.get("preset_id"));
+			assertEquals("quick", execution.get("mode"));
+			assertEquals("gemma-4-12b", execution.get("preset_id"));
+			@SuppressWarnings("unchecked")
+			Map<String, Object> checks = (Map<String, Object>) execution.get("checks");
+			assertEquals("findings", checks.get("confidence"));
+			assertEquals(Boolean.TRUE, checks.get("drug_safety"));
 		}
 		catch (ReflectiveOperationException e) {
 			throw new AssertionError("HubCallRequest.getExecution() missing", e);
@@ -492,7 +496,7 @@ public class HubClinicalAnswerProviderTest {
 		HubClinicalAnswerProvider provider = provider(transport, "http://hub.example/v1/chat/completions", true);
 		CollectingSink sink = new CollectingSink();
 		TurnResult result = provider
-				.execute(request("standard"), sink, CancellationSignal.NONE)
+				.execute(request("gemma-4-12b"), sink, CancellationSignal.NONE)
 				.toCompletableFuture().get();
 
 		assertEquals(0, transport.calls.get());
@@ -509,7 +513,7 @@ public class HubClinicalAnswerProviderTest {
 				"http://hub.example/v1/chat/completions");
 
 		CollectingSink sink = new CollectingSink();
-		TurnResult result = provider.execute(request("standard"), sink, CancellationSignal.NONE)
+		TurnResult result = provider.execute(request("gemma-4-12b"), sink, CancellationSignal.NONE)
 				.toCompletableFuture().get();
 
 		assertEquals(1, transport.calls.get());
@@ -526,7 +530,7 @@ public class HubClinicalAnswerProviderTest {
 				"http://hub.example/v1/chat/completions");
 
 		CollectingSink sink = new CollectingSink();
-		TurnResult result = provider.execute(request("standard"), sink, CancellationSignal.NONE)
+		TurnResult result = provider.execute(request("gemma-4-12b"), sink, CancellationSignal.NONE)
 				.toCompletableFuture().get();
 
 		assertEquals(TurnEventType.TURN_ERROR, result.getTerminalState());
@@ -544,7 +548,7 @@ public class HubClinicalAnswerProviderTest {
 				"http://hub.example/v1/chat/completions");
 		CollectingSink sink = new CollectingSink();
 
-		TurnResult result = provider.execute(request("standard"), sink,
+		TurnResult result = provider.execute(request("gemma-4-12b"), sink,
 				CancellationSignal.NONE).toCompletableFuture().get();
 
 		assertEquals(Arrays.asList(TurnEventType.TURN_STARTED, TurnEventType.TURN_ERROR),
@@ -566,7 +570,7 @@ public class HubClinicalAnswerProviderTest {
 		CollectingSink sink = new CollectingSink();
 		TurnCancellation cancellation = new TurnCancellation();
 
-		provider.execute(request("standard"), sink, cancellation).toCompletableFuture().get();
+		provider.execute(request("gemma-4-12b"), sink, cancellation).toCompletableFuture().get();
 
 		assertTrue(transport.lastCancellation == cancellation);
 	}
@@ -581,7 +585,7 @@ public class HubClinicalAnswerProviderTest {
 		HubClinicalAnswerProvider provider = provider(transport, "http://hub.example/v1/chat/completions");
 		CollectingSink sink = new CollectingSink();
 
-		TurnResult result = provider.execute(request("standard"), sink, new TurnCancellation())
+		TurnResult result = provider.execute(request("gemma-4-12b"), sink, new TurnCancellation())
 				.toCompletableFuture().get();
 
 		assertEquals(TurnEventType.TURN_DONE, result.getTerminalState());
@@ -606,7 +610,7 @@ public class HubClinicalAnswerProviderTest {
 		CollectingSink sink = new CollectingSink();
 		TurnCancellation cancellation = new TurnCancellation();
 
-		TurnResult result = provider.execute(request("standard"), sink, cancellation)
+		TurnResult result = provider.execute(request("gemma-4-12b"), sink, cancellation)
 				.toCompletableFuture().get();
 
 		assertEquals(TurnEventType.TURN_DONE, result.getTerminalState());
@@ -644,9 +648,10 @@ public class HubClinicalAnswerProviderTest {
 		CollectingSink sink = new CollectingSink();
 		TurnCancellation cancellation = new TurnCancellation();
 
-		TurnResult result = provider.execute(request("standard"), sink, cancellation)
+		TurnResult result = provider.execute(request("gemma-4-12b"), sink, cancellation)
 				.toCompletableFuture().get();
 
+		assertNotNull(result.getAnswer());
 		Map<String, Object> inDepth = (Map<String, Object>) result.getAnswer().getPayload().get("inDepth");
 		assertEquals("failed", inDepth.get("status"));
 		Map<String, Object> validation = (Map<String, Object>) result.getAnswer().getPayload()
@@ -681,7 +686,7 @@ public class HubClinicalAnswerProviderTest {
 				"http://hub.example/v1/chat/completions");
 		CollectingSink sink = new CollectingSink();
 
-		TurnResult result = provider.execute(request("standard"), sink,
+		TurnResult result = provider.execute(request("gemma-4-12b"), sink,
 				CancellationSignal.NONE).toCompletableFuture().get();
 
 		assertEquals(Arrays.asList(TurnEventType.TURN_STARTED, TurnEventType.ANSWER_DONE,
@@ -703,7 +708,7 @@ public class HubClinicalAnswerProviderTest {
 		CollectingSink sink = new CollectingSink();
 		TurnCancellation cancellation = new TurnCancellation();
 
-		TurnResult result = provider.execute(request("standard"), sink, cancellation)
+		TurnResult result = provider.execute(request("gemma-4-12b"), sink, cancellation)
 				.toCompletableFuture().get();
 
 		assertEquals(TurnEventType.TURN_ERROR, result.getTerminalState());
@@ -724,7 +729,7 @@ public class HubClinicalAnswerProviderTest {
 				"http://hub.example/v1/chat/completions");
 		CollectingSink sink = new CollectingSink();
 
-		TurnResult result = provider.execute(request("standard"), sink, CancellationSignal.NONE)
+		TurnResult result = provider.execute(request("gemma-4-12b"), sink, CancellationSignal.NONE)
 				.toCompletableFuture().get();
 
 		assertEquals(Arrays.asList(TurnEventType.TURN_STARTED, TurnEventType.ANSWER_DONE,
@@ -745,7 +750,7 @@ public class HubClinicalAnswerProviderTest {
 				"http://hub.example/v1/chat/completions");
 		CollectingSink sink = new CollectingSink();
 
-		TurnResult result = provider.execute(request("standard"), sink, CancellationSignal.NONE)
+		TurnResult result = provider.execute(request("gemma-4-12b"), sink, CancellationSignal.NONE)
 				.toCompletableFuture().get();
 
 		assertEquals(Arrays.asList(TurnEventType.TURN_STARTED, TurnEventType.ANSWER_DONE,
@@ -761,10 +766,73 @@ public class HubClinicalAnswerProviderTest {
 				"http://hub.example/v1/chat/completions");
 
 		CollectingSink sink = new CollectingSink();
-		TurnResult result = provider.execute(request("standard"), sink, () -> true)
+		TurnResult result = provider.execute(request("gemma-4-12b"), sink, () -> true)
 				.toCompletableFuture().get();
 
 		assertEquals(0, transport.calls.get());
 		assertEquals("cancelled", result.getProblemCode());
+	}
+
+	@Test
+	public void answerDeltaEventsStreamBeforeAnswerDoneAndPassLifecycle() throws Exception {
+		ScriptedHubTransport transport = new ScriptedHubTransport();
+		Map<String, Object> answer = answerPayload("ART started.");
+		transport.events = Arrays.asList(
+				wire("answer_delta", Collections.singletonMap("delta", "ART ")),
+				wire("answer_delta", Collections.singletonMap("delta", "")),
+				wire("answer_delta", Collections.singletonMap("delta", "started.")),
+				wire("answer_done", answer),
+				wire("answer_delta", Collections.singletonMap("delta", "late chunk")),
+				wire("done", answer));
+		HubClinicalAnswerProvider provider = provider(transport, "http://hub.example/v1/chat/completions");
+		CollectingSink sink = new CollectingSink();
+
+		TurnResult result = provider.execute(request("gemma-4-12b"), sink, CancellationSignal.NONE)
+				.toCompletableFuture().get();
+
+		assertEquals(Arrays.asList(
+				TurnEventType.TURN_STARTED,
+				TurnEventType.ANSWER_DELTA,
+				TurnEventType.ANSWER_DELTA,
+				TurnEventType.ANSWER_DONE,
+				TurnEventType.EVIDENCE_UPDATED,
+				TurnEventType.TURN_DONE), sink.types());
+		assertEquals(Arrays.asList("ART ", "started."),
+				sink.events.stream()
+						.filter(event -> event.getType() == TurnEventType.ANSWER_DELTA)
+						.map(TurnEvent::getTextDelta)
+						.collect(Collectors.toList()));
+		assertTrue(TurnLifecycleValidator
+				.violations(provider.descriptor().getCapabilities(), sink.types()).isEmpty());
+		assertEquals("ART started.", result.getAnswer().getText());
+	}
+
+	@Test
+	@SuppressWarnings("unchecked")
+	public void fastAndAlternativePresetsResolveTheirNamedBackingModels() throws Exception {
+		ScriptedHubTransport transport = new ScriptedHubTransport();
+		transport.events = Collections.singletonList(wire("done", answerPayload("Answer.")));
+		HubClinicalAnswerProvider provider = provider(transport, "http://hub.example/v1/chat/completions");
+
+		provider.execute(request("gemma-4-e4b"), new CollectingSink(), CancellationSignal.NONE)
+				.toCompletableFuture().get();
+		assertNotNull(transport.lastRequest);
+		assertEquals("gemma-e4b", transport.lastRequest.getProfileId());
+		Map<String, Object> e4bExecution = (Map<String, Object>) HubCallRequest.class
+				.getMethod("getExecution")
+				.invoke(transport.lastRequest);
+		assertEquals("quick", e4bExecution.get("mode"));
+		assertEquals("gemma-4-e4b", e4bExecution.get("preset_id"));
+
+		transport.lastRequest = null;
+		provider.execute(request("qwen-3.5-9b"), new CollectingSink(), CancellationSignal.NONE)
+				.toCompletableFuture().get();
+		assertNotNull(transport.lastRequest);
+		assertEquals("qwen3.5-9b", transport.lastRequest.getProfileId());
+		Map<String, Object> qwenExecution = (Map<String, Object>) HubCallRequest.class
+				.getMethod("getExecution")
+				.invoke(transport.lastRequest);
+		assertEquals("quick", qwenExecution.get("mode"));
+		assertEquals("qwen-3.5-9b", qwenExecution.get("preset_id"));
 	}
 }

@@ -134,7 +134,7 @@ public final class HubPreset {
 		entry.put("staged", indepth || verifierModel != null || "fast_checked".equals(mode) || "verified".equals(mode));
 		entry.put("validation",
 				verifierModel != null || "fast_checked".equals(mode) || "verified".equals(mode)
-						|| "agree".equals(mode) || "team".equals(mode) || "standard".equals(mode));
+						|| "agree".equals(mode) || "team".equals(mode));
 		entry.put("indepth", indepth);
 		entry.put("temporal_enforcement", temporalEnforcement());
 		entry.put("stages", stagesForMode(executionModes, mode, indepth));

@@ -439,7 +439,7 @@ public class ProviderStreamPersistenceTest extends BaseModuleWebContextSensitive
 		assertEquals(1, peerRequests.get());
 		assertEquals(patient.getUuid(), receivedRequest.path("patient").asText());
 		assertEquals("gemma-4-12b", receivedRequest.path("model").asText());
-		assertEquals("standard", receivedRequest.path("execution").path("preset_id").asText());
+		assertEquals("gemma-4-12b", receivedRequest.path("execution").path("preset_id").asText());
 		assertTrue(response.getContentAsString().contains("event: turn_error"));
 		Context.flushSession();
 		Context.clearSession();
@@ -694,7 +694,7 @@ public class ProviderStreamPersistenceTest extends BaseModuleWebContextSensitive
 		body.put("question", "What is recorded?");
 		body.put("provider", "hub");
 		body.put("mode", "query_scoped");
-		body.put("profile", "standard");
+		body.put("profile", "gemma-4-12b");
 		return body;
 	}
 
@@ -786,7 +786,7 @@ public class ProviderStreamPersistenceTest extends BaseModuleWebContextSensitive
 
 		assertEquals(1, peerRequests.get(), response.getContentAsString());
 		assertEquals("gemma-4-12b", receivedRequest.path("model").asText());
-		assertEquals("standard", receivedRequest.path("execution").path("preset_id").asText());
+		assertEquals("gemma-4-12b", receivedRequest.path("execution").path("preset_id").asText());
 		assertTrue(response.getContentAsString().contains("Resolved default answer."));
 
 		peerRequests.set(0);
@@ -851,7 +851,7 @@ public class ProviderStreamPersistenceTest extends BaseModuleWebContextSensitive
 
 		assertEquals(1, peerRequests.get(), ephemeralResponse.getContentAsString());
 		assertEquals("gemma-4-12b", receivedRequest.path("model").asText());
-		assertEquals("standard", receivedRequest.path("execution").path("preset_id").asText());
+		assertEquals("gemma-4-12b", receivedRequest.path("execution").path("preset_id").asText());
 		assertEquals(1, receivedRequest.path("messages").size(), "ephemeral turn must send no prior turns");
 		assertTrue(receivedRequest.path("context").path("session").isNull());
 

@@ -244,7 +244,7 @@ public class HttpHubStreamTransportTest {
 		Patient patient = new Patient(7);
 		patient.setUuid("patient-1");
 		return new TurnRequest(patient, "question", "conversation-1", "request-1",
-				ProviderMode.QUERY_SCOPED, "standard", Collections.emptyList(), AccountContext.unavailable());
+				ProviderMode.QUERY_SCOPED, "gemma-4-12b", Collections.emptyList(), AccountContext.unavailable());
 	}
 
 	private static final class CloseTrackingInputStream extends ByteArrayInputStream {

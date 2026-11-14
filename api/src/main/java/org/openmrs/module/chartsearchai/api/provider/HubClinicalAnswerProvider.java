@@ -109,7 +109,8 @@ public class HubClinicalAnswerProvider implements ClinicalAnswerProvider {
 				: ChartSearchAiConstants.GP_HUB_ENDPOINT_URL + " must end with /v1/chat/completions";
 		boolean ready = unavailableReason == null;
 		Set<ProviderCapability> capabilities = EnumSet.of(ProviderCapability.ANSWER,
-				ProviderCapability.ANSWER_CHECK, ProviderCapability.ANSWER_REVIEW, ProviderCapability.INDEPTH,
+				ProviderCapability.TOKEN_STREAMING, ProviderCapability.ANSWER_CHECK,
+				ProviderCapability.ANSWER_REVIEW, ProviderCapability.INDEPTH,
 				ProviderCapability.GROUNDING, ProviderCapability.DRUG_SAFETY,
 				ProviderCapability.STRUCTURED_BLOCKS, ProviderCapability.MULTI_TURN_CONTEXT);
 		return new ProviderDescriptor(PROVIDER_ID, "Med-Agent Hub", true, ready, false,
@@ -329,6 +330,17 @@ public class HubClinicalAnswerProvider implements ClinicalAnswerProvider {
 			events.accept(TurnEvent.withAnswer(TurnEventType.TURN_DONE,
 					sequence.getAndIncrement(), PROVIDER_ID, answer));
 			doneSeen[0] = true;
+			return;
+		}
+		if ("answer_delta".equals(event)) {
+			if (!emitted.contains(TurnEventType.ANSWER_DONE) && wire.getPayload() != null) {
+				Object delta = wire.getPayload().get("delta");
+				if (delta instanceof String && !((String) delta).isEmpty()) {
+					events.accept(TurnEvent.delta(TurnEventType.ANSWER_DELTA,
+							sequence.getAndIncrement(), PROVIDER_ID, (String) delta));
+					emitted.add(TurnEventType.ANSWER_DELTA);
+				}
+			}
 			return;
 		}
 		TurnEventType type = mapEvent(event);

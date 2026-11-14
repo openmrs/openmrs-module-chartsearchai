@@ -645,7 +645,10 @@ public class ProviderRestContractTest {
 
 			@Override
 			protected String gp(String property, String defaultValue) {
-				return "http://hub.example/v1/chat/completions";
+				if (ChartSearchAiConstants.GP_HUB_ENDPOINT_URL.equals(property)) {
+					return "http://hub.example/v1/chat/completions";
+				}
+				return defaultValue;
 			}
 
 			@Override
@@ -657,7 +660,7 @@ public class ProviderRestContractTest {
 		controller.setProviderRegistry(stubRegistry(provider));
 
 		controller.streamProviderTurn(new FailOnEventOutputStream("answer_done"), patient(), "What meds?",
-				"hub", ProviderMode.QUERY_SCOPED, "single-e4b-checked", null, AccountContext.unavailable());
+				"hub", ProviderMode.QUERY_SCOPED, "standard", null, AccountContext.unavailable());
 
 		assertEquals(1, conversations.finished,
 				"the final answer must persist after the browser disconnects during its staged tail");
@@ -735,7 +738,10 @@ public class ProviderRestContractTest {
 
 			@Override
 			protected String gp(String property, String defaultValue) {
-				return "http://hub.example/v1/chat/completions";
+				if (ChartSearchAiConstants.GP_HUB_ENDPOINT_URL.equals(property)) {
+					return "http://hub.example/v1/chat/completions";
+				}
+				return defaultValue;
 			}
 
 			@Override
@@ -748,7 +754,7 @@ public class ProviderRestContractTest {
 
 		ByteArrayOutputStream out = new ByteArrayOutputStream();
 		controller.streamProviderTurn(out, patient(), "Any known drug allergies?", "hub",
-				ProviderMode.QUERY_SCOPED, "single-e4b-checked", null, AccountContext.unavailable());
+				ProviderMode.QUERY_SCOPED, "standard", null, AccountContext.unavailable());
 
 		assertEquals(0, hubCalls.get());
 		assertEquals(Arrays.asList("turn_started", "turn_error"), sseTypes(out));

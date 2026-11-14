@@ -41,6 +41,7 @@ public class GlobalPropertyDefaultsTest {
 	@Test
 	public void hubEndpointIsDeclaredButNotEnabledWithoutConfiguration() throws Exception {
 		assertEquals("", declaredDefaults().get(ChartSearchAiConstants.GP_HUB_ENDPOINT_URL));
+		assertEquals("", declaredDefaults().get("chartsearchai.hub.presets"));
 	}
 
 	@Test

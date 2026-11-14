@@ -73,6 +73,11 @@
 		<defaultValue></defaultValue>
 		<description>Med Agent Hub chat-completions URL, ending in /v1/chat/completions. Leave empty to keep the Hub provider unavailable. Enable hub in chartsearchai.providers.enabled to offer it alongside bundled inference. Set any API key in the runtime property chartsearchai.hub.apikey, not a global property.</description>
 	</globalProperty>
+	<globalProperty>
+		<property>chartsearchai.hub.presets</property>
+		<defaultValue></defaultValue>
+		<description>Optional JSON array of clinician Hub preset definitions mapping client preset IDs to med-agent-hub backing model IDs and execution settings. Leave empty to use the built-in quick, standard (default), and verified presets.</description>
+	</globalProperty>
 
 	<globalProperty>
 		<property>chartsearchai.llm.remote.modelName</property>

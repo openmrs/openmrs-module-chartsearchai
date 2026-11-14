@@ -64,7 +64,7 @@ public class TemporalGateRelayConformanceTest {
 
 	private static TurnRequest request() {
 		return new TurnRequest(patient(), "When was the last visit?", "conversation-1", "request-1",
-				ProviderMode.QUERY_SCOPED, "product-profile-a",
+				ProviderMode.QUERY_SCOPED, "standard",
 				Collections.singletonList(new PriorClinicalTurn("prior q", "prior a")), AccountContext.unavailable());
 	}
 

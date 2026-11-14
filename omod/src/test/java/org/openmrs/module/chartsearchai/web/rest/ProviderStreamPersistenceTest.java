@@ -250,8 +250,9 @@ public class ProviderStreamPersistenceTest extends BaseModuleWebContextSensitive
 
 	private volatile int peerStatus = 503;
 
-	private volatile String modelsBody = "{\"object\":\"list\",\"data\":[{\"id\":\"single-e4b-checked\","
-			+ "\"visibility\":\"product\",\"available\":true,\"default\":true}]}";
+	private volatile String modelsBody = "{\"object\":\"list\","
+			+ "\"data\":[{\"id\":\"gemma-4-12b\",\"available\":true},{\"id\":\"qwen3.5-9b\",\"available\":true}],"
+			+ "\"execution_modes\":{\"quick\":{},\"standard\":{},\"verified\":{}}}";
 
 	private volatile int modelsStatus = 200;
 
@@ -437,7 +438,8 @@ public class ProviderStreamPersistenceTest extends BaseModuleWebContextSensitive
 		controller.chatStream(requestBody(patient), response);
 		assertEquals(1, peerRequests.get());
 		assertEquals(patient.getUuid(), receivedRequest.path("patient").asText());
-		assertEquals("product-profile-a", receivedRequest.path("model").asText());
+		assertEquals("gemma-4-12b", receivedRequest.path("model").asText());
+		assertEquals("standard", receivedRequest.path("execution").path("preset_id").asText());
 		assertTrue(response.getContentAsString().contains("event: turn_error"));
 		Context.flushSession();
 		Context.clearSession();
@@ -692,7 +694,7 @@ public class ProviderStreamPersistenceTest extends BaseModuleWebContextSensitive
 		body.put("question", "What is recorded?");
 		body.put("provider", "hub");
 		body.put("mode", "query_scoped");
-		body.put("profile", "product-profile-a");
+		body.put("profile", "standard");
 		return body;
 	}
 
@@ -768,10 +770,11 @@ public class ProviderStreamPersistenceTest extends BaseModuleWebContextSensitive
 	public void omittedHubProfileResolvesDefaultAndFailsExplicitlyWhenUnavailable() throws Exception {
 		ChartSearchAiRestController controller = requestController();
 		Patient patient = Context.getPatientService().getPatient(2);
+		Context.getAdministrationService().setGlobalProperty("chartsearchai.hub.presets", "");
 		modelsStatus = 200;
-		modelsBody = "{\"object\":\"list\",\"data\":["
-				+ "{\"id\":\"secondary-profile\",\"visibility\":\"product\",\"available\":true,\"default\":false},"
-				+ "{\"id\":\"single-e4b-checked\",\"visibility\":\"product\",\"available\":true,\"default\":true}]}";
+		modelsBody = "{\"object\":\"list\","
+				+ "\"data\":[{\"id\":\"gemma-4-12b\",\"available\":true},{\"id\":\"qwen3.5-9b\",\"available\":true}],"
+				+ "\"execution_modes\":{\"quick\":{},\"standard\":{},\"verified\":{}}}";
 		peerStatus = 200;
 		peerBody = "event: done\ndata: {\"answer\":\"Resolved default answer.\",\"references\":[]}\n\n";
 
@@ -782,26 +785,40 @@ public class ProviderStreamPersistenceTest extends BaseModuleWebContextSensitive
 		controller.chatStream(noProfileBody, response);
 
 		assertEquals(1, peerRequests.get(), response.getContentAsString());
-		assertEquals("single-e4b-checked", receivedRequest.path("model").asText());
+		assertEquals("gemma-4-12b", receivedRequest.path("model").asText());
+		assertEquals("standard", receivedRequest.path("execution").path("preset_id").asText());
 		assertTrue(response.getContentAsString().contains("Resolved default answer."));
 
 		peerRequests.set(0);
-		modelsBody = "{\"object\":\"list\",\"data\":["
-				+ "{\"id\":\"secondary-profile\",\"visibility\":\"product\",\"available\":true,\"default\":false}]}";
+		Context.getAdministrationService().setGlobalProperty("chartsearchai.hub.presets", "["
+				+ "{\"id\":\"quick\",\"label\":\"Quick answer\",\"default\":false,\"model\":\"gemma-4-4b\","
+				+ "\"execution\":{\"mode\":\"quick\",\"preset_id\":\"quick\"}},"
+				+ "{\"id\":\"standard\",\"label\":\"Standard answer\",\"default\":true,\"model\":\"gemma-4-12b\","
+				+ "\"execution\":{\"mode\":\"standard\",\"preset_id\":\"standard\"}}"
+				+ "]");
+		modelsBody = "{\"object\":\"list\","
+				+ "\"data\":[{\"id\":\"gemma-4-4b\",\"available\":true}],"
+				+ "\"execution_modes\":{\"quick\":{},\"standard\":{}}}";
 		MockHttpServletResponse fallbackProfileResponse = new MockHttpServletResponse();
-		controller.chatStream(noProfileBody, fallbackProfileResponse);
-		assertEquals(1, peerRequests.get(), fallbackProfileResponse.getContentAsString());
-		assertEquals("secondary-profile", receivedRequest.path("model").asText());
+		try {
+			controller.chatStream(noProfileBody, fallbackProfileResponse);
+			assertEquals(1, peerRequests.get(), fallbackProfileResponse.getContentAsString());
+			assertEquals("gemma-4-4b", receivedRequest.path("model").asText());
+			assertEquals("quick", receivedRequest.path("execution").path("preset_id").asText());
 
-		peerRequests.set(0);
-		modelsBody = "{\"object\":\"list\",\"data\":[]}";
-		MockHttpServletResponse emptyModelsResponse = new MockHttpServletResponse();
-		controller.chatStream(noProfileBody, emptyModelsResponse);
+			peerRequests.set(0);
+			modelsBody = "{\"object\":\"list\",\"data\":[]}";
+			MockHttpServletResponse emptyModelsResponse = new MockHttpServletResponse();
+			controller.chatStream(noProfileBody, emptyModelsResponse);
 
-		assertEquals(0, peerRequests.get(), "unavailable Hub models must fail before calling completions");
-		assertTrue(emptyModelsResponse.getContentAsString().contains("event: turn_error"));
-		assertTrue(emptyModelsResponse.getContentAsString().contains("profiles_unavailable"),
-				emptyModelsResponse.getContentAsString());
+			assertEquals(0, peerRequests.get(), "unavailable Hub models must fail before calling completions");
+			assertTrue(emptyModelsResponse.getContentAsString().contains("event: turn_error"));
+			assertTrue(emptyModelsResponse.getContentAsString().contains("profiles_unavailable"),
+					emptyModelsResponse.getContentAsString());
+		}
+		finally {
+			Context.getAdministrationService().setGlobalProperty("chartsearchai.hub.presets", "");
+		}
 	}
 
 	@Test
@@ -833,7 +850,8 @@ public class ProviderStreamPersistenceTest extends BaseModuleWebContextSensitive
 				.invoke(controller, ephemeralJson, ephemeralResponse);
 
 		assertEquals(1, peerRequests.get(), ephemeralResponse.getContentAsString());
-		assertEquals("single-e4b-checked", receivedRequest.path("model").asText());
+		assertEquals("gemma-4-12b", receivedRequest.path("model").asText());
+		assertEquals("standard", receivedRequest.path("execution").path("preset_id").asText());
 		assertEquals(1, receivedRequest.path("messages").size(), "ephemeral turn must send no prior turns");
 		assertTrue(receivedRequest.path("context").path("session").isNull());
 

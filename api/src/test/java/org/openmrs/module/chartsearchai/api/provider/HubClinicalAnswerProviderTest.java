@@ -68,7 +68,7 @@ public class HubClinicalAnswerProviderTest {
 			}
 		});
 		TurnRequest request = new TurnRequest(patient(), "Question", "conversation", "request",
-				ProviderMode.QUERY_SCOPED, "profile-a", Collections.emptyList(), account);
+				ProviderMode.QUERY_SCOPED, "standard", Collections.emptyList(), account);
 		ScriptedHubTransport transport = new ScriptedHubTransport();
 		transport.events = Collections.singletonList(wire("done", answerPayload("Answer")));
 		provider(transport, "http://hub.example/v1/chat/completions")
@@ -169,7 +169,7 @@ public class HubClinicalAnswerProviderTest {
 				"http://hub.example/v1/chat/completions");
 		CollectingSink sink = new CollectingSink();
 
-		TurnResult result = provider.execute(request("product-profile-a"), sink,
+		TurnResult result = provider.execute(request("standard"), sink,
 				CancellationSignal.NONE).toCompletableFuture().get();
 
 		assertEquals(TurnEventType.TURN_ERROR, result.getTerminalState());
@@ -194,7 +194,7 @@ public class HubClinicalAnswerProviderTest {
 				"http://hub.example/v1/chat/completions");
 		CollectingSink sink = new CollectingSink();
 
-		TurnResult result = provider.execute(request("product-profile-a"), sink,
+		TurnResult result = provider.execute(request("standard"), sink,
 				CancellationSignal.NONE).toCompletableFuture().get();
 
 		assertEquals(TurnEventType.TURN_ERROR, result.getTerminalState());
@@ -222,7 +222,7 @@ public class HubClinicalAnswerProviderTest {
 				"http://hub.example/v1/chat/completions");
 		CollectingSink sink = new CollectingSink();
 
-		TurnResult result = provider.execute(request("product-profile-a"), sink,
+		TurnResult result = provider.execute(request("standard"), sink,
 				CancellationSignal.NONE).toCompletableFuture().get();
 
 		assertEquals(TurnEventType.TURN_ERROR, result.getTerminalState());
@@ -245,7 +245,7 @@ public class HubClinicalAnswerProviderTest {
 				"http://hub.example/v1/chat/completions");
 		CollectingSink sink = new CollectingSink();
 
-		TurnResult result = provider.execute(request("product-profile-a"), sink,
+		TurnResult result = provider.execute(request("standard"), sink,
 				CancellationSignal.NONE).toCompletableFuture().get();
 
 		assertEquals(TurnEventType.TURN_DONE, result.getTerminalState());
@@ -266,7 +266,7 @@ public class HubClinicalAnswerProviderTest {
 				"http://hub.example/v1/chat/completions");
 		CollectingSink sink = new CollectingSink();
 
-		TurnResult result = provider.execute(request("product-profile-a"), sink,
+		TurnResult result = provider.execute(request("standard"), sink,
 				CancellationSignal.NONE).toCompletableFuture().get();
 
 		assertEquals(TurnEventType.TURN_ERROR, result.getTerminalState());
@@ -290,7 +290,7 @@ public class HubClinicalAnswerProviderTest {
 			transport.errorBody = "{\"detail\":\"Metformin 500 mg twice daily\"}";
 			try (LogCapture capture = LogCapture.on(HubClinicalAnswerProvider.class.getName(), Level.DEBUG)) {
 				TurnResult result = provider(transport, "http://hub.example/v1/chat/completions")
-						.execute(request("product-profile-a"), new CollectingSink(), CancellationSignal.NONE)
+						.execute(request("standard"), new CollectingSink(), CancellationSignal.NONE)
 						.toCompletableFuture().get();
 
 				assertEquals(TurnEventType.TURN_ERROR, result.getTerminalState());
@@ -316,7 +316,7 @@ public class HubClinicalAnswerProviderTest {
 		transport.cancelOnFailure = false;
 		try (LogCapture capture = LogCapture.on(HubClinicalAnswerProvider.class.getName(), Level.DEBUG)) {
 			TurnResult result = provider(transport, "http://hub.example/v1/chat/completions")
-					.execute(request("product-profile-a"), new CollectingSink(), CancellationSignal.NONE)
+					.execute(request("standard"), new CollectingSink(), CancellationSignal.NONE)
 					.toCompletableFuture().get();
 
 			assertEquals("provider_failure", result.getProblemCode());
@@ -394,7 +394,7 @@ public class HubClinicalAnswerProviderTest {
 		CollectingSink sink = new CollectingSink();
 		TurnRequest fullChartRequest = new TurnRequest(patient(),
 				"What medications is this patient on?", "conversation-1", "request-1",
-				ProviderMode.FULL_CHART_STABLE, "product-profile-a", Collections.emptyList(), AccountContext.unavailable());
+				ProviderMode.FULL_CHART_STABLE, "standard", Collections.emptyList(), AccountContext.unavailable());
 
 		TurnResult result = provider.execute(fullChartRequest, sink,
 				CancellationSignal.NONE).toCompletableFuture().get();
@@ -432,11 +432,22 @@ public class HubClinicalAnswerProviderTest {
 		HubClinicalAnswerProvider provider = provider(transport,
 				"http://hub.example/v1/chat/completions");
 		CollectingSink sink = new CollectingSink();
-		TurnResult result = provider.execute(request("product-profile-a"), sink, CancellationSignal.NONE)
+		TurnResult result = provider.execute(request("standard"), sink, CancellationSignal.NONE)
 				.toCompletableFuture().get();
 
 		assertEquals(1, transport.calls.get(), "exactly one hub call per turn");
-		assertEquals("product-profile-a", transport.lastRequest.getProfileId());
+		assertEquals("gemma-4-12b", transport.lastRequest.getProfileId());
+		try {
+			@SuppressWarnings("unchecked")
+			Map<String, String> execution = (Map<String, String>) HubCallRequest.class
+					.getMethod("getExecution")
+					.invoke(transport.lastRequest);
+			assertEquals("standard", execution.get("mode"));
+			assertEquals("standard", execution.get("preset_id"));
+		}
+		catch (ReflectiveOperationException e) {
+			throw new AssertionError("HubCallRequest.getExecution() missing", e);
+		}
 		assertEquals("patient-uuid-1", transport.lastRequest.getPatientUuid());
 		assertEquals("conversation-1", transport.lastRequest.getConversationId());
 		assertEquals(1, transport.lastRequest.getPriorTurns().size());
@@ -481,7 +492,7 @@ public class HubClinicalAnswerProviderTest {
 		HubClinicalAnswerProvider provider = provider(transport, "http://hub.example/v1/chat/completions", true);
 		CollectingSink sink = new CollectingSink();
 		TurnResult result = provider
-				.execute(request("product-profile-a"), sink, CancellationSignal.NONE)
+				.execute(request("standard"), sink, CancellationSignal.NONE)
 				.toCompletableFuture().get();
 
 		assertEquals(0, transport.calls.get());
@@ -498,7 +509,7 @@ public class HubClinicalAnswerProviderTest {
 				"http://hub.example/v1/chat/completions");
 
 		CollectingSink sink = new CollectingSink();
-		TurnResult result = provider.execute(request("product-profile-a"), sink, CancellationSignal.NONE)
+		TurnResult result = provider.execute(request("standard"), sink, CancellationSignal.NONE)
 				.toCompletableFuture().get();
 
 		assertEquals(1, transport.calls.get());
@@ -515,7 +526,7 @@ public class HubClinicalAnswerProviderTest {
 				"http://hub.example/v1/chat/completions");
 
 		CollectingSink sink = new CollectingSink();
-		TurnResult result = provider.execute(request("product-profile-a"), sink, CancellationSignal.NONE)
+		TurnResult result = provider.execute(request("standard"), sink, CancellationSignal.NONE)
 				.toCompletableFuture().get();
 
 		assertEquals(TurnEventType.TURN_ERROR, result.getTerminalState());
@@ -533,7 +544,7 @@ public class HubClinicalAnswerProviderTest {
 				"http://hub.example/v1/chat/completions");
 		CollectingSink sink = new CollectingSink();
 
-		TurnResult result = provider.execute(request("product-profile-a"), sink,
+		TurnResult result = provider.execute(request("standard"), sink,
 				CancellationSignal.NONE).toCompletableFuture().get();
 
 		assertEquals(Arrays.asList(TurnEventType.TURN_STARTED, TurnEventType.TURN_ERROR),
@@ -555,7 +566,7 @@ public class HubClinicalAnswerProviderTest {
 		CollectingSink sink = new CollectingSink();
 		TurnCancellation cancellation = new TurnCancellation();
 
-		provider.execute(request("product-profile-a"), sink, cancellation).toCompletableFuture().get();
+		provider.execute(request("standard"), sink, cancellation).toCompletableFuture().get();
 
 		assertTrue(transport.lastCancellation == cancellation);
 	}
@@ -570,7 +581,7 @@ public class HubClinicalAnswerProviderTest {
 		HubClinicalAnswerProvider provider = provider(transport, "http://hub.example/v1/chat/completions");
 		CollectingSink sink = new CollectingSink();
 
-		TurnResult result = provider.execute(request("product-profile-a"), sink, new TurnCancellation())
+		TurnResult result = provider.execute(request("standard"), sink, new TurnCancellation())
 				.toCompletableFuture().get();
 
 		assertEquals(TurnEventType.TURN_DONE, result.getTerminalState());
@@ -595,7 +606,7 @@ public class HubClinicalAnswerProviderTest {
 		CollectingSink sink = new CollectingSink();
 		TurnCancellation cancellation = new TurnCancellation();
 
-		TurnResult result = provider.execute(request("product-profile-a"), sink, cancellation)
+		TurnResult result = provider.execute(request("standard"), sink, cancellation)
 				.toCompletableFuture().get();
 
 		assertEquals(TurnEventType.TURN_DONE, result.getTerminalState());
@@ -633,7 +644,7 @@ public class HubClinicalAnswerProviderTest {
 		CollectingSink sink = new CollectingSink();
 		TurnCancellation cancellation = new TurnCancellation();
 
-		TurnResult result = provider.execute(request("product-profile-a"), sink, cancellation)
+		TurnResult result = provider.execute(request("standard"), sink, cancellation)
 				.toCompletableFuture().get();
 
 		Map<String, Object> inDepth = (Map<String, Object>) result.getAnswer().getPayload().get("inDepth");
@@ -670,7 +681,7 @@ public class HubClinicalAnswerProviderTest {
 				"http://hub.example/v1/chat/completions");
 		CollectingSink sink = new CollectingSink();
 
-		TurnResult result = provider.execute(request("product-profile-a"), sink,
+		TurnResult result = provider.execute(request("standard"), sink,
 				CancellationSignal.NONE).toCompletableFuture().get();
 
 		assertEquals(Arrays.asList(TurnEventType.TURN_STARTED, TurnEventType.ANSWER_DONE,
@@ -692,7 +703,7 @@ public class HubClinicalAnswerProviderTest {
 		CollectingSink sink = new CollectingSink();
 		TurnCancellation cancellation = new TurnCancellation();
 
-		TurnResult result = provider.execute(request("product-profile-a"), sink, cancellation)
+		TurnResult result = provider.execute(request("standard"), sink, cancellation)
 				.toCompletableFuture().get();
 
 		assertEquals(TurnEventType.TURN_ERROR, result.getTerminalState());
@@ -713,7 +724,7 @@ public class HubClinicalAnswerProviderTest {
 				"http://hub.example/v1/chat/completions");
 		CollectingSink sink = new CollectingSink();
 
-		TurnResult result = provider.execute(request("product-profile-a"), sink, CancellationSignal.NONE)
+		TurnResult result = provider.execute(request("standard"), sink, CancellationSignal.NONE)
 				.toCompletableFuture().get();
 
 		assertEquals(Arrays.asList(TurnEventType.TURN_STARTED, TurnEventType.ANSWER_DONE,
@@ -734,7 +745,7 @@ public class HubClinicalAnswerProviderTest {
 				"http://hub.example/v1/chat/completions");
 		CollectingSink sink = new CollectingSink();
 
-		TurnResult result = provider.execute(request("product-profile-a"), sink, CancellationSignal.NONE)
+		TurnResult result = provider.execute(request("standard"), sink, CancellationSignal.NONE)
 				.toCompletableFuture().get();
 
 		assertEquals(Arrays.asList(TurnEventType.TURN_STARTED, TurnEventType.ANSWER_DONE,
@@ -750,7 +761,7 @@ public class HubClinicalAnswerProviderTest {
 				"http://hub.example/v1/chat/completions");
 
 		CollectingSink sink = new CollectingSink();
-		TurnResult result = provider.execute(request("product-profile-a"), sink, () -> true)
+		TurnResult result = provider.execute(request("standard"), sink, () -> true)
 				.toCompletableFuture().get();
 
 		assertEquals(0, transport.calls.get());

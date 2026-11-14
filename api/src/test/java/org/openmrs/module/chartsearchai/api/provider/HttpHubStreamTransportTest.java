@@ -48,6 +48,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.openmrs.Role;
 import org.openmrs.User;
 import org.openmrs.api.context.UserContext;
+import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.api.conversation.PriorClinicalTurn;
 
 /**
@@ -228,7 +229,10 @@ public class HttpHubStreamTransportTest {
 		};
 		return new HubClinicalAnswerProvider(transport) {
 			@Override protected String gp(String key, String fallback) {
-				return "http://127.0.0.1:" + server.getAddress().getPort() + "/stream";
+				if (ChartSearchAiConstants.GP_HUB_ENDPOINT_URL.equals(key)) {
+					return "http://127.0.0.1:" + server.getAddress().getPort() + "/stream";
+				}
+				return fallback;
 			}
 			@Override protected boolean queryStoreWithholdsFromCaller() {
 				return false;
@@ -240,7 +244,7 @@ public class HttpHubStreamTransportTest {
 		Patient patient = new Patient(7);
 		patient.setUuid("patient-1");
 		return new TurnRequest(patient, "question", "conversation-1", "request-1",
-				ProviderMode.QUERY_SCOPED, "profile", Collections.emptyList(), AccountContext.unavailable());
+				ProviderMode.QUERY_SCOPED, "standard", Collections.emptyList(), AccountContext.unavailable());
 	}
 
 	private static final class CloseTrackingInputStream extends ByteArrayInputStream {
@@ -290,15 +294,26 @@ public class HttpHubStreamTransportTest {
 				return Locale.ENGLISH;
 			}
 		});
-		HubCallRequest request = new HubCallRequest(
-				"http://hub.example/v1/chat/completions", "product-a", "patient-1",
-				"conversation-1", "request-1", "current question",
-				Collections.singletonList(new PriorClinicalTurn("earlier q", "earlier a")), account);
+		HubCallRequest request;
+		try {
+			java.lang.reflect.Constructor<HubCallRequest> ctor = HubCallRequest.class.getConstructor(
+					String.class, String.class, String.class, String.class, String.class, String.class,
+					List.class, AccountContext.class, Map.class);
+			request = ctor.newInstance(
+					"http://hub.example/v1/chat/completions", "gemma-4-12b", "patient-1",
+					"conversation-1", "request-1", "current question",
+					Collections.singletonList(new PriorClinicalTurn("earlier q", "earlier a")), account,
+					Collections.singletonMap("mode", "verified"));
+		}
+		catch (ReflectiveOperationException e) {
+			throw new AssertionError("HubCallRequest execution constructor missing", e);
+		}
 
 		String json = HttpHubStreamTransport.requestJson(request);
 		Map<String, Object> root = MAPPER.readValue(json, Map.class);
 
-		assertEquals("product-a", root.get("model"));
+		assertEquals("gemma-4-12b", root.get("model"));
+		assertEquals(Collections.singletonMap("mode", "verified"), root.get("execution"));
 		assertEquals(Boolean.TRUE, root.get("stream"));
 		assertEquals("patient-1", root.get("patient"));
 		List<Map<String, Object>> messages = (List<Map<String, Object>>) root.get("messages");

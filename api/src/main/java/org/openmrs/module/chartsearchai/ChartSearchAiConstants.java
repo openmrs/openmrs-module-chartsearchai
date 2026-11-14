@@ -892,6 +892,12 @@ public class ChartSearchAiConstants {
 	 */
 	public static final String RP_HUB_API_KEY = "chartsearchai.hub.apikey";
 
+	/**
+	 * Optional JSON array defining the clinician presets exposed by {@code /chartsearchai/models}
+	 * and translated into backing model + {@code execution} specs sent to {@code med-agent-hub}.
+	 */
+	public static final String GP_HUB_PRESETS = "chartsearchai.hub.presets";
+
 	private ChartSearchAiConstants() {
 	}
 }

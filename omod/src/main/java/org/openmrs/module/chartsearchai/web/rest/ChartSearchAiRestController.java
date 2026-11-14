@@ -63,6 +63,7 @@ import org.openmrs.module.chartsearchai.api.impl.HostDiagnostics;
 import org.openmrs.module.chartsearchai.api.impl.LocalLlmEngine;
 import org.openmrs.module.chartsearchai.api.conversation.ConversationService;
 import org.openmrs.module.chartsearchai.api.conversation.PriorClinicalTurn;
+import org.openmrs.module.chartsearchai.api.conversation.impl.ConversationServiceImpl;
 import org.openmrs.module.chartsearchai.api.impl.PrewarmBootstrapService;
 import org.openmrs.module.chartsearchai.api.impl.PrewarmStatus;
 import org.openmrs.module.chartsearchai.api.impl.WarmupExecutor;
@@ -322,6 +323,11 @@ public class ChartSearchAiRestController {
 	@ResponseBody
 	public ResponseEntity<Object> search(@RequestBody Map<String, String> body) {
 		Context.requirePrivilege(ChartSearchAiConstants.PRIV_QUERY_PATIENT_DATA);
+		if (!isBundledSystemProviderActive()) {
+			return new ResponseEntity<Object>(
+					providerNotEnabledError("Bundled provider is not enabled."),
+					HttpStatus.CONFLICT);
+		}
 
 		String patientUuid = body.get("patient");
 		String question = asTyped(body.get("question"));
@@ -437,6 +443,9 @@ public class ChartSearchAiRestController {
 	@ResponseBody
 	public ResponseEntity<Object> warmup(@RequestBody Map<String, String> body) {
 		Context.requirePrivilege(ChartSearchAiConstants.PRIV_QUERY_PATIENT_DATA);
+		if (!isBundledSystemProviderActive()) {
+			return new ResponseEntity<Object>(HttpStatus.NO_CONTENT);
+		}
 
 		PatientResolution resolved = resolvePatient(body.get("patient"));
 		if (resolved.hasError()) {
@@ -682,6 +691,11 @@ public class ChartSearchAiRestController {
 	public void searchStream(@RequestBody Map<String, String> body,
 			HttpServletResponse response) throws IOException {
 		Context.requirePrivilege(ChartSearchAiConstants.PRIV_QUERY_PATIENT_DATA);
+		if (!isBundledSystemProviderActive()) {
+			writeJsonBody(response, HttpServletResponse.SC_CONFLICT,
+					providerNotEnabledError("Bundled provider is not enabled."));
+			return;
+		}
 
 		String patientUuid = body.get("patient");
 		String question = asTyped(body.get("question"));
@@ -1443,16 +1457,17 @@ public class ChartSearchAiRestController {
 	 * <pre>
 	 * POST /ws/rest/v1/chartsearchai/chat/stream
 	 * { "patient": "...", "question": "...", "provider": "bundled|hub",
-	 *   "mode": "query_scoped?", "profile": "hub-profile?", "session": "uuid?" }
+	 *   "mode": "query_scoped?", "profile": "hub-profile?", "session": "uuid?",
+	 *   "ephemeral": "boolean?" }
 	 * </pre>
 	 */
 	@RequestMapping(value = "/chat/stream", method = RequestMethod.POST)
-	public void chatStream(@RequestBody Map<String, String> body, HttpServletResponse response)
+	public void chatStream(@RequestBody Map<String, ?> body, HttpServletResponse response)
 			throws IOException {
 		Context.requirePrivilege(ChartSearchAiConstants.PRIV_QUERY_PATIENT_DATA);
 
-		String patientUuid = body == null ? null : body.get("patient");
-		String question = body == null ? null : asTyped(body.get("question"));
+		String patientUuid = stringField(body, "patient");
+		String question = asTyped(stringField(body, "question"));
 		if (patientUuid == null || patientUuid.trim().isEmpty()) {
 			writeJsonError(response, HttpServletResponse.SC_BAD_REQUEST, "patient is required");
 			return;
@@ -1491,8 +1506,9 @@ public class ChartSearchAiRestController {
 
 		String providerId = resolveProviderId(body);
 		ProviderMode mode = resolveMode(body);
-		String profileId = body.get("profile");
-		String sessionUuid = body.get("session");
+		String profileId = stringField(body, "profile");
+		String sessionUuid = stringField(body, "session");
+		boolean ephemeral = booleanFlag(body, "ephemeral");
 		AccountContext accountContext = AccountContext.fromSession(Context.getUserContext());
 
 		HttpServletResponse unwrapped = response;
@@ -1514,24 +1530,31 @@ public class ChartSearchAiRestController {
 		unwrapped.flushBuffer();
 
 		streamProviderTurn(out, resolved.patient, sanitizedQuestion, providerId, mode, profileId,
-				sessionUuid, accountContext);
+				sessionUuid, accountContext, ephemeral, KEEP_ALIVE_INTERVAL_MS);
 	}
 
 	/**
 	 * Orchestrates one provider turn: resolve provider (no silent fallback), open/reuse a
-	 * provider-bound conversation, execute, persist, and relay canonical SSE events.
-	 * Package-private for unit tests.
+	 * provider-bound conversation (unless {@code ephemeral}), execute, persist/audit, and relay
+	 * canonical SSE events. Package-private for unit tests.
 	 */
 	void streamProviderTurn(OutputStream out, Patient patient, String question, String providerId,
 			ProviderMode mode, String profileId, String conversationUuid, AccountContext accountContext) {
 		streamProviderTurn(out, patient, question, providerId, mode, profileId, conversationUuid,
-				accountContext, KEEP_ALIVE_INTERVAL_MS);
+				accountContext, false, KEEP_ALIVE_INTERVAL_MS);
 	}
 
 	/** Per-call interval seam, matching the legacy stream's keep-alive tests. */
 	void streamProviderTurn(OutputStream out, Patient patient, String question, String providerId,
 			ProviderMode mode, String profileId, String conversationUuid, AccountContext accountContext,
 			long keepAliveIntervalMillis) {
+		streamProviderTurn(out, patient, question, providerId, mode, profileId, conversationUuid,
+				accountContext, false, keepAliveIntervalMillis);
+	}
+
+	private void streamProviderTurn(OutputStream out, Patient patient, String question, String providerId,
+			ProviderMode mode, String profileId, String conversationUuid, AccountContext accountContext,
+			boolean ephemeral, long keepAliveIntervalMillis) {
 		final SseKeepAlive keepAlive = SseKeepAlive.start(out, keepAliveIntervalMillis);
 		final java.io.Closeable stopKeepAlive = keepAlive::stop;
 		final Map<TurnEventType, WholeCodePoints> textChannels = new java.util.EnumMap<>(TurnEventType.class);
@@ -1544,6 +1567,8 @@ public class ChartSearchAiRestController {
 		final DeliveredAnswer delivered = new DeliveredAnswer();
 		ProviderMode resolvedMode = mode;
 		boolean persisted = false;
+		boolean providerStarted = false;
+		String requestId = UUID.randomUUID().toString();
 		long startNs = System.nanoTime();
 		try {
 			ClinicalAnswerProvider provider;
@@ -1557,33 +1582,62 @@ public class ChartSearchAiRestController {
 						problemCodeJson(e.getProblemCode()));
 				return;
 			}
+			String resolvedProfileId = profileId == null ? null : profileId.trim();
 			if (HubClinicalAnswerProvider.PROVIDER_ID.equals(providerId)
-					&& (profileId == null || profileId.trim().isEmpty())) {
-				writeSseEvent(out, TurnEventType.TURN_STARTED.getWireName(), "{}");
-				writeSseEvent(out, TurnEventType.TURN_ERROR.getWireName(),
-						problemCodeJson("profile_required"));
-				return;
+					&& (resolvedProfileId == null || resolvedProfileId.isEmpty())) {
+				if (hubProfileService == null) {
+					writeSseEvent(out, TurnEventType.TURN_STARTED.getWireName(), "{}");
+					writeSseEvent(out, TurnEventType.TURN_ERROR.getWireName(),
+							problemCodeJson("profile_required"));
+					return;
+				}
+				try {
+					resolvedProfileId = hubProfileService.resolveDefaultProfileId();
+				}
+				catch (Exception e) {
+					log.warn("Could not resolve default Hub profile: {}", e.getMessage());
+					resolvedProfileId = null;
+				}
+				if (resolvedProfileId == null || resolvedProfileId.trim().isEmpty()) {
+					writeSseEvent(out, TurnEventType.TURN_STARTED.getWireName(), "{}");
+					writeSseEvent(out, TurnEventType.TURN_ERROR.getWireName(),
+							problemCodeJson("profiles_unavailable"));
+					return;
+				}
 			}
 
-			conversation = resolveConversation(patient, providerId, resolvedMode, conversationUuid);
+			final String messageId;
+			final List<PriorClinicalTurn> prior;
+			final String conversationIdForProvider;
+			if (ephemeral) {
+				messageId = UUID.randomUUID().toString();
+				prior = Collections.emptyList();
+				conversationIdForProvider = null;
+				cancellation = new TurnCancellation();
+			}
+			else {
+				conversation = resolveConversation(patient, providerId, resolvedMode, conversationUuid);
+				startedTurn = conversationService.startTurn(conversation, requestId, question);
+				messageId = startedTurn.getUuid();
+				prior = conversationService.priorClinicalTurns(conversation);
+				conversationIdForProvider = conversation.getUuid();
+				// A new turn starting for this conversation IS the preempt signal — it cancels
+				// whichever turn currently holds that conversation's slot (see TurnPreemptionRegistry),
+				// forcibly closing that turn's open hub connection instead of letting it run to the
+				// hub's own completion after the browser has already moved on.
+				cancellation = preemptionRegistry.begin(conversation.getUuid(),
+						startedTurn.getOrdinal() == null ? 0 : startedTurn.getOrdinal());
+			}
 			final ClinicalConversation activeConversation = conversation;
-			String requestId = UUID.randomUUID().toString();
-			startedTurn = conversationService.startTurn(activeConversation, requestId, question);
 			final ClinicalConversationTurn turn = startedTurn;
-			List<PriorClinicalTurn> prior = conversationService.priorClinicalTurns(activeConversation);
-			TurnRequest request = new TurnRequest(patient, question, activeConversation.getUuid(),
-					requestId, resolvedMode, profileId, prior, accountContext);
+			TurnRequest request = new TurnRequest(patient, question, conversationIdForProvider,
+					requestId, resolvedMode, resolvedProfileId, prior, accountContext);
 
-			// A new turn starting for this conversation IS the preempt signal — it cancels
-			// whichever turn currently holds that conversation's slot (see TurnPreemptionRegistry),
-			// forcibly closing that turn's open hub connection instead of letting it run to the
-			// hub's own completion after the browser has already moved on.
-			cancellation = preemptionRegistry.begin(activeConversation.getUuid(),
-					turn.getOrdinal() == null ? 0 : turn.getOrdinal());
 			cancellation.bindCloseable(stopKeepAlive);
 			final TurnCancellation activeCancellation = cancellation;
 			final java.util.concurrent.atomic.AtomicReference<TurnEvent> terminalEvent =
 					new java.util.concurrent.atomic.AtomicReference<>();
+			providerStarted = true;
 
 			TurnResult result = provider
 					.execute(request,
@@ -1604,7 +1658,8 @@ public class ChartSearchAiRestController {
 								TurnEvent outgoing = withTurnMetadata(event, accountContext);
 								delivered.record(outgoing);
 								try {
-									writeTurnEventOrThrow(out, outgoing, activeConversation, turn, textChannels);
+									writeTurnEventOrThrow(out, outgoing, activeConversation, turn,
+											messageId, null, textChannels);
 								}
 								catch (RuntimeException e) {
 									// A refused write means the client left: cancel, so the provider keeps
@@ -1619,11 +1674,26 @@ public class ChartSearchAiRestController {
 							cancellation)
 					.toCompletableFuture().get();
 			long responseTimeMs = (System.nanoTime() - startNs) / 1_000_000L;
-			ClinicalConversationTurn completedTurn = conversationService.finishTurn(turn,
-					withTurnMetadata(delivered.attachTo(result), accountContext), responseTimeMs);
-			persisted = true;
+			Integer auditLogId = null;
+			if (ephemeral) {
+				TurnResult settled = withTurnMetadata(delivered.attachTo(result), accountContext);
+				AnswerEnvelope settledAnswer = settled.getAnswer() != null
+						? settled.getAnswer() : settled.getDeliveredAnswer();
+				auditLogId = saveEphemeralAuditLog(Context.getAuthenticatedUser(), patient, question,
+						providerId, resolvedMode, requestId, settledAnswer, responseTimeMs);
+				persisted = true;
+			}
+			else {
+				ClinicalConversationTurn completedTurn = conversationService.finishTurn(turn,
+						withTurnMetadata(delivered.attachTo(result), accountContext), responseTimeMs);
+				persisted = true;
+				if (completedTurn.getAuditLog() != null) {
+					auditLogId = completedTurn.getAuditLog().getAuditLogId();
+				}
+			}
 			if (!activeCancellation.isCancelled() && terminalEvent.get() != null) {
-				writeTurnEventOrThrow(out, withTurnMetadata(terminalEvent.get(), accountContext), activeConversation, completedTurn, textChannels);
+				writeTurnEventOrThrow(out, withTurnMetadata(terminalEvent.get(), accountContext),
+						activeConversation, turn, messageId, auditLogId, textChannels);
 			}
 		}
 		catch (Exception e) {
@@ -1631,16 +1701,24 @@ public class ChartSearchAiRestController {
 			// Settle the stored turn before abandoning the connection; do not persist twice.
 			boolean brokenResponse = e instanceof ClientDisconnectedException
 					|| e.getCause() instanceof ClientDisconnectedException;
-			if (startedTurn != null && !persisted) {
-				String problem = cancellation != null && cancellation.isCancelled()
-						|| brokenResponse ? "cancelled" : "provider_failure";
-				try {
-					conversationService.finishTurn(startedTurn,
-							TurnResult.error(providerId, resolvedMode, problem, delivered.answer()),
+			if (!persisted) {
+				if (ephemeral && providerStarted) {
+					saveEphemeralAuditLog(Context.getAuthenticatedUser(), patient, question,
+							providerId, resolvedMode, requestId, delivered.answer(),
 							(System.nanoTime() - startNs) / 1_000_000L);
 				}
-				catch (RuntimeException persistenceError) {
-					log.error("Could not settle interrupted provider turn {}", startedTurn.getUuid(), persistenceError);
+				else if (startedTurn != null) {
+					String problem = cancellation != null && cancellation.isCancelled()
+							|| brokenResponse ? "cancelled" : "provider_failure";
+					try {
+						conversationService.finishTurn(startedTurn,
+								TurnResult.error(providerId, resolvedMode, problem, delivered.answer()),
+								(System.nanoTime() - startNs) / 1_000_000L);
+					}
+					catch (RuntimeException persistenceError) {
+						log.error("Could not settle interrupted provider turn {}", startedTurn.getUuid(),
+								persistenceError);
+					}
 				}
 			}
 			if (cancellation != null && cancellation.isCancelled()) {
@@ -1661,9 +1739,11 @@ public class ChartSearchAiRestController {
 		}
 		finally {
 			keepAlive.stop();
-			if (conversation != null && cancellation != null) {
+			if (cancellation != null) {
 				cancellation.unbindCloseable(stopKeepAlive);
-				preemptionRegistry.end(conversation.getUuid(), cancellation);
+				if (conversation != null) {
+					preemptionRegistry.end(conversation.getUuid(), cancellation);
+				}
 			}
 		}
 	}
@@ -1782,14 +1862,18 @@ public class ChartSearchAiRestController {
 	}
 
 	/**
-	 * Persists what the event carries, then writes it. The persistence failure propagates as
-	 * itself; only a failure of the write, whatever its type, is the client going away.
+	 * Persists what the event carries when writing a conversation turn, then writes it. The
+	 * persistence failure propagates as itself; only a failure of the write, whatever its type, is
+	 * the client going away.
 	 */
 	private void writeTurnEventOrThrow(OutputStream out, TurnEvent event,
-			ClinicalConversation conversation, ClinicalConversationTurn turn, Map<TurnEventType, WholeCodePoints> textChannels) {
-		persistCheckedAnswer(event, turn);
+			ClinicalConversation conversation, ClinicalConversationTurn turn, String messageId,
+			Integer auditLogId, Map<TurnEventType, WholeCodePoints> textChannels) {
+		if (turn != null) {
+			persistCheckedAnswer(event, turn);
+		}
 		try {
-			writeTurnEvent(out, event, conversation, turn, textChannels);
+			writeTurnEvent(out, event, conversation, turn, messageId, auditLogId, textChannels);
 		}
 		catch (IOException | RuntimeException e) {
 			log.debug("Client disconnected during provider turn event {}", event.getType());
@@ -1808,7 +1892,8 @@ public class ChartSearchAiRestController {
 	}
 
 	private void writeTurnEvent(OutputStream out, TurnEvent event, ClinicalConversation conversation,
-			ClinicalConversationTurn turn, Map<TurnEventType, WholeCodePoints> textChannels) throws IOException {
+			ClinicalConversationTurn turn, String messageId, Integer auditLogId,
+			Map<TurnEventType, WholeCodePoints> textChannels) throws IOException {
 		TurnEventType type = event.getType();
 		String wire = type.getWireName();
 		WholeCodePoints textChannel = textChannels.get(type);
@@ -1821,10 +1906,11 @@ public class ChartSearchAiRestController {
 			writeSseEvent(out, wire, problemCodeJson(event.getProblemCode()));
 			return;
 		}
+		String sessionUuid = conversation == null ? null : conversation.getUuid();
 		if (type == TurnEventType.TURN_STARTED) {
 			Map<String, Object> payload = new LinkedHashMap<String, Object>();
-			payload.put("session", conversation.getUuid());
-			payload.put("messageId", turn.getUuid());
+			payload.put("session", sessionUuid);
+			payload.put("messageId", messageId);
 			payload.put("provider", event.getProviderId());
 			writeSseEvent(out, wire, new ObjectMapper().writeValueAsString(payload));
 			return;
@@ -1834,12 +1920,14 @@ public class ChartSearchAiRestController {
 		if (answer != null) {
 			payload.putAll(answer.getPayload());
 		}
-		payload.put("session", conversation.getUuid());
-		payload.put("messageId", turn.getUuid());
+		payload.put("session", sessionUuid);
+		payload.put("messageId", messageId);
 		payload.put("provider", event.getProviderId());
 		payload.put("disclaimer", DISCLAIMER);
-		if (turn.getAuditLog() != null && turn.getAuditLog().getAuditLogId() != null) {
-			payload.put("auditLogId", turn.getAuditLog().getAuditLogId());
+		Integer resolvedAuditLogId = auditLogId != null ? auditLogId
+				: (turn != null && turn.getAuditLog() != null ? turn.getAuditLog().getAuditLogId() : null);
+		if (resolvedAuditLogId != null) {
+			payload.put("auditLogId", resolvedAuditLogId);
 		}
 		writeSseEvent(out, wire, new ObjectMapper().writeValueAsString(payload));
 	}
@@ -1850,8 +1938,8 @@ public class ChartSearchAiRestController {
 		return new ObjectMapper().writeValueAsString(payload);
 	}
 
-	private String resolveProviderId(Map<String, String> body) {
-		String providerId = body == null ? null : body.get("provider");
+	private String resolveProviderId(Map<String, ?> body) {
+		String providerId = stringField(body, "provider");
 		if (providerId == null || providerId.trim().isEmpty()) {
 			return providerRegistry.getDefaultProviderId();
 		}
@@ -1865,8 +1953,8 @@ public class ChartSearchAiRestController {
 	 * mode. A request-layer default would conflict with providers configured for another supported
 	 * mode. Package-private for {@code ProviderRestContractTest}.
 	 */
-	ProviderMode resolveMode(Map<String, String> body) {
-		String mode = body == null ? null : body.get("mode");
+	ProviderMode resolveMode(Map<String, ?> body) {
+		String mode = stringField(body, "mode");
 		if (mode == null || mode.trim().isEmpty()) {
 			return null;
 		}
@@ -1876,6 +1964,54 @@ public class ChartSearchAiRestController {
 		catch (IllegalArgumentException e) {
 			throw new InvalidProviderModeException(e.getMessage());
 		}
+	}
+
+	private boolean isBundledSystemProviderActive() {
+		if (providerRegistry == null) {
+			return true;
+		}
+		return ChartSearchAiConstants.DEFAULT_PROVIDER.equals(providerRegistry.getDefaultProviderId());
+	}
+
+	private static String stringField(Map<String, ?> body, String key) {
+		if (body == null) {
+			return null;
+		}
+		Object value = body.get(key);
+		if (value == null) {
+			return null;
+		}
+		return value instanceof String ? (String) value : String.valueOf(value);
+	}
+
+	private static boolean booleanFlag(Map<String, ?> body, String key) {
+		if (body == null) {
+			return false;
+		}
+		Object value = body.get(key);
+		if (value instanceof Boolean) {
+			return ((Boolean) value).booleanValue();
+		}
+		return value instanceof String && "true".equalsIgnoreCase(((String) value).trim());
+	}
+
+	private Integer saveEphemeralAuditLog(User user, Patient patient, String question,
+			String providerId, ProviderMode mode, String requestId, AnswerEnvelope answer,
+			long responseTimeMs) {
+		if (auditLogService == null) {
+			return null;
+		}
+		ChartSearchAuditLog auditLog = ConversationServiceImpl.buildProviderAuditLog(user, patient,
+				question, providerId, mode == null ? null : mode.getWireName(), null, requestId,
+				answer, responseTimeMs, new Date());
+		try {
+			auditLogService.saveAuditLog(auditLog);
+		}
+		catch (Exception e) {
+			log.error("Failed to save ephemeral audit log", e);
+			return null;
+		}
+		return auditLog.getAuditLogId();
 	}
 
 	static final class InvalidProviderModeException extends IllegalArgumentException {
@@ -3386,15 +3522,27 @@ public class ChartSearchAiRestController {
 
 	private void writeJsonError(HttpServletResponse response, int status, String message)
 			throws IOException {
+		writeJsonBody(response, status, errorResponse(message));
+	}
+
+	private void writeJsonBody(HttpServletResponse response, int status, Object body)
+			throws IOException {
 		response.setStatus(status);
 		response.setContentType("application/json");
 		response.setCharacterEncoding("UTF-8");
-		new ObjectMapper().writeValue(response.getOutputStream(), errorResponse(message));
+		new ObjectMapper().writeValue(response.getOutputStream(), body);
 	}
 
 	private Map<String, String> errorResponse(String message) {
 		Map<String, String> error = new HashMap<String, String>();
 		error.put("error", message);
+		return error;
+	}
+
+	private Map<String, String> providerNotEnabledError(String message) {
+		Map<String, String> error = new LinkedHashMap<String, String>();
+		error.put("error", message);
+		error.put("problemCode", "provider_not_enabled");
 		return error;
 	}
 }

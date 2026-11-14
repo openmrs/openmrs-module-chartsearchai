@@ -257,16 +257,17 @@ public class ConversationServiceImpl implements ConversationService {
 		return conversationDAO.purgeBefore(before);
 	}
 
-	private ChartSearchAuditLog buildAudit(ClinicalConversationTurn turn, TurnResult result,
-			long responseTimeMs, Date now) {
-		ClinicalConversation conversation = turn.getConversation();
+	/**
+	 * Builds the shared audit row for either a conversation turn ({@code conversationUuid != null})
+	 * or a stateless ephemeral turn ({@code conversationUuid == null}).
+	 */
+	public static ChartSearchAuditLog buildProviderAuditLog(User user, Patient patient, String question,
+			String providerId, String providerMode, String conversationUuid, String requestId,
+			AnswerEnvelope answer, long responseTimeMs, Date now) {
 		ChartSearchAuditLog audit = new ChartSearchAuditLog();
-		audit.setUser(conversation.getUser());
-		audit.setPatient(conversation.getPatient());
-		audit.setQuestion(turn.getQuestion());
-		// A failed turn audits what its client was last sent, else the checked answer the turn retained.
-		AnswerEnvelope answer = result.getAnswer() != null ? result.getAnswer()
-				: result.getDeliveredAnswer() != null ? result.getDeliveredAnswer() : retainedAnswer(turn);
+		audit.setUser(user);
+		audit.setPatient(patient);
+		audit.setQuestion(question);
 		audit.setAnswer(answer == null ? "" : answer.getText());
 		audit.setReferenceCount(answer != null && answer.getSource() != null
 				? answer.getSource().getReferences().size() : referenceCount(answer));
@@ -282,12 +283,23 @@ public class ConversationServiceImpl implements ConversationService {
 		// them; only a relayed answer states them in its payload.
 		audit.setInputTokens(source != null ? measured(source.getInputTokens()) : number(answer, "inputTokens"));
 		audit.setOutputTokens(source != null ? measured(source.getOutputTokens()) : number(answer, "outputTokens"));
-		audit.setProviderId(conversation.getProviderId());
-		audit.setProviderMode(conversation.getProviderMode());
-		audit.setConversationUuid(conversation.getUuid());
-		audit.setRequestId(turn.getRequestId());
+		audit.setProviderId(providerId);
+		audit.setProviderMode(providerMode);
+		audit.setConversationUuid(conversationUuid);
+		audit.setRequestId(requestId);
 		audit.setDateCreated(now);
 		return audit;
+	}
+
+	private ChartSearchAuditLog buildAudit(ClinicalConversationTurn turn, TurnResult result,
+			long responseTimeMs, Date now) {
+		ClinicalConversation conversation = turn.getConversation();
+		// A failed turn audits what its client was last sent, else the checked answer the turn retained.
+		AnswerEnvelope answer = result.getAnswer() != null ? result.getAnswer()
+				: result.getDeliveredAnswer() != null ? result.getDeliveredAnswer() : retainedAnswer(turn);
+		return buildProviderAuditLog(conversation.getUser(), conversation.getPatient(), turn.getQuestion(),
+				conversation.getProviderId(), conversation.getProviderMode(), conversation.getUuid(),
+				turn.getRequestId(), answer, responseTimeMs, now);
 	}
 
 	@SuppressWarnings("unchecked")

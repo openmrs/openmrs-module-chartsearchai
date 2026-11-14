@@ -47,6 +47,8 @@ public class HubClinicalAnswerProvider implements ClinicalAnswerProvider {
 
 	public static final String PROBLEM_PROFILE_REQUIRED = "profile_required";
 
+	public static final String PROBLEM_MODEL_NOT_FOUND = "model_not_found";
+
 	public static final String PROBLEM_HUB_NOT_CONFIGURED = "hub_not_configured";
 
 	public static final String PROBLEM_HUB_STREAM_INCOMPLETE = "hub_stream_incomplete";
@@ -134,15 +136,28 @@ public class HubClinicalAnswerProvider implements ClinicalAnswerProvider {
 		if (profileId == null || profileId.trim().isEmpty()) {
 			return failed(events, sequence, request.getMode(), PROBLEM_PROFILE_REQUIRED);
 		}
+		HubPresetCatalog catalog;
+		try {
+			catalog = HubPresetCatalog.load(gp(ChartSearchAiConstants.GP_HUB_PRESETS, ""));
+		}
+		catch (IllegalArgumentException e) {
+			log.warn("Invalid {} configuration: {}", ChartSearchAiConstants.GP_HUB_PRESETS, e.getMessage());
+			return failed(events, sequence, request.getMode(), PROBLEM_HUB_NOT_CONFIGURED);
+		}
+		HubPreset preset = catalog.findById(profileId.trim());
+		if (preset == null) {
+			return failed(events, sequence, request.getMode(), PROBLEM_MODEL_NOT_FOUND);
+		}
 		// The Hub reads the chart as its own QueryStore account, so it cannot leave out what this
 		// caller may not read; until it can be told what to omit, such a caller cannot use it.
 		if (queryStoreWithholdsFromCaller()) {
 			return failed(events, sequence, request.getMode(), PROBLEM_PROVIDER_NOT_PERMITTED);
 		}
 
-		HubCallRequest call = new HubCallRequest(endpoint, profileId.trim(),
+		HubCallRequest call = new HubCallRequest(endpoint, preset.getModel(),
 				request.getPatient().getUuid(), request.getConversationId(), request.getRequestId(),
-				request.getQuestion(), request.getPriorClinicalTurns(), request.getAccountContext());
+				request.getQuestion(), request.getPriorClinicalTurns(), request.getAccountContext(),
+				preset.getExecution());
 
 		AtomicReference<AnswerEnvelope> latestAnswer = new AtomicReference<>();
 		AtomicReference<String> streamError = new AtomicReference<>();

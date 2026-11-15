@@ -210,6 +210,51 @@ public class HerMedicationGroupByClassTest extends BaseModuleContextSensitiveTes
 		}
 	}
 
+	/**
+	 * A word the data does not recognise asked "interactions between" it and a group of his, or his medications, either
+	 * way round, is said unchecked, as "Does rifampcin interact with his ARVs?" is (ADR Decision 638): by the module where the
+	 * data has a near name for it, after the chart's answer where it has none (ADR Decision 384). On the
+	 * demo replica "Any interactions between his rifampcin and his ARVs?" reached the model, which read rifampin and was
+	 * handed its findings against every order of his, his cotrimoxazole among them; "Any interactions between his ARVs and
+	 * klarizom?" was given his ARVs' interactions among themselves.
+	 */
+	@Test
+	public void anUnrecognisedNameAskedInteractionsBetweenItAndAGroupOfHisIsSaidUnchecked() {
+		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
+			DrugReferenceTestSupport.activeOrder("order-lpvr", "Lopinavir / ritonavir", "Lopinavir", "Ritonavir"),
+			DrugReferenceTestSupport.activeOrder("order-azt", "Retrovir", "Zidovudine"),
+			DrugReferenceTestSupport.activeOrder("order-ctx", "Sulfamethoxazole and Trimethoprim", "Sulfamethoxazole",
+				"Trimethoprim"));
+		String[][] cases = { { "Any interactions between his rifampcin and his ARVs?", "rifampcin" },
+				{ "Any interactions between rifampcin and his ARVs?", "rifampcin" },
+				{ "Any interactions between his ARVs and rifampcin?", "rifampcin" },
+				{ "Are there any interactions between rifampcin and his medications?", "rifampcin" },
+				{ "Is there an interaction between klarizom and his ARVs?", "klarizom" },
+				{ "Any interactions between his ARVs and klarizom?", "klarizom" } };
+		for (String[] c : cases) {
+			for (boolean everyOrderARecord : new boolean[] { false, true }) {
+				PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.shippedServiceWithGroups())
+						.injectRecords(everyOrderARecord ? DrugReferenceTestSupport.chartOf(
+							DrugReferenceTestSupport.drugOrderRecord(1, "order-lpvr", "Lopinavir / ritonavir"),
+							DrugReferenceTestSupport.drugOrderRecord(2, "order-azt", "Retrovir"),
+							DrugReferenceTestSupport.drugOrderRecord(3, "order-ctx", "Sulfamethoxazole and Trimethoprim"))
+								: DrugReferenceTestSupport.oneRecordChart(),
+							DrugReferenceTestSupport.ctx(40, null, new LinkedHashSet<String>(Arrays.asList("Lopinavir", "Ritonavir",
+								"Retrovir", "Zidovudine", "Sulfamethoxazole", "Trimethoprim")), null, null, null, orders), c[0]);
+				String where = c[0] + (everyOrderARecord ? " (every order a record)" : "");
+				// "rifampcin" has a near name, so the module answers; "klarizom" none, so its statement follows the chart's answer
+				String statement = "rifampcin".equals(c[1]) ? chart.getModuleAnswer() : chart.getUncheckedWordStatement();
+				assertNotNull(statement, where + " — not said unchecked");
+				assertTrue(statement.contains("No interaction check was run: \"" + c[1]
+						+ "\" is not a drug name the interaction data recognises."), where + ": " + statement);
+				assertFalse(chart.screenedHerOrders(), where + " — his screen was run");
+				assertTrue(chart.getMappings().stream().noneMatch(
+					m -> ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING.equals(m.getResourceType())),
+					where + " — a finding of his screen");
+			}
+		}
+	}
+
 	private static PatientChart ask(String question) {
 		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
 			DrugReferenceTestSupport.activeOrder("order-nvp", "Nevirapine"),

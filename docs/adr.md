@@ -29181,3 +29181,55 @@ Pinned by `LlmInferenceServiceModelReadQuestionContextTest`'s
 `aGroupOfHisNotAskedOfIsStampedWhereEveryOrderIsAlreadyARecordOfHisChart`. Disabling each rule of the change turns
 its test red. One round of review by an agent given the code alone found three wordings the first version refused or
 missed (*"When is it safe to restart …"*, *"… safe to give with his …"*, *"… safely with his …"*); each is now pinned.
+
+## Decision 638: A word the data does not recognise, asked "interactions between" it and a group of her medications, is said unchecked
+
+**Status: Accepted** (November 2026), on the owner's direction that an answer carries nothing beyond what was asked. It
+resolves the first residue of [Decision 637](#decision-637-a-question-naming-a-group-of-her-medications-is-never-given-the-screen-of-all-her-medications).
+
+### Context
+
+*"Does rifampcin interact with his ARVs?"* is answered by the module: no interaction check was run, *"rifampcin"* is not a
+drug name the interaction data recognises, did you mean Rifampicin (rifampin)? (Decision 183). Asked as *"Any
+interactions between his rifampcin and his ARVs?"*, the same word was never found in a drug's place, because no question
+shape the router holds reads *"interactions between X and her medications"* or *"… between her medications and X"*. On
+the demo replica the question went to the model, which read the word as rifampin and was given its findings against every
+one of his orders: for patients dd55352f and dd5558ed one chip was his co-trimoxazole, outside his ARVs, and the answer
+said *"The records do not address any interactions between rifampin and his ARVs"* beside Major chips. Asked group first,
+*"Any interactions between his ARVs and klarizom?"* was answered with his ARVs' interactions among themselves, and *"… his
+ARVs and grapefruit juice?"*, *"… dairy products?"* and *"… herbal remedies?"* likewise.
+
+### The decision
+
+- `QueryScopeRouter`'s shapes of one drug beside a group of her medications read *"(are there) (any) interactions between
+  X and her <group>"* and *"… between her <group> and X"*, the drug named as hers or not. A word the data does not
+  recognise there is now in a drug's place, so `UnrecognisedDrugName` states it as for every other shape: by the module
+  where the data has a near name for it (*"Did you mean Rifampicin (rifampin) or Rifamycin?"*), and after the chart's
+  answer where it has none (Decision 384). A statement after the chart's answer already keeps the chips from it (Decision
+  479) and the model's reading of the question as one of her medications from running.
+- Nothing else changes: a drug the data does recognise was already answered over the group (Decisions 632, 635).
+
+### Measured
+
+On the demo replica (2026-11-15), against the build of Decision 637:
+
+- The 750-question old-versus-new harness (`DrugReferenceInjector.injectRecords` over fixed orders) changed 10 answers,
+  each intended. Seven had been the groups' interactions beside a word nothing checked: *"… between his ARVs and klarizom
+  / grapefruit / grapefruit juice / dairy products / herbal remedies?"*, *"… between his ARVs, TB drugs and klarizom?"* and
+  *"… between his TB drugs and grapefruit?"*. *"… his ARVs and flucnazole?"*
+  and *"… his rifampcin and his ARVs?"* are now the module's *"Did you mean"*. *"… between his ARVs and his rifampcin?"*
+  had been told that *"ARVs and"* is no drug name.
+- 12 wordings were asked of 4 ARV patients through the deployed module, model included. The 40 answers to the 10 wordings
+  naming a word the data does not recognise all changed, and each now says no interaction check was run for that word.
+  29 of them had carried chips — the group's interactions among themselves, or the misspelt drug's against every order
+  of his — and none does now. The 8 answers to the two wordings naming rifampicin correctly were unchanged, chips alike.
+
+### Residues
+
+- *"Do his TB drugs interact with each other or klarizom?"* is answered over his TB drugs and says nothing of the other
+  word.
+- *"Can I give klarizom to him with his ARVs, any interactions?"* is answered with his ARVs' interactions.
+
+Pinned by `HerMedicationGroupByClassTest.anUnrecognisedNameAskedInteractionsBetweenItAndAGroupOfHisIsSaidUnchecked`, on a
+chart holding one record and on one where every order is already a record of the chart (the shape Decision 637 found the
+harness missed). Removing the two shapes turns it red.

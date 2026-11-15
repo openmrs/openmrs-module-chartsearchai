@@ -1400,6 +1400,13 @@ public final class QueryScopeRouter {
 			// and with nothing after the group, "Cipro with her antacid?" — never "vs", which Decision 448 reads as asked safe
 			// (ADR Decision 513)
 			D + " (?:and|with|plus) " + HER_MEDICATION_GROUP,
+			// "Any interactions between rifampcin and his ARVs?", "… between his ARVs and rifampcin?" — either way round, the
+			// drug named as his or not (ADR Decision 638): no shape held it, so a word the data does not recognise there was
+			// never said unchecked and the model read it as a drug and answered over every order of his
+			"(?:(?:are|is) there )?(?:any |an )?(?:drug )?interactions? between " + HER_D + " and (?:any of )?"
+					+ HER_MEDICATION_GROUP,
+			"(?:(?:are|is) there )?(?:any |an )?(?:drug )?interactions? between (?:any of )?" + HER_MEDICATION_GROUP + " and "
+					+ HER_D,
 			"(?:(?:is|are) there )?any (?:problems?|issues?|concerns?|interactions?) (?:with |in )?(?:combining|mixing) "
 					+ HER_MEDICATION_GROUP + " (?:with|and) " + D,
 			"(?:(?:is|are) there )?any (?:problems?|issues?|concerns?|interactions?) (?:with |in )?(?:combining|mixing|giving|"

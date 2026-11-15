@@ -29670,3 +29670,28 @@ order, the group naming the drug, its own duplicates, the guard on the order's o
 each turns one red, as does reading a class-only finding's partner by its partner rows alone
 (`aDrugOfHisGroupRelatedByClassOrByItsOwnOrdersIsSaidSo`). `ClinicianWordingsTest`'s case of *"Any issues adding warfarin to her TB and HIV meds?"*, which
 Decision 646 re-specified, now asserts the line that she has no TB drug and the answer over her ARVs.
+
+## Decision 650: A harness asks questions through the service, as the deployed module does
+
+**Status: Accepted** (November 2026).
+
+### Context
+
+The injector's harness (`DrugReferenceInjector.injectRecords` over fixed orders) never reaches `LlmInferenceService`:
+its reading of the question by the model, the plain-English rewrite, the chips drawn for the question. Decision 644's two
+defects showed only on the demo replica, an hour a sweep.
+
+### The decision
+
+- `LlmInferenceServiceModelReadQuestionContextTest.harness`, run only where `-Dchartsearchai.harness.questions` names a
+  file, asks each question through the service over the efavirenz, RHZE and co-trimoxazole patient, the model stubbed
+  (its reading `-Dchartsearchai.harness.reading`, its rewrites `-Dchartsearchai.harness.rewrites`), and writes one JSON
+  line each — module or model, the answer, the chips — to compare two builds.
+
+### Measured
+
+Over the 753 questions of the injector's harness it ran in under seven minutes. Calibrated on Decision 644: with the
+question as read taken out of `readForDrugSafety`, it reported the two answers whose three chips vanished; with the stamp
+of a group not answered over taken out and a rewrite dropping *"klarizom"*, it reported *"Do her ARVs and klarizom
+interact?"* answered with her ARVs' screen. Its first use found what the injector's harness had not: *"Is warfarin safe
+with her ARVs and her statin?"* answered only that no statin is among her medications (Decision 649).

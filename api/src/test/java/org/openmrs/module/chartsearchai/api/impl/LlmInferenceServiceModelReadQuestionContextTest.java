@@ -881,6 +881,61 @@ public class LlmInferenceServiceModelReadQuestionContextTest extends BaseModuleC
 		}
 	}
 
+	/**
+	 * Not a check but a harness, run only where {@code -Dchartsearchai.harness.questions=<file>} names a file of questions,
+	 * one per line: each is asked through the service as the deployed module asks it — the injection, the model's reading of
+	 * the question, its plain-English rewrite, the chips — over the efavirenz, RHZE and co-trimoxazole patient, the model
+	 * stubbed. It writes one JSON line per question to {@code -Dchartsearchai.harness.out=<file>}: the question, whether the
+	 * module answered, the answer and the chips. The stub reads every question as {@code -Dchartsearchai.harness.reading}
+	 * (YES, her medications, by default) and rewrites one as {@code -Dchartsearchai.harness.rewrites=<file>} pairs it,
+	 * question and rewrite on one line apart by a tab. The injector's own harness never reaches this layer, where two answers
+	 * of the demo replica differed from the injector's (ADR Decisions 644, 650): compare two builds' files line by line.
+	 */
+	@Test
+	@org.junit.jupiter.api.condition.EnabledIfSystemProperty(named = "chartsearchai.harness.questions", matches = ".+")
+	public void harness() throws Exception {
+		executeDataSet("GroupAnswerEfavirenzRhzeCotrimoxazoleOrdersTestData.xml");
+		java.util.Map<String, String> rewrites = new java.util.HashMap<String, String>();
+		String rewritesFile = System.getProperty("chartsearchai.harness.rewrites");
+		if (rewritesFile != null && !rewritesFile.isEmpty()) {
+			for (String line : java.nio.file.Files.readAllLines(java.nio.file.Paths.get(rewritesFile))) {
+				String[] pair = line.split("\t", 2);
+				if (pair.length == 2) {
+					rewrites.put(pair[0], pair[1]);
+				}
+			}
+		}
+		com.fasterxml.jackson.databind.ObjectMapper json = new com.fasterxml.jackson.databind.ObjectMapper();
+		StringBuilder out = new StringBuilder();
+		for (String question : java.nio.file.Files.readAllLines(java.nio.file.Paths.get(System.getProperty(
+			"chartsearchai.harness.questions")))) {
+			if (question.trim().isEmpty()) {
+				continue;
+			}
+			RecordingProvider provider = new RecordingProvider(System.getProperty("chartsearchai.harness.reading", "YES"));
+			provider.engine.rewrites.putAll(rewrites);
+			ObjectNode row = json.createObjectNode();
+			row.put("q", question);
+			try {
+				ChartAnswer answer = serviceWith(provider, new org.openmrs.module.chartsearchai.reference.DrugReferenceService())
+						.search(patient, question);
+				row.put("module", answer.isAnsweredByTheModule());
+				row.put("answer", answer.getAnswer() == null ? null : answer.getAnswer().replaceAll("\\[\\d+\\]", "[n]"));
+				com.fasterxml.jackson.databind.node.ArrayNode chips = row.putArray("chips");
+				for (SafetyWarning chip : answer.getSafetyWarnings()) {
+					chips.add(chip.getType() + " | " + chip.getDetail());
+				}
+				row.put("rewritten", provider.engine.rewritesAsked > 0);
+			}
+			catch (RuntimeException e) {
+				row.put("error", String.valueOf(e));
+			}
+			out.append(json.writeValueAsString(row)).append('\n');
+		}
+		java.nio.file.Files.write(java.nio.file.Paths.get(System.getProperty("chartsearchai.harness.out", "harness.jsonl")),
+			out.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+	}
+
 	private static TestableService serviceWith(RecordingProvider provider,
 			org.openmrs.module.chartsearchai.reference.DrugReferenceService reference) {
 		TestableService service = new TestableService();

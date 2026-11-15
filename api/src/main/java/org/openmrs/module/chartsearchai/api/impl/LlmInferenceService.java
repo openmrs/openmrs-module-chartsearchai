@@ -1423,7 +1423,10 @@ public class LlmInferenceService implements ChartSearchService {
 				(asked, findings) -> LlmProvider.interruptible(cancellation, () -> llmProvider.findingsBearingOn(asked, findings)));
 		}
 		SafetyReading reading = readForDrugSafety(patient, question, built, chartRead, cancellation, injected);
-		if (reading.chart != injected || !aWordingRuleKeptTheReadingOff(question, injected)) {
+		// Nor a question naming a group of hers and not asked of it: a rewrite can drop the group, and the screen of all her
+		// medications its plain form runs answers nothing asked (ADR Decision 637).
+		if (reading.chart != injected || !aWordingRuleKeptTheReadingOff(question, injected)
+				|| injected.namesAGroupOfHersNotAskedOf()) {
 			return reading;
 		}
 		// A wording rule of the router kept the model from reading the question, so it is read again as one plain English
@@ -1505,7 +1508,10 @@ public class LlmInferenceService implements ChartSearchService {
 				// Nor one thing asked of where a drug would stand, which the model read as one: "amox ok?" (ADR Decision 514).
 				|| DrugReferenceInjector.asksOfOneThingInADrugsPlace(question)
 				// Nor drug resistance, how her infection responds to treatment: "Any drug resistance?" (ADR Decision 525).
-				|| QueryScopeRouter.asksOfDrugResistance(question)) {
+				|| QueryScopeRouter.asksOfDrugResistance(question)
+				// Nor a group of her medications named and not asked of, whose screen of all her medications answers nothing
+				// it asks: the model read "Is it safe to give him an NSAID with his BP meds?" as one (ADR Decision 637).
+				|| injected.namesAGroupOfHersNotAskedOf()) {
 			return new SafetyReading(injected, question);
 		}
 		// Only the model call runs under the cancel interrupt, keeping the chart reads around it outside.

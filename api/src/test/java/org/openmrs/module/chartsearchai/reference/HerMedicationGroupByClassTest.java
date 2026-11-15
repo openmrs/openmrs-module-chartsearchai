@@ -221,4 +221,32 @@ public class HerMedicationGroupByClassTest extends BaseModuleContextSensitiveTes
 				Arrays.asList("Nevirapine", "Lopinavir", "Ritonavir", "Fluconazole", "Simvastatin")), null, null, null, orders),
 			question);
 	}
+
+	/**
+	 * A group of his named and not asked of is stamped so whether or not anything resolved for the question (ADR Decision
+	 * 637). On the demo replica every order of his was already a record of his chart and nothing resolved for "Any
+	 * interactions between his rifampcin and his ARVs?", so the injection returned before the stamp, the model read the
+	 * question as one of his medications, and his whole screen — his cotrimoxazole and TB drugs among it — answered it.
+	 */
+	@Test
+	public void aGroupOfHisNotAskedOfIsStampedWhereEveryOrderIsAlreadyARecordOfHisChart() {
+		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
+			DrugReferenceTestSupport.activeOrder("order-lpvr", "Lopinavir / ritonavir", "Lopinavir", "Ritonavir"),
+			DrugReferenceTestSupport.activeOrder("order-azt", "Retrovir", "Zidovudine"),
+			DrugReferenceTestSupport.activeOrder("order-ddi", "Didanosine"));
+		for (String question : new String[] { "Any interactions between his rifampcin and his ARVs?",
+				"Do his TB drugs interact with anything in his diet?", "When were his ARVs last changed?" }) {
+			PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.shippedServiceWithGroups())
+					.injectRecords(DrugReferenceTestSupport.chartOf(
+						DrugReferenceTestSupport.drugOrderRecord(1, "order-lpvr", "Lopinavir / ritonavir"),
+						DrugReferenceTestSupport.drugOrderRecord(2, "order-azt", "Retrovir"),
+						DrugReferenceTestSupport.drugOrderRecord(3, "order-ddi", "Didanosine")),
+						DrugReferenceTestSupport.ctx(40, null, new LinkedHashSet<String>(Arrays.asList("Lopinavir", "Ritonavir",
+							"Retrovir", "Zidovudine", "Didanosine")), null, null, null, orders), question);
+
+			assertFalse(chart.screenedHerOrders(), question);
+			assertTrue(chart.namesAGroupOfHersNotAskedOf(), question + " names his ARVs and asks nothing the module answers "
+					+ "over them, so the model's reading may not run his whole screen for it");
+		}
+	}
 }

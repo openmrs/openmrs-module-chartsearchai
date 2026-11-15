@@ -11582,6 +11582,11 @@ public class DrugSafetyValidator {
 		if (!questionDrugs.isEmpty()) {
 			return false;
 		}
+		// Never for a question naming a group of hers the module does not answer over that group: what it asks of — a class
+		// proposed beside them, food, their record — is no pair of all her medications (ADR Decision 637).
+		if (service != null && DrugReferenceInjector.namesAGroupOfHersNotAskedOf(question, service.getCrossReactivityGroups())) {
+			return false;
+		}
 		boolean wordInADrugsPlace = UnrecognisedDrugName.namesAWordInADrugsPlace(question);
 		boolean oneOfHerOrdersByName = wordInADrugsPlace
 				&& DrugReferenceInjector.asksAboutOneOfHerOrdersByName(question, context, service) != null;

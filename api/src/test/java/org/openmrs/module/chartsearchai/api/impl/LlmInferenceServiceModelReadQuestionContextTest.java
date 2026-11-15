@@ -730,6 +730,122 @@ public class LlmInferenceServiceModelReadQuestionContextTest extends BaseModuleC
 		assertFalse(answer.isAnsweredByTheModule());
 	}
 
+	/**
+	 * A question naming a group of her medications that the module does not answer over that group is never given the screen
+	 * of all her medications, however the router's safety words or the model read it (ADR Decision 637). On the demo replica
+	 * patient dd553355, on ARVs alone, "Is it safe to give him an NSAID with his BP meds?", "Do his TB drugs interact with
+	 * anything in his diet?" and "When were his BP meds last changed?" were each given his whole screen.
+	 */
+	@Test
+	public void aQuestionNamingAGroupOfHersIsNeverGivenTheScreenOfAllHerMedications() throws Exception {
+		executeDataSet("GroupAnswerEfavirenzRhzeCotrimoxazoleOrdersTestData.xml");
+		for (String question : new String[] { "Is it safe to give her an NSAID with her ARVs?", "Do her TB drugs interact with anything in her diet?",
+				"Do her statins and over-the-counter drugs interact?", "Is it safe to give a statin with her TB drugs?",
+				"Any interactions if we add an antifungal to her ARVs?",
+				// a misspelt drug beside the group, which the model read as one of her medications' safety
+				"Any interactions between her rifampcin and her ARVs?" }) {
+			ChartAnswer answer = serviceWith(new RecordingProvider("YES"), new org.openmrs.module.chartsearchai.reference.DrugReferenceService()).search(patient, question);
+
+			// her aspirin and warfarin are in none of the groups it names
+			assertFalse(answer.getAnswer().contains("(aspirin) interacts with active order Warfarin"), question
+					+ " names no pair outside the groups it asks of: " + answer.getAnswer());
+			for (SafetyWarning chip : answer.getSafetyWarnings()) {
+				assertFalse(chip.getDetail().contains("aspirin") && chip.getDetail().contains("Warfarin"), question + " — "
+						+ chip.getDetail());
+			}
+		}
+	}
+
+	/** Nor is a question naming a group of hers and not asked of it read again in plain English (ADR Decision 637): a rewrite
+	 *  can drop the group the clinician named, and the screen of all her medications its plain form runs answers nothing they
+	 *  asked. */
+	@Test
+	public void aQuestionNamingAGroupOfHersIsNotReadAgainInPlainEnglish() throws Exception {
+		executeDataSet("GroupAnswerEfavirenzRhzeCotrimoxazoleOrdersTestData.xml");
+		RecordingProvider provider = new RecordingProvider("YES");
+		provider.engine.rewrites.put("Do her TB drugs interact with anything in her diet?",
+			"Does she have any drug interactions?");
+		ChartAnswer answer = serviceWith(provider, new org.openmrs.module.chartsearchai.reference.DrugReferenceService())
+				.search(patient, "Do her TB drugs interact with anything in her diet?");
+
+		assertFalse(answer.isAnsweredByTheModule(), "was: " + answer.getAnswer());
+		assertTrue(answer.getSafetyWarnings().isEmpty(), "no screen of all her medications: " + answer.getSafetyWarnings());
+		assertEquals(0, provider.engine.rewritesAsked, "the model was not asked to rewrite it");
+	}
+
+	/** One group of hers asked to be all right with her other medications is answered over what the check relates it to (ADR
+	 *  Decision 637): "Are his BP meds safe with his other drugs?" was given his whole screen. */
+	@Test
+	public void aGroupOfHersAskedWhetherItIsAllRightWithHerOtherMedicationsIsAnsweredOverIt() throws Exception {
+		executeDataSet("GroupAnswerEfavirenzRhzeCotrimoxazoleOrdersTestData.xml");
+		for (String question : new String[] { "Are her ARVs ok with her other medications?",
+				"Are her ARVs safe with her other drugs?" }) {
+			ChartAnswer answer = serviceWith(new RecordingProvider("YES"),
+				new org.openmrs.module.chartsearchai.reference.DrugReferenceService()).search(patient, question);
+
+			assertTrue(answer.isAnsweredByTheModule(), question + " was: " + answer.getAnswer());
+			assertTrue(answer.getAnswer().split("\\n")[0].startsWith("This patient's antiretrovirals (")
+					&& answer.getAnswer().split("\\n")[0].endsWith("what the interaction check relates them to:"),
+				question + " was: " + answer.getAnswer());
+			assertFalse(answer.getAnswer().contains("(aspirin) interacts with active order Warfarin"), question + " was: "
+					+ answer.getAnswer());
+		}
+		// and a group the module cannot resolve is said to be unresolved, as Decision 631 says of it
+		ChartAnswer unresolved = serviceWith(new RecordingProvider("YES"),
+			new org.openmrs.module.chartsearchai.reference.DrugReferenceService()).search(patient,
+				"Are her BP meds safe with her other drugs?");
+		assertTrue(unresolved.getAnswer().startsWith("This check cannot tell which of this patient's active medications are "
+				+ "the \"BP meds\""),
+			"was: " + unresolved.getAnswer());
+	}
+
+	/** A question of her groups' record — when they changed, why they were stopped — is no question of their interactions,
+	 *  and no check answers it (ADR Decision 637): "Why were his ARVs and TB drugs stopped?" was answered with what the check
+	 *  relates between them. */
+	@Test
+	public void aQuestionOfTheRecordOfAGroupOfHersIsAnsweredByNoCheck() throws Exception {
+		executeDataSet("GroupAnswerEfavirenzRhzeCotrimoxazoleOrdersTestData.xml");
+		for (String question : new String[] { "When were her TB drugs last changed?", "Why were her ARVs and TB drugs stopped?",
+				"Who prescribed her ARVs?", "When was her TB treatment started?" }) {
+			RecordingProvider provider = new RecordingProvider("YES");
+			ChartAnswer answer = serviceWith(provider, new org.openmrs.module.chartsearchai.reference.DrugReferenceService())
+					.search(patient, question);
+
+			assertFalse(answer.isAnsweredByTheModule(), question + " was: " + answer.getAnswer());
+			assertTrue(answer.getSafetyWarnings().isEmpty(), question + " — " + answer.getSafetyWarnings());
+			assertEquals(1, provider.answers, question + ": the model answers it from her records");
+		}
+	}
+
+	/** Two groups of hers asked whether they are all right together are asked of their interactions (ADR Decision 637): on
+	 *  the demo replica "Are his TB drugs ok with his ARVs?" was given his whole screen. */
+	@Test
+	public void twoGroupsOfHersAskedWhetherTheyAreAllRightTogetherAreAnsweredOverThem() throws Exception {
+		executeDataSet("GroupAnswerEfavirenzRhzeCotrimoxazoleOrdersTestData.xml");
+		for (String question : new String[] { "Are her TB drugs ok with her ARVs?", "Are her ARVs safe with her TB drugs?",
+				"Is it fine to take her TB drugs with her ARVs?", "Are her TB drugs safe to give with her ARVs?",
+				"Can her TB drugs be given safely with her ARVs?", "Is her TB treatment fine to continue with her ARVs?",
+				"When is it safe to restart her ARVs with her TB drugs?" }) {
+			ChartAnswer answer = serviceWith(new RecordingProvider("YES"), new org.openmrs.module.chartsearchai.reference.DrugReferenceService()).search(patient, question);
+
+			assertTrue(answer.isAnsweredByTheModule(), question + " was: " + answer.getAnswer());
+			assertTrue(answer.getAnswer().split("\n")[0].startsWith("This patient's antiretrovirals (")
+					&& answer.getAnswer().split("\n")[0].endsWith("what the interaction check relates between them:"),
+				question + " was: " + answer.getAnswer());
+			assertFalse(answer.getAnswer().contains("Warfarin"), question + " was: " + answer.getAnswer());
+		}
+	}
+
+	private static TestableService serviceWith(RecordingProvider provider,
+			org.openmrs.module.chartsearchai.reference.DrugReferenceService reference) {
+		TestableService service = new TestableService();
+		service.setChartBuildingStrategy(new StubStrategy());
+		service.setLlmProvider(provider);
+		service.setDrugReferenceInjector(DrugReferenceTestSupport.injectorWithSafety(reference));
+		service.setDrugSafetyValidator(DrugReferenceTestSupport.validator(reference));
+		return service;
+	}
+
 	private static TestableService serviceWith(RecordingProvider provider) {
 		TestableService service = new TestableService();
 		service.setChartBuildingStrategy(new StubStrategy());

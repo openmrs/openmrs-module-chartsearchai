@@ -28910,9 +28910,10 @@ alone. Residues:
 - Something asked of in a clause after the group (*"… with his statins if he drinks grapefruit juice?"*) is answered over
   the group, its clause left unsaid.
 - A group asked of in words the router reads as no safety question (*"Are his TB drugs ok with his ARVs?"*) keeps the
-  screen, as under Decision 630.
+  screen, as under Decision 630. Resolved by
+  [Decision 637](#decision-637-a-question-naming-a-group-of-her-medications-is-never-given-the-screen-of-all-her-medications).
 - Decision 630's own readings stand where they were imperfect: *"Why were his ARVs and TB drugs stopped?"* and *"Do his
-  ARVs and grapefruit interact?"* are answered over the groups.
+  ARVs and grapefruit interact?"* are answered over the groups. The first is resolved by Decision 637.
 - A drug the data resolves named beside a group keeps Decision 313's lead, *"cannot tell which … are the "ARVs" …"*, though
   the group may now be resolved.
 
@@ -29110,3 +29111,73 @@ On the demo replica (2026-11-15), the module built from this change was compared
 
 Pinned by `ThreeGroupsOfHisTest`, which failed before the change.
 
+## Decision 637: A question naming a group of her medications is never given the screen of all her medications
+
+**Status: Accepted** (November 2026), on the owner's direction that an answer carries nothing beyond what was asked. It
+extends [Decision 631](#decision-631-a-class-of-her-medications-is-answered-over-that-class-and-a-group-the-module-cannot-resolve-is-said-to-be-unresolved).
+
+### Context
+
+Decisions 630–636 answer a question over the groups of her medications it names where it asks of their interactions. A
+question naming a group and asking of something else fell back to the screen of all her medications. On the demo replica,
+patient dd553355 is on ARVs and takes no statin or TB drug. The module answered each of these with his whole screen:
+*"Is it safe to give him an NSAID with his BP meds?"*, *"Do his TB drugs interact with anything in his diet?"*, *"Do his
+statins interact with TB drugs?"* and *"Are his TB drugs ok with his ARVs?"*. The model's reading of a question as one
+about her medications (Decision 489) gave the same screen to others, *"When were his BP meds last changed?"* among them.
+And Decision 630's looser gate answered *"Why were his ARVs and TB drugs stopped?"* with what the check relates between
+the two groups.
+
+### The decision
+
+- `DrugReferenceInjector.namesAGroupOfHersNotAskedOf` holds when a question naming no drug names a group of her
+  medications and `asksOfTheSafetyOfAGroupOfHers` does not take it. For such a question,
+  `DrugSafetyValidator.screensHerOrders` runs no screen. The injector stamps it on the chart
+  (`PatientChart.namesAGroupOfHersNotAskedOf`), and `LlmInferenceService` then does not ask the model to read it as a
+  question about her medications, nor rewrite it in plain English (Decision 608), since a rewrite can drop the group. The
+  stamp is set on every chart the injection returns, including the one it returns when nothing resolved. On the replica,
+  where every order of the patient's was already a record of the chart, that return had come before the stamp, and the
+  model's reading gave *"Any interactions between his rifampcin and his ARVs?"* the whole screen. Nothing else the injector does for the question changes. The model answers from her
+  records and any reference record the question resolved.
+- A question opening with *when*, *why*, *who* or *how long* that carries no word of interaction or of safety asks of the
+  groups' record. It is no question of their interactions, so a word of change in it (*changed*, *stopped*) no longer
+  admits it. *"When is it safe to restart his ARVs with his TB drugs?"* is still asked of them. A group question is not
+  given Decision 403's findings either.
+- Two groups asked to be all right with each other — *"Are his TB drugs ok with his ARVs?"*, *"Is it fine to take his TB
+  drugs with his ARVs?"*, *"Can his TB drugs be given safely with his ARVs?"* — ask of their interactions
+  (`ALL_RIGHT_WITH_ANOTHER_OF_HERS`). So does one group asked to be all right with her other medications, *"Are his ARVs ok
+  with his other medications?"* (`ALL_RIGHT_WITH_HER_OTHER_MEDICATIONS`).
+- Decision 630's gate refuses another drug class named beside the groups (*"Is it safe to give a statin with his TB
+  drugs?"*), as Decision 631's gate already did.
+
+### Measured
+
+On the demo replica (2026-11-15), the module built from this change was compared with the build of Decision 636:
+
+- The 750-question old-versus-new harness (`DrugReferenceInjector.injectRecords` over fixed orders, no model reading)
+  changed 25 answers, each one intended. Answers that were screened but carried no chip fell from 22 to 1. The one left is
+  *"Any interactions with his own medications?"*, which asks for the whole screen.
+- 15 residue wordings were asked of 4 ARV patients through the deployed module, model included. All 60 answers had been
+  the whole screen or carried its chips. None does now. *"When were his BP meds last changed?"* is answered from his
+  orders' dates, and *"Are his TB drugs ok with his ARVs?"* says that no TB drug is among his medications.
+- The four deployed sweeps (Decisions 630–632: 207, 44, 136 and 120 answers) were identical to Decision 636's, answer and
+  chips alike.
+
+### Residues
+
+- *"Do his statins interact with TB drugs?"*: the second group carries no possessive, so the question is not answered over
+  the two groups. It now gets no screen.
+- A misspelt drug beside a group (*"Any interactions between his rifampcin and his ARVs?"*) is not resolved to the drug
+  it misspells. It gets no screen, and the model answers it. On the replica its chips were the misspelt drug's
+  interactions with his medications. For one patient, one of them (his cotrimoxazole) was outside his ARVs.
+- A class proposed beside a group (*"Is it safe to give him an NSAID with his BP meds?"*) is not checked against the
+  group's members. The answer says the class was not resolved to a substance, as for a class asked about alone.
+
+Pinned by `LlmInferenceServiceModelReadQuestionContextTest`'s
+`aQuestionNamingAGroupOfHersIsNeverGivenTheScreenOfAllHerMedications`,
+`twoGroupsOfHersAskedWhetherTheyAreAllRightTogetherAreAnsweredOverThem` and
+`aQuestionOfTheRecordOfAGroupOfHersIsAnsweredByNoCheck` and
+`aGroupOfHersAskedWhetherItIsAllRightWithHerOtherMedicationsIsAnsweredOverIt` and
+`aQuestionNamingAGroupOfHersIsNotReadAgainInPlainEnglish`, and by `HerMedicationGroupByClassTest`'s
+`aGroupOfHisNotAskedOfIsStampedWhereEveryOrderIsAlreadyARecordOfHisChart`. Disabling each rule of the change turns
+its test red. One round of review by an agent given the code alone found three wordings the first version refused or
+missed (*"When is it safe to restart …"*, *"… safe to give with his …"*, *"… safely with his …"*); each is now pinned.

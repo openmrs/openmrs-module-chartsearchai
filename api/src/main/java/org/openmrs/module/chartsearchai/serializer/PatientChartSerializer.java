@@ -595,6 +595,9 @@ public class PatientChartSerializer {
 		/** @see #asksOnlyAboutADrugsRecord() */
 		private boolean asksOnlyAboutADrugsRecord;
 
+		/** @see #namesAGroupOfHersNotAskedOf() */
+		private boolean namesAGroupOfHersNotAskedOf;
+
 		/** @see #getFindingsBearingOnTheQuestion() */
 		private Set<String> findingsBearingOnTheQuestion;
 
@@ -891,6 +894,18 @@ public class PatientChartSerializer {
 		 *  stopped (ADR Decision 399): it asks nothing of drug safety, and no chip answers it. */
 		public boolean asksOnlyAboutADrugsRecord() {
 			return asksOnlyAboutADrugsRecord;
+		}
+
+		/** Records that the question names a group of her medications the module does not answer it over — ADR Decision 637,
+		 *  and {@code DrugReferenceInjector} is the only caller. */
+		public void markNamesAGroupOfHersNotAskedOf() {
+			this.namesAGroupOfHersNotAskedOf = true;
+		}
+
+		/** Whether the question names a group of her medications — "his BP meds" — and asks of something the screen of all
+		 *  her medications does not answer (ADR Decision 637): no reading of it runs that screen. */
+		public boolean namesAGroupOfHersNotAskedOf() {
+			return namesAGroupOfHersNotAskedOf;
 		}
 
 		/** Records that the question asks what one drug does to her — ADR Decision 613, and {@code DrugReferenceInjector} is

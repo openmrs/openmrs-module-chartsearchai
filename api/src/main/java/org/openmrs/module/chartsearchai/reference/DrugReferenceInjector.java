@@ -902,6 +902,8 @@ public class DrugReferenceInjector {
 		// And one of her orders named by its own name, proposed or asked whether it interacts (ADR Decision 336).
 		boolean stopOfHerOrderByName = questionDrugs.isEmpty()
 				&& asksAboutOneOfHerOrdersByName(question, context, drugReferenceService) != null;
+		boolean groupOfHersNotAskedOf = questionDrugs.isEmpty()
+				&& namesAGroupOfHersNotAskedOf(question, drugReferenceService.getCrossReactivityGroups());
 		if (nothingResolved && unrepresented.isEmpty() && !screenRelatedNothing && !screenOfNoMedications
 				&& !screenOfOneOrder && !allergyToHerMedications && !herDrugAllergiesAsked && !duplicateQuestion
 				&& listed.stated().isEmpty() && unrecognised == null
@@ -913,6 +915,12 @@ public class DrugReferenceInjector {
 			// statement after a model's answer naming an order her records directly conflict with cites it (ADR
 			// Decision 210). Every order has its own record here, so the chart's own index is the one to number off.
 			chart.markOrderRecordNumbers(orderRecordNumbers(new DrugOrderRecords(chart.getMappings()), context));
+			// And a group of hers named and not asked of, which is a fact about the question whatever resolved: unstamped, the
+			// model read "Any interactions between his rifampcin and his ARVs?" as one of his medications and his whole
+			// screen answered it (ADR Decision 637).
+			if (groupOfHersNotAskedOf) {
+				chart.markNamesAGroupOfHersNotAskedOf();
+			}
 			return chart;
 		}
 
@@ -1901,6 +1909,10 @@ public class DrugReferenceInjector {
 		}
 		if (groupStated != null) {
 			injected.markFindingsBearingOnTheQuestion(groupStated);
+		}
+		// A group of hers named and not asked of: the model is not to read it as her medications (ADR Decision 637).
+		if (groupOfHersNotAskedOf) {
+			injected.markNamesAGroupOfHersNotAskedOf();
 		}
 		if ((besideTheGroupStated != null || groupStated != null) && !findingsAsStated.isEmpty()) {
 			injected.markFindingsAsStated(new HashMap<String, Object>(findingsAsStated));
@@ -9483,9 +9495,24 @@ public class DrugReferenceInjector {
 		if (groups.isEmpty() && !unresolved) {
 			return false;
 		}
+		// Nor a question of their record — when they were started or changed, why they were stopped, who prescribed them —
+		// which asks nothing of their interactions, whatever word of a change it carries: "Why were his ARVs and TB drugs
+		// stopped?" was answered with what the check relates between them (ADR Decision 637).
+		if (OF_THEIR_RECORD.matcher(question).lookingAt() && !OF_INTERACTIONS.matcher(question).find()
+				&& !OF_THEIR_SAFETY.matcher(question).find()) {
+			return false;
+		}
+		boolean several = groups.size() + (unresolved ? 1 : 0) > 1;
+		// One group of hers all right with another, or with her other medications: "Are his TB drugs ok with his ARVs?",
+		// "Are his BP meds safe with his other drugs?" (ADR Decision 637)
+		boolean allRightWithHers = several && ALL_RIGHT_WITH_ANOTHER_OF_HERS.matcher(question).find()
+				|| ALL_RIGHT_WITH_HER_OTHER_MEDICATIONS.matcher(question).find();
 		boolean ofTheirSafety = QueryScopeRouter.isInteractionScreening(question)
 				|| QueryScopeRouter.asksOnlyToScreenHerMedications(question) || QueryScopeRouter.asksOnlyAboutInteractions(question)
-				|| QueryScopeRouter.asksWhatAContraindicationAnswers(question);
+				|| QueryScopeRouter.asksWhatAContraindicationAnswers(question)
+				// and one group of hers asked to be all right with another or with her other medications, which no safety word
+				// of the router's reads (ADR Decision 637)
+				|| allRightWithHers;
 		boolean ofNothingElse = !QueryScopeRouter.asksAboutAllergies(question)
 				&& !QueryScopeRouter.asksAboutConditions(question) && !QueryScopeRouter.asksAboutDuplicateTherapy(question)
 				// nor something else asked beside them: "Does her diet interact with her ARVs?" (ADR Decision 492)
@@ -9493,7 +9520,10 @@ public class DrugReferenceInjector {
 		// Decision 630's groups alone are read as Decision 630 reads them, so nothing it answered over them changes: what
 		// follows a possessive of its own, and nothing joined to them.
 		if (!unresolved && DrugClassTerms.onlyGroupsOfDecision630(groups)) {
-			return ofTheirSafety && ofNothingElse && !DrugClassTerms.namesSomethingElseOfHers(question, carried, false);
+			// and no other class named beside them, proposed — "Is it safe to give a statin with his TB drugs?" — which is no
+			// question of the groups alone (ADR Decision 637)
+			return ofTheirSafety && ofNothingElse && !DrugClassTerms.namesSomethingElseOfHers(question, carried, false)
+					&& DrugClassTerms.namedIn(DrugClassTerms.withHerGroupsAsHerMedications(question, carried), carried) == null;
 		}
 		ofNothingElse &= !DrugClassTerms.namesSomethingElseOfHers(question, carried);
 		// Read with her groups as her medications, so what else it names is seen by the rules reading a question about them
@@ -9530,8 +9560,21 @@ public class DrugReferenceInjector {
 		// Of their interactions, by its words — never "Why were his statins stopped?", "Is his statin dose safe?" or "When
 		// were his ARVs and TB drugs changed?", which a safety word alone admits.
 		boolean ofTheirInteractions = OF_INTERACTIONS.matcher(question).find()
-				|| groups.size() + (unresolved ? 1 : 0) > 1 && ONE_WITH_ANOTHER_OF_HERS.matcher(question).find();
+				|| several && ONE_WITH_ANOTHER_OF_HERS.matcher(question).find() || allRightWithHers;
 		return ofTheirSafety && ofTheirInteractions && ofNothingElse;
+	}
+
+	/**
+	 * Whether {@code question} names a group of her medications — "his BP meds", "his TB drugs" — and is no question the
+	 * module answers over that group (ADR Decision 637): it then asks of something the screen of all her medications does not
+	 * answer — a class proposed beside them, food, their record — and that screen is not run for it, by the router's safety
+	 * words or the model's reading. On the demo replica "Is it safe to give him an NSAID with his BP meds?" and "When were his
+	 * BP meds last changed?" were each given his whole screen.
+	 */
+	static boolean namesAGroupOfHersNotAskedOf(String question, List<CrossReactivityGroup> carried) {
+		return question != null && (!DrugClassTerms.herMedicationGroupsNamed(question, carried).isEmpty()
+				|| DrugClassTerms.unresolvedGroupOfHers(question, carried) != null)
+				&& !asksOfTheSafetyOfAGroupOfHers(question, carried);
 	}
 
 	/** Whether {@code words} name one of {@code drugs}, by its name or an alias (ADR Decision 632). */
@@ -9643,6 +9686,30 @@ public class DrugReferenceInjector {
 	private static final Pattern OF_INTERACTIONS = Pattern.compile("\\b(?:interact\\w*|clash\\w*|ddis?|together|combin\\w*|"
 			+ "mix\\w*|compatib\\w*|contraindicat\\w*|concurrent\\w*|at the same time|each other|one another|between)\\b",
 		Pattern.CASE_INSENSITIVE);
+
+	/** Asked to be all right, as safe, ok or fine — and to be taken, given or continued so: "safe to give", "fine to take his
+	 *  TB drugs", "given safely" (ADR Decision 637). */
+	private static final String ALL_RIGHT = "(?:(?:safe|ok|okay|fine|alright|all right|compatible)(?: to (?:take|give|use|"
+			+ "continue|combine|restart|start)(?: [^?]*?)?)?|safely)";
+
+	/** The openers of a question of her medications' record: when, why, who, how long — none asking of their safety, "When
+	 *  is it safe to restart his ARVs with his TB drugs?" (ADR Decision 637). */
+	private static final Pattern OF_THEIR_RECORD = Pattern.compile("(?i)\\s*(?:when|why|who|since when|how long)\\b");
+
+	/** One group of hers asked to be all right with another — "Are his TB drugs ok with his ARVs?", "Is it fine to take his
+	 *  TB drugs with his ARVs?" (ADR Decision 637). */
+	private static final Pattern ALL_RIGHT_WITH_ANOTHER_OF_HERS = Pattern.compile("(?i)\\b" + ALL_RIGHT
+			+ " (?:with|alongside|beside) (?:his|her|their)\\b");
+
+	/** One group of hers asked to be all right with her other medications — "Are his BP meds safe with his other drugs?"
+	 *  (ADR Decision 637). */
+	private static final Pattern ALL_RIGHT_WITH_HER_OTHER_MEDICATIONS = Pattern.compile("(?i)\\b" + ALL_RIGHT
+			+ " (?:with|alongside|beside) (?:(?:any|all) of )?(?:his|her|their) (?:other|remaining|current other) "
+			+ "(?:medications|meds|medicines|drugs|pills|tablets|treatments?)\\b");
+
+	/** A word of safety in a question of her medications' record: "When is it safe to …" (ADR Decision 637). */
+	private static final Pattern OF_THEIR_SAFETY = Pattern.compile("(?i)\\b(?:safe|safely|safety|unsafe|risk\\w*|danger\\w*|"
+			+ "ok|okay|fine|alright|compatible|harm\\w*|problem\\w*)\\b");
 
 	/** One group of hers taken or safe with another, "Can he take his TB drugs with his ARVs?" — asking of their
 	 *  interactions where two groups are named (ADR Decision 631). */

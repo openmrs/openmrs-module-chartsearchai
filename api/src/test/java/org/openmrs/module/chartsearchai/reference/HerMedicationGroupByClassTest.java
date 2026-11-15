@@ -255,6 +255,44 @@ public class HerMedicationGroupByClassTest extends BaseModuleContextSensitiveTes
 		}
 	}
 
+	/**
+	 * A group answer states every pair of its groups, whatever the cap on the screen's chips (ADR Decision 639). That cap
+	 * keeps the most severe pairs of ALL her medications, so before this a group whose pairs were milder than her ten worst
+	 * was answered "The interaction check relates none of this patient's antiretrovirals … to … antifungals (Fluconazole)"
+	 * of a patient whose fluconazole the data relates to his nevirapine and lopinavir, and his ARVs' Moderate pair with his
+	 * simvastatin went unsaid.
+	 */
+	@Test
+	public void aGroupAnswerIsTheSameWhateverTheCapOnTheScreensChips() {
+		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
+			DrugReferenceTestSupport.activeOrder("order-nvp", "Nevirapine"),
+			DrugReferenceTestSupport.activeOrder("order-lpvr", "Lopinavir / ritonavir", "Lopinavir", "Ritonavir"),
+			DrugReferenceTestSupport.activeOrder("order-rif", "Rifampicin"),
+			DrugReferenceTestSupport.activeOrder("order-inh", "Isoniazid"),
+			DrugReferenceTestSupport.activeOrder("order-flu", "Fluconazole"),
+			DrugReferenceTestSupport.activeOrder("order-sim", "Simvastatin"),
+			DrugReferenceTestSupport.activeOrder("order-aml", "Amlodipine"));
+		for (String question : Arrays.asList("Do his ARVs interact with his antifungals?",
+			"Do his ARVs interact with his statins?", "Are his TB drugs ok with his ARVs?",
+			"Any interactions with his ARVs, statins and TB drugs?", "Any interactions with his antifungals?")) {
+			String[] answers = new String[2];
+			Object[] chips = new Object[2];
+			for (int i = 0; i < 2; i++) {
+				Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_DRUG_SAFETY_MAX_PAIR_CHIPS,
+					i == 0 ? String.valueOf(ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_MAX_PAIR_CHIPS) : "100");
+				PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(new DrugReferenceService()).injectRecords(
+					DrugReferenceTestSupport.oneRecordChart(), DrugReferenceTestSupport.ctx(40, null, new LinkedHashSet<String>(
+						Arrays.asList("Nevirapine", "Lopinavir", "Ritonavir", "Rifampicin", "Isoniazid", "Fluconazole",
+							"Simvastatin", "Amlodipine")), null, null, null, orders), question);
+				answers[i] = chart.getModuleAnswer();
+				chips[i] = chart.getFindingsBearingOnTheQuestion();
+			}
+			assertNotNull(answers[1], question);
+			assertEquals(answers[1], answers[0], question + " — the cap on the screen's chips changed the group answer");
+			assertEquals(chips[1], chips[0], question + " — the cap changed its chips");
+		}
+	}
+
 	private static PatientChart ask(String question) {
 		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
 			DrugReferenceTestSupport.activeOrder("order-nvp", "Nevirapine"),

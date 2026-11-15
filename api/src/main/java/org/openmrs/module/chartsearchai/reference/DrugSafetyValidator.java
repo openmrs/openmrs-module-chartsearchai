@@ -1448,8 +1448,15 @@ public class DrugSafetyValidator {
 		if (warnInteractions && screensHerOrders(question, questionDrugs, context, drugReferenceService)) {
 			ordersPairScreened = context.getActiveDrugOrders().size() > 1;
 			int screenedFrom = warnings.size();
+			// A question of a group of hers is answered over that group's pairs alone, so the cap that keeps her most severe
+			// pairs is not applied before it: it withheld the group's milder pairs, and "Do his ARVs interact with his
+			// antifungals?" was answered that the check relates none of them where it relates two (ADR Decision 639). The
+			// answer and its chips state the group's pairs only.
+			int chipCap = question != null && drugReferenceService != null
+					&& DrugReferenceInjector.screensAGroupOfHers(question, drugReferenceService) ? Integer.MAX_VALUE
+					: maxPairChips();
 			pairExtent = addActiveOrderPairInteractions(warnings, subjects, context, severityFloor,
-					orderEntries, interactionPairs, coMedications, statedChips, bridgedOrders);
+					orderEntries, interactionPairs, coMedications, statedChips, bridgedOrders, chipCap);
 			// Among the pairs by strength and outside their extent: it relates no pair (issue #477).
 			addOrdersSharingASubstance(warnings, screenedFrom, orderEntries, subjects, coMedications,
 				Collections.emptySet());
@@ -10312,7 +10319,7 @@ public class DrugSafetyValidator {
 			SubstanceSubjects subjects, PatientClinicalContext context, int severityFloor,
 			List<DrugReference> orderDrugs, InteractionPairs reportedPairs,
 			CoMedications coMedications, StatedInteractionChips statedChips,
-			BridgedOrders bridgedOrders) {
+			BridgedOrders bridgedOrders, int chipCap) {
 		if (context == null) {
 			// The arm could not run at all, so it states nothing — not a complete screen of zero pairs.
 			return null;
@@ -10602,7 +10609,7 @@ public class DrugSafetyValidator {
 		// exclusive, so one question can never meet both, and two limits for one concept would be
 		// arbitrary (issue #131).
 		// The cap bounds the CHIPS, each a mechanism stated once (ADR Decision 190); the extent counts the pairs.
-		int reported = Math.min(pairs.size(), maxPairChips());
+		int reported = Math.min(pairs.size(), chipCap);
 		int foundPairs = 0;
 		int shownPairs = 0;
 		for (int n = 0; n < pairs.size(); n++) {

@@ -29233,3 +29233,44 @@ On the demo replica (2026-11-15), against the build of Decision 637:
 Pinned by `HerMedicationGroupByClassTest.anUnrecognisedNameAskedInteractionsBetweenItAndAGroupOfHisIsSaidUnchecked`, on a
 chart holding one record and on one where every order is already a record of the chart (the shape Decision 637 found the
 harness missed). Removing the two shapes turns it red.
+
+## Decision 639: A group answer states every pair of its groups, whatever the cap on the screen's chips
+
+**Status: Accepted** (November 2026). It corrects
+[Decision 630](#decision-630-a-group-of-her-medications-asked-about-by-name-is-answered-over-that-group) and the group
+answers built on it (Decisions 631–637).
+
+### Context
+
+The screen of her medications keeps her most severe pairs up to `chartsearchai.drugSafety.maxPairChips` (10 by default)
+and withholds the rest (issue #336). A group answer is composed from the screen's chips, keeping those that relate its
+groups. The cap was applied to all her pairs before the group's were picked, so a group whose pairs were milder than her
+ten worst lost them. On the harness patient (nevirapine, lopinavir/ritonavir, rifampicin, isoniazid, fluconazole,
+simvastatin, amlodipine: 21 pairs above the floor), *"Do his ARVs interact with his antifungals?"* was answered *"The
+interaction check relates none of this patient's antiretrovirals (Nevirapine and Lopinavir / ritonavir) to this patient's
+antifungals … (Fluconazole)"*, where the data rates fluconazole with nevirapine and with lopinavir Moderate. *"Do his TB
+drugs interact with each other?"* was told the check relates none, where it rates rifampicin with isoniazid Minor, and
+*"Do his ARVs interact with his statins?"* left out nevirapine with simvastatin (Moderate).
+
+### The decision
+
+- `DrugSafetyValidator` applies no cap to the screen when it runs for a question of a group of hers
+  (`DrugReferenceInjector.screensAGroupOfHers`). The group answer states, and its chips carry, the groups' pairs only, as
+  before (Decisions 630, 633). The screen of all her medications keeps the cap.
+- Keeping the cap and counting it over the groups' pairs alone was the other shape. It would need the groups' scope inside
+  the validator for no difference an answer shows: an answer over a group states every pair of it either way, or states
+  fewer with no word that it withheld any.
+
+### Measured
+
+On the 750-question old-versus-new harness (`DrugReferenceInjector.injectRecords` over the seven orders above), against
+Decision 638's build: 292 answers changed, each a group answer. 24 that said the check relates none now state the pairs
+it relates; 268 keep their lead and gain the groups' pairs the cap had withheld. None gains a pair outside its groups.
+On the demo replica (2026-11-15), Decisions 630–632's four sweeps (507 answers asked through the deployed module) changed
+in 7 between Decision 638's build and Decision 645's, each keeping every line it had and gaining Minor pairs the cap had
+withheld: rifampicin with isoniazid in *"Any interactions between his TB drugs?"* and *"Any interactions with his TB
+treatment?"* of two patients, and trimethoprim with three of his ARVs in *"Do his ARVs interact?"*, *"Any interactions
+with his ARVs?"* and *"Do his antibiotics interact with his ARVs?"* of one.
+
+Pinned by `HerMedicationGroupByClassTest.aGroupAnswerIsTheSameWhateverTheCapOnTheScreensChips`, which asks five group
+questions with the cap at its default and at 100 and requires the same answer and chips. Restoring the cap turns it red.

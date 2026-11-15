@@ -406,6 +406,49 @@ public class HerMedicationGroupByClassTest extends BaseModuleContextSensitiveTes
 				|| !askOfSeven("Are his ARVs safe with antibiotics?").getModuleAnswer().startsWith("This patient's antiretrovirals"));
 	}
 
+	/**
+	 * One drug beside groups of hers the module resolves is answered over the drug and those groups (ADR Decision 646): two
+	 * groups, "Is fluconazole safe with his ARVs and TB drugs?"; "Is his fluconazole interacting with his ARVs?"; "Is it safe
+	 * to continue his fluconazole with his ARVs?". Each was answered with every interaction of the drug, under a lead saying
+	 * the check cannot tell which of his medications are the ARVs — which it can.
+	 */
+	@Test
+	public void oneDrugBesideGroupsOfHisIsAnsweredOverThem() {
+		String[][] cases = {
+				{ "Is fluconazole safe with his ARVs and TB drugs?",
+						"Fluconazole and this patient's antiretrovirals (Nevirapine and Lopinavir / ritonavir) and TB drugs (Rifampicin "
+								+ "and Isoniazid): what the interaction check relates between them:" },
+				{ "Is fluconazole safe with his TB and HIV meds?",
+						"Fluconazole and this patient's antiretrovirals (Nevirapine and Lopinavir / ritonavir) and TB drugs (Rifampicin "
+								+ "and Isoniazid): what the interaction check relates between them:" },
+				{ "Is his fluconazole interacting with his ARVs?",
+						"Fluconazole and this patient's antiretrovirals (Nevirapine and Lopinavir / ritonavir): what the interaction "
+								+ "check relates between them:" },
+				{ "Is it safe to continue his fluconazole with his ARVs?",
+						"Fluconazole and this patient's antiretrovirals (Nevirapine and Lopinavir / ritonavir): what the interaction "
+								+ "check relates between them:" } };
+		for (String[] c : cases) {
+			String answer = askOfSeven(c[0]).getModuleAnswer();
+			assertNotNull(answer, c[0]);
+			assertEquals(c[1], answer.split("\n")[0], c[0] + ": " + answer);
+			assertFalse(answer.contains("Simvastatin") || answer.contains("Amlodipine"), c[0] + ": " + answer);
+		}
+		// Where the drug keeps its answer against all of them — beside another of his the module cannot resolve, or one of the
+		// group itself, whose combination order's other substance would be left out — no lead says the check cannot tell
+		// which are the ARVs, which it can
+		for (String question : Arrays.asList("Is fluconazole safe with his ARVs and his cold medicine?",
+			"Does ritonavir interact with his ARVs?")) {
+			String answer = askOfSeven(question).getModuleAnswer();
+			assertNotNull(answer, question);
+			assertFalse(answer.contains(DrugReferenceInjector.GROUP_NOT_IDENTIFIED_OPENING + "ARVs"), question + ": " + answer);
+		}
+		String ritonavir = askOfSeven("Does ritonavir interact with his ARVs?").getModuleAnswer();
+		assertTrue(ritonavir.startsWith("This check checked Ritonavir against all of this patient's active medications.\n"),
+			ritonavir);
+		assertTrue(ritonavir.contains("Lopinavir interacts with active order Nevirapine — Major"),
+			"the Major finding of the order ritonavir is taken in: " + ritonavir);
+	}
+
 	private static PatientChart askOfSeven(String question) {
 		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
 			DrugReferenceTestSupport.activeOrder("order-nvp", "Nevirapine"),

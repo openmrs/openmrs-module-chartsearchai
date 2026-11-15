@@ -659,10 +659,11 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		String pair = ask("What is the interaction between warfarin and ibuprofen?");
 		assertNotNull(pair, "precondition: the module answers it");
 		assertEquals(pair, ask("warfarin and ibuprofen - any issue?"));
+		// Continuing her drug with her ARVs is whether it is safe with them, answered over them (ADR Decisions 632, 646)
 		for (String drug : new String[] { "ibuprofen", "warfarin" }) {
-			String toContinue = ask("Is it okay to continue her " + drug + "?");
-			assertNotNull(toContinue, "precondition: the module answers it");
-			assertEquals(toContinue, ask("Is it ok to continue her " + drug + " with her ARVs?"), drug);
+			String withHerArvs = ask("Is her " + drug + " safe with her ARVs?");
+			assertNotNull(withHerArvs, "precondition: the module answers it");
+			assertEquals(withHerArvs, ask("Is it ok to continue her " + drug + " with her ARVs?"), drug);
 		}
 	}
 
@@ -788,10 +789,12 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 			assertEquals(canonical, ask(pair[0]), pair[0]);
 		}
 		assertTrue(chart("Can I give her a stat dose of warfarin?").statesADose(), "the dose said not checked");
-		// "TB and HIV meds" is a group of hers the check cannot resolve, named in the lead (ADR Decision 221)
+		// "TB and HIV meds" are her TB drugs and ARVs, groups the module resolves (ADR Decisions 630, 631), of which she has no
+		// TB drug, so warfarin is kept against all her medications (ADR Decision 632) — under a lead saying that, and never
+		// Decision 221's that the check cannot tell which they are (ADR Decision 646)
 		String group = ask("Any issues adding warfarin to her TB and HIV meds?");
-		assertTrue(group != null && group.startsWith("This check cannot tell which of this patient's active medications are the "
-				+ "\"TB and HIV meds\" the question names"), "was: " + group);
+		assertTrue(group != null && group.startsWith("This check checked Warfarin against all of this patient's active "
+				+ "medications.\n") && !group.contains("cannot tell which"), "was: " + group);
 		String safe = ask("Is warfarin ok with her meds?");
 		assertNotNull(safe, "precondition: the module answers it");
 		assertEquals(safe + "\n" + DrugReferenceInjector.STATEMENT_NOT_WEIGHED_OPENING + "She needs pain relief).",

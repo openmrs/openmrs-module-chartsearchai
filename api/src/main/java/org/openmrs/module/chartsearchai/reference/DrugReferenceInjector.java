@@ -1996,12 +1996,26 @@ public class DrugReferenceInjector {
 		}
 		// One drug asked about beside a group of her medications the question names: answered as beside her medications,
 		// under a lead saying the check cannot tell which of her orders the group means (ADR Decision 313).
+		// Only one the module cannot resolve: "cannot tell which … are the "ARVs"" is false of a group it resolves, beside
+		// which something else asked of keeps this answer (ADR Decision 646).
 		String group = besideAResolvedGroup || moduleAnswer == null || questionDrugs.isEmpty() || context == null
 				|| context.getActiveDrugOrders().isEmpty() ? null : QueryScopeRouter.groupOfHerMedicationsNamed(question);
-		if (group != null && (asksWhetherItInteracts(question, questionDrugs)
-				|| QueryScopeRouter.asksWhetherADrugIsSafeWithHerMedications(wordsBesideItsNames(question, questionDrugs)))) {
+		boolean resolvedGroupOnly = false;
+		if (group != null && !DrugClassTerms.herMedicationGroupsNamed(question, drugReferenceService.getCrossReactivityGroups())
+				.isEmpty()) {
+			group = DrugClassTerms.unresolvedGroupOfHers(question, drugReferenceService.getCrossReactivityGroups());
+			resolvedGroupOnly = group == null;
+		}
+		boolean ofTheDrugBesideThem = !questionDrugs.isEmpty() && (asksWhetherItInteracts(question, questionDrugs)
+				|| QueryScopeRouter.asksWhetherADrugIsSafeWithHerMedications(wordsBesideItsNames(question, questionDrugs)));
+		if (group != null && ofTheDrugBesideThem) {
 			moduleAnswer = GROUP_NOT_IDENTIFIED_OPENING + group + GROUP_NOT_IDENTIFIED_CLOSING
 					+ askedDrugs(question, questionDrugs, context, false).get(0).label + " against all of them.\n" + moduleAnswer;
+		} else if (resolvedGroupOnly && ofTheDrugBesideThem) {
+			// Beside groups it resolves, what else the question asks of, or the drug being one of them, kept the drug against
+			// all her medications, which is said (ADR Decision 646).
+			moduleAnswer = ALL_HER_MEDICATIONS_OPENING + askedDrugs(question, questionDrugs, context, false).get(0).label
+					+ ALL_HER_MEDICATIONS_CLOSING + "\n" + moduleAnswer;
 		}
 		String purpose = moduleAnswer == null ? null
 				: choice ? QueryScopeRouter.statedPurposeOfAChoice(question)
@@ -9823,8 +9837,9 @@ public class DrugReferenceInjector {
 		List<CrossReactivityGroup> carried = drugReferenceService.getCrossReactivityGroups();
 		List<String> groups = DrugClassTerms.herMedicationGroupsNamed(question, carried);
 		String unresolved = DrugClassTerms.unresolvedGroupOfHers(question, carried);
+		// Beside one drug, any number of her groups the module resolves, the drug asked against them all (ADR Decision 646).
 		if (orderEntries == null || (asked == null ? !asksOfTheSafetyOfAGroupOfHers(question, carried)
-				: unresolved != null || groups.size() != 1)) {
+				: unresolved != null || groups.isEmpty())) {
 			return null;
 		}
 		// A group the module cannot resolve to her orders — "his BP meds", "his antihypertensives" — is said to be that, and
@@ -9893,11 +9908,19 @@ public class DrugReferenceInjector {
 			return String.join("\n", absent);
 		}
 		if (asked != null) {
-			// The drug asked about against the group: never one of its own members, which is the group among itself.
-			if (!Collections.disjoint(asked.substances, substances.get(0))) {
+			// The drug asked about against its groups' members, together: "Is fluconazole safe with his ARVs and TB drugs?"
+			// asks of fluconazole against either, and never of the groups against each other (ADR Decision 646).
+			Set<Object> ofTheGroups = new LinkedHashSet<Object>();
+			for (Set<Object> ofOne : substances) {
+				ofTheGroups.addAll(ofOne);
+			}
+			// Never one of their own members, which is the group among itself: narrowed to the group's other members, "Does
+			// ritonavir interact with his ARVs?" of a patient on lopinavir/ritonavir left out lopinavir's Major interaction with
+			// his nevirapine, which the drug's own answer states of the order it is taken in (ADR Decisions 292, 632, 646).
+			if (!Collections.disjoint(asked.substances, ofTheGroups)) {
 				return null;
 			}
-			substances.add(0, asked.substances);
+			substances = new ArrayList<Set<Object>>(Arrays.asList(asked.substances, ofTheGroups));
 		}
 		boolean several = asked == null && groups.size() > 2;
 		Set<Object> ofThemAll = new LinkedHashSet<Object>();
@@ -9930,8 +9953,12 @@ public class DrugReferenceInjector {
 		}
 		findings = shown;
 		if (asked != null) {
-			String group = "this patient's " + DrugClassTerms.spokenName(groups.get(0), true)
-					+ DrugClassTerms.readAs(groups.get(0), carried) + " (" + members.get(0) + ")";
+			List<String> eachGroup = new ArrayList<String>();
+			for (int g = 0; g < groups.size(); g++) {
+				eachGroup.add(DrugClassTerms.spokenName(groups.get(g), true) + DrugClassTerms.readAs(groups.get(g), carried) + " ("
+						+ members.get(g) + ")");
+			}
+			String group = "this patient's " + DrugSafetyValidator.joinPartners(eachGroup);
 			if (relating.isEmpty()) {
 				return "The interaction check relates " + asked.label + " to none of " + group + ".\n" + BELOW_FLOOR_SCOPE;
 			}
@@ -10778,6 +10805,13 @@ public class DrugReferenceInjector {
 	static final String GROUP_MEMBERSHIP_NOT_IDENTIFIED_OPENING = "This check cannot tell whether ";
 
 	static final String GROUP_NOT_IDENTIFIED_CLOSING = "\" the question names, so it checked ";
+
+	/** How the answer about one drug beside groups of her medications the module resolves opens where it is kept over all of
+	 *  them — something else asked of beside the groups, or the drug one of them (ADR Decision 646): "This check checked
+	 *  Fluconazole against all of this patient's active medications." */
+	static final String ALL_HER_MEDICATIONS_OPENING = "This check checked ";
+
+	static final String ALL_HER_MEDICATIONS_CLOSING = " against all of this patient's active medications.";
 
 	/** How the answer about one drug and her allergies opens, the drug and " and this patient's recorded allergies:" after
 	 *  it (ADR Decision 327). */

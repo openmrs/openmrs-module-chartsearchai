@@ -913,6 +913,9 @@ public final class QueryScopeRouter {
 			// and "react with" (ADR Decision 431)
 			"(?:does|will|would|could|can) (?:" + POSSESSIVE + " )?" + D + " (?:interact|react) with (?:any of )?" + POSSESSIVE
 					+ " (?:other )?" + MEDICATIONS,
+			// "Is her fluconazole interacting with her ARVs?" (ADR Decision 646)
+			"is (?:" + POSSESSIVE + " )?" + D + " (?:interacting|reacting|interfering) with (?:any of )?" + POSSESSIVE
+					+ " (?:other )?" + MEDICATIONS,
 			// "Any interactions if I give her ibuprofen?", "Are there any interactions if I start her on ibuprofen?" — the
 			// model answered it "No — X should not be given: it interacts with …" (ADR Decision 181)
 			"(?:are there )?any (?:drug )?interactions if (?:i|we) (?:give|start|prescribe|add) (?:" + PATIENT + " )?(?:on )?"
@@ -1618,6 +1621,9 @@ public final class QueryScopeRouter {
 			+ " (?:with|alongside|in combination with|together with) (?:any of )?" + HER_MEDICATION_GROUP;
 
 	private static final List<Pattern> SAFE_WITH_HER_MEDICATIONS_SHAPES = shapes(SAFE_WITH_HER_MEDICATIONS,
+			// "Is it safe to continue her fluconazole with her ARVs?" — her drug kept on beside them (ADR Decision 646)
+			"is it (?:safe|ok|okay|fine|appropriate) to (?:continue|keep|keep taking|keep giving|use) (?:" + POSSESSIVE + " )?" + D
+					+ " (?:with|alongside|together with) (?:any of )?" + POSSESSIVE + " (?:other )?" + MEDICATIONS,
 			// "Will fluconazole be okay with what she's on?", "Rifampicin on top of her ARVs - safe?" (ADR Decision 440)
 			"(?:will|would|is) " + D + " (?:be )?(?:ok|okay|safe|fine) with what (?:she's|he's|they're|(?:she|he|the patient) is"
 					+ "|they are) (?:already |currently )?(?:on|taking)",

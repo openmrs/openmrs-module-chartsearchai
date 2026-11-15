@@ -29499,3 +29499,62 @@ group answers Decision 639 measures; none had an error.
 
 Pinned by `HerMedicationGroupByClassTest.aGroupNamedWithoutHisIsNeverHisMedicationsAsAWhole`. Disabling the residual
 reading's refusal, the group beside a named drug, or the reading of a group with nothing of hers before it, turns it red.
+
+## Decision 646: One drug beside groups of her medications the module resolves is answered over them, and no lead says it cannot tell which they are
+
+**Status: Accepted** (November 2026), on the owner's direction that an answer carries nothing beyond what was asked. It
+resolves the residue of [Decision 632](#decision-632-one-drug-asked-about-beside-a-group-of-her-medications-the-module-resolves-is-answered-over-that-group)
+on two groups beside one drug.
+
+### Context
+
+A scan of the 750-question harness after Decision 645 found 22 questions naming one drug beside groups of hers that were
+answered with every interaction of the drug. Nineteen opened with Decision 313's lead, *"This check cannot tell which of
+this patient's active medications are the "ARVs" the question names"*, of groups the module resolves (Decisions 630, 631).
+Decision 632 keeps the drug against all her medications where narrowing would leave out what was asked, but its lead was
+written for a group the module cannot resolve. And some questions were kept there with nothing else asked:
+
+- two groups beside the drug: *"Is fluconazole safe with her ARVs and TB drugs?"*, *"… with her TB and HIV meds?"*,
+  *"Is warfarin safe with her ARVs and her statin?"*;
+- *"Is her fluconazole interacting with her ARVs?"* and *"Is it safe to continue her fluconazole with her ARVs?"*, which no
+  shape read as asking whether the drug interacts with or is safe with her medications.
+
+### The decision
+
+- `DrugReferenceInjector.composeHerMedicationGroups` answers one drug beside any number of groups the module resolves:
+  what the check relates between the drug and the groups' members together, under *"Fluconazole and this patient's
+  antiretrovirals (…) and TB drugs (…): what the interaction check relates between them:"*. Never the groups against
+  each other, which the question does not ask.
+- `QueryScopeRouter` reads *"is her X interacting (reacting, interfering) with her …"* as whether it interacts, and *"is it
+  safe to continue (keep, use) her X with her …"* as whether it is safe with them.
+- Where the drug is still kept against all her medications, Decision 313's lead names only a group the module cannot
+  resolve — *"… are the "BP meds" …"* of *"… with her ARVs and her BP meds?"*. Beside groups it resolves alone, the answer
+  opens *"This check checked Fluconazole against all of this patient's active medications."*
+- A drug that is one of the group is still kept against all her medications. Narrowed to the group's other members,
+  *"Does ritonavir interact with his ARVs?"* of a patient on lopinavir/ritonavir and nevirapine was answered that the
+  check relates ritonavir to none of them, leaving out lopinavir's Major interaction with his nevirapine, which the drug's
+  own answer states of the order it is taken in (Decision 292).
+
+### Measured
+
+On the 750-question old-versus-new harness, against Decision 645's build: 30 answers changed, each intended. Fourteen
+false leads became *"This check checked … against all of this patient's active medications."*; five name the group the
+module cannot resolve in place of *"ARVs"*; eleven, from that lead or from the model, are answered over the drug and the
+groups asked of.
+On the demo replica (2026-11-15), 10 wordings asked of 4 ARV patients through the deployed module, model included: 22 of
+the 40 answers had opened with Decision 313's lead of *"ARVs"*, *"ARVs and TB drugs"* or *"TB and HIV meds"*, and none
+does now. 25 answers changed: 9 are answered over the drug and the groups asked of, among them *"Does clarithromycin
+interact with his ARVs or TB drugs?"* of the patient on RHZE, which the model had answered; 12 open *"This check checked …
+against all of this patient's active medications."*, the three patients on no TB drug among them, whose TB drugs keep
+Decision 632's answer; and 4 name *"BP meds"*. The other 15 were unchanged. Decisions 630–632's four sweeps (507 answers)
+changed, against Decision 645's build, in 24, each only in its lead — Decision 313's of *"TB drugs"* or *"antibiotics"*
+becoming *"This check checked … against all of this patient's active medications."* for a patient with none of the group
+— its findings and chips unchanged; none had an error.
+
+Pinned by `HerMedicationGroupByClassTest.oneDrugBesideGroupsOfHisIsAnsweredOverThem`, and Decision 632's
+`DrugBesideAResolvedGroupTest.aDrugBesideMoreThanAResolvedGroupKeepsItsAnswerOverAllHisMedications` holds. Answering one
+group alone beside the drug, the lead's old group, the *interacting* shape or the *continue* shape each turns the first
+red. Two cases of `ClinicianWordingsTest` asserted what these groups were before the module resolved them, as four did
+that Decision 632 rewrote: Decision 221's lead that the check cannot tell which are *"her TB and HIV meds"*, and Decision
+426's answer over all her medications to *"Is it ok to continue her ibuprofen with her ARVs?"*. They now assert the lead
+the answer is true to, never the old one, and the answer *"Is her ibuprofen safe with her ARVs?"* gets.

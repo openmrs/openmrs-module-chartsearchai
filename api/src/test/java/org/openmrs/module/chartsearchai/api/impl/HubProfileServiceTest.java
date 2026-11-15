@@ -87,6 +87,7 @@ public class HubProfileServiceTest extends BaseModuleContextSensitiveTest {
 		String response = "{\"object\":\"list\","
 				+ "\"data\":["
 				+ "{\"id\":\"gemma-4-12b\",\"available\":true,\"backend_metadata\":{\"context_window\":16384}},"
+				+ "{\"id\":\"gemma-26b\",\"available\":true,\"backend_metadata\":{\"context_window\":24576}},"
 				+ "{\"id\":\"gemma-e4b\",\"available\":true,\"backend_metadata\":{\"context_window\":16384}},"
 				+ "{\"id\":\"qwen3.5-9b\",\"available\":true}"
 				+ "],"
@@ -112,7 +113,7 @@ public class HubProfileServiceTest extends BaseModuleContextSensitiveTest {
 					"http://localhost:" + server.getAddress().getPort() + "/v1/chat/completions");
 			Map<String, Object> payload = new HubProfileService().listProfiles();
 			List<Map<String, Object>> profiles = (List<Map<String, Object>>) payload.get("data");
-			assertEquals(3, profiles.size());
+			assertEquals(4, profiles.size());
 			assertEquals("gemma-4-12b", profiles.get(0).get("id"));
 			assertEquals("Gemma 4 12B", profiles.get(0).get("label"));
 			assertTrue((Boolean) profiles.get(0).get("default"));
@@ -120,18 +121,25 @@ public class HubProfileServiceTest extends BaseModuleContextSensitiveTest {
 			assertFalse((Boolean) profiles.get(0).get("indepth"));
 			assertFalse((Boolean) profiles.get(0).get("validation"));
 			assertEquals(16384, profiles.get(0).get("context_window"));
-			assertEquals("gemma-4-e4b", profiles.get(1).get("id"));
-			assertEquals("Gemma 4 E4B (Fast)", profiles.get(1).get("label"));
+			assertEquals("gemma-4-26b", profiles.get(1).get("id"));
+			assertEquals("Gemma 4 26B", profiles.get(1).get("label"));
 			assertFalse((Boolean) profiles.get(1).get("default"));
 			assertTrue((Boolean) profiles.get(1).get("available"));
 			assertFalse((Boolean) profiles.get(1).get("indepth"));
 			assertFalse((Boolean) profiles.get(1).get("validation"));
-			assertEquals("qwen-3.5-9b", profiles.get(2).get("id"));
-			assertEquals("Qwen 3.5 9B", profiles.get(2).get("label"));
+			assertEquals(24576, profiles.get(1).get("context_window"));
+			assertEquals("gemma-4-e4b", profiles.get(2).get("id"));
+			assertEquals("Gemma 4 E4B (Fast)", profiles.get(2).get("label"));
 			assertFalse((Boolean) profiles.get(2).get("default"));
 			assertTrue((Boolean) profiles.get(2).get("available"));
 			assertFalse((Boolean) profiles.get(2).get("indepth"));
 			assertFalse((Boolean) profiles.get(2).get("validation"));
+			assertEquals("qwen-3.5-9b", profiles.get(3).get("id"));
+			assertEquals("Qwen 3.5 9B", profiles.get(3).get("label"));
+			assertFalse((Boolean) profiles.get(3).get("default"));
+			assertTrue((Boolean) profiles.get(3).get("available"));
+			assertFalse((Boolean) profiles.get(3).get("indepth"));
+			assertFalse((Boolean) profiles.get(3).get("validation"));
 			assertEquals("gemma-4-12b", new HubProfileService().resolveDefaultProfileId());
 
 			// Custom catalog where the default preset is unavailable: discovery keeps default=true on
@@ -183,11 +191,14 @@ public class HubProfileServiceTest extends BaseModuleContextSensitiveTest {
 					"http://localhost:" + server.getAddress().getPort() + "/v1/chat/completions");
 			Map<String, Object> payload = new HubProfileService().listProfiles();
 			List<Map<String, Object>> profiles = (List<Map<String, Object>>) payload.get("data");
-			assertEquals(3, profiles.size());
+			assertEquals(4, profiles.size());
 			assertTrue((Boolean) profiles.get(0).get("available"));
-			assertTrue((Boolean) profiles.get(1).get("available"));
-			assertFalse((Boolean) profiles.get(2).get("available"));
-			assertTrue(((List<?>) profiles.get(2).get("unavailable_reasons"))
+			assertFalse((Boolean) profiles.get(1).get("available"));
+			assertTrue(((List<?>) profiles.get(1).get("unavailable_reasons"))
+					.contains("model_unavailable:gemma-26b"));
+			assertTrue((Boolean) profiles.get(2).get("available"));
+			assertFalse((Boolean) profiles.get(3).get("available"));
+			assertTrue(((List<?>) profiles.get(3).get("unavailable_reasons"))
 					.contains("model_unavailable:qwen3.5-9b"));
 
 			String verifiedPresets = "["

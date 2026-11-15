@@ -22,12 +22,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 /**
  * Parses and owns the OpenMRS clinician Hub preset catalog configured via
  * {@link org.openmrs.module.chartsearchai.ChartSearchAiConstants#GP_HUB_PRESETS}, falling back to
- * the three single-call model-named baseline presets ({@code gemma-4-12b}, {@code gemma-4-e4b},
- * {@code qwen-3.5-9b}) when the global property is unset or empty.
+ * the four single-call model-named baseline presets ({@code gemma-4-12b}, {@code gemma-4-26b},
+ * {@code gemma-4-e4b}, {@code qwen-3.5-9b}) when the global property is unset or empty.
  */
 public final class HubPresetCatalog {
 
 	public static final String DEFAULT_BACKING_MODEL = "gemma-4-12b";
+
+	public static final String LARGE_BACKING_MODEL = "gemma-26b";
 
 	public static final String FAST_BACKING_MODEL = "gemma-e4b";
 
@@ -133,10 +135,13 @@ public final class HubPresetCatalog {
 	}
 
 	private static HubPresetCatalog buildDefaultCatalog() {
-		List<HubPreset> defaults = new ArrayList<>(3);
+		List<HubPreset> defaults = new ArrayList<>(4);
 		defaults.add(new HubPreset("gemma-4-12b", "Gemma 4 12B",
 				"Balanced clinical chart synthesis (Gemma 4 12B, single pass)", true,
 				DEFAULT_BACKING_MODEL, singleCallExecutionSpec("gemma-4-12b")));
+		defaults.add(new HubPreset("gemma-4-26b", "Gemma 4 26B",
+				"High-capacity clinical chart synthesis (Gemma 4 26B, single pass)", false,
+				LARGE_BACKING_MODEL, singleCallExecutionSpec("gemma-4-26b")));
 		defaults.add(new HubPreset("gemma-4-e4b", "Gemma 4 E4B (Fast)",
 				"Fast clinical chart synthesis (Gemma 4 E4B, single pass)", false,
 				FAST_BACKING_MODEL, singleCallExecutionSpec("gemma-4-e4b")));

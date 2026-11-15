@@ -825,6 +825,17 @@ public class HubClinicalAnswerProviderTest {
 		assertEquals("gemma-4-e4b", e4bExecution.get("preset_id"));
 
 		transport.lastRequest = null;
+		provider.execute(request("gemma-4-26b"), new CollectingSink(), CancellationSignal.NONE)
+				.toCompletableFuture().get();
+		assertNotNull(transport.lastRequest);
+		assertEquals("gemma-26b", transport.lastRequest.getProfileId());
+		Map<String, Object> gemma26bExecution = (Map<String, Object>) HubCallRequest.class
+				.getMethod("getExecution")
+				.invoke(transport.lastRequest);
+		assertEquals("quick", gemma26bExecution.get("mode"));
+		assertEquals("gemma-4-26b", gemma26bExecution.get("preset_id"));
+
+		transport.lastRequest = null;
 		provider.execute(request("qwen-3.5-9b"), new CollectingSink(), CancellationSignal.NONE)
 				.toCompletableFuture().get();
 		assertNotNull(transport.lastRequest);

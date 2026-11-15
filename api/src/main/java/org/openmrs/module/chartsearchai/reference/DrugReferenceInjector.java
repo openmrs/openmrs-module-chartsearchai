@@ -1806,7 +1806,8 @@ public class DrugReferenceInjector {
 				&& ChartSearchAiUtils.getBooleanGlobalProperty(ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
 					ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS)
 				&& DrugClassTerms.namesOnlyGroupsOfHers(question, drugReferenceService.getCrossReactivityGroups(),
-					words -> namesADrugOf(words, questionDrugs))
+					// by one of its names, or by a word the data resolves it from: "alcohol", ethanol (ADR Decision 647)
+					words -> namesADrugOf(words, questionDrugs) || resolvesToOnly(words, questionDrugs, orderEntries))
 				&& asksOfADrugBesideHerMedications(DrugClassTerms.withHerGroupsAsHerMedications(question,
 					drugReferenceService.getCrossReactivityGroups()), questionDrugs)) {
 			List<AskedDrug> asked = askedDrugs(question, questionDrugs, context, false);
@@ -9618,6 +9619,16 @@ public class DrugReferenceInjector {
 		return question != null && (!DrugClassTerms.herMedicationGroupsNamed(question, carried).isEmpty()
 				|| DrugClassTerms.unresolvedGroupOfHers(question, carried) != null)
 				&& !asksOfTheSafetyOfAGroupOfHers(question, carried);
+	}
+
+	/** Whether the data resolves {@code words} to drugs, every one of them among {@code drugs}: "alcohol" to ethanol, which
+	 *  names neither (ADR Decision 647). */
+	private boolean resolvesToOnly(String words, List<DrugReference> drugs, List<DrugReference> orderEntries) {
+		if (words == null || words.trim().isEmpty()) {
+			return false;
+		}
+		List<DrugReference> resolved = drugReferenceService.findImpliedByQuestion(words, orderEntries);
+		return !resolved.isEmpty() && drugs.containsAll(resolved);
 	}
 
 	/** Whether {@code words} name one of {@code drugs}, by its name or an alias (ADR Decision 632). */

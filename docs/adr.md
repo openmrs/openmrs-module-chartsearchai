@@ -29558,3 +29558,33 @@ red. Two cases of `ClinicianWordingsTest` asserted what these groups were before
 that Decision 632 rewrote: Decision 221's lead that the check cannot tell which are *"her TB and HIV meds"*, and Decision
 426's answer over all her medications to *"Is it ok to continue her ibuprofen with her ARVs?"*. They now assert the lead
 the answer is true to, never the old one, and the answer *"Is her ibuprofen safe with her ARVs?"* gets.
+
+## Decision 647: A drug named by a word the data resolves it from is the drug asked beside her groups
+
+**Status: Accepted** (November 2026). It completes
+[Decision 646](#decision-646-one-drug-beside-groups-of-her-medications-the-module-resolves-is-answered-over-them-and-no-lead-says-it-cannot-tell-which-they-are).
+
+### Context
+
+Decision 632 answers a drug over the groups of hers it is named beside only where the question names nothing else of hers,
+and it told the drug from something else of hers by the drug's names and aliases. *"Alcohol"*, which the data resolves to
+ethanol, is neither, so *"Any interactions between his ARVs and alcohol?"*, *"Do his TB drugs and alcohol interact?"* and
+*"Do his ARVs, TB drugs and alcohol interact?"* were answered with ethanol against all his medications, where *"Does
+alcohol interact with his ARVs?"* was answered over his ARVs.
+
+### The decision
+
+- A word joined to her groups is the drug asked about where the data resolves it to that drug and nothing else
+  (`DrugReferenceService.findImpliedByQuestion`), as well as where it is one of the drug's names.
+
+### Measured
+
+On the 750-question old-versus-new harness, against Decision 646's build: four answers changed, each from ethanol against
+all his medications to what the check relates between ethanol and the groups named.
+On the demo replica (2026-11-15), asked of 4 ARV patients through the deployed module: *"Any interactions between his
+ARVs and alcohol?"* is answered for all four exactly as *"Does alcohol interact with his ARVs?"* is. *"Do his TB drugs and
+alcohol interact?"* is answered over his TB drugs for the patient on RHZE; for the three on no TB drug it keeps Decision
+632's answer over all his medications, under Decision 646's lead saying so.
+
+Pinned by `HerMedicationGroupByClassTest.aDrugNamedByAWordItResolvesFromIsTheDrugAskedBesideHisGroup`, which failed
+before the change.

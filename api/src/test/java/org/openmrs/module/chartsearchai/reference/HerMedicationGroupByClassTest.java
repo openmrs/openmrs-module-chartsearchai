@@ -449,6 +449,20 @@ public class HerMedicationGroupByClassTest extends BaseModuleContextSensitiveTes
 			"the Major finding of the order ritonavir is taken in: " + ritonavir);
 	}
 
+	/** A drug the question names by a word the data resolves it from, not one of its names — "alcohol", ethanol — is the
+	 *  drug asked beside his group, as named alone it is (ADR Decision 647): "Any interactions between his ARVs and alcohol?"
+	 *  was answered with ethanol against all his medications. */
+	@Test
+	public void aDrugNamedByAWordItResolvesFromIsTheDrugAskedBesideHisGroup() {
+		for (String[] asked : new String[][] {
+				{ "Any interactions between his ARVs and alcohol?", "Does alcohol interact with his ARVs?" },
+				{ "Do his TB drugs and alcohol interact?", "Does alcohol interact with his TB drugs?" } }) {
+			String plain = askOfSeven(asked[1]).getModuleAnswer();
+			assertNotNull(plain, asked[1]);
+			assertEquals(plain, askOfSeven(asked[0]).getModuleAnswer(), asked[0]);
+		}
+	}
+
 	private static PatientChart askOfSeven(String question) {
 		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
 			DrugReferenceTestSupport.activeOrder("order-nvp", "Nevirapine"),

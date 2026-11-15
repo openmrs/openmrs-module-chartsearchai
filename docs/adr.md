@@ -28905,7 +28905,8 @@ named (*"Is there an interaction risk if NSAIDs are added to his blood thinners?
 Fourteen rounds of review by agents given the code alone found the wordings this decision now pins. Reading what else a
 question names beside her groups is done by words, so a wording no rule reads can still be answered over the group
 alone. Residues:
-- Three or more groups named at once fall back to the screen.
+- Three or more groups named at once fall back to the screen. Resolved by
+  [Decision 636](#decision-636-three-or-more-groups-of-her-medications-are-answered-over-what-the-check-relates-among-them).
 - Something asked of in a clause after the group (*"… with his statins if he drinks grapefruit juice?"*) is answered over
   the group, its clause left unsaid.
 - A group asked of in words the router reads as no safety question (*"Are his TB drugs ok with his ARVs?"*) keeps the
@@ -29084,4 +29085,28 @@ over her ARVs, naming none of her aspirin or diclofenac.
 
 Pinned by `DrugBesideAResolvedGroupTest.aDrugBesideAGroupOfHisIsAnsweredOverThatGroup`, whose four proposal wordings
 redden without the new clause.
+
+## Decision 636: Three or more groups of her medications are answered over what the check relates among them
+
+**Status: Accepted** (November 2026), on the owner's direction that an answer carries nothing beyond what was asked. It
+extends [Decision 631](#decision-631-a-class-of-her-medications-is-answered-over-that-class-and-a-group-the-module-cannot-resolve-is-said-to-be-unresolved).
+
+### Context
+
+Decisions 630 and 631 answered a question naming one group of her medications or two; one naming three or more —
+*"Do his ARVs interact with his TB drugs and his statins?"* — fell back to her whole screen, naming her fluconazole and
+amlodipine in an answer about three other groups.
+
+### The decision
+
+`DrugReferenceInjector.composeHerMedicationGroups` answers three or more groups over the orders of all of them: *"This
+patient's antiretrovirals (…), TB drugs (…) and statins in ATC group C10AA (…): what the interaction check relates among
+them:"*, each finding relating two of their members, a merged finding restricted to them (Decision 633); or that the check
+relates none of them to each other. A group of them she has none of is said to be absent, as for two.
+
+### Measured
+
+On the demo replica (2026-11-15), the module built from this change was compared with the build of Decision 635 over the 750-question old-versus-new harness (`DrugReferenceInjector.injectRecords` on each replica patient's real orders). Exactly one question's answer changed: "Any interactions with his ARVs, statins and TB drugs?". It went from his whole screen of 10 Major pairs with no chips to the three groups' lead and what the check relates among them, with 6 chips. Answers that were screened but carried no chip fell from 23 to 22, and none appeared that were not there before. The four deployed sweeps (Decisions 630–632: 207, 44, 136 and 120 answers) were identical to Decision 635's, answer and chips alike.
+
+Pinned by `ThreeGroupsOfHisTest`, which failed before the change.
 

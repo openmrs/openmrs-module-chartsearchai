@@ -9480,7 +9480,7 @@ public class DrugReferenceInjector {
 	static boolean asksOfTheSafetyOfAGroupOfHers(String question, List<CrossReactivityGroup> carried) {
 		List<String> groups = DrugClassTerms.herMedicationGroupsNamed(question, carried);
 		boolean unresolved = DrugClassTerms.unresolvedGroupOfHers(question, carried) != null;
-		if (groups.isEmpty() && !unresolved || groups.size() > 2) {
+		if (groups.isEmpty() && !unresolved) {
 			return false;
 		}
 		boolean ofTheirSafety = QueryScopeRouter.isInteractionScreening(question)
@@ -9737,9 +9737,7 @@ public class DrugReferenceInjector {
 			return GROUP_NOT_IDENTIFIED_OPENING + unresolved + "\" the question names. Ask about a drug by name to have it "
 					+ "checked.";
 		}
-		if (groups.size() > 2) {
-			return null;
-		}
+		// Three or more groups are answered over what the check relates among them all (ADR Decision 636).
 		// Only where the data files each of her identified orders under some ATC code: an order it files under none may be
 		// in the group, and nothing could be said of the group's members or its absence. Said, and never the screen in its
 		// place (ADR Decision 631).
@@ -9805,14 +9803,20 @@ public class DrugReferenceInjector {
 			}
 			substances.add(0, asked.substances);
 		}
-		boolean between = groups.size() == 2 || asked != null;
-		boolean among = !between && DrugClassTerms.asksAmongThemselves(question);
+		boolean several = asked == null && groups.size() > 2;
+		Set<Object> ofThemAll = new LinkedHashSet<Object>();
+		for (Set<Object> ofOne : substances) {
+			ofThemAll.addAll(ofOne);
+		}
+		List<Set<Object>> scope = several ? Collections.singletonList(ofThemAll) : substances;
+		boolean between = !several && (groups.size() == 2 || asked != null);
+		boolean among = several || !between && DrugClassTerms.asksAmongThemselves(question);
 		List<Integer> relating = new ArrayList<Integer>();
 		// Each finding over only the orders the groups asked about: a chip stating one mechanism over several of her orders
 		// (Decision 99) is stated over those of them it relates to the groups (ADR Decision 633) — "Efavirenz interacts with
 		// active order Rifampicin … and Sulfamethoxazole" named his co-trimoxazole in an answer about his TB drugs.
 		List<SafetyWarning> shown = new ArrayList<SafetyWarning>(findings);
-		Predicate<SafetyWarning> relates = finding -> relatesToTheGroups(finding, orderEntries, substances, between, among);
+		Predicate<SafetyWarning> relates = finding -> relatesToTheGroups(finding, orderEntries, scope, between, among);
 		for (int i = 0; i < findings.size(); i++) {
 			SafetyWarning finding = findings.get(i);
 			if (!SafetyWarning.TYPE_INTERACTION.equals(finding.getType())) {
@@ -9837,6 +9841,22 @@ public class DrugReferenceInjector {
 			}
 			List<String> lines = findingLines(findings, numbers, relating, orderRecordNumbers, herOrderRecords, true);
 			lines.add(0, asked.label + " and " + group + ": what the interaction check relates between them:");
+			lines.add(BELOW_FLOOR_SCOPE);
+			return String.join("\n", lines);
+		}
+		if (several) {
+			List<String> named = new ArrayList<String>();
+			for (int g = 0; g < groups.size(); g++) {
+				named.add(DrugClassTerms.spokenName(groups.get(g), true) + DrugClassTerms.readAs(groups.get(g), carried) + " ("
+						+ members.get(g) + ")");
+			}
+			String all = "this patient's " + DrugSafetyValidator.joinPartners(named);
+			if (relating.isEmpty()) {
+				return "The interaction check relates none of " + all + " to each other.\n" + BELOW_FLOOR_SCOPE;
+			}
+			List<String> lines = findingLines(findings, numbers, relating, orderRecordNumbers, herOrderRecords, true);
+			lines.add(0, Character.toUpperCase(all.charAt(0)) + all.substring(1) + ": what the interaction check relates among "
+					+ "them:");
 			lines.add(BELOW_FLOOR_SCOPE);
 			return String.join("\n", lines);
 		}

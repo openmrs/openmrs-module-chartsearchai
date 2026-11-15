@@ -358,6 +358,24 @@ public class HerMedicationGroupByClassTest extends BaseModuleContextSensitiveTes
 		}
 	}
 
+	/** Two groups of his asked whether one interferes with the other are asked whether they interact, and "antituberculars"
+	 *  are his TB drugs (ADR Decision 643): "Would his ARVs interfere with his antifungals?" was answered by nothing the
+	 *  module states, and "Do his antiretrovirals and antituberculars interact?" with every interaction of his ARVs. */
+	@Test
+	public void twoGroupsOfHisAskedWhetherOneInterferesWithTheOtherAreAnsweredAsInteracting() {
+		for (String[] asked : new String[][] {
+				{ "Would his ARVs interfere with his antifungals?", "Would his ARVs interact with his antifungals?" },
+				{ "Will his TB drugs interfere with his statins?", "Will his TB drugs interact with his statins?" },
+				// and his TB drugs named "antituberculars"
+				{ "Do his antiretrovirals and antituberculars interact?", "Do his ARVs and TB drugs interact?" } }) {
+			PatientChart interferes = askOfSeven(asked[0]);
+			PatientChart interacts = askOfSeven(asked[1]);
+			assertNotNull(interacts.getModuleAnswer(), asked[1]);
+			assertEquals(interacts.getModuleAnswer(), interferes.getModuleAnswer(), asked[0]);
+			assertEquals(interacts.getFindingsBearingOnTheQuestion(), interferes.getFindingsBearingOnTheQuestion(), asked[0]);
+		}
+	}
+
 	private static PatientChart askOfSeven(String question) {
 		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
 			DrugReferenceTestSupport.activeOrder("order-nvp", "Nevirapine"),

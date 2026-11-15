@@ -237,8 +237,10 @@ final class DrugClassTerms {
 		String tb = "(?:tb|tuberculosis|anti-?tb|anti-?tuberculosis|antitubercular)";
 		words.put("antiretroviral", Pattern.compile("\\b(?:arvs?|art|anti-?retrovirals?|haart|" + hiv + " " + noun + "|" + hiv
 				+ "(?= and " + tb + " " + noun + "))\\b", Pattern.CASE_INSENSITIVE));
-		words.put("TB drug", Pattern.compile("\\b(?:" + tb + " " + noun + "|anti-?tbs?|" + tb + "(?= and (?:" + hiv + " " + noun
-				+ "|(?:his |her |their )?(?:arts?|arvs?|haart|anti-?retrovirals?)\\b)))\\b", Pattern.CASE_INSENSITIVE));
+		// and "antituberculars" (ADR Decision 643)
+		words.put("TB drug", Pattern.compile("\\b(?:" + tb + " " + noun + "|anti-?tbs?|anti-?tuberculars?|" + tb
+				+ "(?= and (?:" + hiv + " " + noun + "|(?:his |her |their )?(?:arts?|arvs?|haart|anti-?retrovirals?)\\b)))\\b",
+			Pattern.CASE_INSENSITIVE));
 		words.put("antibiotic", Pattern.compile("\\b(?:antibiotics?|antibacterials?)\\b", Pattern.CASE_INSENSITIVE));
 		WORDS_OF_HER_MEDICATION_GROUP = Collections.unmodifiableMap(words);
 	}

@@ -29385,3 +29385,27 @@ eats leafy greens?"* of a patient on no blood thinner, had been told that no blo
 demo replica the model now answers it, beside the class statement that none of his orders is in ATC group B01A.
 
 Pinned by `HerMedicationGroupByClassTest.aWordAskedOfBesideAGroupOfHisInAnyShapeIsSaidUnchecked`.
+
+## Decision 643: Two groups of her medications asked whether one interferes with the other are asked whether they interact
+
+**Status: Accepted** (November 2026). It extends Decision 449's *"clash with"* to *"interfere with"*, and the words naming
+her TB drugs to *"antituberculars"*.
+
+### Context
+
+*"Would his ARVs interfere with his antifungals?"* and *"Will his TB drugs interfere with his statins?"* fitted no shape of
+two groups of hers, which read *interact* and *clash*, and were answered by nothing the module states. *"Do his
+antiretrovirals and antituberculars interact?"* named his TB drugs by a word no group of hers was named by, and was given
+every interaction of his ARVs.
+
+### The decision
+
+- The shape of two groups of hers interacting reads *interfere with* too. They are answered as *"… interact with …"* is.
+- *Antitubercular(s)* names her TB drugs, in `DrugClassTerms` and among `QueryScopeRouter`'s nouns of a group of hers.
+
+### Measured
+
+On the 750-question old-versus-new harness, against Decision 642's build, one answer changed: *"Do his antiretrovirals and
+antituberculars interact?"* is answered over his ARVs and TB drugs. None of its questions asks *interfere*. Pinned by `HerMedicationGroupByClassTest.twoGroupsOfHisAskedWhetherOneInterferesWithTheOtherAreAnsweredAsInteracting`,
+which requires each wording to be answered, chips included, exactly as its *interact* form, or *"his ARVs and TB drugs"*,
+is. Leaving out the shape's *interfere* turns it red.

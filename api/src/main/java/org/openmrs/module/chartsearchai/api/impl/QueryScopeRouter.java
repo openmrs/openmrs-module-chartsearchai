@@ -564,7 +564,8 @@ public final class QueryScopeRouter {
 	 * groups interact is a screen of her medications, which states every pair, those between the two among them.
 	 */
 	private static final String MEDICATION_GROUP_NOUN = "(?:treatments?|therapy|therapies|"
-			+ "regimens?|medications?|meds|medicines?|drugs?|pills|tablets|arvs?|art|antiretrovirals?|antacids?|painkillers?|analgesics?|"
+			+ "regimens?|medications?|meds|medicines?|drugs?|pills|tablets|arvs?|art|antiretrovirals?|anti-?tuberculars?|antacids?|"
+			+ "painkillers?|analgesics?|"
 			+ "steroids?|supplements?|vitamins?|contraceptives?|antibiotics?|antimalarials?|"
 			+ "antihypertensives?|antiepileptics?|anticonvulsants?|antidepressants?)";
 
@@ -1373,8 +1374,8 @@ public final class QueryScopeRouter {
 
 	/** "Does her TB treatment interact with her ARVs?", "Do her TB drugs interact with her antiretrovirals?" (ADR Decision 221). */
 	private static final String TWO_OF_HER_MEDICATION_GROUPS_INTERACT = "(?:(?:does|do|will|would) " + HER_MEDICATION_GROUP
-			// and "clash with" (ADR Decision 449)
-			+ " (?:interact|clash) with " + HER_MEDICATION_GROUP
+			// and "clash with" (ADR Decision 449), and "interfere with" (ADR Decision 643)
+			+ " (?:interact|clash|interfere) with " + HER_MEDICATION_GROUP
 			// "Do her ARVs and her TB treatment clash?", "Can she take her TB drugs with her ARVs?" (ADR Decision 449)
 			+ "|(?:do|does|will|would) " + HER_MEDICATION_GROUP + " and " + HER_MEDICATION_GROUP + " (?:interact|clash)(?: with "
 			+ "(?:each other|one another))?"

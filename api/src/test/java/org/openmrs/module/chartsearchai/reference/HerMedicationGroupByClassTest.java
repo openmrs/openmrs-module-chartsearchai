@@ -442,11 +442,28 @@ public class HerMedicationGroupByClassTest extends BaseModuleContextSensitiveTes
 			assertNotNull(answer, question);
 			assertFalse(answer.contains(DrugReferenceInjector.GROUP_NOT_IDENTIFIED_OPENING + "ARVs"), question + ": " + answer);
 		}
+		// A drug that is one of the group is asked, with the whole order it is taken in, against the group's other members
+		// (ADR Decision 648): the Major finding of lopinavir, in ritonavir's order, with his nevirapine stays
 		String ritonavir = askOfSeven("Does ritonavir interact with his ARVs?").getModuleAnswer();
-		assertTrue(ritonavir.startsWith("This check checked Ritonavir against all of this patient's active medications.\n"),
-			ritonavir);
+		assertEquals("Ritonavir (taken in Lopinavir / ritonavir) and this patient's other antiretrovirals (Nevirapine): what the "
+				+ "interaction check relates between them:", ritonavir.split("\n")[0], ritonavir);
 		assertTrue(ritonavir.contains("Lopinavir interacts with active order Nevirapine — Major"),
 			"the Major finding of the order ritonavir is taken in: " + ritonavir);
+		assertFalse(ritonavir.contains("Simvastatin") || ritonavir.contains("Amlodipine") || ritonavir.contains("Rifampicin")
+				|| ritonavir.contains("Fluconazole"), ritonavir);
+		// One of some groups named, against the others alone; its order named only where it carries more than the drug
+		String rifampicin = askOfSeven("Does rifampicin in his TB drugs interact with his ARVs?").getModuleAnswer();
+		assertEquals("Rifampicin (rifampin) and this patient's antiretrovirals (Nevirapine and Lopinavir / ritonavir): what the "
+				+ "interaction check relates between them:", rifampicin.split("\n")[0], rifampicin);
+		assertFalse(rifampicin.contains("Isoniazid") || rifampicin.contains("Simvastatin"), rifampicin);
+		// Never "relates none" of an order whose other substance's findings were not drawn: "Is ritonavir safe with his
+		// ARVs?" drew none of lopinavir's, whose Major finding with his nevirapine is the order's
+		String safeWith = askOfSeven("Is ritonavir safe with his ARVs?").getModuleAnswer();
+		assertNotNull(safeWith);
+		assertFalse(safeWith.contains("to none of this patient's other antiretrovirals"), safeWith);
+		String nevirapine = askOfSeven("Does nevirapine interact with his ARVs?").getModuleAnswer();
+		assertEquals("Nevirapine and this patient's other antiretrovirals (Lopinavir / ritonavir): what the interaction check "
+				+ "relates between them:", nevirapine.split("\n")[0], nevirapine);
 	}
 
 	/** A drug the question names by a word the data resolves it from, not one of its names — "alcohol", ethanol — is the
@@ -461,6 +478,78 @@ public class HerMedicationGroupByClassTest extends BaseModuleContextSensitiveTes
 			assertNotNull(plain, asked[1]);
 			assertEquals(plain, askOfSeven(asked[0]).getModuleAnswer(), asked[0]);
 		}
+	}
+
+	/** A drug beside a group of Decision 630's he has none of is told he has none, as a class he has none of is (ADR
+	 *  Decision 649): "Does fluconazole interact with his TB drugs?" of a patient on no TB drug was answered with every
+	 *  interaction of fluconazole. Decision 632 kept that answer because "No antibiotic …" was said of a patient on
+	 *  rifampicin, which Decision 634 counts among his antibiotics. */
+	@Test
+	public void aDrugBesideAGroupHeHasNoneOfIsToldHeHasNone() {
+		// A proposal of the drug while he is on a group he has none of keeps the proposal's own answer (ADR Decision 402)
+		assertEquals(ask("Can I give him fluconazole?").getModuleAnswer(),
+			ask("Can he take fluconazole while on his TB drugs?").getModuleAnswer());
+		for (String[] asked : new String[][] {
+				{ "Does fluconazole interact with his TB drugs?", "No TB drug is among this patient's active medications the drug "
+						+ "data identifies." },
+				{ "Does amoxicillin interact with his antibiotics?", "No antibiotic is among this patient's active "
+						+ "medications the drug data identifies." } }) {
+			PatientChart chart = ask(asked[0]);
+			assertEquals(asked[1], chart.getModuleAnswer(), asked[0]);
+			assertTrue(chart.getFindingsBearingOnTheQuestion() != null && chart.getFindingsBearingOnTheQuestion().isEmpty(),
+				asked[0] + " — no chip: " + chart.getFindingsBearingOnTheQuestion());
+		}
+	}
+
+	/** A group the drug asked about is one of, which he takes none of, names the drug and is no group it is asked against:
+	 *  "Does rifampicin in his TB drugs interact with his ARVs?" of a patient on no TB drug is answered over his ARVs, its
+	 *  Major findings with them stated; and a drug of the group keeps the duplicates of its own orders (ADR Decision 648). */
+	@Test
+	public void aGroupNamingTheDrugIsNoGroupItIsAskedAgainst() {
+		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
+			DrugReferenceTestSupport.activeOrder("order-lpvr", "Lopinavir / ritonavir", "Lopinavir", "Ritonavir"),
+			DrugReferenceTestSupport.activeOrder("order-lpvr2", "Lopinavir / ritonavir", "Lopinavir", "Ritonavir"),
+			DrugReferenceTestSupport.activeOrder("order-azt", "Retrovir", "Zidovudine"),
+			DrugReferenceTestSupport.activeOrder("order-ctx", "Sulfamethoxazole and Trimethoprim", "Sulfamethoxazole",
+				"Trimethoprim"));
+		java.util.function.Function<String, String> ask = question -> DrugReferenceTestSupport.injectorWithSafety(
+			new DrugReferenceService()).injectRecords(DrugReferenceTestSupport.oneRecordChart(), DrugReferenceTestSupport.ctx(40,
+				null, new LinkedHashSet<String>(Arrays.asList("Lopinavir", "Ritonavir", "Zidovudine", "Sulfamethoxazole",
+					"Trimethoprim")), null, null, null, orders), question).getModuleAnswer();
+		String rifampicin = ask.apply("Does rifampicin in his TB drugs interact with his ARVs?");
+		assertNotNull(rifampicin);
+		assertTrue(rifampicin.startsWith("Rifampicin (rifampin) and this patient's antiretrovirals ("), rifampicin);
+		assertTrue(rifampicin.contains("Rifampicin (rifampin) interacts with active order Lopinavir") && rifampicin.contains(
+			"— Major"), rifampicin);
+		String ritonavir = ask.apply("Is ritonavir safe with his ARVs?");
+		assertNotNull(ritonavir);
+		assertTrue(ritonavir.contains("possible duplicate therapy"), "the duplicate of its own orders: " + ritonavir);
+		assertFalse(ritonavir.contains("Sulfamethoxazole"), "his co-trimoxazole is no ARV: " + ritonavir);
+	}
+
+	/** A drug of his group is never told the check relates it to none of the group's other members where it relates it by
+	 *  class or by his own repeated orders (ADR Decision 648): on the demo replica "Does lamivudine interact with his
+	 *  ARVs?" was told so of a patient whose lamivudine is in the same ATC class as his stavudine and abacavir, and in two
+	 *  of his orders. */
+	@Test
+	public void aDrugOfHisGroupRelatedByClassOrByItsOwnOrdersIsSaidSo() {
+		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
+			DrugReferenceTestSupport.activeOrder("o1", "Lamivudine", "Lamivudine"),
+			DrugReferenceTestSupport.activeOrder("o2", "Lamivudine", "Lamivudine"),
+			DrugReferenceTestSupport.activeOrder("o3", "Stavudine", "Stavudine"),
+			DrugReferenceTestSupport.activeOrder("o4", "Abacavir", "Abacavir"),
+			DrugReferenceTestSupport.activeOrder("o5", "Nevirapine", "Nevirapine"),
+			DrugReferenceTestSupport.activeOrder("o6", "Trimethoprim and sulfamethoxazole", "Trimethoprim", "Sulfamethoxazole"));
+		String answer = DrugReferenceTestSupport.injectorWithSafety(new DrugReferenceService()).injectRecords(
+			DrugReferenceTestSupport.oneRecordChart(), DrugReferenceTestSupport.ctx(40, null, new LinkedHashSet<String>(
+				Arrays.asList("Lamivudine", "Stavudine", "Abacavir", "Nevirapine", "Trimethoprim", "Sulfamethoxazole")), null,
+				null, null, orders), "Does lamivudine interact with his ARVs?").getModuleAnswer();
+		assertNotNull(answer);
+		assertFalse(answer.contains("to none of"), answer);
+		assertTrue(answer.contains("Lamivudine is in the same ATC class (J05AF) as active order Stavudine")
+				&& answer.contains("Lamivudine is in the same ATC class (J05AF) as active order Abacavir")
+				&& answer.contains("Lamivudine is already in active orders Lamivudine (2 orders)"), answer);
+		assertFalse(answer.contains("Trimethoprim"), "his co-trimoxazole is no ARV: " + answer);
 	}
 
 	private static PatientChart askOfSeven(String question) {

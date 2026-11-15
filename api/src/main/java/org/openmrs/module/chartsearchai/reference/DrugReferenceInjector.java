@@ -9660,6 +9660,10 @@ public class DrugReferenceInjector {
 						&& QueryScopeRouter.asksWhetherToGiveADrug(wordsBesideItsNames(asHers, questionDrugs));
 	}
 
+	/** The drug placed in a group of hers: "rifampicin in his TB drugs", "one of her ARVs" (ADR Decision 648). */
+	private static final Pattern THE_DRUG_IN_A_GROUP_OF_HERS = Pattern.compile("(?i)\\b(?:in|among|from|part of|one of) (?:his|"
+			+ "her|their|the patient's) ");
+
 	/** Her medications joined to a drug a question proposes: "with his medications", "to his medications", "between
 	 *  warfarin and her medications" (ADR Decision 635). */
 	private static final Pattern BESIDE_HER_MEDICATIONS = Pattern.compile("(?i)\\b(?:with|alongside|beside|to|plus|and|"
@@ -9811,6 +9815,26 @@ public class DrugReferenceInjector {
 		return chip.isStatedInTheAnswer() ? ((SafetyWarning) stated).asStatedInTheAnswer() : (SafetyWarning) stated;
 	}
 
+	/** Whether any interaction finding names one of {@code substances}, as its subject or a partner (ADR Decision 648). */
+	private static boolean anyFindingOf(List<SafetyWarning> findings, Set<Object> substances, List<DrugReference> orderEntries) {
+		for (SafetyWarning finding : findings) {
+			if (!SafetyWarning.TYPE_INTERACTION.equals(finding.getType())) {
+				continue;
+			}
+			if (!Collections.disjoint(subjectSubstances(finding, orderEntries), substances)) {
+				return true;
+			}
+			for (List<DrugReference> rows : finding.partnerRows().values()) {
+				for (DrugReference row : rows) {
+					if (substances.contains(row.substanceGroupKey())) {
+						return true;
+					}
+				}
+			}
+		}
+		return false;
+	}
+
 	/** Whether {@code finding}, a chip of one partner or one merging several, relates the groups' {@code substances} as
 	 *  the question asks of them: between two, among one, or one to anything (ADR Decisions 630, 633). */
 	private static boolean relatesToTheGroups(SafetyWarning finding, List<DrugReference> orderEntries,
@@ -9821,6 +9845,12 @@ public class DrugReferenceInjector {
 			for (DrugReference row : rows) {
 				partners.add(row.substanceGroupKey());
 			}
+		}
+		// and the order a class-only finding names — "… in the same ATC class (J05AF) as active order Stavudine" — whose rows
+		// it carries for this question (ADR Decisions 584, 648): without them "Does lamivudine interact with his ARVs?" was
+		// told the check relates lamivudine to none of them
+		for (DrugReference row : finding.classPartnerRows()) {
+			partners.add(row.substanceGroupKey());
 		}
 		boolean sharing = finding.statesOrdersSharingASubstance();
 		Set<Object> first = substances.get(0);
@@ -9882,9 +9912,34 @@ public class DrugReferenceInjector {
 					: " are") + " among the " + String.join(" or ", spokenNames(groups)) + " the question names: the drug data "
 					+ "files " + (uncoded.size() == 1 ? "it" : "them") + " under no drug class.";
 		}
+		// A group the question places the drug in, which she has none of, names the drug and is no group it is asked against:
+		// "Does rifampicin in his TB drugs interact with his ARVs?" of a patient on no TB drug; never "amoxicillin with his
+		// antibiotics", which asks of them (ADR Decision 648).
+		if (asked != null && THE_DRUG_IN_A_GROUP_OF_HERS.matcher(question).find()) {
+			Set<String> itsCodes = new LinkedHashSet<String>();
+			for (DrugReference row : asked.rows) {
+				itsCodes.addAll(row.normalizedAtcCodes());
+			}
+			List<String> askedAgainst = new ArrayList<String>();
+			for (String group : groups) {
+				Predicate<Set<String>> inGroup = DrugClassTerms.membersOf(group, carried);
+				List<PatientClinicalContext.ActiveDrugOrder> orders = inGroup == null ? null
+						: activeOrdersFiledUnder(inGroup, orderEntries, context);
+				if (!(inGroup != null && !itsCodes.isEmpty() && inGroup.test(itsCodes) && orders != null && orders.isEmpty())) {
+					askedAgainst.add(group);
+				}
+			}
+			if (askedAgainst.isEmpty()) {
+				return null;
+			}
+			groups = askedAgainst;
+		}
 		List<Set<Object>> substances = new ArrayList<Set<Object>>();
 		List<String> members = new ArrayList<String>();
 		List<String> absent = new ArrayList<String>();
+		// Every group's orders, each beside its name as the answer names it, for a drug that is one of them (ADR Decision 648).
+		List<PatientClinicalContext.ActiveDrugOrder> groupOrders = new ArrayList<PatientClinicalContext.ActiveDrugOrder>();
+		List<String> groupOrderNames = new ArrayList<String>();
 		for (String group : groups) {
 			Predicate<Set<String>> inGroup = DrugClassTerms.membersOf(group, carried);
 			List<PatientClinicalContext.ActiveDrugOrder> orders = activeOrdersFiledUnder(inGroup, orderEntries, context);
@@ -9904,20 +9959,53 @@ public class DrugReferenceInjector {
 			}
 			substances.add(ofIt);
 			members.add(each == null || each.isEmpty() ? "" : DrugSafetyValidator.joinPartners(collapsedByName(each)));
+			if (each != null && each.size() == orders.size()) {
+				groupOrders.addAll(orders);
+				groupOrderNames.addAll(each);
+			}
 			if (orders.isEmpty()) {
 				absent.add("No " + DrugClassTerms.spokenName(group, false) + DrugClassTerms.readAs(group, carried)
 						+ " is among this patient's active medications the drug data identifies.");
 			}
 		}
-		// Beside one drug, a group of Decision 630's with no member keeps that drug's answer over all her medications: its
-		// line names no code group, and "No antibiotic is among …" of a patient on rifampicin dropped the Major finding asked
-		// about (ADR Decision 632).
-		if (!absent.isEmpty() && asked != null && DrugClassTerms.onlyGroupsOfDecision630(groups)) {
-			return null;
+		// Beside one drug too, a group she has none of is said to be that, as a class she has none of is (ADR Decision 649).
+		// Decision 632 kept the drug's answer over all her medications because "No antibiotic is among …" was said of a patient
+		// on rifampicin, which Decision 634 counts among her antibiotics. Never in place of a proposal's own answer, whose
+		// groups are where she is asked to take it — "Can she take fluconazole while on her TB drugs?" asks whether she may
+		// (ADR Decision 402); nor of the groups she has, which the drug is answered over, after the line (ADR Decision 649).
+		String absentLead = null;
+		if (!absent.isEmpty() && asked != null) {
+			if (absent.size() == groups.size()) {
+				if (QueryScopeRouter.asksWhetherToGiveADrug(wordsBesideItsNames(question, asked.rows))) {
+					return null;
+				}
+				return String.join("\n", absent);
+			}
+			List<String> present = new ArrayList<String>();
+			List<Set<Object>> presentSubstances = new ArrayList<Set<Object>>();
+			List<String> presentMembers = new ArrayList<String>();
+			for (int g = 0; g < groups.size(); g++) {
+				if (!members.get(g).isEmpty()) {
+					present.add(groups.get(g));
+					presentSubstances.add(substances.get(g));
+					presentMembers.add(members.get(g));
+				}
+			}
+			if (present.size() + absent.size() != groups.size()) {
+				return null;
+			}
+			absentLead = String.join("\n", absent);
+			groups = present;
+			substances = presentSubstances;
+			members = presentMembers;
+			absent.clear();
 		}
 		if (!absent.isEmpty()) {
 			return String.join("\n", absent);
 		}
+		String askedAs = asked == null ? null : asked.label;
+		String othersOfTheGroups = null;
+		List<String> askedBesideOnly = null;
 		if (asked != null) {
 			// The drug asked about against its groups' members, together: "Is fluconazole safe with his ARVs and TB drugs?"
 			// asks of fluconazole against either, and never of the groups against each other (ADR Decision 646).
@@ -9925,13 +10013,64 @@ public class DrugReferenceInjector {
 			for (Set<Object> ofOne : substances) {
 				ofTheGroups.addAll(ofOne);
 			}
-			// Never one of their own members, which is the group among itself: narrowed to the group's other members, "Does
-			// ritonavir interact with his ARVs?" of a patient on lopinavir/ritonavir left out lopinavir's Major interaction with
-			// his nevirapine, which the drug's own answer states of the order it is taken in (ADR Decisions 292, 632, 646).
+			Set<Object> ofTheAsked = asked.substances;
+			// A drug that is one of them is asked with the whole order it is taken in against their other members: narrowed to
+			// the drug alone, "Does ritonavir interact with his ARVs?" of a patient on lopinavir/ritonavir left out lopinavir's
+			// Major interaction with his nevirapine, which the drug's own answer states of its order (ADR Decisions 292, 646,
+			// 648).
 			if (!Collections.disjoint(asked.substances, ofTheGroups)) {
-				return null;
+				Set<PatientClinicalContext.ActiveDrugOrder> itsOrders = new LinkedHashSet<PatientClinicalContext.ActiveDrugOrder>();
+				for (DrugReference entry : orderEntries) {
+					if (asked.substances.contains(entry.substanceGroupKey())) {
+						itsOrders.addAll(DrugSafetyValidator.ordersOfSubstance(drugReferenceService, entry, orderEntries, context));
+					}
+				}
+				ofTheAsked = new LinkedHashSet<Object>(asked.substances);
+				for (DrugReference entry : orderEntries) {
+					if (!Collections.disjoint(DrugSafetyValidator.ordersOfSubstance(drugReferenceService, entry, orderEntries,
+						context), itsOrders)) {
+						ofTheAsked.add(entry.substanceGroupKey());
+					}
+				}
+				// Only where the findings of the order's other substances were drawn: "Is ritonavir safe with his ARVs?" drew
+				// none of lopinavir's, and was told the check relates the order to none of his ARVs beside lopinavir's Major
+				// finding with his nevirapine (ADR Decision 648).
+				Set<Object> companions = new LinkedHashSet<Object>(ofTheAsked);
+				companions.removeAll(asked.substances);
+				if (!companions.isEmpty() && !anyFindingOf(findings, companions, orderEntries)) {
+					return null;
+				}
+				// Named beside groups it is not one of — "Does rifampicin in his TB drugs interact with his ARVs?" — it is asked
+				// against those alone; one of every group named, against their other members.
+				List<String> notItsGroups = new ArrayList<String>();
+				Set<Object> ofTheOtherGroups = new LinkedHashSet<Object>();
+				for (int g = 0; g < groups.size(); g++) {
+					if (Collections.disjoint(substances.get(g), ofTheAsked)) {
+						notItsGroups.add(groups.get(g));
+						ofTheOtherGroups.addAll(substances.get(g));
+					}
+				}
+				if (!notItsGroups.isEmpty()) {
+					ofTheGroups = ofTheOtherGroups;
+					askedBesideOnly = notItsGroups;
+				}
+				ofTheGroups.removeAll(ofTheAsked);
+				List<String> itsNames = new ArrayList<String>();
+				List<String> others = new ArrayList<String>();
+				for (int o = 0; o < groupOrders.size(); o++) {
+					(itsOrders.contains(groupOrders.get(o)) ? itsNames : others).add(groupOrderNames.get(o));
+				}
+				// Nothing of the group but its own order, or a group answer whose orders cannot be named apart: its own answer
+				if (ofTheGroups.isEmpty() || others.isEmpty() || itsNames.isEmpty() || groupOrders.size() != itsNames.size()
+						+ others.size()) {
+					return null;
+				}
+				// Its order named where it carries more than the drug: "Ritonavir (taken in Lopinavir / ritonavir)".
+				String taken = DrugSafetyValidator.joinPartners(collapsedByName(itsNames));
+				askedAs = asked.label + (ofTheAsked.equals(asked.substances) ? "" : " (taken in " + taken + ")");
+				othersOfTheGroups = askedBesideOnly != null ? null : DrugSafetyValidator.joinPartners(collapsedByName(others));
 			}
-			substances = new ArrayList<Set<Object>>(Arrays.asList(asked.substances, ofTheGroups));
+			substances = new ArrayList<Set<Object>>(Arrays.asList(ofTheAsked, ofTheGroups));
 		}
 		boolean several = asked == null && groups.size() > 2;
 		Set<Object> ofThemAll = new LinkedHashSet<Object>();
@@ -9946,7 +10085,11 @@ public class DrugReferenceInjector {
 		// (Decision 99) is stated over those of them it relates to the groups (ADR Decision 633) — "Efavirenz interacts with
 		// active order Rifampicin … and Sulfamethoxazole" named his co-trimoxazole in an answer about his TB drugs.
 		List<SafetyWarning> shown = new ArrayList<SafetyWarning>(findings);
-		Predicate<SafetyWarning> relates = finding -> relatesToTheGroups(finding, orderEntries, scope, between, among);
+		// and, of a drug that is one of the group, the duplicates of its own orders (ADR Decision 648)
+		Set<Object> itsOwnDuplicates = othersOfTheGroups != null ? scope.get(0) : null;
+		Predicate<SafetyWarning> relates = finding -> relatesToTheGroups(finding, orderEntries, scope, between, among)
+				|| itsOwnDuplicates != null && (finding.statesOrdersSharingASubstance() || finding.isAboutItsOwnOrders())
+						&& !Collections.disjoint(subjectSubstances(finding, orderEntries), itsOwnDuplicates);
 		for (int i = 0; i < findings.size(); i++) {
 			SafetyWarning finding = findings.get(i);
 			if (!SafetyWarning.TYPE_INTERACTION.equals(finding.getType())) {
@@ -9969,14 +10112,33 @@ public class DrugReferenceInjector {
 				eachGroup.add(DrugClassTerms.spokenName(groups.get(g), true) + DrugClassTerms.readAs(groups.get(g), carried) + " ("
 						+ members.get(g) + ")");
 			}
+			// Only the groups it is not one of, where it is one of some (ADR Decision 648).
+			if (askedBesideOnly != null) {
+				eachGroup = new ArrayList<String>();
+				for (int g = 0; g < groups.size(); g++) {
+					if (askedBesideOnly.contains(groups.get(g))) {
+						eachGroup.add(DrugClassTerms.spokenName(groups.get(g), true) + DrugClassTerms.readAs(groups.get(g), carried)
+								+ " (" + members.get(g) + ")");
+					}
+				}
+			}
 			String group = "this patient's " + DrugSafetyValidator.joinPartners(eachGroup);
+			// A drug of the group against its other members, named as those (ADR Decision 648).
+			if (othersOfTheGroups != null) {
+				List<String> spoken = new ArrayList<String>();
+				for (String g : groups) {
+					spoken.add(DrugClassTerms.spokenName(g, true) + DrugClassTerms.readAs(g, carried));
+				}
+				group = "this patient's other " + DrugSafetyValidator.joinPartners(spoken) + " (" + othersOfTheGroups + ")";
+			}
+			String lead = absentLead == null ? "" : absentLead + "\n";
 			if (relating.isEmpty()) {
-				return "The interaction check relates " + asked.label + " to none of " + group + ".\n" + BELOW_FLOOR_SCOPE;
+				return lead + "The interaction check relates " + askedAs + " to none of " + group + ".\n" + BELOW_FLOOR_SCOPE;
 			}
 			List<String> lines = findingLines(findings, numbers, relating, orderRecordNumbers, herOrderRecords, true);
-			lines.add(0, asked.label + " and " + group + ": what the interaction check relates between them:");
+			lines.add(0, askedAs + " and " + group + ": what the interaction check relates between them:");
 			lines.add(BELOW_FLOOR_SCOPE);
-			return String.join("\n", lines);
+			return lead + String.join("\n", lines);
 		}
 		if (several) {
 			List<String> named = new ArrayList<String>();

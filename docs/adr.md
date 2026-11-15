@@ -29588,3 +29588,85 @@ alcohol interact?"* is answered over his TB drugs for the patient on RHZE; for t
 
 Pinned by `HerMedicationGroupByClassTest.aDrugNamedByAWordItResolvesFromIsTheDrugAskedBesideHisGroup`, which failed
 before the change.
+
+## Decision 648: A drug that is one of her group is asked, with the whole order it is taken in, against the group's other members
+
+**Status: Accepted** (November 2026), on the owner's direction that an answer carries nothing beyond what was asked. It
+resolves the residue of [Decision 646](#decision-646-one-drug-beside-groups-of-her-medications-the-module-resolves-is-answered-over-them-and-no-lead-says-it-cannot-tell-which-they-are)
+on a drug that is one of the group.
+
+### Context
+
+Decision 646 kept *"Does ritonavir interact with his ARVs?"* against all his medications: narrowed to ritonavir against
+his other ARVs, it was told the check relates none of them, leaving out lopinavir's Major interaction with his nevirapine,
+lopinavir being taken in ritonavir's own order. And *"Does rifampicin in his TB drugs interact with his ARVs?"* of a
+patient on no TB drug was kept there too, the TB drugs naming rifampicin and not what it is asked against.
+
+### The decision
+
+- A drug that is one of the groups it is named beside is asked with every substance of the order it is taken in —
+  *"Ritonavir (taken in Lopinavir / ritonavir) and this patient's other antiretrovirals (Nevirapine): …"* — against the
+  groups' other members, and the duplicates of its own orders are stated with them.
+- Only where the findings of the order's other substances were drawn: *"Is ritonavir safe with his ARVs?"* draws none of
+  lopinavir's, and narrowed it was told the order relates to none of his other ARVs beside lopinavir's Major finding with
+  his nevirapine. It keeps its answer over all his medications.
+- A finding resting on a shared class — *"Lamivudine is in the same ATC class (J05AF) as active order Stavudine"* — relates
+  the drug to the order it names by the rows it carries for that (`SafetyWarning.classPartnerRows`, Decision 584), and the
+  duplicates of its own orders are stated. On the demo replica *"Does lamivudine interact with his ARVs?"* had been told
+  the check relates lamivudine to none of his ARVs, of a patient whose lamivudine shares J05AF with his stavudine and
+  abacavir and stands in two of his orders.
+- Named in some of the groups and beside others — *"Does rifampicin in his TB drugs interact with his ARVs?"* — it is
+  asked against those it is not one of. Placed in a group he has none of (*"in"*, *"among"*, *"one of"* his), that group
+  names the drug and is no group it is asked against; *"amoxicillin with his antibiotics"* still asks of his antibiotics.
+
+## Decision 649: One drug beside a group of hers she has none of is told she has none
+
+**Status: Accepted** (November 2026), on the owner's direction that an answer carries nothing beyond what was asked. It
+supersedes in part
+[Decision 632](#decision-632-one-drug-asked-about-beside-a-group-of-her-medications-the-module-resolves-is-answered-over-that-group).
+
+### Context
+
+Decision 632 kept a drug beside one of Decision 630's groups she has none of against all her medications, because *"No
+antibiotic is among …"* was said of a patient on rifampicin, whose ATC code is outside J01. Decision 634 has since counted
+her TB drugs among her antibiotics, and `DrugBesideAResolvedGroupTest.aDrugBesideHisAntibioticsIsAnsweredOverHisTbDrugsAmongThem`
+pins it. So *"Does fluconazole interact with his TB drugs?"* of a patient on no TB drug was still answered with every
+interaction of fluconazole, his ARVs' among them.
+
+### The decision
+
+- A drug asked whether it interacts with, or is safe with, groups of hers she has none of is told *"No TB drug is among this
+  patient's active medications the drug data identifies."*, as a class she has none of already is.
+- Beside groups she has some of and some not, it is answered over those she has, after the line for those she has not:
+  *"Is warfarin safe with her ARVs and her statin?"* had been told only that no statin is among her medications.
+- A proposal of the drug *while* she is on such a group keeps the proposal's own answer: *"Can she take fluconazole while on
+  her TB drugs?"* asks whether she may take it (Decision 402).
+
+### Measured (Decisions 648, 649)
+
+Through `DrugReferenceInjector.injectRecords`, against Decision 647's build: on the harness patient of seven orders, five
+answers changed; on a patient on ARVs and co-trimoxazole and no TB drug, eleven. Every Major finding an answer no longer
+states is with an order outside the groups asked about — rifampicin with his simvastatin of a question of his ARVs,
+efavirenz with her lopinavir of a question of her TB drugs — and none with a member of a group asked about, which is
+what Decision 632 feared. Through the service (Decision 650), seven answers changed on the efavirenz, RHZE and
+co-trimoxazole patient: the four with a statin she has none of beside her ARVs had answered only that no statin is among
+her medications; the two asking of a drug beside her other blood thinner had been the model's; and *"Does rifampicin in
+his TB drugs interact with his ARVs?"* kept every pair of his RHZE order with his ARVs and lost those with his warfarin and
+co-trimoxazole.
+On the demo replica (2026-11-16), 8 wordings asked of 4 ARV patients through the deployed module, model included, against
+Decision 647's build: 25 of 32 answers changed. 24 had opened *"This check checked … against all of this patient's active
+medications."* and one still does: *"Does isoniazid interact with his TB drugs?"* of the patient whose only TB-drug order
+is isoniazid's own RHZE order, which leaves the group no other member. 20 are now answered over the drug and the group
+asked of, and 11 that he has none of it; their chips fell from 120 to 76. The three Major chips no longer published are
+efavirenz with lopinavir/ritonavir, an ARV, beside *"Does efavirenz interact with his TB drugs?"*. No answer says the check
+relates the drug to none of a group it relates it to. Decisions 630–632's four sweeps (507 answers) changed, against
+Decision 647's build, in 17, each a drug beside a group the patient has none of — *"Does fluconazole interact with his TB
+drugs?"* of a patient on ARVs alone, *"Will rifampicin interact with his ARVs?"* of one on TB drugs alone — now told he
+has none; every line they no longer state is of an order outside the group asked about. None had an error.
+
+Pinned by `HerMedicationGroupByClassTest`'s `oneDrugBesideGroupsOfHisIsAnsweredOverThem`,
+`aGroupNamingTheDrugIsNoGroupItIsAskedAgainst` and `aDrugBesideAGroupHeHasNoneOfIsToldHeHasNone`; disabling the whole
+order, the group naming the drug, its own duplicates, the guard on the order's other substances, or Decision 649's line,
+each turns one red, as does reading a class-only finding's partner by its partner rows alone
+(`aDrugOfHisGroupRelatedByClassOrByItsOwnOrdersIsSaidSo`). `ClinicianWordingsTest`'s case of *"Any issues adding warfarin to her TB and HIV meds?"*, which
+Decision 646 re-specified, now asserts the line that she has no TB drug and the answer over her ARVs.

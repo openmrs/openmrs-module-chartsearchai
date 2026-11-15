@@ -789,12 +789,13 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 			assertEquals(canonical, ask(pair[0]), pair[0]);
 		}
 		assertTrue(chart("Can I give her a stat dose of warfarin?").statesADose(), "the dose said not checked");
-		// "TB and HIV meds" are her TB drugs and ARVs, groups the module resolves (ADR Decisions 630, 631), of which she has no
-		// TB drug, so warfarin is kept against all her medications (ADR Decision 632) — under a lead saying that, and never
-		// Decision 221's that the check cannot tell which they are (ADR Decision 646)
+		// "TB and HIV meds" are her TB drugs and ARVs, groups the module resolves (ADR Decisions 630, 631): she has no TB drug,
+		// which is said, and warfarin is answered over her ARVs — never Decision 221's lead that the check cannot tell which
+		// they are (ADR Decisions 646, 649)
 		String group = ask("Any issues adding warfarin to her TB and HIV meds?");
-		assertTrue(group != null && group.startsWith("This check checked Warfarin against all of this patient's active "
-				+ "medications.\n") && !group.contains("cannot tell which"), "was: " + group);
+		assertTrue(group != null && group.startsWith("No TB drug is among this patient's active medications the drug data "
+				+ "identifies.\nWarfarin and this patient's antiretrovirals (") && !group.contains("cannot tell which")
+				&& !group.contains("aspirin"), "was: " + group);
 		String safe = ask("Is warfarin ok with her meds?");
 		assertNotNull(safe, "precondition: the module answers it");
 		assertEquals(safe + "\n" + DrugReferenceInjector.STATEMENT_NOT_WEIGHED_OPENING + "She needs pain relief).",

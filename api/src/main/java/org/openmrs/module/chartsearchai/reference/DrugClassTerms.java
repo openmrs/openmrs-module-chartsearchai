@@ -245,8 +245,9 @@ final class DrugClassTerms {
 
 	/** A possessive and where the words after it start: "her diet", "his other meds", "her TB treatment". */
 	private static final Pattern A_THING_OF_HERS = Pattern.compile("\\b(?:(?i:his|her|their|the patient's|this patient's)|"
-		// and her own name's: "Do Mary's ARVs interact with her TB drugs?"
-		+ "\\p{Lu}\\p{Ll}+'s) (?=[\\p{L}])");
+		// and her own name's: "Do Mary's ARVs interact with her TB drugs?" — never a saint's, which names a herb: "St John's
+		// wort" (ADR Decision 641)
+		+ "(?<!\\b(?:St|Saint)\\.? )\\p{Lu}\\p{Ll}+'s) (?=[\\p{L}])");
 
 	/** A verb giving her something, before which "her" and a drug class is the class proposed for her and never one of her
 	 *  groups: "give her statins with her ARVs" proposes statins (ADR Decision 631). Her ARVs and TB drugs given her stay
@@ -382,7 +383,8 @@ final class DrugClassTerms {
 	private static ThingOfHers thingAt(String question, int at, int start, List<CrossReactivityGroup> groups,
 			String joinedTo) {
 		String from = question.substring(start);
-		Matcher word = Pattern.compile("[\\p{L}-]+").matcher(from);
+		// A word keeps its "'s": "St John's wort" is three words, never "St John" (ADR Decision 641).
+		Matcher word = Pattern.compile("[\\p{L}-]+(?:'s(?![\\p{L}]))?").matcher(from);
 		List<String> each = new ArrayList<String>();
 		List<Integer> starts = new ArrayList<Integer>();
 		List<Integer> ends = new ArrayList<Integer>();

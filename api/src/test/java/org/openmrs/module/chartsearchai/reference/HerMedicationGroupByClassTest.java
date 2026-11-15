@@ -313,6 +313,25 @@ public class HerMedicationGroupByClassTest extends BaseModuleContextSensitiveTes
 		}
 	}
 
+	/**
+	 * "St John's wort" names a herb and no one's medications: asked beside a group of his, it is answered over that group
+	 * (ADR Decision 641). Read as the possessive of a patient named John, "Does St John's wort interact with his ARVs?" was
+	 * told the module cannot tell which of his medications are the ARVs and answered over all of them, his simvastatin and
+	 * amlodipine among them.
+	 */
+	@Test
+	public void aSaintsNameBeforeAHerbIsNoPatientsPossessive() {
+		for (String question : Arrays.asList("Does St John's wort interact with his ARVs?",
+			"Is it safe to give him St John's wort with his ARVs?", "Does St. John's Wort interact with his ARVs?",
+			"Do his ARVs and St John's wort interact?")) {
+			String answer = askOfSeven(question).getModuleAnswer();
+			assertNotNull(answer, question);
+			assertTrue(answer.startsWith("St. John's Wort and this patient's antiretrovirals (Nevirapine and Lopinavir / ritonavir): "
+					+ "what the interaction check relates between them:"), question + ": " + answer);
+			assertFalse(answer.contains("Simvastatin") || answer.contains("Amlodipine"), question + ": " + answer);
+		}
+	}
+
 	private static PatientChart askOfSeven(String question) {
 		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
 			DrugReferenceTestSupport.activeOrder("order-nvp", "Nevirapine"),

@@ -29318,3 +29318,31 @@ change.
 
 Pinned by `HerMedicationGroupByClassTest.aGroupHeTakesAskedOfWithoutHisIsAnsweredAsHis`, which requires four bare-group
 wordings to be answered, chips included, exactly as their possessive forms are. Disabling the reading turns it red.
+
+## Decision 641: "St John's wort" is no patient's possessive
+
+**Status: Accepted** (November 2026). It narrows the name possessive of
+[Decision 630](#decision-630-a-group-of-her-medications-asked-about-by-name-is-answered-over-that-group).
+
+### Context
+
+`DrugClassTerms` reads a capitalised name before *'s* as the patient's own — *"Do Mary's ARVs interact with her TB
+drugs?"*. It read *"St John's wort"* the same way, as the wort of a patient named John, something of hers that is no group
+of her medications. So *"Does St John's wort interact with his ARVs?"* was not answered over his ARVs: it was told the
+module cannot tell which of his medications are the ARVs, and given the herb's interactions with all of them, his
+simvastatin and amlodipine among them.
+
+### The decision
+
+- A name after *St*, *St.* or *Saint* is no possessive of hers. The herb is then a drug beside a group of hers, answered
+  over the group (Decisions 632, 635).
+- A word of a thing of hers keeps its *'s*: joined to a group, *"Do his ARVs and St John's wort interact?"*, the herb was read
+  as *"St John"*, which names no drug the question asks of.
+
+### Measured
+
+On the 750-question old-versus-new harness, against Decision 640's build, the three questions naming St John's wort
+changed — *"Does St John's wort interact with his ARVs?"*, *"Is St John's wort safe with his ARVs?"* and *"Do his ARVs and
+St John's wort interact?"* — each now answered over his ARVs alone.
+
+Pinned by `HerMedicationGroupByClassTest.aSaintsNameBeforeAHerbIsNoPatientsPossessive`.

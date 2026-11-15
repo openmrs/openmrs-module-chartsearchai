@@ -376,6 +376,36 @@ public class HerMedicationGroupByClassTest extends BaseModuleContextSensitiveTes
 		}
 	}
 
+	/**
+	 * A group named after "interact with" without "his" is never his medications as a whole (ADR Decision 645): of a patient
+	 * on no TB drug, "Does his fluconazole interact with TB drugs?" was answered with every interaction of his fluconazole,
+	 * and is now said unchecked, as "… with antifungals?" is. Of one on ARVs, "Does fluconazole interact with ARVs?" is answered
+	 * as "… with his ARVs?" is, whether or not the question names anything of his before the group.
+	 */
+	@Test
+	public void aGroupNamedWithoutHisIsNeverHisMedicationsAsAWhole() {
+		for (String question : Arrays.asList("Does his fluconazole interact with TB drugs?",
+			"Does his fluconazole interact with antibiotics?")) {
+			PatientChart chart = ask(question);
+			String word = question.substring(question.lastIndexOf("with ") + 5, question.length() - 1);
+			assertNotNull(chart.getUncheckedWordStatement(), question + ": " + chart.getModuleAnswer());
+			assertTrue(chart.getUncheckedWordStatement().startsWith("No interaction check was run for \"" + word
+					+ "\" and Fluconazole"), question + ": " + chart.getUncheckedWordStatement());
+			assertTrue(chart.getModuleAnswer() == null, question + ": " + chart.getModuleAnswer());
+		}
+		for (String[] asked : new String[][] { { "Does fluconazole interact with ARVs?", "Does fluconazole interact with his ARVs?" },
+				{ "Is fluconazole safe with ARVs?", "Is fluconazole safe with his ARVs?" } }) {
+			PatientChart bare = askOfSeven(asked[0]);
+			PatientChart his = askOfSeven(asked[1]);
+			assertNotNull(his.getModuleAnswer(), asked[1]);
+			assertEquals(his.getModuleAnswer(), bare.getModuleAnswer(), asked[0]);
+			assertEquals(his.getFindingsBearingOnTheQuestion(), bare.getFindingsBearingOnTheQuestion(), asked[0]);
+		}
+		// and a group safe with a group of his proposes it, as Decision 631 reads it
+		assertTrue(askOfSeven("Are his ARVs safe with antibiotics?").getModuleAnswer() == null
+				|| !askOfSeven("Are his ARVs safe with antibiotics?").getModuleAnswer().startsWith("This patient's antiretrovirals"));
+	}
+
 	private static PatientChart askOfSeven(String question) {
 		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
 			DrugReferenceTestSupport.activeOrder("order-nvp", "Nevirapine"),

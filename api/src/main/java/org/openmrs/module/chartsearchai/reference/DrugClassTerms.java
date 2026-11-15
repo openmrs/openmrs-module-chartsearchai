@@ -630,15 +630,17 @@ final class DrugClassTerms {
 	}
 
 	/** What a thing of hers is asked to interact with, with no possessive of its own after it: "interact with TB drugs"
-	 *  (ADR Decision 640). */
-	private static final Pattern ASKED_TO_INTERACT_WITH = Pattern.compile("(?i)\\b(?:interacts?|interferes?|clash(?:es)?) with "
+	 *  (ADR Decision 640), and asked to be safe with: "safe with ARVs" (ADR Decision 645). */
+	private static final Pattern ASKED_TO_INTERACT_WITH = Pattern.compile("(?i)\\b(?:interacts?|interferes?|clash(?:es)?|safe|ok|"
+			+ "okay|fine) with "
 			+ "(?!(?:his|her|their|the patient's|this patient's|any|all|each|one|anything|something|food|foods)\\b)(?=[\\p{L}])");
 
 	/**
 	 * {@code question} with a group of medications asked of after "interact with" and no possessive — "Do his statins interact
-	 * with TB drugs?" — named as hers, "… with his TB drugs?", where something of hers is named before it and {@code
-	 * sheTakes} holds for the group: one she takes is hers as the group before it is (ADR Decision 640). One she does not
-	 * take stays the class it names, whose answer says the class resolves to no substance. Unchanged otherwise.
+	 * with TB drugs?" — named as hers, "… with his TB drugs?", where {@code sheTakes} holds for the group: one she takes is
+	 * hers (ADR Decision 640), whether or not the question names anything of hers before it — "Does fluconazole interact with
+	 * ARVs?" reads "… with the patient's ARVs?" (ADR Decision 645). One she does not take stays the class it names, whose
+	 * answer says the class resolves to no substance. Unchanged otherwise.
 	 */
 	static String withAGroupSheTakesNamedAsHers(String question, List<CrossReactivityGroup> groups,
 			java.util.function.Predicate<String> sheTakes) {
@@ -647,11 +649,18 @@ final class DrugClassTerms {
 		}
 		Matcher with = ASKED_TO_INTERACT_WITH.matcher(question);
 		while (with.find()) {
-			Matcher hers = A_THING_OF_HERS.matcher(question.substring(0, with.start()));
-			if (!hers.find()) {
-				continue;
+			// Safe with a group, after a group of hers, proposes it: "Are his ARVs safe with antibiotics?" (ADR Decision 631).
+			if (!with.group().toLowerCase(Locale.ROOT).matches("(?:interacts?|interferes?|clash(?:es)?) with ")) {
+				boolean aGroupOfHersBefore = false;
+				for (ThingOfHers before : thingsOfHers(question.substring(0, with.start()), groups)) {
+					aGroupOfHersBefore |= before.kind == ThingOfHers.Kind.GROUP || before.kind == ThingOfHers.Kind.UNRESOLVED;
+				}
+				if (aGroupOfHersBefore) {
+					continue;
+				}
 			}
-			String possessive = hers.group().trim();
+			Matcher hers = A_THING_OF_HERS.matcher(question.substring(0, with.start()));
+			String possessive = hers.find() ? hers.group().trim() : "the patient's";
 			ThingOfHers thing = thingAt(question, with.end(), with.end(), groups, null);
 			if (thing.kind == ThingOfHers.Kind.GROUP && sheTakes.test(thing.name)) {
 				return question.substring(0, with.end()) + (possessive.endsWith("'s") ? possessive : possessive.toLowerCase(

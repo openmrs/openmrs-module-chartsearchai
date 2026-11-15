@@ -29455,3 +29455,47 @@ Pinned by `LlmInferenceServiceModelReadQuestionContextTest`'s
 `aGroupSheTakesAskedOfWithoutHerCarriesTheChipsItsAnswerStates` and `aWordBesideAGroupOfHersIsNotReadAgainInPlainEnglish`.
 Reading the question as asked in `readForDrugSafety` turns the first red, and leaving the stamp as Decision 637 set it the
 second.
+
+## Decision 645: A group named after "with" without "her" is never her medications as a whole
+
+**Status: Accepted** (November 2026), on the owner's direction that an answer carries nothing beyond what was asked. It
+extends [Decision 640](#decision-640-a-group-she-takes-asked-of-after-interact-with-without-her-is-hers).
+
+### Context
+
+Asked of the demo replica's three patients on no TB drug, *"Does his zidovudine interact with TB drugs?"* was answered with
+every interaction of his zidovudine, his didanosine and stavudine among them. Decision 396's residual reading takes *"TB"*
+as filler (Decision 402, for *"… while on her TB drugs?"*) and *"drugs"* as her medications, so it read the question as
+whether zidovudine interacts with his medications. *"… with statins?"* and *"Can I give him TB drugs?"* were already said
+unchecked. And of a patient on ARVs, *"Does fluconazole interact with ARVs?"* and *"Is fluconazole safe with ARVs?"* were
+given every interaction of fluconazole: Decision 640 read a group as hers only after something of hers.
+
+### The decision
+
+- `QueryScopeRouter`'s residual reading reads nothing where a group of medications follows *with* and no possessive — *"with
+  TB drugs"*, *"with ARVs"*. One she takes the injector has already read as hers.
+- `UnrecognisedDrugName.besideANamedDrug` takes such a group as the word beside the named drug, by the test that admits a
+  group proposed in a drug's place (Decision 551), now one method: *"No interaction check was run for "TB drugs" and
+  Fluconazole"*, after the chart's answer.
+- `DrugClassTerms.withAGroupSheTakesNamedAsHers` reads a group she takes as hers whether or not the question names
+  anything of hers first, writing *"the patient's"* where it names nothing; and after *safe*, *ok* or *fine with* too —
+  but not after a group of hers, where the group proposes what it names: *"Are his ARVs safe with antibiotics?"* (Decision
+  631).
+
+### Measured
+
+On the 750-question old-versus-new harness, against Decision 644's build: three answers changed, each intended —
+*"Does fluconazole interact with ARVs?"* and *"Is fluconazole safe with ARVs?"*, from every interaction of fluconazole to
+what the check relates between it and his ARVs, and *"Does fluconazole interact with antibiotics?"*, from the model's to
+the module's over his antibiotics.
+On the demo replica (2026-11-15), asked of the 4 ARV patients through the deployed module: *"Does his zidovudine interact
+with TB drugs?"* of the three on no TB drug says no interaction check was run for *"TB drugs"* and zidovudine, after the
+model's answer, with no chip, where it had been every interaction of his zidovudine; of the one on RHZE it is unchanged.
+*"Does fluconazole interact with ARVs?"* and *"Is fluconazole safe with ARVs?"* are answered over his ARVs alone for all
+four, and *"Are his ARVs safe with antibiotics?"* says *"antibiotics"* was not checked. Every other answer of the 20 asked
+before and after was unchanged.
+Decisions 630–632's four sweeps (207, 120, 136 and 44 answers) changed, against Decision 638's build, only in the seven
+group answers Decision 639 measures; none had an error.
+
+Pinned by `HerMedicationGroupByClassTest.aGroupNamedWithoutHisIsNeverHisMedicationsAsAWhole`. Disabling the residual
+reading's refusal, the group beside a named drug, or the reading of a group with nothing of hers before it, turns it red.

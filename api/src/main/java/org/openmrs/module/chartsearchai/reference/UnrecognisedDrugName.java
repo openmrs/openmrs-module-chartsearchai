@@ -318,7 +318,10 @@ final class UnrecognisedDrugName {
 				if (word.contains("allerg")) {
 					return null;
 				}
-				if (!isAName(span) || carriesAWordOfTheQuestion(span, question) || namedByOneOf(questionDrugs, word)
+				// A group proposed beside it is in that place, its words of medication no words of the question: "Does his
+				// fluconazole interact with TB drugs?" of a patient on none (ADR Decision 645).
+				boolean groupProposed = !hers && QueryScopeRouter.namesAMedicationGroup(word) && aGroupProposed(words, i, span);
+				if (!groupProposed && (!isAName(span) || carriesAWordOfTheQuestion(span, question)) || namedByOneOf(questionDrugs, word)
 						|| namesOneOfHerOrders(context, word)
 						|| hers && (QueryScopeRouter.namesAMedicationGroup(word) || context == null
 								|| !context.activeDrugOrdersRead())) {
@@ -659,10 +662,7 @@ final class UnrecognisedDrugName {
 				String joined = String.join(" ", named);
 				boolean group = false;
 				if (QueryScopeRouter.namesAMedicationGroup(joined)) {
-					// Never a singular word of medication, which qualifies the noun after it: "significant drug interactions".
-					group = leadsWithNames(named) && !ADJECTIVAL_HEADS.contains(named.get(named.size() - 1))
-							&& !QueryScopeRouter.namesEveryMedicationSheTakes(joined)
-							&& !groupNamedAsHers(words, at);
+					group = aGroupProposed(words, at, named);
 					if (!group) {
 						continue;
 					}
@@ -723,6 +723,16 @@ final class UnrecognisedDrugName {
 	 * antibiotic" — but where the question asks of drugs together, they are hers: "Is it safe to give her TB drugs
 	 * together?".
 	 */
+	/** Whether {@code named}, at {@code at} of {@code words} and naming a group of medications, is a group proposed — "an
+	 *  antacid", "TB drugs" — and not her medications: never a singular word of medication, which qualifies the noun after
+	 *  it ("significant drug interactions"), her medications as a whole, nor a group named as hers (ADR Decisions 551,
+	 *  645). */
+	private static boolean aGroupProposed(List<String> words, int at, List<String> named) {
+		String joined = String.join(" ", named);
+		return leadsWithNames(named) && !ADJECTIVAL_HEADS.contains(named.get(named.size() - 1))
+				&& !QueryScopeRouter.namesEveryMedicationSheTakes(joined) && !groupNamedAsHers(words, at);
+	}
+
 	private static boolean groupNamedAsHers(List<String> words, int at) {
 		int j = at - 1;
 		while (j >= 1 && "and".equals(words.get(j))) {

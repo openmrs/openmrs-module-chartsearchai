@@ -3367,6 +3367,11 @@ public final class QueryScopeRouter {
 					+ POSSESSIVE + " )?" + D + "(?: dose)?");
 
 	/** A group of her medications named by its own noun — "her antacid", "his TB painkillers" (ADR Decision 488). */
+	/** A group of medications named right after "with", no possessive between: "with TB drugs", "with ARVs" (ADR Decision
+	 *  645). */
+	private static final Pattern A_GROUP_ASKED_OF_WITHOUT_A_POSSESSIVE = Pattern.compile("(?:^| )with (?:any |all )?(?:of )?"
+			+ "(?:tb|arvs?|antiretrovirals?|antibiotics?|painkillers?)(?= |$)");
+
 	private static final Pattern A_GROUP_OF_HER_MEDICATIONS_BY_NAME = Pattern.compile("(?<=^| )" + POSSESSIVE
 			+ " (?:\\p{L}+ )?" + MEDICATION_GROUP_NOUN + "(?= |$)");
 
@@ -3427,6 +3432,12 @@ public final class QueryScopeRouter {
 		}
 		group.appendTail(withHerMedications);
 		wordsWithTheDrugMarked = Arrays.asList(withHerMedications.toString().split(" "));
+		// A group named after "with" and no possessive is never her medications as a whole, whatever filler its words are:
+		// "Does his fluconazole interact with TB drugs?", of a patient on none, was answered with every interaction of his
+		// fluconazole. One she takes the injector reads as hers before this reads it (ADR Decision 645).
+		if (A_GROUP_ASKED_OF_WITHOUT_A_POSSESSIVE.matcher(String.join(" ", wordsWithTheDrugMarked)).find()) {
+			return Residual.NONE;
+		}
 		String withoutAPurposeAfterIt = withoutAPurposeAfterTheDrug(String.join(" ", wordsWithTheDrugMarked));
 		if (withoutAPurposeAfterIt != null) {
 			wordsWithTheDrugMarked = Arrays.asList(withoutAPurposeAfterIt.split(" "));

@@ -672,6 +672,22 @@ public class DrugReferenceInjector {
 		// narrower key — see matchingEntries.
 		List<DrugReference> orderEntries = drugReferenceService.findForActiveOrders(rawContext);
 		PatientClinicalContext context = drugReferenceService.withReferenceNames(rawContext, orderEntries);
+		// A group of medications she takes, asked of after "interact with" without "her", is hers: "Do his statins interact
+		// with TB drugs?" of a patient on TB drugs was answered by nothing the module states, and "Does his simvastatin
+		// interact with TB drugs?" by every interaction of his simvastatin (ADR Decision 640).
+		List<CrossReactivityGroup> carriedGroups = drugReferenceService.getCrossReactivityGroups();
+		question = DrugClassTerms.withAGroupSheTakesNamedAsHers(question, carriedGroups, group -> {
+			java.util.function.Predicate<Set<String>> inGroup = DrugClassTerms.membersOf(group, carriedGroups);
+			if (inGroup == null) {
+				return false;
+			}
+			for (DrugReference entry : orderEntries) {
+				if (inGroup.test(entry.normalizedAtcCodes())) {
+					return true;
+				}
+			}
+			return false;
+		});
 		// The resolved context, which is what every other consumer in this method is handed. It is the
 		// SAME answer rawContext would give for this particular reader, and that is worth stating rather
 		// than leaving to be discovered: which row this response names a substance by is ranked off

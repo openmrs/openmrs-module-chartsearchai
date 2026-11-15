@@ -293,6 +293,41 @@ public class HerMedicationGroupByClassTest extends BaseModuleContextSensitiveTes
 		}
 	}
 
+	/**
+	 * A group of medications he takes, asked of after "interact with" without "his", is his — "Do his statins interact with TB
+	 * drugs?" of a patient on rifampicin and isoniazid is answered as "… with his TB drugs?" is (ADR Decision 640). Read as
+	 * the drug class it names, it was answered by nothing the module states, and "Does his simvastatin interact with TB
+	 * drugs?" by every interaction of his simvastatin, his amlodipine and fluconazole among them.
+	 */
+	@Test
+	public void aGroupHeTakesAskedOfWithoutHisIsAnsweredAsHis() {
+		for (String[] asked : new String[][] { { "Do his statins interact with TB drugs?", "Do his statins interact with his TB drugs?" },
+				{ "Does his simvastatin interact with TB drugs?", "Does his simvastatin interact with his TB drugs?" },
+				{ "Do his ARVs interact with statins?", "Do his ARVs interact with his statins?" },
+				{ "Would his ARVs interact with antifungals?", "Would his ARVs interact with his antifungals?" } }) {
+			PatientChart bare = askOfSeven(asked[0]);
+			PatientChart his = askOfSeven(asked[1]);
+			assertNotNull(his.getModuleAnswer(), asked[1]);
+			assertEquals(his.getModuleAnswer(), bare.getModuleAnswer(), asked[0]);
+			assertEquals(his.getFindingsBearingOnTheQuestion(), bare.getFindingsBearingOnTheQuestion(), asked[0] + " — its chips");
+		}
+	}
+
+	private static PatientChart askOfSeven(String question) {
+		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
+			DrugReferenceTestSupport.activeOrder("order-nvp", "Nevirapine"),
+			DrugReferenceTestSupport.activeOrder("order-lpvr", "Lopinavir / ritonavir", "Lopinavir", "Ritonavir"),
+			DrugReferenceTestSupport.activeOrder("order-rif", "Rifampicin"),
+			DrugReferenceTestSupport.activeOrder("order-inh", "Isoniazid"),
+			DrugReferenceTestSupport.activeOrder("order-flu", "Fluconazole"),
+			DrugReferenceTestSupport.activeOrder("order-sim", "Simvastatin"),
+			DrugReferenceTestSupport.activeOrder("order-aml", "Amlodipine"));
+		return DrugReferenceTestSupport.injectorWithSafety(new DrugReferenceService()).injectRecords(
+			DrugReferenceTestSupport.oneRecordChart(), DrugReferenceTestSupport.ctx(40, null, new LinkedHashSet<String>(
+				Arrays.asList("Nevirapine", "Lopinavir", "Ritonavir", "Rifampicin", "Isoniazid", "Fluconazole", "Simvastatin",
+					"Amlodipine")), null, null, null, orders), question);
+	}
+
 	private static PatientChart ask(String question) {
 		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
 			DrugReferenceTestSupport.activeOrder("order-nvp", "Nevirapine"),

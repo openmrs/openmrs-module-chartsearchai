@@ -29274,3 +29274,47 @@ with his ARVs?"* and *"Do his antibiotics interact with his ARVs?"* of one.
 
 Pinned by `HerMedicationGroupByClassTest.aGroupAnswerIsTheSameWhateverTheCapOnTheScreensChips`, which asks five group
 questions with the cap at its default and at 100 and requires the same answer and chips. Restoring the cap turns it red.
+
+## Decision 640: A group she takes, asked of after "interact with" without "her", is hers
+
+**Status: Accepted** (November 2026), on the owner's direction that an answer carries nothing beyond what was asked. It
+resolves the residue of [Decision 637](#decision-637-a-question-naming-a-group-of-her-medications-is-never-given-the-screen-of-all-her-medications)
+on *"Do his statins interact with TB drugs?"*.
+
+### Context
+
+A group of her medications is read as hers after a possessive or joined to one by *and* (Decisions 630, 631): *"Any
+interactions between his statins and TB drugs?"* is answered over the two. Asked *"Do his statins interact with TB
+drugs?"*, the second group followed *interact with* and no possessive, so it read as the class it names. Of a patient on
+rifampicin, isoniazid and simvastatin the question was answered by nothing the module states, and *"Does his simvastatin
+interact with TB drugs?"* by every interaction of his simvastatin, his amlodipine, ritonavir and fluconazole among them.
+
+### The decision
+
+- `DrugClassTerms.withAGroupSheTakesNamedAsHers` reads a group after *interact(s) with*, *interfere(s) with* or *clash(es)
+  with*, with no possessive, as hers — *"… with his TB drugs?"* — where something of hers is named before it and she takes
+  a member of the group (`DrugClassTerms.membersOf` over her orders' reference entries). `DrugReferenceInjector`
+  reads the question so before anything else reads it, as it reads a misspelt verb (Decision 527).
+- A group she takes none of stays the class it names. *"Do his ARVs interact with statins?"* of a patient on no statin
+  may ask whether to start one, which *"No statin is among this patient's active medications"* would not answer; the
+  class's own answer says the class resolves to no substance and asks for a drug by name.
+
+### Measured
+
+On the 750-question old-versus-new harness, against Decision 639's build: three answers changed, each intended — *"Do
+his statins interact with TB drugs?"*, *"Do his statins interact with ARVs?"* and *"Do his TB drugs interact with ARVs?"*,
+each now answered over the two groups. Of a patient on ARVs and no statin or TB drug, *"Do his ARVs interact with
+statins?"*, *"… with TB drugs?"* and *"Does his zidovudine interact with antifungals?"* were answered identically by both
+builds.
+On the demo replica (2026-11-15, Decision 644's build), *"Do his ARVs interact with TB drugs?"* of patient dd5558ed, on
+RHZE, is answered over his ARVs and TB drugs with its three chips; of the three patients on no TB drug the answer did not
+change.
+
+### Residues
+
+- *"Would his ARVs interfere with his antifungals?"* is answered by nothing the module states, with the possessive or
+  without: the router's shapes of a screen read *interact* and *clash*, and not *interfere*. Resolved by
+  [Decision 643](#decision-643-two-groups-of-her-medications-asked-whether-one-interferes-with-the-other-are-asked-whether-they-interact).
+
+Pinned by `HerMedicationGroupByClassTest.aGroupHeTakesAskedOfWithoutHisIsAnsweredAsHis`, which requires four bare-group
+wordings to be answered, chips included, exactly as their possessive forms are. Disabling the reading turns it red.

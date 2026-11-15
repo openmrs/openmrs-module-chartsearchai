@@ -625,6 +625,38 @@ final class DrugClassTerms {
 		return false;
 	}
 
+	/** What a thing of hers is asked to interact with, with no possessive of its own after it: "interact with TB drugs"
+	 *  (ADR Decision 640). */
+	private static final Pattern ASKED_TO_INTERACT_WITH = Pattern.compile("(?i)\\b(?:interacts?|interferes?|clash(?:es)?) with "
+			+ "(?!(?:his|her|their|the patient's|this patient's|any|all|each|one|anything|something|food|foods)\\b)(?=[\\p{L}])");
+
+	/**
+	 * {@code question} with a group of medications asked of after "interact with" and no possessive — "Do his statins interact
+	 * with TB drugs?" — named as hers, "… with his TB drugs?", where something of hers is named before it and {@code
+	 * sheTakes} holds for the group: one she takes is hers as the group before it is (ADR Decision 640). One she does not
+	 * take stays the class it names, whose answer says the class resolves to no substance. Unchanged otherwise.
+	 */
+	static String withAGroupSheTakesNamedAsHers(String question, List<CrossReactivityGroup> groups,
+			java.util.function.Predicate<String> sheTakes) {
+		if (question == null) {
+			return null;
+		}
+		Matcher with = ASKED_TO_INTERACT_WITH.matcher(question);
+		while (with.find()) {
+			Matcher hers = A_THING_OF_HERS.matcher(question.substring(0, with.start()));
+			if (!hers.find()) {
+				continue;
+			}
+			String possessive = hers.group().trim();
+			ThingOfHers thing = thingAt(question, with.end(), with.end(), groups, null);
+			if (thing.kind == ThingOfHers.Kind.GROUP && sheTakes.test(thing.name)) {
+				return question.substring(0, with.end()) + (possessive.endsWith("'s") ? possessive : possessive.toLowerCase(
+					Locale.ROOT)) + " " + question.substring(with.end());
+			}
+		}
+		return question;
+	}
+
 	/**
 	 * {@code question} with every group of her medications it names as hers, resolved or not, read as her medications —
 	 * "Does grapefruit juice interact with his medications?" of "Does grapefruit juice interact with his statins?" — so

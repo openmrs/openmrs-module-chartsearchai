@@ -552,6 +552,18 @@ public class HerMedicationGroupByClassTest extends BaseModuleContextSensitiveTes
 		assertFalse(answer.contains("Trimethoprim"), "his co-trimoxazole is no ARV: " + answer);
 	}
 
+	/** Whether to stop a drug he is not on is answered that there is no order of it to stop, and nothing of the drug's
+	 *  interactions is published beside that (ADR Decision 651): on the demo replica "Should I stop his dapsone?" of a
+	 *  patient on no dapsone carried six chips of dapsone against his medications. */
+	@Test
+	public void stoppingADrugHeIsNotOnPublishesNoFindingOfIt() {
+		PatientChart chart = askOfSeven("Should I stop his dapsone?");
+		assertNotNull(chart.getModuleAnswer());
+		assertTrue(chart.getModuleAnswer().contains("so there is no order of it to stop"), chart.getModuleAnswer());
+		assertTrue(chart.getFindingsBearingOnTheQuestion() != null && chart.getFindingsBearingOnTheQuestion().isEmpty(),
+			"no chip: " + chart.getFindingsBearingOnTheQuestion());
+	}
+
 	private static PatientChart askOfSeven(String question) {
 		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
 			DrugReferenceTestSupport.activeOrder("order-nvp", "Nevirapine"),

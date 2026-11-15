@@ -1922,7 +1922,11 @@ public class DrugReferenceInjector {
 						|| QueryScopeRouter.asksAboutThePairsInteraction(wordsBesideItsNames(question, questionDrugs))
 						|| QueryScopeRouter.asksWhetherOneDrugChangesTheOther(wordsBesideItsNames(question, questionDrugs))
 						// and whether the two interact, trimmed to the pair as well (ADR Decision 616)
-						|| QueryScopeRouter.asksWhetherTwoDrugsInteract(wordsBesideItsNames(question, questionDrugs)))) {
+						|| QueryScopeRouter.asksWhetherTwoDrugsInteract(wordsBesideItsNames(question, questionDrugs))
+						// and whether to stop one drug: "Should I stop his dapsone?" of a patient on none was told there is no
+						// order of it to stop beside six chips of dapsone against his medications (ADR Decision 651)
+						|| QueryScopeRouter.asksWhetherItIsSafeToStopHerDrug(wordsBesideItsNames(question, questionDrugs))
+						|| QueryScopeRouter.asksWhetherToStopHerDrug(wordsBesideItsNames(question, questionDrugs)))) {
 			Set<Integer> cited = ChartSearchAiUtils.citedIndexes(moduleAnswer);
 			Set<String> stated = new HashSet<String>();
 			for (int f = 0; f < renderedFindings.size(); f++) {

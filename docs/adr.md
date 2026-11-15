@@ -29695,3 +29695,29 @@ question as read taken out of `readForDrugSafety`, it reported the two answers w
 of a group not answered over taken out and a rewrite dropping *"klarizom"*, it reported *"Do her ARVs and klarizom
 interact?"* answered with her ARVs' screen. Its first use found what the injector's harness had not: *"Is warfarin safe
 with her ARVs and her statin?"* answered only that no statin is among her medications (Decision 649).
+
+## Decision 651: Whether to stop one drug publishes only the findings its answer states
+
+**Status: Accepted** (November 2026), on the owner's direction that an answer carries nothing beyond what was asked. It
+extends Decisions 615–620, which trim a pair question's chips to its answer, to a question whether to stop one drug.
+
+### Context
+
+Asked of a patient on no dapsone on the demo replica, *"Should I stop his dapsone?"* was answered *"Dapsone is not one of
+this patient's active medications, so there is no order of it to stop."* beside six chips of dapsone against his
+medications, none of which the answer stated.
+
+### The decision
+
+- A question whether to stop a drug publishes as chips the findings its answer cites, and no other: none where she is not
+  on it; where she is, the drug's findings its answer states, as before.
+
+### Measured
+
+Over the injector's harness, against the build before, no answer changed: none of its questions asks to stop a drug she
+is not on. `StoppingHerDrugQuestionTest` holds. On the demo replica (2026-11-16) the
+dapsone question published 6 chips before and none after; of the patient on dapsone it publishes the 7 findings its answer
+states, as before. A wider sweep of 30 questions over 6 patients outside the ARV-only four — on fluconazole, dapsone,
+streptomycin, vaccines, isoniazid alone, and no active order — found no other answer carrying a chip it does not state.
+
+Pinned by `HerMedicationGroupByClassTest.stoppingADrugHeIsNotOnPublishesNoFindingOfIt`, which failed before the change.

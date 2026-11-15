@@ -29346,3 +29346,42 @@ changed — *"Does St John's wort interact with his ARVs?"*, *"Is St John's wort
 St John's wort interact?"* — each now answered over his ARVs alone.
 
 Pinned by `HerMedicationGroupByClassTest.aSaintsNameBeforeAHerbIsNoPatientsPossessive`.
+
+## Decision 642: A word asked of beside a group of her medications, in any shape the module reads, is said unchecked
+
+**Status: Accepted** (November 2026), on the owner's direction that an answer carries nothing beyond what was asked. It
+resolves the residues of [Decision 638](#decision-638-a-word-the-data-does-not-recognise-asked-interactions-between-it-and-a-group-of-her-medications-is-said-unchecked).
+
+### Context
+
+Three more shapes asked of a word beside a group of hers that no shape put in a drug's place, so the group's answer, or
+her whole screen, answered them and said nothing of the word: *"Do his TB drugs interact with each other or klarizom?"*,
+*"Can I give klarizom to him with his ARVs, any interactions?"* and *"Any interactions with his statins if he drinks
+grapefruit juice?"*.
+
+### The decision
+
+- `QueryScopeRouter` reads, beside a group of hers or her medications: *"do her <group> and X interact"*, as Decision 631
+  reads *"do X and her <group> interact"*; *"… interact with each other or (with) X"*; *"any
+  interactions with her <group> if she drinks / eats / has / takes / uses / starts X"* and *"do her <group> interact with
+  anything if she … X"*; and Decision 606's giving shape takes the patient after the drug and a trailing *"any
+  interactions"*: *"Can I give X to him with his ARVs, any interactions?"*.
+- A word the data does not recognise there is said unchecked, as Decision 638 says it; a drug it does recognise is answered
+  over the group: *"Any interactions with his ARVs if he drinks alcohol?"* is answered that the check relates ethanol to
+  none of his antiretrovirals.
+
+### Measured
+
+On the 750-question old-versus-new harness (Decisions 641 and 642 measured together against Decision 640's build, the
+three of Decision 641 aside): 24 answers changed, each intended. Seventeen had been a group's interactions beside a word
+nothing checked, among them *"Do his ARVs and grapefruit interact?"*, *"Can I start klarizom with his statins, any
+interactions?"* and *"Do his ARVs interact with each other or with herbal remedies?"*. Three now ask whether the
+misspelling means the drug it is near: *"Do his TB drugs and efavirenx interact?"*, *"Do his ARVs, TB drugs and rifampcin
+interact?"* and *"Can I start efavirenx with his BP meds, any interactions?"*, which had been told the module cannot tell
+which of his medications are the BP meds. The two asking of alcohol are answered over his ARVs. *"Do his antiretrovirals
+and antituberculars interact?"*, which had been every interaction of his ARVs, is answered by the model with the word said
+unchecked, and over the two groups after Decision 643. The twenty-fourth, *"Any interactions with his blood thinners if he
+eats leafy greens?"* of a patient on no blood thinner, had been told that no blood thinner is among his medications; on the
+demo replica the model now answers it, beside the class statement that none of his orders is in ATC group B01A.
+
+Pinned by `HerMedicationGroupByClassTest.aWordAskedOfBesideAGroupOfHisInAnyShapeIsSaidUnchecked`.

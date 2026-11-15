@@ -332,6 +332,32 @@ public class HerMedicationGroupByClassTest extends BaseModuleContextSensitiveTes
 		}
 	}
 
+	/**
+	 * A word the data does not recognise asked of beside a group of his — after "each other or", in a clause after the group,
+	 * given him with it — is said unchecked and his screen is not run for it (ADR Decision 642). Each was answered with his
+	 * group's interactions, or his whole screen, and nothing of the word.
+	 */
+	@Test
+	public void aWordAskedOfBesideAGroupOfHisInAnyShapeIsSaidUnchecked() {
+		String[][] cases = { { "Do his TB drugs interact with each other or klarizom?", "klarizom" },
+				{ "Do his ARVs interact with each other or with klarizom?", "klarizom" },
+				{ "Can I give klarizom to him with his ARVs, any interactions?", "klarizom" },
+				{ "Any interactions with his ARVs if he drinks grapefruit juice?", "grapefruit juice" },
+				{ "Do his ARVs interact with anything if he drinks grapefruit juice?", "grapefruit juice" },
+				{ "Do his ARVs and klarizom interact?", "klarizom" } };
+		for (String[] c : cases) {
+			PatientChart chart = askOfSeven(c[0]);
+			String statement = chart.getModuleAnswer() != null ? chart.getModuleAnswer() : chart.getUncheckedWordStatement();
+			assertNotNull(statement, c[0] + " — not said unchecked");
+			assertTrue(statement.contains("No interaction check was run: \"" + c[1]
+					+ "\" is not a drug name the interaction data recognises."), c[0] + ": " + statement);
+			assertFalse(chart.screenedHerOrders(), c[0] + " — his screen was run");
+			assertTrue(chart.getMappings().stream().noneMatch(
+				m -> ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING.equals(m.getResourceType())),
+				c[0] + " — a finding of his screen");
+		}
+	}
+
 	private static PatientChart askOfSeven(String question) {
 		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
 			DrugReferenceTestSupport.activeOrder("order-nvp", "Nevirapine"),

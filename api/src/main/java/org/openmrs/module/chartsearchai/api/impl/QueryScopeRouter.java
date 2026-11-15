@@ -647,8 +647,11 @@ public final class QueryScopeRouter {
 			// and given her by the one asking, "Can I give her boldo with her medications?" — the same proposal by a verb of
 			// giving, whose word the data does not know is said to be unchecked as the one she would take is (ADR Decision 606)
 			"(?:can|could|may|should) (?:i|we) (?:also )?(?:safely )?(?:give|add|start|prescribe|administer) (?:" + PATIENT
-					+ " )?(?:on )?" + D + " (?:with|alongside|while (?:on|taking)) (?:" + POSSESSIVE + " (?:other )?" + MEDICATIONS
-					+ "|" + HER_MEDICATION_GROUP + ")",
+					+ " )?(?:on )?" + D + "(?: (?:to|for) " + PATIENT + ")? (?:with|alongside|while (?:on|taking)) (?:" + POSSESSIVE
+					+ " (?:other )?" + MEDICATIONS + "|" + HER_MEDICATION_GROUP + ")"
+					// and the patient after the drug, and what is asked after: "Can I give klarizom to him with his ARVs, any
+					// interactions?" was answered with his ARVs' interactions (ADR Decision 642)
+					+ "(?: (?:are there |is there )?any (?:drug )?(?:interactions?|issues?|problems?|concerns?))?",
 			// "Can this patient take warfarin?", "Can she take ibuprofen?", "Can she drink alcohol?" (ADR Decision 268)
 			"(?:can|could|may|should) (?:she|he|they|the patient|this patient) (?:also )?(?:safely )?(?:take|start|be given|be started on"
 					// and "Can she get fluconazole?" (ADR Decision 431), and "Can she eat ginger?", answered by the model "Ginger
@@ -1400,6 +1403,18 @@ public final class QueryScopeRouter {
 			// and with nothing after the group, "Cipro with her antacid?" — never "vs", which Decision 448 reads as asked safe
 			// (ADR Decision 513)
 			D + " (?:and|with|plus) " + HER_MEDICATION_GROUP,
+			// "Do his ARVs and klarizom interact?" — a drug joined after the group, as "Do klarizom and his ARVs interact?" joins
+			// one before it (ADR Decision 642)
+			"(?:does|do|will|would|could|can) (?:any of )?" + HER_MEDICATION_GROUP + " and " + D + " (?:interact|clash)(?: with "
+					+ "(?:each other|one another))?",
+			// "Do his TB drugs interact with each other or klarizom?" — the group among itself and a drug beside it; "Any
+			// interactions with his ARVs if he drinks grapefruit juice?" — a drug in a clause after the group. Each was answered
+			// over the group alone, and nothing of the word (ADR Decision 642)
+			"(?:does|do|will|would|could|can) (?:any of )?" + HER_MEDICATION_GROUP + " (?:interact|clash) with (?:each other|one "
+					+ "another) (?:or|and) (?:with )?" + D,
+			"(?:(?:(?:are|is) there )?any (?:drug )?interactions? with (?:any of )?" + HER_MEDICATION_GROUP + "|(?:does|do|will|"
+					+ "would) (?:any of )?" + HER_MEDICATION_GROUP + " interact with anything) if (?:she|he|they) (?:drinks?|eats?|"
+					+ "has|have|takes?|uses?|starts?) " + D,
 			// "Any interactions between rifampcin and his ARVs?", "… between his ARVs and rifampcin?" — either way round, the
 			// drug named as his or not (ADR Decision 638): no shape held it, so a word the data does not recognise there was
 			// never said unchecked and the model read it as a drug and answered over every order of his

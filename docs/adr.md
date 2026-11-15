@@ -29409,3 +29409,49 @@ On the 750-question old-versus-new harness, against Decision 642's build, one an
 antituberculars interact?"* is answered over his ARVs and TB drugs. None of its questions asks *interfere*. Pinned by `HerMedicationGroupByClassTest.twoGroupsOfHisAskedWhetherOneInterferesWithTheOtherAreAnsweredAsInteracting`,
 which requires each wording to be answered, chips included, exactly as its *interact* form, or *"his ARVs and TB drugs"*,
 is. Leaving out the shape's *interfere* turns it red.
+
+## Decision 644: What reads a question after the drug-safety layer reads it as the layer read it, and a group question no group screen answers is not read again
+
+**Status: Accepted** (November 2026). It completes Decisions 640 and 642 through the deployed module.
+
+### Context
+
+Asked on the demo replica after Decisions 639–643, two answers differed from the injector's own:
+
+- *"Do his ARVs interact with TB drugs?"*, of patient dd5558ed on RHZE, was answered over his ARVs and TB drugs, as
+  Decision 640 reads it, and published no chip. `LlmInferenceService` took its chips from the question as asked, which
+  fits no shape of a screen of her medications, so it read as no question of drug safety.
+- *"Can I give klarizom to him with his ARVs, any interactions?"* was answered with every interaction of his ARVs, where
+  the injector says *"klarizom"* was not checked. The question names a group of his that `asksOfTheSafetyOfAGroupOfHers`
+  admits and whose screen `screensAGroupOfHers` refuses, for the word beside it, so Decision 637's stamp did not hold, and
+  Decision 608 read it again in plain English. The model's rewrite dropped the word, and its screen answered.
+
+### The decision
+
+- Where the injector reads a question otherwise than as asked (Decision 640), it injects again for the question as read,
+  as it does a supposed allergy's proposal (Decision 410), and stamps it: `PatientChart.getQuestionAsRead`.
+  `LlmInferenceService.readForDrugSafety` reads that question in every reading after the injection, and the chips are
+  drawn for it.
+- `PatientChart.namesAGroupOfHersNotAskedOf` also holds for a question of a group of hers that no screen of the group
+  answers, for a word or a class asked of beside it. So neither the model's reading (Decision 489) nor its plain-English
+  rewrite (Decision 608) runs a screen for it.
+
+### Measured
+
+On the demo replica (2026-11-15), 12 wordings asked of 4 ARV patients through the deployed module, model included, against
+Decision 638's build — Decisions 639–644 together:
+
+- 33 of the 48 answers changed, each intended. Each of the 16 answers asking of *"klarizom"* or *"grapefruit juice"* beside
+  his ARVs or TB drugs now says no interaction check was run for that word; 13 of them had carried the group's chips, and
+  none does now. *"Does St John's wort interact with his ARVs?"* and *"Do his ARVs and St John's wort interact?"* are
+  answered over his ARVs. *"Would his ARVs interfere with his TB drugs?"* and *"Do his antiretrovirals and antituberculars
+  interact?"* are answered over his ARVs and TB drugs, or say that no TB drug is among his medications.
+- The 12 answers to *"Do his ARVs interact with each other?"*, *"Any interactions with his ARVs?"* and *"Do his TB drugs
+  interact with his ARVs?"* were unchanged, chips alike.
+- Against Decision 643's build alone, the answers that changed are the two this decision is about: the four answers to
+  the *"klarizom"* proposal, and dd5558ed's *"Do his ARVs interact with TB drugs?"*, now with its three chips.
+
+Pinned by `LlmInferenceServiceModelReadQuestionContextTest`'s
+`aGroupSheTakesAskedOfWithoutHerCarriesTheChipsItsAnswerStates` and `aWordBesideAGroupOfHersIsNotReadAgainInPlainEnglish`.
+Reading the question as asked in `readForDrugSafety` turns the first red, and leaving the stamp as Decision 637 set it the
+second.

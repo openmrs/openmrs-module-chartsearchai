@@ -598,6 +598,9 @@ public class PatientChartSerializer {
 		/** @see #namesAGroupOfHersNotAskedOf() */
 		private boolean namesAGroupOfHersNotAskedOf;
 
+		/** @see #getQuestionAsRead() */
+		private String questionAsRead;
+
 		/** @see #getFindingsBearingOnTheQuestion() */
 		private Set<String> findingsBearingOnTheQuestion;
 
@@ -906,6 +909,20 @@ public class PatientChartSerializer {
 		 *  her medications does not answer (ADR Decision 637): no reading of it runs that screen. */
 		public boolean namesAGroupOfHersNotAskedOf() {
 			return namesAGroupOfHersNotAskedOf;
+		}
+
+		/** Records the question as the drug-safety layer read it, where that differs from what was asked — ADR Decision 644,
+		 *  and {@code DrugReferenceInjector} is the only caller. */
+		public void markQuestionAsRead(String question) {
+			this.questionAsRead = question;
+		}
+
+		/** The question as the drug-safety layer read it — "Do his ARVs interact with his TB drugs?" of "Do his ARVs interact
+		 *  with TB drugs?" asked of a patient on TB drugs (ADR Decision 640) — or {@code null} where it read the question as
+		 *  asked. What reads the question after the injection reads this one, so the chips of what the answer states are
+		 *  published (ADR Decision 644). */
+		public String getQuestionAsRead() {
+			return questionAsRead;
 		}
 
 		/** Records that the question asks what one drug does to her — ADR Decision 613, and {@code DrugReferenceInjector} is

@@ -773,6 +773,51 @@ public class LlmInferenceServiceModelReadQuestionContextTest extends BaseModuleC
 		assertEquals(0, provider.engine.rewritesAsked, "the model was not asked to rewrite it");
 	}
 
+	/** Nor is a question asking of a word the data does not recognise beside a group of hers, which the module says it did
+	 *  not check (ADR Decision 644): on the demo replica the plain-English rewrite of "Can I give klarizom to him with his
+	 *  ARVs, any interactions?" dropped the word, and the screen of his ARVs answered it. */
+	@Test
+	public void aWordBesideAGroupOfHersIsNotReadAgainInPlainEnglish() throws Exception {
+		executeDataSet("GroupAnswerEfavirenzRhzeCotrimoxazoleOrdersTestData.xml");
+		for (String question : new String[] { "Can I give klarizom to her with her ARVs, any interactions?",
+				"Do her ARVs and klarizom interact?" }) {
+			RecordingProvider provider = new RecordingProvider("YES");
+			provider.engine.rewrites.put(question, "Are there any interactions with her ARVs?");
+			ChartAnswer answer = serviceWith(provider, new org.openmrs.module.chartsearchai.reference.DrugReferenceService())
+					.search(patient, question);
+
+			assertFalse(answer.isAnsweredByTheModule(), question + " was: " + answer.getAnswer());
+			assertTrue(answer.getSafetyWarnings().isEmpty(), question + " — no screen of her ARVs: " + answer.getSafetyWarnings());
+			assertEquals(0, provider.engine.rewritesAsked, question + " — the model was not asked to rewrite it");
+		}
+	}
+
+	/** A group she takes, asked of after "interact with" without "her", carries the chips "… with her TB drugs?" carries (ADR
+	 *  Decision 644): on the demo replica the module answered "Do his ARVs interact with TB drugs?" over the two groups and
+	 *  published no chip, the raw question reading as no question of drug safety. */
+	@Test
+	public void aGroupSheTakesAskedOfWithoutHerCarriesTheChipsItsAnswerStates() throws Exception {
+		executeDataSet("GroupAnswerEfavirenzRhzeCotrimoxazoleOrdersTestData.xml");
+		ChartAnswer bare = serviceWith(new RecordingProvider("YES"),
+			new org.openmrs.module.chartsearchai.reference.DrugReferenceService()).search(patient,
+				"Do her ARVs interact with TB drugs?");
+		ChartAnswer hers = serviceWith(new RecordingProvider("YES"),
+			new org.openmrs.module.chartsearchai.reference.DrugReferenceService()).search(patient,
+				"Do her ARVs interact with her TB drugs?");
+
+		assertTrue(hers.isAnsweredByTheModule() && !hers.getSafetyWarnings().isEmpty(), "was: " + hers.getAnswer());
+		assertEquals(hers.getAnswer(), bare.getAnswer());
+		assertEquals(details(hers.getSafetyWarnings()), details(bare.getSafetyWarnings()));
+	}
+
+	private static List<String> details(List<SafetyWarning> chips) {
+		List<String> out = new java.util.ArrayList<String>();
+		for (SafetyWarning chip : chips) {
+			out.add(chip.getDetail());
+		}
+		return out;
+	}
+
 	/** One group of hers asked to be all right with her other medications is answered over what the check relates it to (ADR
 	 *  Decision 637): "Are his BP meds safe with his other drugs?" was given his whole screen. */
 	@Test

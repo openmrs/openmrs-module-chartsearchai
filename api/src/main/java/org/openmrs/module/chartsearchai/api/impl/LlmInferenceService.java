@@ -1410,9 +1410,12 @@ public class LlmInferenceService implements ChartSearchService {
 	 * allergies, whose chips are drawn for that question. Only adds a check: a NO, an unreadable reply or a failed
 	 * engine keeps the first injection.
 	 */
-	private SafetyReading readForDrugSafety(Patient patient, String question, PatientChart built,
+	private SafetyReading readForDrugSafety(Patient patient, String asAsked, PatientChart built,
 			ChartReadStatus chartRead, CancellationSignal cancellation) {
-		PatientChart injected = drugReferenceInjector.inject(built, patient, question, chartRead);
+		PatientChart injected = drugReferenceInjector.inject(built, patient, asAsked, chartRead);
+		// The question as the drug-safety layer read it is what every reading below, and the chips, read: "Do his ARVs
+		// interact with TB drugs?", read as of his TB drugs, published none of the chips its answer stated (ADR Decision 644).
+		String question = injected != null && injected.getQuestionAsRead() != null ? injected.getQuestionAsRead() : asAsked;
 		// A question asking what one drug does to her is injected again, keeping only the findings the model judges to bear
 		// on it (ADR Decision 613). Again rather than in the one pass, so an injector a caller substitutes, which never says
 		// the question asks so, is called as it always was.

@@ -676,7 +676,7 @@ public class DrugReferenceInjector {
 		// with TB drugs?" of a patient on TB drugs was answered by nothing the module states, and "Does his simvastatin
 		// interact with TB drugs?" by every interaction of his simvastatin (ADR Decision 640).
 		List<CrossReactivityGroup> carriedGroups = drugReferenceService.getCrossReactivityGroups();
-		question = DrugClassTerms.withAGroupSheTakesNamedAsHers(question, carriedGroups, group -> {
+		String asRead = DrugClassTerms.withAGroupSheTakesNamedAsHers(question, carriedGroups, group -> {
 			java.util.function.Predicate<Set<String>> inGroup = DrugClassTerms.membersOf(group, carriedGroups);
 			if (inGroup == null) {
 				return false;
@@ -688,6 +688,14 @@ public class DrugReferenceInjector {
 			}
 			return false;
 		});
+		// Read again as so read, as a supposed allergy's proposal is below, and the question stamped, so what reads it after the
+		// injection reads it so: the raw question read as no question of drug safety and published none of the chips its
+		// answer stated (ADR Decision 644).
+		if (asRead != null && !asRead.equals(question)) {
+			PatientChart read = injectRecords(chart, rawContext, asRead, orderHistory, relevance);
+			read.markQuestionAsRead(asRead);
+			return read;
+		}
 		// The resolved context, which is what every other consumer in this method is handed. It is the
 		// SAME answer rawContext would give for this particular reader, and that is worth stating rather
 		// than leaving to be discovered: which row this response names a substance by is ranked off
@@ -919,7 +927,12 @@ public class DrugReferenceInjector {
 		boolean stopOfHerOrderByName = questionDrugs.isEmpty()
 				&& asksAboutOneOfHerOrdersByName(question, context, drugReferenceService) != null;
 		boolean groupOfHersNotAskedOf = questionDrugs.isEmpty()
-				&& namesAGroupOfHersNotAskedOf(question, drugReferenceService.getCrossReactivityGroups());
+				&& (namesAGroupOfHersNotAskedOf(question, drugReferenceService.getCrossReactivityGroups())
+						// and a question of a group of hers that no screen of the group answers, for a word or a class asked
+						// of beside it: a plain-English rewrite dropped "klarizom" of "Can I give klarizom to him with his
+						// ARVs, any interactions?" and the screen of his ARVs answered it (ADR Decision 644)
+						|| asksOfTheSafetyOfAGroupOfHers(question, drugReferenceService.getCrossReactivityGroups())
+								&& !screensAGroupOfHers(question, drugReferenceService));
 		if (nothingResolved && unrepresented.isEmpty() && !screenRelatedNothing && !screenOfNoMedications
 				&& !screenOfOneOrder && !allergyToHerMedications && !herDrugAllergiesAsked && !duplicateQuestion
 				&& listed.stated().isEmpty() && unrecognised == null

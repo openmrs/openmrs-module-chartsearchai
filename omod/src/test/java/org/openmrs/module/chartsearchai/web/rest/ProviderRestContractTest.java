@@ -13,6 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -862,6 +863,81 @@ public class ProviderRestContractTest {
 
 		assertEquals(Arrays.asList("turn_started", "answer_done", "turn_done"), sseTypes(out));
 		assertEquals("Full chart summary.", ssePayload(out, "answer_done").get("answer").asText());
+	}
+
+	@Test
+	public void chatStreamPassesOptionalInDepthFlagToTurnRequest() throws Exception {
+		RestControllerContext fixture = new RestControllerContext();
+		fixture.install();
+		try {
+			User user = new User(3);
+			user.setUuid("signed-in-account");
+			Context.setUserContext(new UserContext(null) {
+				@Override
+				public boolean hasPrivilege(String privilege) {
+					return true;
+				}
+
+				@Override
+				public User getAuthenticatedUser() {
+					return user;
+				}
+
+				@Override
+				public Set<Role> getAllRoles() {
+					return user.getAllRoles();
+				}
+
+				@Override
+				public Locale getLocale() {
+					return Locale.forLanguageTag("en");
+				}
+			});
+			ScriptedProvider provider = new ScriptedProvider("hub", true);
+			provider.mode = ProviderMode.QUERY_SCOPED;
+			AnswerEnvelope envelope = AnswerEnvelope.fromPayload(answerPayload("Answer"), null);
+			provider.events = Arrays.asList(TurnEvent.of(TurnEventType.TURN_STARTED, 0, "hub"),
+					TurnEvent.withAnswer(TurnEventType.ANSWER_DONE, 1, "hub", envelope),
+					TurnEvent.withAnswer(TurnEventType.TURN_DONE, 2, "hub", envelope));
+			provider.result = TurnResult.done("hub", ProviderMode.QUERY_SCOPED, envelope);
+			ChartSearchAiRestController controller = new ChartSearchAiRestController();
+			controller.setConversationService(new RecordingConversationService());
+			controller.setProviderRegistry(stubRegistry(provider));
+			controller.setAuditLogService(new StubAuditLogService());
+			controller.setPatientAccessCheck((actor, patient) -> true);
+
+			Map<String, Object> onBody = new LinkedHashMap<>(RestControllerContext.searchBody("Summarize"));
+			onBody.put("provider", "hub");
+			onBody.put("profile", "gemma-4-12b");
+			onBody.put("inDepth", Boolean.TRUE);
+			controller.chatStream(onBody, new org.springframework.mock.web.MockHttpServletResponse());
+			assertEquals(Boolean.TRUE, inDepthOf(provider.lastRequest));
+
+			Map<String, Object> offBody = new LinkedHashMap<>(RestControllerContext.searchBody("Summarize"));
+			offBody.put("provider", "hub");
+			offBody.put("profile", "gemma-4-12b");
+			offBody.put("inDepth", Boolean.FALSE);
+			controller.chatStream(offBody, new org.springframework.mock.web.MockHttpServletResponse());
+			assertEquals(Boolean.FALSE, inDepthOf(provider.lastRequest));
+
+			Map<String, Object> omittedBody = new LinkedHashMap<>(RestControllerContext.searchBody("Summarize"));
+			omittedBody.put("provider", "hub");
+			omittedBody.put("profile", "gemma-4-12b");
+			controller.chatStream(omittedBody, new org.springframework.mock.web.MockHttpServletResponse());
+			org.junit.jupiter.api.Assertions.assertNull(inDepthOf(provider.lastRequest));
+		}
+		finally {
+			fixture.restore();
+		}
+	}
+
+	private static Boolean inDepthOf(TurnRequest request) {
+		try {
+			return (Boolean) TurnRequest.class.getMethod("getInDepth").invoke(request);
+		}
+		catch (ReflectiveOperationException e) {
+			return fail("TurnRequest missing getInDepth(): " + e);
+		}
 	}
 
 	private static Patient patient() {

@@ -39,6 +39,8 @@ public final class TurnRequest {
 
 	private final AccountContext accountContext;
 
+	private final Boolean inDepth;
+
 	/**
 	 * @param mode the caller-requested context mode, or {@code null} to use the provider's
 	 *        configured default; a provider must fail explicitly rather than silently substitute
@@ -53,6 +55,17 @@ public final class TurnRequest {
 	public TurnRequest(Patient patient, String question, String conversationId, String requestId,
 			ProviderMode mode, String profileId, List<PriorClinicalTurn> priorClinicalTurns,
 			AccountContext accountContext) {
+		this(patient, question, conversationId, requestId, mode, profileId, priorClinicalTurns,
+				accountContext, null);
+	}
+
+	/**
+	 * @param inDepth optional per-turn override for {@code ProviderCapability.INDEPTH}, or
+	 *        {@code null} to use the provider/preset default
+	 */
+	public TurnRequest(Patient patient, String question, String conversationId, String requestId,
+			ProviderMode mode, String profileId, List<PriorClinicalTurn> priorClinicalTurns,
+			AccountContext accountContext, Boolean inDepth) {
 		this.patient = patient;
 		this.question = question;
 		this.conversationId = conversationId;
@@ -62,6 +75,7 @@ public final class TurnRequest {
 		this.priorClinicalTurns = priorClinicalTurns == null ? Collections.emptyList()
 				: Collections.unmodifiableList(new ArrayList<>(priorClinicalTurns));
 		this.accountContext = accountContext == null ? AccountContext.unavailable() : accountContext;
+		this.inDepth = inDepth;
 	}
 
 	public Patient getPatient() {
@@ -94,5 +108,13 @@ public final class TurnRequest {
 
 	public AccountContext getAccountContext() {
 		return accountContext;
+	}
+
+	/**
+	 * Optional caller override for {@link ProviderCapability#INDEPTH}; {@code null} leaves the
+	 * provider/preset default unchanged.
+	 */
+	public Boolean getInDepth() {
+		return inDepth;
 	}
 }

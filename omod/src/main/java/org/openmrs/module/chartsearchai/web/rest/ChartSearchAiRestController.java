@@ -1509,6 +1509,7 @@ public class ChartSearchAiRestController {
 		String profileId = stringField(body, "profile");
 		String sessionUuid = stringField(body, "session");
 		boolean ephemeral = booleanFlag(body, "ephemeral");
+		Boolean inDepth = optionalBooleanFlag(body, "inDepth");
 		AccountContext accountContext = AccountContext.fromSession(Context.getUserContext());
 
 		HttpServletResponse unwrapped = response;
@@ -1530,7 +1531,7 @@ public class ChartSearchAiRestController {
 		unwrapped.flushBuffer();
 
 		streamProviderTurn(out, resolved.patient, sanitizedQuestion, providerId, mode, profileId,
-				sessionUuid, accountContext, ephemeral, KEEP_ALIVE_INTERVAL_MS);
+				sessionUuid, accountContext, ephemeral, inDepth, KEEP_ALIVE_INTERVAL_MS);
 	}
 
 	/**
@@ -1541,7 +1542,7 @@ public class ChartSearchAiRestController {
 	void streamProviderTurn(OutputStream out, Patient patient, String question, String providerId,
 			ProviderMode mode, String profileId, String conversationUuid, AccountContext accountContext) {
 		streamProviderTurn(out, patient, question, providerId, mode, profileId, conversationUuid,
-				accountContext, false, KEEP_ALIVE_INTERVAL_MS);
+				accountContext, false, null, KEEP_ALIVE_INTERVAL_MS);
 	}
 
 	/** Per-call interval seam, matching the legacy stream's keep-alive tests. */
@@ -1549,12 +1550,12 @@ public class ChartSearchAiRestController {
 			ProviderMode mode, String profileId, String conversationUuid, AccountContext accountContext,
 			long keepAliveIntervalMillis) {
 		streamProviderTurn(out, patient, question, providerId, mode, profileId, conversationUuid,
-				accountContext, false, keepAliveIntervalMillis);
+				accountContext, false, null, keepAliveIntervalMillis);
 	}
 
 	private void streamProviderTurn(OutputStream out, Patient patient, String question, String providerId,
 			ProviderMode mode, String profileId, String conversationUuid, AccountContext accountContext,
-			boolean ephemeral, long keepAliveIntervalMillis) {
+			boolean ephemeral, Boolean inDepth, long keepAliveIntervalMillis) {
 		final SseKeepAlive keepAlive = SseKeepAlive.start(out, keepAliveIntervalMillis);
 		final java.io.Closeable stopKeepAlive = keepAlive::stop;
 		final Map<TurnEventType, WholeCodePoints> textChannels = new java.util.EnumMap<>(TurnEventType.class);
@@ -1631,7 +1632,7 @@ public class ChartSearchAiRestController {
 			final ClinicalConversation activeConversation = conversation;
 			final ClinicalConversationTurn turn = startedTurn;
 			TurnRequest request = new TurnRequest(patient, question, conversationIdForProvider,
-					requestId, resolvedMode, resolvedProfileId, prior, accountContext);
+					requestId, resolvedMode, resolvedProfileId, prior, accountContext, inDepth);
 
 			cancellation.bindCloseable(stopKeepAlive);
 			final TurnCancellation activeCancellation = cancellation;
@@ -1993,6 +1994,29 @@ public class ChartSearchAiRestController {
 			return ((Boolean) value).booleanValue();
 		}
 		return value instanceof String && "true".equalsIgnoreCase(((String) value).trim());
+	}
+
+	private static Boolean optionalBooleanFlag(Map<String, ?> body, String key) {
+		if (body == null) {
+			return null;
+		}
+		Object value = body.get(key);
+		if (value == null) {
+			return null;
+		}
+		if (value instanceof Boolean) {
+			return (Boolean) value;
+		}
+		if (value instanceof String) {
+			String trimmed = ((String) value).trim();
+			if ("true".equalsIgnoreCase(trimmed)) {
+				return Boolean.TRUE;
+			}
+			if ("false".equalsIgnoreCase(trimmed)) {
+				return Boolean.FALSE;
+			}
+		}
+		return null;
 	}
 
 	private Integer saveEphemeralAuditLog(User user, Patient patient, String question,

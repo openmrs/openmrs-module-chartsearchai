@@ -16,7 +16,9 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -845,5 +847,66 @@ public class HubClinicalAnswerProviderTest {
 				.invoke(transport.lastRequest);
 		assertEquals("quick", qwenExecution.get("mode"));
 		assertEquals("qwen-3.5-9b", qwenExecution.get("preset_id"));
+	}
+
+	@Test
+	@SuppressWarnings("unchecked")
+	public void inDepthOverridePromotesQuickToStandardOrSetsFalseOnHubCall() throws Exception {
+		ScriptedHubTransport transport = new ScriptedHubTransport();
+		transport.events = Collections.singletonList(wire("done", answerPayload("Answer.")));
+		HubClinicalAnswerProvider provider = provider(transport, "http://hub.example/v1/chat/completions");
+
+		TurnRequest enableInDepth = turnRequestWithInDepth("request-in-depth-on", Boolean.TRUE);
+		provider.execute(enableInDepth, new CollectingSink(), CancellationSignal.NONE)
+				.toCompletableFuture().get();
+		Map<String, Object> onExecution = (Map<String, Object>) HubCallRequest.class
+				.getMethod("getExecution")
+				.invoke(transport.lastRequest);
+		assertEquals("standard", onExecution.get("mode"));
+		assertEquals(Boolean.TRUE, onExecution.get("indepth"));
+
+		transport.lastRequest = null;
+		TurnRequest disableInDepth = turnRequestWithInDepth("request-in-depth-off", Boolean.FALSE);
+		provider.execute(disableInDepth, new CollectingSink(), CancellationSignal.NONE)
+				.toCompletableFuture().get();
+		Map<String, Object> offExecution = (Map<String, Object>) HubCallRequest.class
+				.getMethod("getExecution")
+				.invoke(transport.lastRequest);
+		assertEquals("quick", offExecution.get("mode"));
+		assertEquals(Boolean.FALSE, offExecution.get("indepth"));
+
+		Map<String, Object> fastChecked = new LinkedHashMap<>();
+		fastChecked.put("mode", "fast_checked");
+		Map<String, Object> promotedFast = invokeEffectiveExecution(fastChecked, Boolean.TRUE);
+		assertEquals("verified", promotedFast.get("mode"));
+		assertEquals(Boolean.TRUE, promotedFast.get("indepth"));
+		assertNull(invokeEffectiveExecution(null, null));
+	}
+
+	private static TurnRequest turnRequestWithInDepth(String requestId, Boolean inDepth) {
+		try {
+			return TurnRequest.class
+					.getConstructor(Patient.class, String.class, String.class, String.class,
+							ProviderMode.class, String.class, List.class, AccountContext.class, Boolean.class)
+					.newInstance(patient(), "Summarize meds", "conversation-1", requestId,
+							ProviderMode.QUERY_SCOPED, "gemma-4-12b", Collections.emptyList(),
+							AccountContext.unavailable(), inDepth);
+		}
+		catch (ReflectiveOperationException e) {
+			return fail("TurnRequest missing 9-arg inDepth constructor: " + e);
+		}
+	}
+
+	@SuppressWarnings("unchecked")
+	private static Map<String, Object> invokeEffectiveExecution(Map<String, Object> base, Boolean inDepth) {
+		try {
+			Method method = HubClinicalAnswerProvider.class.getDeclaredMethod("effectiveExecution",
+					Map.class, Boolean.class);
+			method.setAccessible(true);
+			return (Map<String, Object>) method.invoke(null, base, inDepth);
+		}
+		catch (ReflectiveOperationException e) {
+			return fail("HubClinicalAnswerProvider missing effectiveExecution(Map, Boolean): " + e);
+		}
 	}
 }

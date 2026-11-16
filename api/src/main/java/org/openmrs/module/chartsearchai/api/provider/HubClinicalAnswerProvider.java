@@ -158,7 +158,7 @@ public class HubClinicalAnswerProvider implements ClinicalAnswerProvider {
 		HubCallRequest call = new HubCallRequest(endpoint, preset.getModel(),
 				request.getPatient().getUuid(), request.getConversationId(), request.getRequestId(),
 				request.getQuestion(), request.getPriorClinicalTurns(), request.getAccountContext(),
-				preset.getExecution());
+				effectiveExecution(preset.getExecution(), request.getInDepth()));
 
 		AtomicReference<AnswerEnvelope> latestAnswer = new AtomicReference<>();
 		AtomicReference<String> streamError = new AtomicReference<>();
@@ -462,6 +462,30 @@ public class HubClinicalAnswerProvider implements ClinicalAnswerProvider {
 		}
 		endpoint = endpoint.trim();
 		return endpoint.isEmpty() ? null : endpoint;
+	}
+
+	static Map<String, Object> effectiveExecution(Map<String, Object> presetExecution,
+			Boolean inDepthOverride) {
+		if (inDepthOverride == null) {
+			return presetExecution;
+		}
+		Map<String, Object> out = presetExecution == null
+				? new LinkedHashMap<>()
+				: new LinkedHashMap<>(presetExecution);
+		String rawMode = out.get("mode") instanceof String
+				? ((String) out.get("mode")).trim().toLowerCase()
+				: "";
+		if (Boolean.TRUE.equals(inDepthOverride)) {
+			if (rawMode.isEmpty() || "quick".equals(rawMode)) {
+				out.put("mode", "standard");
+			} else if ("fast_checked".equals(rawMode)) {
+				out.put("mode", "verified");
+			}
+			out.put("indepth", Boolean.TRUE);
+		} else {
+			out.put("indepth", Boolean.FALSE);
+		}
+		return out;
 	}
 
 	@SuppressWarnings("unchecked")

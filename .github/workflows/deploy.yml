@@ -15,7 +15,10 @@ concurrency:
 jobs:
   deploy:
     name: Deploy
-    runs-on: ubuntu-latest
+    # Pinned: ubuntu-latest became ubuntu-26.04 in November 2026, and Playwright 1.59.1 (the
+    # SPA gate below) refuses to install chromium there ("does not support chromium on
+    # ubuntu26.04-x64"). Move this only together with a Playwright that supports the new image.
+    runs-on: ubuntu-24.04
     # The gate's failure path is tens of minutes — ten attempts, each with a page load, three
     # challenge polls and the entry's own, plus nine 30s sleeps — against a 360-minute default.
     # Nothing else in this repo's workflows bounds a job except build-standalone.yml.

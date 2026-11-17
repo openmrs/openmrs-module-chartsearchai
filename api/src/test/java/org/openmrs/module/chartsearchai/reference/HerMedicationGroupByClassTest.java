@@ -668,6 +668,36 @@ public class HerMedicationGroupByClassTest extends BaseModuleContextSensitiveTes
 				+ "recognises."), statement);
 	}
 
+	/**
+	 * Two groups of his asked of one another and of anything else are asked what the check relates them to (ADR Decision
+	 * 658): "Any interactions between his ARVs and TB drugs, or with anything else?" was answered with what it relates
+	 * between them, his simvastatin against his lopinavir left out.
+	 */
+	@Test
+	public void twoGroupsOfHisAskedOfAnythingElseAreAnsweredWithWhatTheyAreRelatedTo() {
+		String between = askOfSeven("Any interactions between his ARVs and TB drugs?").getModuleAnswer();
+		assertNotNull(between);
+		assertTrue(between.contains("what the interaction check relates between them:"), between);
+		assertFalse(between.contains("Simvastatin"), between);
+		for (String question : Arrays.asList("Any interactions between his ARVs and TB drugs, or with anything else?",
+				"Do his ARVs and TB drugs interact with each other or anything else?")) {
+			String answer = askOfSeven(question).getModuleAnswer();
+			assertNotNull(answer, question);
+			assertTrue(answer.contains("what the interaction check relates them to:"), question + " was: " + answer);
+			assertTrue(answer.contains("Simvastatin"), question + " was: " + answer);
+			assertTrue(answer.contains("Rifampicin"), question + " was: " + answer);
+		}
+		// A group he has none of is said to be, and the one he has is still asked of anything else: on the demo replica a
+		// patient on no TB drug was told only that.
+		String noTb = ask("Any interactions between his ARVs and TB drugs, or with anything else?").getModuleAnswer();
+		assertNotNull(noTb);
+		assertTrue(noTb.startsWith("No TB drug is among this patient's active medications"), noTb);
+		assertTrue(noTb.contains("what the interaction check relates them to:"), noTb);
+		assertTrue(noTb.contains("Simvastatin"), noTb);
+		assertEquals("No TB drug is among this patient's active medications the drug data identifies.",
+			ask("Any interactions between his ARVs and TB drugs?").getModuleAnswer());
+	}
+
 	private static PatientChart askOfSeven(String question) {
 		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
 			DrugReferenceTestSupport.activeOrder("order-nvp", "Nevirapine"),

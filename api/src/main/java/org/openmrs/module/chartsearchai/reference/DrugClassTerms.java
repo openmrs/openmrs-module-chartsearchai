@@ -720,6 +720,13 @@ final class DrugClassTerms {
 				+ "their|the patient's|this patient's) |together)\\b", Pattern.CASE_INSENSITIVE).matcher(question).find();
 	}
 
+	/** Whether {@code question} asks of its groups against anything besides one another — "or with anything else", "each
+	 *  other or anything else", "with everything" — so that what they are related to answers it (ADR Decision 658). */
+	static boolean asksOfAnythingElse(String question) {
+		return question != null && Pattern.compile("\\b(?:(?:with|and|or|to) (?:anything|everything|something)|(?:anything|"
+				+ "everything|something) else)\\b", Pattern.CASE_INSENSITIVE).matcher(question).find();
+	}
+
 	private DrugClassTerms() {
 	}
 

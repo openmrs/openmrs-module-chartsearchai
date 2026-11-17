@@ -10042,9 +10042,10 @@ public class DrugReferenceInjector {
 		// groups are where she is asked to take it — "Can she take fluconazole while on her TB drugs?" asks whether she may
 		// (ADR Decision 402); nor of the groups she has, which the drug is answered over, after the line (ADR Decision 649).
 		String absentLead = null;
-		if (!absent.isEmpty() && asked != null) {
+		// Her groups asked of anything else too: the groups she has are still asked of it, after the line (ADR Decision 658).
+		if (!absent.isEmpty() && (asked != null || DrugClassTerms.asksOfAnythingElse(question))) {
 			if (absent.size() == groups.size()) {
-				if (QueryScopeRouter.asksWhetherToGiveADrug(wordsBesideItsNames(question, asked.rows))) {
+				if (asked != null && QueryScopeRouter.asksWhetherToGiveADrug(wordsBesideItsNames(question, asked.rows))) {
 					return null;
 				}
 				return String.join("\n", absent);
@@ -10161,13 +10162,17 @@ public class DrugReferenceInjector {
 					: new ArrayList<Set<Object>>(Arrays.asList(ofTheAsked, ofTheGroups));
 		}
 		boolean several = asked == null && groups.size() > 2;
+		// Her groups asked of one another and of anything else — "Any interactions between his ARVs and TB drugs, or with
+		// anything else?" — are asked what the check relates them to, as one group asked of anything is (ADR Decision 658).
+		boolean ofAnythingElse = asked == null && !several && DrugClassTerms.asksOfAnythingElse(question);
 		Set<Object> ofThemAll = new LinkedHashSet<Object>();
 		for (Set<Object> ofOne : substances) {
 			ofThemAll.addAll(ofOne);
 		}
-		List<Set<Object>> scope = several ? Collections.singletonList(ofThemAll) : substances;
-		boolean between = !several && itsOrderAlone == null && (groups.size() == 2 || asked != null);
-		boolean among = several || itsOrderAlone != null || !between && DrugClassTerms.asksAmongThemselves(question);
+		List<Set<Object>> scope = several || ofAnythingElse ? Collections.singletonList(ofThemAll) : substances;
+		boolean between = !several && !ofAnythingElse && itsOrderAlone == null && (groups.size() == 2 || asked != null);
+		boolean among = several || itsOrderAlone != null
+				|| !between && !ofAnythingElse && DrugClassTerms.asksAmongThemselves(question);
 		List<Integer> relating = new ArrayList<Integer>();
 		// Each finding over only the orders the groups asked about: a chip stating one mechanism over several of her orders
 		// (Decision 99) is stated over those of them it relates to the groups (ADR Decision 633) — "Efavirenz interacts with
@@ -10246,20 +10251,26 @@ public class DrugReferenceInjector {
 			}
 			String all = "this patient's " + DrugSafetyValidator.joinPartners(named);
 			if (relating.isEmpty()) {
-				return "The interaction check relates none of " + all + " to each other.\n" + BELOW_FLOOR_SCOPE;
+				return (absentLead == null ? "" : absentLead + "\n") + "The interaction check relates none of " + all
+						+ " to each other.\n" + BELOW_FLOOR_SCOPE;
 			}
 			List<String> lines = findingLines(findings, numbers, relating, orderRecordNumbers, herOrderRecords, true);
 			lines.add(0, Character.toUpperCase(all.charAt(0)) + all.substring(1) + ": what the interaction check relates among "
 					+ "them:");
 			lines.add(BELOW_FLOOR_SCOPE);
-			return String.join("\n", lines);
+			return (absentLead == null ? "" : absentLead + "\n") + String.join("\n", lines);
 		}
-		String one = "this patient's " + DrugClassTerms.spokenName(groups.get(0), true)
-				+ DrugClassTerms.readAs(groups.get(0), carried) + " (" + members.get(0) + ")";
+		List<String> eachOfThem = new ArrayList<String>();
+		for (int g = 0; g < groups.size(); g++) {
+			eachOfThem.add(DrugClassTerms.spokenName(groups.get(g), true) + DrugClassTerms.readAs(groups.get(g), carried) + " ("
+					+ members.get(g) + ")");
+		}
+		String one = "this patient's " + (between ? eachOfThem.get(0) : DrugSafetyValidator.joinPartners(eachOfThem));
+		String absentFirst = absentLead == null ? "" : absentLead + "\n";
 		String other = between ? "this patient's " + DrugClassTerms.spokenName(groups.get(1), true)
 				+ DrugClassTerms.readAs(groups.get(1), carried) + " (" + members.get(1) + ")" : null;
 		if (relating.isEmpty()) {
-			return "The interaction check relates none of " + one + (between ? " to " + other
+			return absentFirst + "The interaction check relates none of " + one + (between ? " to " + other
 					: among ? " to each other" : " to this patient's other active medications") + ".\n" + BELOW_FLOOR_SCOPE;
 		}
 		List<String> lines = findingLines(findings, numbers, relating, orderRecordNumbers, herOrderRecords, true);
@@ -10268,7 +10279,7 @@ public class DrugReferenceInjector {
 				: among ? ": what the interaction check relates among them:" : ": what the interaction check relates them to:");
 		lines.add(0, lead);
 		lines.add(BELOW_FLOOR_SCOPE);
-		return String.join("\n", lines);
+		return absentFirst + String.join("\n", lines);
 	}
 
 	/** Whether {@code orders} are one order, or several of one drug: one display among them (ADR Decision 623). */

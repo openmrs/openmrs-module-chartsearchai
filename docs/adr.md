@@ -29964,3 +29964,40 @@ changed. On the demo replica (2026-11-17), over six patients, each answer said *
 
 Pinned by `HerMedicationGroupByClassTest.aWordPartedFromHisGroupByPunctuationIsTheWordSaidUnchecked`, which failed
 before the change.
+
+## Decision 658: Her groups asked of one another and of anything else are answered with what they are related to
+
+**Status: Accepted** (November 2026). Found by Decision 656's measurement.
+
+### Context
+
+[Decision 630](#decision-630-a-group-of-her-medications-asked-about-by-name-is-answered-over-that-group) answers two
+groups of hers with what the check relates between them, one group among itself with what it relates among them, and one
+group otherwise with what it relates them to. *"Any interactions between his ARVs and TB drugs, or with anything
+else?"* was answered with what it relates between his ARVs and his TB drugs, and his warfarin and co-trimoxazole against
+either, which the question asks of in *"or with anything else"*, were left out — where *"Do his TB drugs interact with
+anything else?"* is answered with them.
+
+### The decision
+
+- A question of her groups that asks of them against anything besides one another — *"with anything"*, *"or anything
+  else"*, *"everything else"* (`DrugClassTerms.asksOfAnythingElse`) — is answered with what the check relates them to,
+  over every order of the groups, under *"This patient's antiretrovirals (…) and TB drugs (…): what the interaction check
+  relates them to:"*. The same words after *"each other"* ask of a group against anything too.
+- A group of them she has none of is said to be, as Decision 649 says it beside a drug, and the groups she has are
+  answered so after that line. Asked of one another alone, the line is the whole answer, as it was.
+- A drug asked beside her groups, and more than two groups, keep Decision 630's readings.
+
+### Measured
+
+Through the service, over the 789 questions of Decisions 650 and 655, against Decision 657's build: that one answer
+changed, from three findings between his ARVs and TB drugs to ten, his warfarin and co-trimoxazole against either among
+them, each stated and each a chip. On the demo replica (2026-11-18), over six patients, five of them on no TB drug, the
+two wordings asking of anything else were answered over his ARVs with what the check relates them to, after *"No TB drug
+is among …"*, where a first build had answered them with that line alone; the two groups asked of one another alone and
+Decision 630's 207 answers were unchanged.
+
+Pinned by `HerMedicationGroupByClassTest.twoGroupsOfHisAskedOfAnythingElseAreAnsweredWithWhatTheyAreRelatedTo`, which
+failed before the change, its first case the two groups asked of one another alone, unchanged, and its last a patient
+on no TB drug, which failed before the absent group was carried as a lead.
+

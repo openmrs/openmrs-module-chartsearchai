@@ -461,6 +461,10 @@ public class HerMedicationGroupByClassTest extends BaseModuleContextSensitiveTes
 		String safeWith = askOfSeven("Is ritonavir safe with his ARVs?").getModuleAnswer();
 		assertNotNull(safeWith);
 		assertFalse(safeWith.contains("to none of this patient's other antiretrovirals"), safeWith);
+		// and, its order's other substance put in play as "Does ritonavir interact …" puts it, it is answered over the group
+		// as that wording is (ADR Decision 652)
+		assertEquals(ritonavir.split("\n")[0], safeWith.split("\n")[0], safeWith);
+		assertTrue(safeWith.contains("Lopinavir interacts with active order Nevirapine — Major"), safeWith);
 		String nevirapine = askOfSeven("Does nevirapine interact with his ARVs?").getModuleAnswer();
 		assertEquals("Nevirapine and this patient's other antiretrovirals (Lopinavir / ritonavir): what the interaction check "
 				+ "relates between them:", nevirapine.split("\n")[0], nevirapine);
@@ -562,6 +566,71 @@ public class HerMedicationGroupByClassTest extends BaseModuleContextSensitiveTes
 		assertTrue(chart.getModuleAnswer().contains("so there is no order of it to stop"), chart.getModuleAnswer());
 		assertTrue(chart.getFindingsBearingOnTheQuestion() != null && chart.getFindingsBearingOnTheQuestion().isEmpty(),
 			"no chip: " + chart.getFindingsBearingOnTheQuestion());
+	}
+
+	/** Continuing a drug he is not on, or changing its dose, publishes no finding of it either (ADR Decision 654). */
+	@Test
+	public void continuingOrChangingTheDoseOfADrugHeIsNotOnPublishesNoFindingOfIt() {
+		for (String question : new String[] { "Should I continue his dapsone?", "Should I increase his dapsone dose?" }) {
+			PatientChart chart = askOfSeven(question);
+			assertNotNull(chart.getModuleAnswer(), question);
+			assertTrue(chart.getModuleAnswer().startsWith("Dapsone is not one of this patient's active medications"),
+				chart.getModuleAnswer());
+			assertTrue(chart.getFindingsBearingOnTheQuestion() != null && chart.getFindingsBearingOnTheQuestion().isEmpty(),
+				question + " no chip: " + chart.getFindingsBearingOnTheQuestion());
+		}
+	}
+
+	/** A drug whose own order is every member of the group it is asked beside is answered over that order's substances,
+	 *  and nothing of her other medications (ADR Decision 652): "Is rifampicin safe with her TB drugs?" of a patient whose
+	 *  one TB-drug order is rifampicin's RHZE order was given rifampicin's order against all her medications. */
+	@Test
+	public void aDrugWhoseOrderIsAllOfTheGroupIsAnsweredOverItsOrder() {
+		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
+			DrugReferenceTestSupport.activeOrder("o-rhze", "Rifampicin isoniazid pyrazinamide and ethambutol", "Rifampicin",
+				"Isoniazid", "Pyrazinamide", "Ethambutol"),
+			DrugReferenceTestSupport.activeOrder("o-efv", "Efavirenz", "Efavirenz"),
+			DrugReferenceTestSupport.activeOrder("o-war", "Warfarin", "Warfarin"));
+		for (String question : Arrays.asList("Is rifampicin safe with her TB drugs?", "Does rifampicin interact with her TB drugs?")) {
+			String answer = DrugReferenceTestSupport.injectorWithSafety(new DrugReferenceService()).injectRecords(
+				DrugReferenceTestSupport.oneRecordChart(), DrugReferenceTestSupport.ctx(40, null, new LinkedHashSet<String>(
+					Arrays.asList("Rifampicin", "Isoniazid", "Pyrazinamide", "Ethambutol", "Efavirenz", "Warfarin")), null, null,
+					null, orders), question).getModuleAnswer();
+			assertNotNull(answer, question);
+			assertTrue(answer.startsWith("Rifampicin (rifampin) (taken in Rifampicin isoniazid pyrazinamide and ethambutol) is "
+					+ "this patient's only TB drug order"), question + ": " + answer);
+			assertFalse(answer.contains("Efavirenz") || answer.contains("Warfarin"), question + ": " + answer);
+		}
+	}
+
+	/** A duplicate-therapy question publishes only the findings its answer states (ADR Decision 654): on the 8083 rig,
+	 *  answered that no two of a patient's medications duplicate each other, it carried the screen's interaction chips —
+	 *  aspirin with warfarin, Major — none of which is a duplicate. */
+	@Test
+	public void aDuplicateTherapyQuestionPublishesOnlyWhatItsAnswerStates() {
+		PatientChart chart = askOfSeven("Any duplicate therapy?");
+		assertNotNull(chart.getModuleAnswer());
+		assertTrue(chart.getFindingsBearingOnTheQuestion() != null && chart.getFindingsBearingOnTheQuestion().isEmpty(),
+			"no chip but what the answer states: " + chart.getFindingsBearingOnTheQuestion() + " beside " + chart.getModuleAnswer());
+	}
+
+	/** A drug that is his only order in the group it is asked beside, alone in its order, is said to be that (ADR Decision
+	 *  654): on the 8083 rig "Does aspirin interact with his blood thinners?" of a patient whose one blood thinner is his
+	 *  aspirin went to the model, which answered with aspirin's Major interaction with his ibuprofen, no blood thinner. */
+	@Test
+	public void aDrugThatIsHisOnlyOrderOfTheGroupIsSaidToBe() {
+		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
+			DrugReferenceTestSupport.activeOrder("o-asa", "Aspirin 81mg", "Aspirin"),
+			DrugReferenceTestSupport.activeOrder("o-ibu", "Advil 400mg", "Ibuprofen"));
+		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(new DrugReferenceService()).injectRecords(
+			DrugReferenceTestSupport.oneRecordChart(), DrugReferenceTestSupport.ctx(40, null, new LinkedHashSet<String>(
+				Arrays.asList("Aspirin", "Ibuprofen")), null, null, null, orders), "Does aspirin interact with his blood thinners?");
+		assertNotNull(chart.getModuleAnswer(), "left to the model");
+		assertTrue(chart.getModuleAnswer().startsWith("Acetylsalicylic acid (aspirin) is this patient's only blood thinner"),
+			chart.getModuleAnswer());
+		assertFalse(chart.getModuleAnswer().contains("Ibuprofen"), chart.getModuleAnswer());
+		assertTrue(chart.getFindingsBearingOnTheQuestion() != null && chart.getFindingsBearingOnTheQuestion().isEmpty(),
+			String.valueOf(chart.getFindingsBearingOnTheQuestion()));
 	}
 
 	private static PatientChart askOfSeven(String question) {

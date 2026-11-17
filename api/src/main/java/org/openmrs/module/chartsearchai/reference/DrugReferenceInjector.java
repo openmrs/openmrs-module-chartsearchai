@@ -1279,6 +1279,8 @@ public class DrugReferenceInjector {
 			moduleAnswer = continuingTwo;
 		} else if (nothingToStop != null) {
 			moduleAnswer = nothingToStop;
+			// It states no finding, and publishes none (ADR Decisions 651, 654).
+			chipsFollowTheAnswer = true;
 		} else if (againstHerAllergies != null) {
 			moduleAnswer = againstHerAllergies;
 		} else if (productCarryingHers != null) {
@@ -1935,6 +1937,18 @@ public class DrugReferenceInjector {
 				}
 			}
 			// An answer stating no finding — two drugs the data does not relate — publishes none (ADR Decision 618).
+			injected.markFindingsBearingOnTheQuestion(stated);
+		}
+		// A duplicate-therapy question: only the findings its answer cites (ADR Decision 654). Answered that no two of her
+		// medications duplicate each other, it carried the screen's interaction chips, none of them a duplicate.
+		if (bearing == null && moduleAnswer != null && QueryScopeRouter.asksAboutDuplicateTherapy(question)) {
+			Set<Integer> cited = ChartSearchAiUtils.citedIndexes(moduleAnswer);
+			Set<String> stated = new HashSet<String>();
+			for (int f = 0; f < renderedFindings.size(); f++) {
+				if (cited.contains(renderedNumbers.get(f))) {
+					stated.add(renderedFindings.get(f).getDetail());
+				}
+			}
 			injected.markFindingsBearingOnTheQuestion(stated);
 		}
 		// A group of her medications asked about: only what its answer states (ADR Decision 630).
@@ -3996,7 +4010,12 @@ public class DrugReferenceInjector {
 		for (DrugReference entry : questionDrugs) {
 			asked.add(entry.substanceGroupKey());
 		}
-		if (asked.size() != 1 || !asksAboutOneDrugAsHerOwn(question, questionDrugs)) {
+		// and whether it is safe with them, of a drug she takes — "Is ritonavir safe with his ARVs?" drew none of his
+		// lopinavir's findings, so its answer over his ARVs could not be stated (ADR Decision 652). Her orders below decide
+		// whether it is hers; a drug she does not take has none.
+		if (asked.size() != 1 || !asksAboutOneDrugAsHerOwn(question, questionDrugs)
+				&& !QueryScopeRouter.asksWhetherADrugIsSafeWithHerMedications(wordsBesideItsNames(
+					DrugClassTerms.withHerGroupsAsHerMedications(question, service.getCrossReactivityGroups()), questionDrugs))) {
 			return Collections.emptyList();
 		}
 		Set<PatientClinicalContext.ActiveDrugOrder> orders = new HashSet<PatientClinicalContext.ActiveDrugOrder>();
@@ -10008,6 +10027,8 @@ public class DrugReferenceInjector {
 			return String.join("\n", absent);
 		}
 		String askedAs = asked == null ? null : asked.label;
+		String itsOrderAlone = null;
+		boolean itsOrderSingle = false;
 		String othersOfTheGroups = null;
 		List<String> askedBesideOnly = null;
 		if (asked != null) {
@@ -10064,17 +10085,35 @@ public class DrugReferenceInjector {
 				for (int o = 0; o < groupOrders.size(); o++) {
 					(itsOrders.contains(groupOrders.get(o)) ? itsNames : others).add(groupOrderNames.get(o));
 				}
-				// Nothing of the group but its own order, or a group answer whose orders cannot be named apart: its own answer
-				if (ofTheGroups.isEmpty() || others.isEmpty() || itsNames.isEmpty() || groupOrders.size() != itsNames.size()
-						+ others.size()) {
+				// Its own order every member of the group: what the check relates among that order's substances, "Is rifampicin
+				// safe with her TB drugs?" of a patient whose one TB-drug order is rifampicin's RHZE order (ADR Decision 652),
+				// or the drug alone in it (ADR Decision 654).
+				boolean onlyItsOrder = askedBesideOnly == null && ofTheGroups.isEmpty() && others.isEmpty()
+						&& !itsNames.isEmpty() && groupOrders.size() == itsNames.size();
+				// Else nothing of the group but its own order, or a group answer whose orders cannot be named apart: its own
+				// answer
+				if (!onlyItsOrder && (ofTheGroups.isEmpty() || others.isEmpty() || itsNames.isEmpty()
+						|| groupOrders.size() != itsNames.size() + others.size())) {
 					return null;
 				}
 				// Its order named where it carries more than the drug: "Ritonavir (taken in Lopinavir / ritonavir)".
 				String taken = DrugSafetyValidator.joinPartners(collapsedByName(itsNames));
+				if (onlyItsOrder) {
+					// Alone in its order — "Does aspirin interact with his blood thinners?" of a patient whose one blood
+					// thinner is his aspirin — it is said to be his only one, its own repeated orders stated (ADR Decision
+					// 654).
+					itsOrderSingle = companions.isEmpty();
+					itsOrderAlone = companions.isEmpty()
+							? asked.label + " is this patient's only " + DrugClassTerms.spokenName(groups.get(0), false)
+									+ DrugClassTerms.readAs(groups.get(0), carried)
+							: asked.label + " (taken in " + taken + ") is this patient's only "
+									+ DrugClassTerms.spokenName(groups.get(0), false) + " order";
+				}
 				askedAs = asked.label + (ofTheAsked.equals(asked.substances) ? "" : " (taken in " + taken + ")");
 				othersOfTheGroups = askedBesideOnly != null ? null : DrugSafetyValidator.joinPartners(collapsedByName(others));
 			}
-			substances = new ArrayList<Set<Object>>(Arrays.asList(ofTheAsked, ofTheGroups));
+			substances = itsOrderAlone != null ? new ArrayList<Set<Object>>(Collections.singletonList(ofTheAsked))
+					: new ArrayList<Set<Object>>(Arrays.asList(ofTheAsked, ofTheGroups));
 		}
 		boolean several = asked == null && groups.size() > 2;
 		Set<Object> ofThemAll = new LinkedHashSet<Object>();
@@ -10082,8 +10121,8 @@ public class DrugReferenceInjector {
 			ofThemAll.addAll(ofOne);
 		}
 		List<Set<Object>> scope = several ? Collections.singletonList(ofThemAll) : substances;
-		boolean between = !several && (groups.size() == 2 || asked != null);
-		boolean among = several || !between && DrugClassTerms.asksAmongThemselves(question);
+		boolean between = !several && itsOrderAlone == null && (groups.size() == 2 || asked != null);
+		boolean among = several || itsOrderAlone != null || !between && DrugClassTerms.asksAmongThemselves(question);
 		List<Integer> relating = new ArrayList<Integer>();
 		// Each finding over only the orders the groups asked about: a chip stating one mechanism over several of her orders
 		// (Decision 99) is stated over those of them it relates to the groups (ADR Decision 633) — "Efavirenz interacts with
@@ -10136,6 +10175,16 @@ public class DrugReferenceInjector {
 				group = "this patient's other " + DrugSafetyValidator.joinPartners(spoken) + " (" + othersOfTheGroups + ")";
 			}
 			String lead = absentLead == null ? "" : absentLead + "\n";
+			if (itsOrderAlone != null) {
+				if (relating.isEmpty()) {
+					return lead + itsOrderAlone + (itsOrderSingle ? "." : ", and the interaction check relates none of its "
+							+ "substances to each other.\n" + BELOW_FLOOR_SCOPE);
+				}
+				List<String> lines = findingLines(findings, numbers, relating, orderRecordNumbers, herOrderRecords, true);
+				lines.add(0, itsOrderAlone + ": what the interaction check relates among its substances:");
+				lines.add(BELOW_FLOOR_SCOPE);
+				return lead + String.join("\n", lines);
+			}
 			if (relating.isEmpty()) {
 				return lead + "The interaction check relates " + askedAs + " to none of " + group + ".\n" + BELOW_FLOOR_SCOPE;
 			}

@@ -29721,3 +29721,110 @@ states, as before. A wider sweep of 30 questions over 6 patients outside the ARV
 streptomycin, vaccines, isoniazid alone, and no active order — found no other answer carrying a chip it does not state.
 
 Pinned by `HerMedicationGroupByClassTest.stoppingADrugHeIsNotOnPublishesNoFindingOfIt`, which failed before the change.
+
+## Decision 652: A drug she takes, asked whether it is safe with her groups, is asked with its whole order
+
+**Status: Accepted** (November 2026), on the owner's direction that an answer carries nothing beyond what was asked. It
+resolves the residue of
+[Decision 648](#decision-648-a-drug-that-is-one-of-her-group-is-asked-with-the-whole-order-it-is-taken-in-against-the-groups-other-members)
+on *"Is ritonavir safe with his ARVs?"*.
+
+### Context
+
+Decision 292 puts the other substances of the combination order she takes a drug in into play where the question asks
+whether her drug interacts with her medications. Asked whether it is *safe* with them, it did not, so Decision 648's guard
+kept *"Is ritonavir safe with his ARVs?"* over all his medications, where *"Does ritonavir interact with his ARVs?"* was
+answered over his ARVs with lopinavir's Major finding with his nevirapine. And where the drug's own order is every member
+of the group — *"Is rifampicin safe with her TB drugs?"* of a patient whose one TB-drug order is rifampicin's RHZE order
+— the group has no other member, and the drug was answered against all her medications.
+
+### The decision
+
+- `DrugReferenceInjector.companionsOfHerOwn` puts the order's other substances in play for a question whether her drug is
+  safe with her medications or her groups too. Her orders decide whether the drug is hers; a drug she does not take has
+  no order and no companion.
+- A drug whose order is every member of the group it is asked beside is answered over that order's substances: *"Rifampicin
+  (rifampin) (taken in Rifampicin isoniazid pyrazinamide and ethambutol) is this patient's only TB drug order: what the
+  interaction check relates among its substances:"*, and nothing of her other medications.
+
+### Measured
+
+Through `DrugReferenceInjector.injectRecords`, against Decision 651's build: one answer changed on the harness patient of
+seven orders and two on the patient on ARVs and co-trimoxazole, each *"Is ritonavir safe with her ARVs?"* now answered
+as its *interact* wording is, or with one more substance named in play. Through the service (Decision 650), against
+Decision 649's build: three answers changed — rifabutin's class duplicate with her rifampicin (Decision 648), and *"Is
+rifampicin safe with her TB drugs?"* and *"Does isoniazid interact with her TB drugs?"* from 4 and 10 chips over all her
+medications to 2 over her RHZE order. On the demo replica (2026-11-17), through the deployed
+module, against Decision 651's build: *"Is ritonavir safe with his ARVs?"* is now answered, for each of the four
+patients on lopinavir / ritonavir asked, with the answer and chips of *"Does ritonavir interact with his ARVs?"* — three
+of them changed, from three or four chips to five or six, lopinavir's Major findings among them; and *"Does isoniazid
+interact with his TB drugs?"* of the patient on RHZE went from 11 chips over all his medications to the 5 duplicate lines
+of his RHZE order.
+
+Pinned by `HerMedicationGroupByClassTest`'s `oneDrugBesideGroupsOfHisIsAnsweredOverThem` and
+`aDrugWhoseOrderIsAllOfTheGroupIsAnsweredOverItsOrder`; leaving the safe-with question out of the companions, or the
+order's own answer, turns its test red.
+
+## Decision 653: A screen of her groups does not state shared ATC classes, and a drug's own answer does
+
+**Status: Accepted** (November 2026). No code changed.
+
+### Context
+
+Since Decision 648, *"Does lamivudine interact with his ARVs?"* states lamivudine's class duplicates with his stavudine
+and abacavir (*"… in the same ATC class (J05AF) … — possible duplicate therapy"*), which the drug's own check raises.
+*"Do his ARVs interact with each other?"* does not: the screen of her orders relates rated pairs, substances repeated in
+her orders, and the drug groups this module carries, never a shared ATC class alone.
+
+### The decision
+
+- The screen stays as [Decision 232](#decision-232-a-question-whether-her-medications-duplicate-one-another-is-a-screen-answered-with-the-duplicates-it-found)
+  scoped it: its answer names the drug groups it compares and says other classes are not covered. A shared ATC class alone
+  is a caution resting on classification ([Decision 86](#decision-86-a-relationship-resting-on-shared-classification-alone-is-a-caution-not-a-reason-to-withhold)),
+  and it was read as a reason to refuse a standard two-NRTI regimen (issue #400, `SafetyWarning.restsOnSharedClassificationAlone`). On the demo replica nearly every
+  patient on ARVs takes lamivudine and stavudine, both J05AF; stated in the screen, it would put the same duplicate line in
+  almost every answer about his ARVs.
+- One drug's own answer keeps them: it is asked of that drug, and its check raises them.
+
+## Decision 654: A duplicate-therapy question, and a drug alone in its group, carry nothing beyond what is asked
+
+**Status: Accepted** (November 2026), on the owner's direction that an answer carries nothing beyond what was asked. Found
+by a sweep on the 8083 rig, whose patients take warfarin, clopidogrel, methotrexate, enalapril, NSAIDs and esomeprazole,
+classes the demo replica's HIV clinic has none of.
+
+### Context
+
+- *"Any duplicate therapy?"*, answered that no two of a patient's medications duplicate each other, carried the screen's
+  interaction chips — aspirin with warfarin, Major — none of which is a duplicate; five of six patients asked.
+- *"Does aspirin interact with his blood thinners?"* of a patient whose one blood thinner is his aspirin went to the model,
+  which answered with aspirin's Major interaction with his ibuprofen, no blood thinner: the group had no member but the
+  drug, and the drug's order no other substance (Decision 652).
+
+### The decision
+
+- A duplicate-therapy question publishes as chips only the findings its answer cites.
+- A drug that is the only order of the group it is asked beside, alone in that order, is said to be: *"Acetylsalicylic
+  acid (aspirin) is this patient's only blood thinner in ATC group B01A."*, the duplicates of its own repeated orders
+  stated, nothing of her other medications.
+- Every answer that she is not on a drug she was asked to stop, continue or change the dose of publishes no chip.
+- *"Is his warfarin dose ok?"* of a patient on no warfarin keeps
+  [Decision 485](#decision-485-her-x-dose-asked-safe-is-her-x-asked-safe-the-dose-said-not-checked)'s answer, warfarin
+  asked safe with the dose said not checked: the sweep found it, a rule answering it *"no dose of it to check"* turned
+  `ClinicianWordingsTest.herDrugsDoseAskedSafeIsHerDrugAskedSafeWithTheDoseNotChecked` red, and it was taken out.
+
+### Measured
+
+Through `DrugReferenceInjector.injectRecords`, against Decision 652's build: one answer changed on the harness patient
+of seven orders — *"Does fluconazole interact with his antifungals?"*, the model's before, now that fluconazole is his only
+antifungal — and none on the patient on ARVs and co-trimoxazole; through the service (Decision 650), none. On the demo replica, the 507 answers of
+the four standing sweeps are unchanged from Decision 651's build; its HIV clinic has no patient on the classes this
+decision touches. On the 8083 rig (2026-11-17), through the deployed module, 6
+patients by 20 questions, against Decision 652's build: seven of 120 answers changed. *"Any duplicate therapy?"* kept
+its answer for all six patients and lost every chip — interactions it does not state, Major among them, one or two a
+patient; *"Does aspirin interact with his blood thinners?"* of the patient whose one blood thinner is his aspirin went
+from the model's answer of aspirin's Major interaction with his ibuprofen to the module's line that aspirin is his only
+blood thinner.
+
+Pinned by `HerMedicationGroupByClassTest`'s `aDuplicateTherapyQuestionPublishesOnlyWhatItsAnswerStates`,
+`aDrugThatIsHisOnlyOrderOfTheGroupIsSaidToBe` and `continuingOrChangingTheDoseOfADrugHeIsNotOnPublishesNoFindingOfIt`,
+each failing with its rule disabled.

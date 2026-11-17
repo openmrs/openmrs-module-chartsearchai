@@ -1526,6 +1526,11 @@ public class DrugReferenceInjector {
 						pairExtent.stated(), mappings, orderEntries, context)) != null) {
 			// Two drugs proposed together, neither hers: each answered as its own proposal (ADR Decision 222).
 			moduleAnswer = twoProposalsAnswer;
+			// One of them named as hers, which she takes none of, is given no answer of its own, so neither are its findings
+			// against her medications a chip: only what the answer states is (ADR Decision 655).
+			for (AskedDrug drug : askedDrugs(question, questionDrugs, context, true)) {
+				chipsFollowTheAnswer |= believedHers(question, drug, screenedSubstances);
+			}
 		} else if (onlyHerOwnOrdersSharingASubstance(findings) && context != null
 				&& ChartSearchAiUtils.getBooleanGlobalProperty(
 						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
@@ -1784,6 +1789,12 @@ public class DrugReferenceInjector {
 				if (allergies != null) {
 					moduleAnswer = moduleAnswer + "\n" + allergies;
 				}
+			} else if (beside != null && beside.proposedTogether() && namedAsHers(question, named.get(0))
+					&& !named.get(0).isHers(screenedSubstances)) {
+				// Named as hers, and she is not on it: never proposed, so given no verdict of its own against her medications,
+				// and no chip — no check of the pair ran (ADR Decision 655).
+				moduleAnswer = beside.statementFor(named.get(0).label);
+				chipsFollowTheAnswer = true;
 			} else if (beside != null) {
 				// Proposed with it, the drug the data recognises is answered as its own proposal after the statement (ADR
 				// Decision 602): the model answered "Can I give him fluconazole with his klarizom?" with "The records do not
@@ -5917,7 +5928,21 @@ public class DrugReferenceInjector {
 		if (!POSSESSIVE_WORDS.contains(before)) {
 			return false;
 		}
+		// Only spaces between them: "for her, ibuprofen or paracetamol" names no drug as hers (ADR Decision 655).
+		int end = drug.start;
+		while (end > 0 && Character.isWhitespace(folded.charAt(end - 1))) {
+			end--;
+		}
+		if (!folded.substring(0, end).endsWith(before)) {
+			return false;
+		}
 		return !"her".equals(before) || !GIVING_TO_HER.contains(wordBefore(folded, folded.lastIndexOf(before, drug.start)));
+	}
+
+	/** Whether {@code question} names {@code drug} as hers and she takes none of it: what the clinician believes she takes,
+	 *  never a drug proposed (ADR Decision 655). */
+	private static boolean believedHers(String question, AskedDrug drug, Set<Object> herSubstances) {
+		return namedAsHers(question, drug) && Collections.disjoint(drug.substances, herSubstances);
 	}
 
 	/** The word ending before {@code at} in {@code folded}, past the separators between them; "" at its start. */
@@ -8894,6 +8919,11 @@ public class DrugReferenceInjector {
 			lines.addAll(pairLines);
 		}
 		for (AskedDrug drug : rowOf) {
+			// Named as hers, and she is not on it: what the clinician believes she takes, never proposed, so given no answer
+			// of its own against her medications; what relates it to the other is stated above (ADR Decision 655).
+			if (believedHers(question, drug, herSubstances)) {
+				continue;
+			}
 			List<SafetyWarning> its = ofEach.get(drug);
 			lines.add("For " + drug.label + ":");
 			if (its.isEmpty()) {
@@ -9306,8 +9336,12 @@ public class DrugReferenceInjector {
 		// where a finding relates them. Whether one changes an effect of the other is answered with neither (ADR Decision
 		// 249): the data relates the pair, never the effect asked about.
 		List<String> words = wordsBesideItsNames(question, questionDrugs, ownNamed);
+		// The other named as hers, and she is not on it, is what the clinician believes she takes and never proposed: the
+		// pair is asked as whether the two interact, as Decision 260 asks it of one drug (ADR Decision 655).
+		boolean believedHers = !notHers.isEmpty();
 		Lead lead = QueryScopeRouter.asksWhetherTwoDrugsInteract(words) ? Lead.INTERACTS
-				: QueryScopeRouter.asksWhetherOneDrugChangesTheOther(words) ? Lead.NOT_GIVE : Lead.of(question, proposedRows);
+				: QueryScopeRouter.asksWhetherOneDrugChangesTheOther(words) ? Lead.NOT_GIVE
+						: believedHers ? Lead.INTERACTS : Lead.of(question, proposedRows);
 		// A question about the pair — whether they interact, whether one changes the other — states the other drug against
 		// her drug asked about alone, never against her other medications (ADR Decision 617, the owner's direction that an
 		// answer carries nothing the question did not ask). A proposal of the two keeps them all: giving the other drug is what
@@ -9315,7 +9349,7 @@ public class DrugReferenceInjector {
 		// Nor, where the question asks nothing a contraindication answers, is any other finding of the other drug stated —
 		// her allergy covering it, a condition of hers: neither says what relates the two (ADR Decision 618). "Is naproxen
 		// contraindicated with her aspirin?" asks what her allergy answers, and keeps it (ADR Decision 359).
-		boolean aboutThePair = asksAboutThePair(words);
+		boolean aboutThePair = asksAboutThePair(words) || believedHers;
 		// Of the pair, how the one acts on the other asks nothing her allergy answers (ADR Decision 627).
 		boolean keepsTheRest = aboutThePair ? QueryScopeRouter.asksWhatAContraindicationAnswersOfThePair(question)
 				: QueryScopeRouter.asksWhatAContraindicationAnswers(question);

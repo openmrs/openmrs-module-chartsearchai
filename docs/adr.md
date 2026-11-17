@@ -29828,3 +29828,58 @@ blood thinner.
 Pinned by `HerMedicationGroupByClassTest`'s `aDuplicateTherapyQuestionPublishesOnlyWhatItsAnswerStates`,
 `aDrugThatIsHisOnlyOrderOfTheGroupIsSaidToBe` and `continuingOrChangingTheDoseOfADrugHeIsNotOnPublishesNoFindingOfIt`,
 each failing with its rule disabled.
+
+## Decision 655: A drug named as hers that she is not on is never proposed
+
+**Status: Accepted** (November 2026), on the owner's direction that an answer carries nothing beyond what was asked. It
+carries [Decision 260](#decision-260-a-question-naming-as-hers-a-drug-she-is-not-on-says-she-is-not-on-it) from one drug
+to a drug asked about beside another, and narrows
+[Decision 617](#decision-617-a-question-about-her-drug-and-another-states-the-other-against-her-drug-alone)'s proposal
+carve-out, [Decision 602](#decision-602-a-drug-proposed-beside-a-word-the-data-does-not-know-is-answered-as-its-own-proposal)
+and [Decision 222](#decision-222-two-drugs-proposed-together-neither-hers-are-each-answered-as-their-own-proposal) to
+the drugs they propose.
+
+### Context
+
+Through the service (Decision 650), over a patient on efavirenz, lamivudine / zidovudine, RHZE, co-trimoxazole and
+warfarin and no nevirapine, *"Does rifampicin interact with his nevirapine?"* was answered with the pair alone, nevirapine's
+Major finding with his rifampicin, and *"Is rifampicin safe with his nevirapine?"* with *"No — this module's drug-safety
+check found a reason to withhold Nevirapine."* and nevirapine against his warfarin and efavirenz as well. Decision 617
+keeps every finding of a proposal, since giving the other drug is what a proposal asks. A drug the question names as
+his, *"his nevirapine"*, is what the clinician believes he takes, and nothing proposes it. *"Is RHZE safe with his
+nevirapine?"* and *"Can I give RHZE with his lopinavir?"*, beside a word the data does not know, gave nevirapine and
+lopinavir their own proposal's answer under *"For Nevirapine:"*; *"Is fluconazole safe with his nevirapine?"*, two drugs
+he is not on, gave both.
+
+### The decision
+
+- A drug named as hers that she takes none of is never answered as a drug proposed (`DrugReferenceInjector.believedHers`,
+  over `namedAsHers`, which reads *"give her nevirapine"* as nevirapine given to her):
+  - beside a drug of hers, the pair is asked as whether the two interact, and answered as that wording is: *"Is rifampicin
+    safe with his nevirapine?"* as *"Does rifampicin interact with his nevirapine?"*. Whether one changes the other keeps
+    [Decision 249](#decision-249-whether-one-drug-changes-an-effect-of-the-other-is-answered-with-the-finding-and-neither-yes-nor-no)'s
+    lead;
+  - beside a word the data does not know, it gets that statement alone and no chip;
+  - beside another drug she is not on, which is proposed, it gets no *"For …:"* answer of its own, and only what the
+    answer states is a chip.
+- A drug proposed beside one of hers — *"Can I give him nevirapine with his rifampicin?"*, *"Is nevirapine safe with his
+  rifampicin?"*, *"Can I add nevirapine to his rifampicin?"* — keeps its proposal's answer.
+- A possessive names a drug as hers only right before it, spaces alone between them: `namedAsHers` had read *"Which is
+  safer for her, ibuprofen or paracetamol?"* as naming ibuprofen hers, past the comma, and this decision's first build
+  dropped ibuprofen's answer for it, which `EitherOfTwoDrugsTest` and two of `ClinicianWordingsTest`'s cases caught.
+
+### Measured
+
+Through the service, against Decision 654's build, over its 753 questions and 36 more naming a drug as his: nine answers
+changed, each intended. The five safe-with wordings of rifampicin with his nevirapine went from three chips to one, the
+pair; *"Is warfarin safe with his fluconazole?"* from five to one; the two beside *"RHZE"* from three and four to none;
+*"Is fluconazole safe with his nevirapine?"* from nine to six, fluconazole's own and the pair. A first build put the
+interact lead ahead of Decision 249's and changed *"Does rifampicin reduce her lopinavir levels?"* to *"Yes —"*; it was
+corrected before this was measured. On the demo replica (2026-11-17), with Decisions 656 and 657, over six patients,
+each of the three wordings of nevirapine with rifampicin or fluconazole on a patient on neither was answered over the
+pair and the drug proposed, with no section and no chip for the one named as his, and the
+539 answers of Decisions 630 to 648's sweeps were unchanged.
+
+Pinned by `DrugNamedAsHisHeIsNotOnTest`. Each of its four rules, disabled alone, turns its own case red; putting the
+interact lead ahead of Decision 249's turns `whetherHisDrugChangesOneNamedAsHisKeepsItsOwnLead` red, and reading a
+possessive past punctuation turns `aPossessiveBeforeACommaNamesNoDrugAsHers` red.

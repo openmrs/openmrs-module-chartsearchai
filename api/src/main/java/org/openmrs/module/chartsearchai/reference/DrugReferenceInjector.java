@@ -1962,6 +1962,40 @@ public class DrugReferenceInjector {
 			}
 			injected.markFindingsBearingOnTheQuestion(stated);
 		}
+		// A drug the question names as hers that she is not on, where the model answers: what the clinician believes she takes
+		// is never proposed (ADR Decision 655), so its findings against her medications are not published, only those
+		// against the other drugs the question names, each hers as the order she takes it in (ADR Decision 659). "Is
+		// fluconazole safe with her ARVs and her simvastatin?" carried simvastatin's interactions with five of her orders.
+		if (bearing == null && moduleAnswer == null && questionDrugs.size() > 1) {
+			List<AskedDrug> named = askedDrugs(question, questionDrugs, context, false);
+			Set<String> unpublished = new HashSet<String>();
+			for (AskedDrug drug : named) {
+				if (!believedHers(question, drug, screenedSubstances)) {
+					continue;
+				}
+				Set<Object> others = new HashSet<Object>();
+				for (AskedDrug other : named) {
+					if (other != drug) {
+						others.addAll(other.substances);
+						others.addAll(ofHerOrders(other, orderEntries, context));
+					}
+				}
+				for (SafetyWarning finding : renderedFindings) {
+					if (isAbout(finding, drug.substances) && !hasPartnerOf(finding, others)) {
+						unpublished.add(finding.getDetail());
+					}
+				}
+			}
+			if (!unpublished.isEmpty()) {
+				Set<String> published = new HashSet<String>();
+				for (SafetyWarning finding : renderedFindings) {
+					if (!unpublished.contains(finding.getDetail())) {
+						published.add(finding.getDetail());
+					}
+				}
+				injected.markFindingsBearingOnTheQuestion(published);
+			}
+		}
 		// A group of her medications asked about: only what its answer states (ADR Decision 630).
 		if (besideTheGroupStated != null) {
 			injected.markFindingsBearingOnTheQuestion(besideTheGroupStated);

@@ -891,6 +891,28 @@ public class LlmInferenceServiceModelReadQuestionContextTest extends BaseModuleC
 	 * question and rewrite on one line apart by a tab. The injector's own harness never reaches this layer, where two answers
 	 * of the demo replica differed from the injector's (ADR Decisions 644, 650): compare two builds' files line by line.
 	 */
+	/**
+	 * A drug the question names as his that he is not on is what the clinician believes he takes, never proposed (ADR
+	 * Decision 655), and where the model answers its findings against his medications are not published either (ADR
+	 * Decision 659): "Is fluconazole safe with her ARVs and her simvastatin?" of a patient on no simvastatin carried
+	 * simvastatin's interactions with her rifampicin, zidovudine, efavirenz, isoniazid and warfarin. Its finding against
+	 * the other drug the question names stays, and so do the findings of the drug proposed.
+	 */
+	@Test
+	public void aDrugNamedAsHisHeIsNotOnPublishesNoChipAgainstHisMedicationsWhereTheModelAnswers() {
+		executeDataSet("GroupAnswerEfavirenzRhzeCotrimoxazoleOrdersTestData.xml");
+		String question = "Is fluconazole safe with her ARVs and her simvastatin?";
+		ChartAnswer answer = serviceWith(new RecordingProvider("YES"),
+			new org.openmrs.module.chartsearchai.reference.DrugReferenceService()).search(patient, question);
+		assertFalse(answer.isAnsweredByTheModule(), answer.getAnswer());
+		boolean fluconazole = false;
+		for (SafetyWarning chip : answer.getSafetyWarnings()) {
+			fluconazole |= "Fluconazole".equals(chip.getDrug());
+			assertFalse(chip.getDetail().startsWith("Simvastatin interacts with active order"), "published: " + chip.getDetail());
+		}
+		assertTrue(fluconazole, "the drug proposed keeps its chips: " + answer.getSafetyWarnings());
+	}
+
 	@Test
 	@org.junit.jupiter.api.condition.EnabledIfSystemProperty(named = "chartsearchai.harness.questions", matches = ".+")
 	public void harness() throws Exception {

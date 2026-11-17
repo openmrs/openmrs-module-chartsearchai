@@ -30001,3 +30001,34 @@ Pinned by `HerMedicationGroupByClassTest.twoGroupsOfHisAskedOfAnythingElseAreAns
 failed before the change, its first case the two groups asked of one another alone, unchanged, and its last a patient
 on no TB drug, which failed before the absent group was carried as a lead.
 
+## Decision 659: Where the model answers, a drug named as hers that she is not on publishes no finding against her medications
+
+**Status: Accepted** (November 2026), on the owner's direction that an answer carries nothing beyond what was asked. It
+carries [Decision 655](#decision-655-a-drug-named-as-hers-that-she-is-not-on-is-never-proposed) to the questions the
+model answers.
+
+### Context
+
+Decision 655 keeps a drug the question names as hers, and that she is not on, out of the module's answers as a proposal.
+Where the model answers, the chips are every finding the check drew (ADR Decision 148), and the check draws such a drug's
+findings against her medications as it does a proposal's. Through the service (Decision 650), over a patient on
+efavirenz, lamivudine / zidovudine, RHZE, co-trimoxazole and warfarin, *"Is fluconazole safe with her ARVs and her
+simvastatin?"* went to the model and carried eleven chips, five of them simvastatin against her rifampicin, zidovudine,
+efavirenz, isoniazid and warfarin: what simvastatin would do were she given it, which no one asked.
+
+### The decision
+
+- Where the model answers, a finding about a drug the question names as hers that she is not on is published only where
+  its partner is another drug the question names, that drug hers as the whole order she takes it in (ADR Decisions 285,
+  288). Its findings against her other medications are not.
+- Every other finding is published as before.
+
+### Measured
+
+Through the service, over the 789 questions of Decisions 650 and 655, against Decision 658's build: that one answer
+changed, from eleven chips to six — fluconazole's own five and simvastatin's against fluconazole, also named in the
+question. On the demo replica (2026-11-18), over six patients on no simvastatin, *"Is fluconazole safe with his ARVs and
+his simvastatin?"* was the model's on each, and its one simvastatin chip was that against fluconazole.
+
+Pinned by `LlmInferenceServiceModelReadQuestionContextTest.aDrugNamedAsHisHeIsNotOnPublishesNoChipAgainstHisMedicationsWhereTheModelAnswers`,
+which failed before the change.

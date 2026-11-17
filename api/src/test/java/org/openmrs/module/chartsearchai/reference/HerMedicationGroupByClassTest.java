@@ -657,6 +657,17 @@ public class HerMedicationGroupByClassTest extends BaseModuleContextSensitiveTes
 		}
 	}
 
+	/** A word the question parts from her group with punctuation is the word said unchecked, never the two as one name (ADR
+	 *  Decision 657): "Any interactions with his ARVs, klarizom?" was told "arvs klarizom" is no drug name. */
+	@Test
+	public void aWordPartedFromHisGroupByPunctuationIsTheWordSaidUnchecked() {
+		PatientChart chart = askOfSeven("Any interactions with his ARVs, klarizom?");
+		String statement = chart.getModuleAnswer() != null ? chart.getModuleAnswer() : chart.getUncheckedWordStatement();
+		assertNotNull(statement, "not said unchecked");
+		assertTrue(statement.contains("No interaction check was run: \"klarizom\" is not a drug name the interaction data "
+				+ "recognises."), statement);
+	}
+
 	private static PatientChart askOfSeven(String question) {
 		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
 			DrugReferenceTestSupport.activeOrder("order-nvp", "Nevirapine"),

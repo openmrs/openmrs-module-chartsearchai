@@ -686,10 +686,28 @@ final class UnrecognisedDrugName {
 								|| QueryScopeRouter.asksAboutADrugBesideHerMedications(marked)))) {
 					continue;
 				}
+				// Two words the question parts with punctuation are never one name: "Any interactions with his ARVs, klarizom?"
+				// was told "arvs klarizom" is no drug name. After a group of hers, the word after it is the one in the drug's
+				// place (ADR Decision 657).
+				if (!group && span.size() == 2 && !writtenTogether(span, question)) {
+					if (QueryScopeRouter.namesAMedicationGroup(span.get(0)) && isAName(span.subList(1, 2))) {
+						return span.get(1);
+					}
+					continue;
+				}
 				return group ? joined : isAName(span) ? String.join(" ", span) : null;
 			}
 		}
 		return null;
+	}
+
+	/** Whether {@code question} writes the words of {@code span} one after another, spaces or hyphens alone between them. */
+	private static boolean writtenTogether(List<String> span, String question) {
+		StringBuilder pattern = new StringBuilder("(?i)(?<![\\p{L}\\p{N}])");
+		for (int w = 0; w < span.size(); w++) {
+			pattern.append(w == 0 ? "" : "[\\s-]+").append(Pattern.quote(span.get(w)));
+		}
+		return Pattern.compile(pattern.append("(?![\\p{L}\\p{N}])").toString()).matcher(question).find();
 	}
 
 	/** {@code word} as the question spells it — "TDF", not the tokenizer's "tdf"; "co-trimoxazole", not its "co trimoxazole"

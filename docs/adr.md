@@ -29939,3 +29939,28 @@ no chip, his ARVs asked alone were still answered over them, and Decision 630's 
 Pinned by `HerMedicationGroupByClassTest.aGroupQuestionNamingSomethingBesideHisGroupsIsNotAnsweredOverThem`: its first
 half turns red with the reading taken out of either Decision 630's branch or Decision 631's, and its second half with
 *"or"* or the patient's name refused.
+
+## Decision 657: Two words the question parts with punctuation are never one name said unchecked
+
+**Status: Accepted** (November 2026). Found by Decision 656's measurement.
+
+### Context
+
+Once *"Any interactions with his ARVs, klarizom?"* was no longer answered over his ARVs (Decision 656), the model's
+answer carried *"No interaction check was run: "arvs klarizom" is not a drug name the interaction data recognises."* The
+words of the question drop its punctuation, so `UnrecognisedDrugName` read the two-word span *"arvs klarizom"* in the
+drug's place of *"Any interactions with his …?"*.
+
+### The decision
+
+- A two-word span the question writes with anything but spaces or hyphens between its words is never one name. Where its
+  first word names a group of her medications, the word after it is the one in the drug's place: *"Any interactions
+  with his ARVs, klarizom?"* says *"klarizom"* is not a drug name the data recognises.
+
+### Measured
+
+Through the service, over the 789 questions of Decisions 650 and 655, against Decision 656's build: that one answer
+changed. On the demo replica (2026-11-17), over six patients, each answer said *"klarizom"* unchecked.
+
+Pinned by `HerMedicationGroupByClassTest.aWordPartedFromHisGroupByPunctuationIsTheWordSaidUnchecked`, which failed
+before the change.

@@ -633,6 +633,30 @@ public class HerMedicationGroupByClassTest extends BaseModuleContextSensitiveTes
 			String.valueOf(chart.getFindingsBearingOnTheQuestion()));
 	}
 
+	/** A question naming something besides his groups — food, a remedy, a condition, a word in a drug's place — is not
+	 *  answered over his groups alone (ADR Decision 656): through the service each was given the screen of his ARVs, what
+	 *  it named left unsaid. Questions of his groups alone, however worded, keep it. */
+	@Test
+	public void aGroupQuestionNamingSomethingBesideHisGroupsIsNotAnsweredOverThem() {
+		for (String question : new String[] { "Any interactions if he eats grapefruit with his ARVs?",
+				"Any interactions between his ARVs and herbal medicines?", "Any interactions with his ARVs while breastfeeding?",
+				"Do grapefruit & his ARVs interact?", "Do his ARVs interact with any food?",
+				"Any interactions with his ARVs during pregnancy?", "Do his TB drugs and the pill interact?",
+				// a class of his, Decision 631's residue
+				"Do his statins interact if he drinks grapefruit juice?", "Any interactions with his antifungals while breastfeeding?" }) {
+			String answer = askOfSeven(question).getModuleAnswer();
+			assertTrue(answer == null || !answer.startsWith("This patient's"), question + ": " + answer);
+		}
+		for (String question : new String[] { "Do his ARVs interact with his TB drugs or each other?",
+				"Does Mary have any interactions with her ARVs?", "Is it safe for John to take his ARVs with his TB drugs?",
+				"What interactions do his ARVs have?", "Do his TB drugs interact with anything else?",
+				"Do any of his ARVs interact with each other?", "Are his TB and HIV meds safe together?",
+				"Do his ARVs clash with each other?" }) {
+			String answer = askOfSeven(question).getModuleAnswer();
+			assertTrue(answer != null && answer.startsWith("This patient's"), question + ": " + answer);
+		}
+	}
+
 	private static PatientChart askOfSeven(String question) {
 		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
 			DrugReferenceTestSupport.activeOrder("order-nvp", "Nevirapine"),

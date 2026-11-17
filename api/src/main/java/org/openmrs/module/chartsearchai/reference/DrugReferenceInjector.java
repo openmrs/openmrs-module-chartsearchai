@@ -9623,8 +9623,11 @@ public class DrugReferenceInjector {
 		if (!unresolved && DrugClassTerms.onlyGroupsOfDecision630(groups)) {
 			// and no other class named beside them, proposed — "Is it safe to give a statin with his TB drugs?" — which is no
 			// question of the groups alone (ADR Decision 637)
+			// and every other word one a question of her medications alone is made of: "Any interactions if he eats grapefruit
+			// with his ARVs?", "… between his ARVs and herbal medicines?" were given the screen of his ARVs (ADR Decision 656)
 			return ofTheirSafety && ofNothingElse && !DrugClassTerms.namesSomethingElseOfHers(question, carried, false)
-					&& DrugClassTerms.namedIn(DrugClassTerms.withHerGroupsAsHerMedications(question, carried), carried) == null;
+					&& DrugClassTerms.namedIn(DrugClassTerms.withHerGroupsAsHerMedications(question, carried), carried) == null
+					&& namesNothingBesideHerGroups(question, carried);
 		}
 		ofNothingElse &= !DrugClassTerms.namesSomethingElseOfHers(question, carried);
 		// Read with her groups as her medications, so what else it names is seen by the rules reading a question about them
@@ -9662,7 +9665,15 @@ public class DrugReferenceInjector {
 		// were his ARVs and TB drugs changed?", which a safety word alone admits.
 		boolean ofTheirInteractions = OF_INTERACTIONS.matcher(question).find()
 				|| several && ONE_WITH_ANOTHER_OF_HERS.matcher(question).find() || allRightWithHers;
-		return ofTheirSafety && ofTheirInteractions && ofNothingElse;
+		return ofTheirSafety && ofTheirInteractions && ofNothingElse && namesNothingBesideHerGroups(question, carried);
+	}
+
+	/** Whether {@code question}, each group of hers it names read as her medications — a group the module cannot resolve
+	 *  as well, "his previous ARVs" — names nothing else (ADR Decision 656). */
+	private static boolean namesNothingBesideHerGroups(String question, List<CrossReactivityGroup> carried) {
+		String unresolved = DrugClassTerms.unresolvedGroupOfHers(question, carried);
+		String read = unresolved == null ? question : question.replaceAll("(?i)" + Pattern.quote(unresolved), "medications");
+		return QueryScopeRouter.namesNothingBesideHerMedications(DrugClassTerms.withHerGroupsAsHerMedications(read, carried));
 	}
 
 	/**

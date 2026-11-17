@@ -29883,3 +29883,59 @@ pair and the drug proposed, with no section and no chip for the one named as his
 Pinned by `DrugNamedAsHisHeIsNotOnTest`. Each of its four rules, disabled alone, turns its own case red; putting the
 interact lead ahead of Decision 249's turns `whetherHisDrugChangesOneNamedAsHisKeepsItsOwnLead` red, and reading a
 possessive past punctuation turns `aPossessiveBeforeACommaNamesNoDrugAsHers` red.
+
+## Decision 656: A question naming something besides her groups is not answered over her groups alone
+
+**Status: Accepted** (November 2026), on the owner's direction that an answer carries nothing beyond what was asked. It
+resolves the residue
+[Decision 631](#decision-631-a-class-of-her-medications-is-answered-over-that-class-and-a-group-the-module-cannot-resolve-is-said-to-be-unresolved)
+left of a clause after a group, and extends that decision's reading of what else a question names to
+[Decision 630](#decision-630-a-group-of-her-medications-asked-about-by-name-is-answered-over-that-group)'s groups.
+
+### Context
+
+Decision 631 refuses a class of hers asked beside something else — *"Does grapefruit juice interact with his statins?"* —
+by rules naming where the something else stands: a subject, a joined word, the object of *"with"*. Decision 630's groups,
+ARVs, TB drugs and antibiotics, were kept out of those rules so that nothing Decision 630 answered changed. Through the
+service (Decision 650), over a patient on efavirenz, lamivudine / zidovudine, RHZE, co-trimoxazole and warfarin, *"Any
+interactions if he eats grapefruit with his ARVs?"*, *"Any interactions with his ARVs while breastfeeding?"*, *"Do his
+ARVs interact with any food?"*, *"Do grapefruit & his ARVs interact?"* and *"Any interactions among his ARVs and
+rifampcin?"* were each answered with the screen of his ARVs, his warfarin among it, and what the question named left
+unsaid. *"Any interactions between his ARVs and herbal medicines?"* was answered with what the check relates among his
+ARVs. A clause after a class — *"… with his statins if he drinks grapefruit juice?"* — was answered over the class, the
+residue Decision 631 recorded. Its fourteen review rounds showed that rules naming where something else stands have no
+end.
+
+### The decision
+
+- A question is answered over her groups alone only where, each group read as her medications, every other word is one
+  a question of her medications alone is made of (`QueryScopeRouter.namesNothingBesideHerMedications`): the residual
+  reading's words ([Decision 396](#decision-396-a-question-about-one-drug-in-a-wording-no-shape-fits-made-only-of-the-words-such-questions-are-made-of-is-answered-as-the-proposal-or-the-interaction)),
+  and how her medications are asked of one another and how much a finding matters — *"each other"*, *"among"*, *"or"*,
+  *"significant"*, *"contraindicated"*, *"what"*. Any other word — *"grapefruit"*, *"smokes"*, *"pregnancy"*,
+  *"herbal"*, a misspelt drug — asks of something besides them, and the question is not answered over the groups.
+  Fail-closed, as Decision 396 is: the model answers, with whatever statement of an unchecked word applies
+  ([Decision 642](#decision-642-a-word-asked-of-beside-a-group-of-her-medications-in-any-shape-the-module-reads-is-said-unchecked)).
+- It applies to Decision 630's groups and Decision 631's classes and unresolved groups alike, an unresolved group's own
+  words — *"his previous ARVs"*, *"his antibiotic eye drops"* — read as her medications too.
+- The patient named where only the patient stands — after a title, as who has the interactions, as who is to take the
+  medications (*"Mr Okello"*, *"Does Mary have …"*, *"safe for John to take …"*) — is no other thing asked of.
+
+### Measured
+
+Through the service, over the 789 questions of Decisions 650 and 655, against Decision 655's build: 83 answers changed.
+Each named something besides his groups: food, grapefruit, milk, herbal remedies, vitamin and over-the-counter
+products, contraception, a vaccine, pregnancy or breastfeeding, smoking, TB treatment to be started, his previous ARVs,
+or a misspelt or unknown drug, now said unrecognised with its suggestion (*"Did you mean Efavirenz?"*) where the model's
+answer had been his group's screen. *"Any interactions between his TB drugs and the rest of his meds?"*, answered that
+the check relates none of his TB drugs to each other, a question it did not ask, is now the model's; *"rest"* stays out
+of the words admitted. A first build refused seven questions of his groups alone, for *"or"*, *"some"* and the
+patient's name, and three that Decisions 631 and 637 specify, for *"home"*, *"previous ARVs"* and *"When is it safe to
+restart …"*; each was restored before this was measured, the last three caught by `HerMedicationGroupByClassTest` and
+`LlmInferenceServiceModelReadQuestionContextTest`. On the demo replica (2026-11-17), over six patients, the five
+wordings of grapefruit, breastfeeding, food, herbal medicines and a misspelt drug beside his ARVs were the model's with
+no chip, his ARVs asked alone were still answered over them, and Decision 630's 207 answers were unchanged.
+
+Pinned by `HerMedicationGroupByClassTest.aGroupQuestionNamingSomethingBesideHisGroupsIsNotAnsweredOverThem`: its first
+half turns red with the reading taken out of either Decision 630's branch or Decision 631's, and its second half with
+*"or"* or the patient's name refused.

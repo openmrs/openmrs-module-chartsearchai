@@ -3070,6 +3070,50 @@ public final class QueryScopeRouter {
 		// where every other word is known, so the everyday senses of these words stay the model's (ADR Decision 536)
 		"screen", "screening", "mess", "messes", "interfere", "interferes", "conflict", "conflicts"));
 
+	/** The words a question about her medications, or groups of them read as her medications, may be made of beside the
+	 *  residual reading's own (ADR Decision 656): how they are asked of one another, and how much a finding matters. */
+	private static final Set<String> OF_HER_MEDICATIONS_ALONE = new HashSet<String>(Arrays.asList("each", "one", "another",
+		"among", "amongst", "same", "time", "at", "significant", "serious", "major", "known", "potential", "possible",
+		"relevant", "clinically", "important", "notable", "contraindication", "contraindications", "contraindicated",
+		"concurrently", "concomitantly", "simultaneously", "combine", "combined", "combining", "combination", "use", "using",
+		"used", "continue", "continuing", "tell", "me", "vs", "versus", "these", "those", "both", "either", "mix", "mixed",
+		"mixing", "concern", "concerns", "risk", "risks", "dangerous", "harmful", "worry", "affect", "affects", "or", "some", "else", "did",
+		// "When is it safe to restart her ARVs with her TB drugs?" (ADR Decision 637's case)
+		"when", "restart", "restarting",
+		// "Do his ARVs interact with his home medications?", her own medications (ADR Decision 631's case)
+		"home",
+		// "What interactions do his ARVs have?", "Which of his ARVs interact?"
+		"what", "which"));
+
+	/** A person the question names where only the patient stands — after a title, as who "has" her interactions, as who is
+	 *  to take them: "Mr Okello", "Does Mary have …", "safe for John to take …" (ADR Decision 656). Capitalised as written. */
+	private static final Pattern THE_PATIENT_BY_NAME = Pattern.compile("\\b(?:[Mm]rs?|[Mm]s|[Mm]iss|[Dd]r)\\.? \\p{Lu}\\p{L}+"
+			+ "|(?<=^(?:[Dd]oes|[Dd]id|[Hh]as) )\\p{Lu}\\p{L}+(?= (?:have|has)\\b)|(?<=\\bfor )\\p{Lu}\\p{L}+(?= to\\b)");
+
+	/**
+	 * Whether every word of {@code question}, a question with her groups read as her medications, is one a question about
+	 * her medications alone may be made of — the residual reading's words (ADR Decision 396) and how her medications are
+	 * asked of one another — or a name's possessive, "Mary's" (ADR Decision 656). Any other word asks of something besides
+	 * them: "grapefruit", "smokes", "pregnancy", "herbal", "rifampcin". Fail-closed: such a question is not answered over
+	 * her groups alone.
+	 */
+	public static boolean namesNothingBesideHerMedications(String question) {
+		if (question == null) {
+			return false;
+		}
+		for (String word : THE_PATIENT_BY_NAME.matcher(question).replaceAll(" ").toLowerCase(Locale.ROOT).replace('\u2019', '\'').split("[^\\p{L}\\p{N}']+")) {
+			String bare = word.replaceAll("^'+|'+$", "");
+			if (bare.isEmpty() || bare.endsWith("'s") || RESIDUAL_FILLER.contains(bare) || RESIDUAL_INTERACTS.contains(bare)
+					|| RESIDUAL_SAFE.contains(bare) || RESIDUAL_HARMS.contains(bare) || RESIDUAL_GIVE.contains(bare)
+					|| RESIDUAL_ASKING.contains(bare) || RESIDUAL_QUESTION.contains(bare)
+					|| OF_HER_MEDICATIONS_ALONE.contains(bare)) {
+				continue;
+			}
+			return false;
+		}
+		return true;
+	}
+
 	/** Words saying the question is about whether the drug is safe to give. */
 	private static final Set<String> RESIDUAL_SAFE = new HashSet<String>(Arrays.asList("safe", "safely", "ok", "okay",
 		"fine", "alright", "compatible", "appropriate", "safety", "good", "suitable", "reasonable", "able", "recommended",

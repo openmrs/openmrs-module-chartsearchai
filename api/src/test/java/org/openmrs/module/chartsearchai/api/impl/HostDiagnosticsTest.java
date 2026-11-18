@@ -42,7 +42,7 @@ public class HostDiagnosticsTest {
 	/** Every key the endpoint documents, in the order it serializes them. A new key is APPENDED. */
 	private static final List<String> DOCUMENTED_FIELDS = Arrays.asList("sampledAtMillis",
 			"jvmAvailableProcessors", "loadAverage", "cpuJiffies", "memoryKb", "cgroupCpu", "llamaServer",
-			"jvmCpuMillis", "processes");
+			"jvmCpuMillis", "processes", "oomKills", "memoryPressure", "cgroupMemory", "dataDisk");
 
 	/** {@code /proc/self/mountinfo} of a cgroup-v2 host or container: the unified hierarchy at /sys/fs/cgroup. */
 	private static final String V2_MOUNTINFO = "22 1 259:2 / / rw,relatime - ext4 /dev/root rw\n"
@@ -74,6 +74,113 @@ public class HostDiagnosticsTest {
 		assertNull(body.get("memoryKb"));
 		assertNull(body.get("cgroupCpu"));
 		assertNull(body.get("processes"), "no /proc to read is not a host running no processes");
+		assertNull(body.get("oomKills"), "an unreadable /proc/vmstat is not a host whose OOM killer never ran");
+		assertNull(body.get("memoryPressure"));
+		assertNull(body.get("cgroupMemory"));
+	}
+
+	/**
+	 * How many processes the kernel's OOM killer has killed on this host since it booted. The counter is
+	 * the host's, not the container's — {@code /proc/vmstat} is not namespaced — so it still counts a kill
+	 * in ANOTHER container (the database's) after this one has been recreated, which is the question a
+	 * container that died with nobody watching leaves behind.
+	 */
+	@Test
+	public void read_shouldReportHowManyProcessesTheOomKillerHasKilledSinceTheHostBooted() throws IOException {
+		write("proc/vmstat", "nr_free_pages 6512345\nnr_anon_pages 712233\npgmajfault 81234\n"
+				+ "oom_kill 3\nnr_unevictable 6858\n");
+
+		assertEquals(3L, HostDiagnostics.read(root, null).get("oomKills"));
+	}
+
+	@Test
+	public void read_shouldReportZeroOomKillsAsZeroAndAKernelWithoutTheCounterAsNull() throws IOException {
+		write("proc/vmstat", "nr_free_pages 6512345\noom_kill 0\n");
+		assertEquals(0L, HostDiagnostics.read(root, null).get("oomKills"), "a host whose OOM killer never ran");
+
+		write("proc/vmstat", "nr_free_pages 6512345\npgmajfault 81234\n");
+		assertNull(HostDiagnostics.read(root, null).get("oomKills"),
+				"a kernel older than 4.13 has no oom_kill line, which is no measurement rather than none");
+	}
+
+	/**
+	 * The host's memory-pressure stall totals since boot, from PSI: {@code some} is time at least one task
+	 * waited on memory, {@code full} time every non-idle task did. Cumulative microseconds, diffed between
+	 * two samples like the CPU counters; a {@code full} total that grows by seconds between them is a host
+	 * thrashing for memory with no swap to absorb it.
+	 */
+	@Test
+	public void read_shouldReportTheHostsMemoryPressureStallTotals() throws IOException {
+		write("proc/pressure/memory", "some avg10=0.00 avg60=0.12 avg300=1.50 total=123456789\n"
+				+ "full avg10=0.00 avg60=0.05 avg300=0.80 total=98765432\n");
+
+		Map<?, ?> pressure = (Map<?, ?>) HostDiagnostics.read(root, null).get("memoryPressure");
+
+		assertEquals(Arrays.asList("someTotalMicros", "fullTotalMicros"), new ArrayList<Object>(pressure.keySet()));
+		assertEquals(123456789L, pressure.get("someTotalMicros"));
+		assertEquals(98765432L, pressure.get("fullTotalMicros"));
+	}
+
+	/**
+	 * What the cgroup this JVM runs in — the backend container, llama-server included — holds now, the most
+	 * it has held since the cgroup was created, its limit, and how many of its processes an OOM killer took.
+	 * {@code peakKb} is what a sample taken after a spike still sees; {@code memory.peak} needs a 5.19
+	 * kernel, and an older one reports it {@code null}.
+	 */
+	@Test
+	public void read_shouldReportTheMemoryThisJvmsCgroupHoldsPeakedAtAndLostToTheOomKiller() throws IOException {
+		inCgroup("0::/\n", V2_MOUNTINFO);
+		write("sys/fs/cgroup/memory.current", "2457600000\n");
+		write("sys/fs/cgroup/memory.peak", "9437184000\n");
+		write("sys/fs/cgroup/memory.max", "max\n");
+		write("sys/fs/cgroup/memory.events", "low 0\nhigh 0\nmax 0\noom 0\noom_kill 1\noom_group_kill 0\n");
+
+		Map<?, ?> memory = (Map<?, ?>) HostDiagnostics.read(root, null).get("cgroupMemory");
+
+		assertEquals(Arrays.asList("path", "currentKb", "peakKb", "maxKb", "oomKills"),
+				new ArrayList<Object>(memory.keySet()));
+		assertEquals("/", memory.get("path"));
+		assertEquals(2400000L, memory.get("currentKb"));
+		assertEquals(9216000L, memory.get("peakKb"));
+		assertNull(memory.get("maxKb"), "max is no limit on this cgroup, never a limit of zero");
+		assertEquals(1L, memory.get("oomKills"));
+	}
+
+	@Test
+	public void read_shouldReportTheLimitOfACgroupThatHasOneAndNoPeakWhereTheKernelKeepsNone() throws IOException {
+		inCgroup("0::/system.slice/docker-4f2a.scope\n", V2_MOUNTINFO);
+		write("sys/fs/cgroup/system.slice/docker-4f2a.scope/memory.current", "1048576\n");
+		write("sys/fs/cgroup/system.slice/docker-4f2a.scope/memory.max", "8589934592\n");
+		write("sys/fs/cgroup/system.slice/docker-4f2a.scope/memory.events", "oom 2\noom_kill 2\n");
+
+		Map<?, ?> memory = (Map<?, ?>) HostDiagnostics.read(root, null).get("cgroupMemory");
+
+		assertEquals("/system.slice/docker-4f2a.scope", memory.get("path"));
+		assertEquals(1024L, memory.get("currentKb"));
+		assertNull(memory.get("peakKb"), "a kernel before 5.19 has no memory.peak");
+		assertEquals(8388608L, memory.get("maxKb"));
+		assertEquals(2L, memory.get("oomKills"));
+	}
+
+	/**
+	 * How full the filesystem holding the OpenMRS data directory is. In a container that directory is a
+	 * volume, so it is the disk the host keeps its container data on — the database's volume included.
+	 */
+	@Test
+	public void read_shouldReportHowFullTheDiskHoldingTheDataDirectoryIs() throws IOException {
+		Map<?, ?> disk = (Map<?, ?>) HostDiagnostics.read(root, null, root).get("dataDisk");
+
+		assertEquals(Arrays.asList("totalKb", "usableKb"), new ArrayList<Object>(disk.keySet()));
+		long totalKb = (Long) disk.get("totalKb");
+		long usableKb = (Long) disk.get("usableKb");
+		assertEquals(Files.getFileStore(root).getTotalSpace() / 1024, totalKb);
+		assertTrue(totalKb > 0, "a disk of no size was not read");
+		assertTrue(usableKb >= 0 && usableKb <= totalKb, "usable space is a share of the disk: " + disk);
+	}
+
+	@Test
+	public void read_shouldReportNoDiskRatherThanAnEmptyOneForADataDirectoryThatDoesNotExist() {
+		assertNull(HostDiagnostics.read(root, null, root.resolve("absent")).get("dataDisk"));
 	}
 
 	@Test

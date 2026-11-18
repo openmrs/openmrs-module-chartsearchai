@@ -12,6 +12,7 @@ package org.openmrs.module.chartsearchai.api.impl;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.DirectoryStream;
+import java.nio.file.FileStore;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -21,6 +22,8 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+
+import org.openmrs.util.OpenmrsUtil;
 
 /**
  * What the host is doing to the local llama-server, read from the kernel's own counters: the body of
@@ -34,11 +37,19 @@ import java.util.Map;
  * CPU time of llama-server and of this JVM, so an operator without a shell on the host can sample it
  * before and after a query and diff.
  *
+ * <p>It also answers what a container that stopped with nobody watching leaves behind (ADR Decision 660):
+ * whether the host's OOM killer has run since boot ({@code oomKills}, the HOST's count, so a kill in
+ * another container is in it), how long the host stalled on memory ({@code memoryPressure}), what this
+ * container holds and has peaked at ({@code cgroupMemory}), and how full the disk under the data directory
+ * is ({@code dataDisk}).
+ *
  * <p>Two kinds of reading, reported raw. The {@code cpuJiffies} ticks, the cgroup's {@code periods},
- * {@code throttledPeriods} and {@code throttledMicros}, {@code llamaServer.cpuMillis} and
- * {@code jvmCpuMillis} are cumulative counters, which the reader diffs between two samples.
- * {@code loadAverage} is the kernel's decaying average, and {@code memoryKb} and the cgroup's quota and
- * period are gauges; each is read as it stands at the sample.
+ * {@code throttledPeriods} and {@code throttledMicros}, {@code llamaServer.cpuMillis},
+ * {@code jvmCpuMillis}, {@code oomKills}, the {@code memoryPressure} totals and {@code cgroupMemory.oomKills}
+ * are cumulative counters, which the reader diffs between two samples.
+ * {@code loadAverage} is the kernel's decaying average, and {@code memoryKb}, the cgroup's quota and
+ * period, {@code cgroupMemory}'s sizes and {@code dataDisk} are gauges; each is read as it stands at the
+ * sample — {@code cgroupMemory.peakKb} being the gauge's own high-water mark.
  * A file that cannot be read reports {@code null}, never zero — "could not read" is not "no steal".
  * Nothing here is patient-derived.
  */
@@ -57,14 +68,19 @@ public final class HostDiagnostics {
 	 * ({@code LocalLlmEngine.serverHandle()}), {@code null} when it holds none.
 	 */
 	public static Map<String, Object> read(ProcessHandle llamaServer) {
-		return read(Paths.get("/"), llamaServer);
+		return read(Paths.get("/"), llamaServer, Paths.get(OpenmrsUtil.getApplicationDataDirectory()));
 	}
 
 	/**
 	 * The host whose {@code /proc} and {@code /sys/fs/cgroup} sit under {@code root}; {@code /proc/self} there
-	 * stands for this JVM.
+	 * stands for this JVM, and {@code root} itself for the data directory.
 	 */
 	static Map<String, Object> read(Path root, ProcessHandle llamaServer) {
+		return read(root, llamaServer, root);
+	}
+
+	/** As {@link #read(Path, ProcessHandle)}, with the data directory whose disk {@code dataDisk} reports. */
+	static Map<String, Object> read(Path root, ProcessHandle llamaServer, Path dataDirectory) {
 		Map<String, Object> body = new LinkedHashMap<String, Object>();
 		body.put("sampledAtMillis", System.currentTimeMillis());
 		body.put("jvmAvailableProcessors", Runtime.getRuntime().availableProcessors());
@@ -75,7 +91,108 @@ public final class HostDiagnostics {
 		body.put("llamaServer", llamaServer(root, llamaServer));
 		body.put("jvmCpuMillis", cpuMillis(ProcessHandle.current()));
 		body.put("processes", processes(root));
+		body.put("oomKills", oomKills(root));
+		body.put("memoryPressure", memoryPressure(root));
+		body.put("cgroupMemory", cgroupMemory(root));
+		body.put("dataDisk", dataDisk(dataDirectory));
 		return body;
+	}
+
+	/**
+	 * The {@code oom_kill} counter of {@code /proc/vmstat}: how many processes the kernel's OOM killer has
+	 * killed on this host since it booted. {@code /proc/vmstat} is not namespaced, so inside a container
+	 * this is still the HOST's count — a kill in another container (the database's) included, and still
+	 * there after this container is recreated. {@code null} when the file cannot be read or the kernel
+	 * (older than 4.13) keeps no such counter.
+	 */
+	private static Long oomKills(Path root) {
+		Map<String, Long> vmstat = keyValues(root.resolve("proc/vmstat"), " ");
+		return vmstat == null ? null : vmstat.get("oom_kill");
+	}
+
+	/**
+	 * The host's memory-pressure stall totals since boot from {@code /proc/pressure/memory} (PSI), in
+	 * microseconds: {@code someTotalMicros} while at least one task waited on memory, {@code fullTotalMicros}
+	 * while every non-idle task did. Cumulative counters, diffed between samples. {@code null} when the
+	 * kernel was built or booted without PSI, or the file cannot be read.
+	 */
+	private static Map<String, Long> memoryPressure(Path root) {
+		String text = readFile(root.resolve("proc/pressure/memory"));
+		if (text == null) {
+			return null;
+		}
+		Long some = null;
+		Long full = null;
+		for (String line : text.split("\n")) {
+			String[] fields = line.trim().split("\\s+");
+			for (String field : fields) {
+				if (field.startsWith("total=")) {
+					Long total = parseLong(field.substring("total=".length()));
+					if ("some".equals(fields[0])) {
+						some = total;
+					}
+					else if ("full".equals(fields[0])) {
+						full = total;
+					}
+				}
+			}
+		}
+		if (some == null && full == null) {
+			return null;
+		}
+		Map<String, Long> pressure = new LinkedHashMap<String, Long>();
+		pressure.put("someTotalMicros", some);
+		pressure.put("fullTotalMicros", full);
+		return pressure;
+	}
+
+	/**
+	 * The memory of the cgroup-v2 cgroup this JVM runs in — in a container, the container, llama-server
+	 * included: {@code currentKb} held now, {@code peakKb} the most held since the cgroup was created
+	 * ({@code memory.peak}, a 5.19 kernel; {@code null} before), {@code maxKb} its limit ({@code null} for
+	 * {@code max}, no limit on THIS cgroup), and {@code oomKills}, how many of its processes an OOM killer
+	 * took, the host's included ({@code memory.events}). {@code null} for the whole section when the JVM's
+	 * v2 cgroup cannot be located or carries no memory controller files; a cgroup-v1 host is not read.
+	 */
+	private static Map<String, Object> cgroupMemory(Path root) {
+		OwnCgroup v2 = ownCgroup(root, null);
+		String current = v2 == null ? null : readFile(v2.dir.resolve("memory.current"));
+		if (current == null) {
+			return null;
+		}
+		String peak = readFile(v2.dir.resolve("memory.peak"));
+		String max = readFile(v2.dir.resolve("memory.max"));
+		Map<String, Long> events = keyValues(v2.dir.resolve("memory.events"), " ");
+		Map<String, Object> memory = new LinkedHashMap<String, Object>();
+		memory.put("path", v2.path);
+		memory.put("currentKb", kilobytes(current));
+		memory.put("peakKb", peak == null ? null : kilobytes(peak));
+		memory.put("maxKb", max == null || "max".equals(max.trim()) ? null : kilobytes(max));
+		memory.put("oomKills", events == null ? null : events.get("oom_kill"));
+		return memory;
+	}
+
+	private static Long kilobytes(String bytes) {
+		Long parsed = parseLong(bytes.trim());
+		return parsed == null ? null : parsed / 1024;
+	}
+
+	/**
+	 * How full the filesystem holding {@code dataDirectory} is, in kilobytes. In a container the OpenMRS
+	 * data directory is a volume, so this is the disk the host keeps its container data on, the database's
+	 * volume normally among it. {@code null} when the directory does not exist or its store cannot be read.
+	 */
+	private static Map<String, Long> dataDisk(Path dataDirectory) {
+		try {
+			FileStore store = Files.getFileStore(dataDirectory);
+			Map<String, Long> disk = new LinkedHashMap<String, Long>();
+			disk.put("totalKb", store.getTotalSpace() / 1024);
+			disk.put("usableKb", store.getUsableSpace() / 1024);
+			return disk;
+		}
+		catch (IOException e) {
+			return null;
+		}
 	}
 
 	private static List<Double> loadAverage(Path root) {

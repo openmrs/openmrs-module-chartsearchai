@@ -30032,3 +30032,60 @@ his simvastatin?"* was the model's on each, and its one simvastatin chip was tha
 
 Pinned by `LlmInferenceServiceModelReadQuestionContextTest.aDrugNamedAsHisHeIsNotOnPublishesNoChipAgainstHisMedicationsWhereTheModelAnswers`,
 which failed before the change.
+
+## Decision 660: The host diagnostics say whether the OOM killer ran, what the container peaked at, and how full the disk is
+
+**Status: Accepted** (November 2026) — implemented, no issue. Extends
+[Decision 174](#decision-174-an-operator-without-a-shell-can-see-what-the-host-does-to-llama-server-and-pin-its-threads).
+
+### Context
+
+On 2026-11-18 the demo answered every REST call, `/session` included, with HTTP 500 *Unable to acquire JDBC
+Connection*, whose root cause was `java.net.UnknownHostException: db`: the MariaDB container was not running, while
+the backend's JVM, up since the 2026-11-17 21:50Z deploy, was. The compose file the host deploys
+(`openmrs-contrib-ansible-docker-compose`, `files/emr-3-ai/docker-compose.yml`) sets no `restart:` policy, so nothing
+started it again, and the host's nightly `docker-cleanup.sh` (02:00, `openmrs-contrib-itsmresources`
+`ansible/tasks/docker-config.yml`) runs `docker container prune -f` then `docker image prune -a -f`, which deletes a
+stopped container with its log and then its image.
+
+What the deploy logs (each run's *Deploy via scoped SSH* output) and the module's own records establish:
+
+- The 14:07Z deploy (run 44320767013) removed one exited container and created `db`, Alloy and monitoring-init
+  afresh, and downloaded only the layers of `grafana/alloy:v1.13.1` and the monitoring-init image. The `mariadb:10.11`
+  image therefore survived 02:00Z, so a container still used it then, and a stopped one would have been pruned: the
+  database died between 02:00Z and 13:59Z, when the server log's 200-entry window, the earliest it held, was already
+  all connection failures.
+- The audit log records no question after 2026-11-17 23:06Z. A question that took the database down could record
+  none, so this does not clear one; it says no question COMPLETED in that window.
+- Of the 42 deploys from 2026-10-28 to 2026-11-17 that reached the host, two found no container at all (2026-11-09
+  10:05Z, 2026-11-16 20:59Z) and the other 40 found `db` running and healthy. The four that redeployed an unchanged
+  image (2026-11-05 23:09Z, 2026-11-16 21:45Z, 2026-11-17 14:12Z and 22:53Z) restarted neither the backend nor the
+  database.
+- The host has 8 vCPUs, 30.8 GB of memory and no swap, and 26.9 GB were available at 14:07Z with no llama-server
+  running and the JVM resident at 2.3 GB (this endpoint, and `chartsearchai.demo.cpuInfo`).
+
+Why `mariadbd` stopped is in nothing this endpoint read: the kernel's log and the dead container's own are on the
+host, and the container's went with it when the deploy removed it.
+
+### The decision
+
+`GET /chartsearchai/hostdiagnostics` appends four readings, each `null` when it cannot be read:
+
+- `oomKills` — `oom_kill` of `/proc/vmstat`, the kills the host's OOM killer has made since boot. `/proc/vmstat` is
+  not namespaced, so it counts a kill in the database's container as well, and it survives this container being
+  recreated by the deploy that brings the database back.
+- `memoryPressure` — the PSI `some` and `full` stall totals of `/proc/pressure/memory`, since boot.
+- `cgroupMemory` — the backend container's cgroup-v2 `memory.current`, `memory.peak`, `memory.max` and the
+  `oom_kill` of `memory.events`: what it holds, the most it has held since it started, its limit, and its OOM kills.
+- `dataDisk` — total and usable space of the filesystem holding the OpenMRS data directory, a volume on the disk the
+  host keeps its container data on.
+
+Pinned by `HostDiagnosticsTest.read_shouldReportHowManyProcessesTheOomKillerHasKilledSinceTheHostBooted`,
+`read_shouldReportZeroOomKillsAsZeroAndAKernelWithoutTheCounterAsNull`,
+`read_shouldReportTheHostsMemoryPressureStallTotals`,
+`read_shouldReportTheMemoryThisJvmsCgroupHoldsPeakedAtAndLostToTheOomKiller`,
+`read_shouldReportTheLimitOfACgroupThatHasOneAndNoPeakWhereTheKernelKeepsNone`,
+`read_shouldReportHowFullTheDiskHoldingTheDataDirectoryIs` and
+`read_shouldReportNoDiskRatherThanAnEmptyOneForADataDirectoryThatDoesNotExist`, and by the field list of
+`ChartSearchAiHostDiagnosticsTest.hostDiagnostics_servesTheHostReadingToAnAdministrator`. Reading `"oom_kill"` under
+another key reddens the first two.

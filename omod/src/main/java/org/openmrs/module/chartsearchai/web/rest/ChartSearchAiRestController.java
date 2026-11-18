@@ -541,8 +541,9 @@ public class ChartSearchAiRestController {
 
 	/**
 	 * The host's CPU, memory and cgroup counters and the local llama-server's CPU time — what an operator
-	 * with no shell on the host needs to tell a starved inference server from a slow model. The body and
-	 * what each counter is for are {@link HostDiagnostics}'s; ADR Decision 174 is why it exists.
+	 * with no shell on the host needs to tell a starved inference server from a slow model — and its OOM
+	 * kills, memory stalls and disk, for a container that stopped with nobody watching. The body and what
+	 * each counter is for are {@link HostDiagnostics}'s; ADR Decisions 174 and 660 are why it exists.
 	 *
 	 * <p>Gated on core's {@code View Administration Functions}, not the {@code Get Global Properties}
 	 * {@link #drugReferenceStatus} accepts: the {@code llamaServer} section names a process id on the

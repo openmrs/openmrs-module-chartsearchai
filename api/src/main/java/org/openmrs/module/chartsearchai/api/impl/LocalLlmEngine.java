@@ -1017,6 +1017,14 @@ public class LocalLlmEngine implements LlmEngine {
 	 *       for her?" on the demo. cache_prompt stays on because the latency win is the whole
 	 *       point; the history is taken out instead, by restoring the saved prefix before every
 	 *       streaming query ({@link #kvQueryAction}, ADR Decision 157).</li>
+	 *   <li>{@code --cache-ram 0} — turn off llama-server's host-memory prompt cache, which is on at
+	 *       8192 MiB unless set. It saves the slot's whole state each time the slot moves to an unrelated
+	 *       prompt, and nothing this module sends is ever served from it: every answer restores its chart
+	 *       prefix from the module's disk entry first ({@link #kvQueryAction}), a prime runs with
+	 *       {@code cache_prompt} off, and a reading call's state is never the one saved. It is not the
+	 *       slot's own KV, which {@code cache_prompt} reuses and this flag leaves alone. Measured on the
+	 *       bundled server with Gemma 4 E4B: two entries, 330 and 434 MiB, per question on a
+	 *       12,400-token chart, held until the idle unload (ADR Decision 661).</li>
 	 *   <li>{@code --reasoning-budget 0} — disable reasoning channel; json_schema does not
 	 *       constrain it and Gemma 4 burns thousands of tokens before the answer.</li>
 	 * </ul>
@@ -1080,6 +1088,10 @@ public class LocalLlmEngine implements LlmEngine {
 		cmd.add("-ub");
 		cmd.add("1024");
 		cmd.add("--cache-reuse");
+		cmd.add("0");
+		// llama-server's host-memory prompt cache, 8192 MiB unless set: nothing this module sends is served
+		// from it, and it grows with every patient asked about. ADR Decision 661.
+		cmd.add("--cache-ram");
 		cmd.add("0");
 		cmd.add("--reasoning-budget");
 		cmd.add("0");

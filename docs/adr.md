@@ -30089,3 +30089,47 @@ Pinned by `HostDiagnosticsTest.read_shouldReportHowManyProcessesTheOomKillerHasK
 `read_shouldReportNoDiskRatherThanAnEmptyOneForADataDirectoryThatDoesNotExist`, and by the field list of
 `ChartSearchAiHostDiagnosticsTest.hostDiagnostics_servesTheHostReadingToAnAdministrator`. Reading `"oom_kill"` under
 another key reddens the first two.
+
+## Decision 661: The local engine launches llama-server with its in-RAM prompt cache off
+
+**Status: Accepted** (November 2026) — implemented, no issue.
+
+### Context
+
+llama-server keeps a host-memory prompt cache unless its command says otherwise: `--cache-ram`, 8192 MiB by default in
+the bundled build (`llama-server-natives` 1.0.0-20260615.194719-23, the one every image installs, whose log reads
+`prompt cache is enabled, size limit: 8192 MiB` under this module's command). When a request's prompt shares less than
+half of what the slot holds, the server copies the slot's whole state, context checkpoints included, into that cache and
+searches it for a closer prompt, evicting only past the limit.
+
+Nothing this module sends is served from it. Every answer restores its chart prefix from the module's own disk entry
+first (Decision 157), so the slot already holds the closest prompt; a prime runs with `cache_prompt` off; and a
+question-reading call's state is never the one saved, the restore that follows replacing it. What the cache does is hold
+memory until the idle unload.
+
+### Measured
+
+- The bundled build's macOS binary, Gemma 4 E4B and this module's launch command, replaying the module's sequence for
+  one question (a prime with `cache_prompt` off, a slot save, a question-reading call, a slot restore, the answer) over
+  six synthetic charts of about 12,400 tokens: each question left two entries, of about 330 and 434 MiB, and after six
+  the server reported 12 prompts holding 4,581 MiB against its 8,192 MiB limit. None of its 18 searches found a closer
+  prompt (similarity 0.016 or 0.043). With `--cache-ram 0` it saved no entry, and all six answers and question
+  readings, at temperature 0, were byte-identical to the first run's.
+- On the demo (2026-11-18, the cache on, one question on each of four patients' charts): llama-server resident at
+  7,834, 8,026, 8,225 and 8,437 MB after each, about 200 MB more per patient.
+
+That is not what stopped the demo's database on 2026-11-18: [Decision 660](#decision-660-the-host-diagnostics-say-whether-the-oom-killer-ran-what-the-container-peaked-at-and-how-full-the-disk-is)'s
+readings show no OOM kill on the host since it booted and 0.07 s of full memory stall. It is memory the host's other
+tenants — MariaDB, the JVM with its 7.5 GB default heap ceiling, Loki — were denied for nothing, and on the 15 GB host
+[Decision 174](#decision-174-an-operator-without-a-shell-can-see-what-the-host-does-to-llama-server-and-pin-its-threads)
+read, where 850 MB stayed available once llama-server loaded, a few patients' entries would have exhausted it.
+
+### The decision
+
+`LocalLlmEngine.buildServerCommand` adds `--cache-ram 0`. It touches neither the slot's own KV, which `cache_prompt`
+reuses, nor the disk entries `--slot-save-path` writes.
+
+Pinned by `LocalLlmPromptCacheContextTest.theServerIsLaunchedWithItsInRamPromptCacheOff`, which failed before the change,
+through `currentServerCommand`, the command `startServer` launches. The opt-in
+`LocalLlamaTokenCounterTest.realEngineCountMatchesInferenceUsageAndArmsIdleUnload`, which launches the bundled server
+through `startServer` and answers through it, passed with the flag.

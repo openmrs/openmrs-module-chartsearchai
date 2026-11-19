@@ -1102,6 +1102,9 @@ public class PatientClinicalContext {
 		/** @see #getConceptNames() */
 		private final Set<String> conceptNames;
 
+		/** @see #getPrescription() */
+		private final String prescription;
+
 		/** An order whose concept carries no ATC map — the majority in practice: only 85 of the 616
 		 *  Drug-class concepts in the 3.7.1 reference demo dictionary carry one (measured 2026-08-04,
 		 *  the same count {@code DrugReferenceService.findForActiveOrders} cites) — so the code-carrying
@@ -1241,6 +1244,14 @@ public class PatientClinicalContext {
 		private ActiveDrugOrder(String uuid, String display, Set<String> names, Set<String> atcCodes,
 				Set<String> administrationTerms, boolean nameKnown, String conceptUuid, Date scheduledStart,
 				Date startedOn, Set<String> conceptNames) {
+			this(uuid, display, names, atcCodes, administrationTerms, nameKnown, conceptUuid, scheduledStart, startedOn,
+					conceptNames, null);
+		}
+
+		private ActiveDrugOrder(String uuid, String display, Set<String> names, Set<String> atcCodes,
+				Set<String> administrationTerms, boolean nameKnown, String conceptUuid, Date scheduledStart,
+				Date startedOn, Set<String> conceptNames, String prescription) {
+			this.prescription = prescription;
 			this.conceptNames = conceptNames == null ? Collections.<String> emptySet()
 					: Collections.unmodifiableSet(new LinkedHashSet<String>(conceptNames));
 			this.scheduledStart = scheduledStart;
@@ -1396,7 +1407,33 @@ public class PatientClinicalContext {
 		/** This order, carrying {@code conceptNames} as {@link #getConceptNames()} (ADR Decision 623). */
 		ActiveDrugOrder withConceptNames(Set<String> conceptNames) {
 			return new ActiveDrugOrder(uuid, display, names, atcCodes, administrationTerms, nameKnown, conceptUuid,
-					scheduledStart, startedOn, conceptNames);
+					scheduledStart, startedOn, conceptNames, prescription);
+		}
+
+		/**
+		 * @return which PRESCRIPTION this order is (ADR Decision 663): the uuid of the first of her active orders this one
+		 *         repeats — this order's own uuid where it repeats none — or null where it was not read, which is every
+		 *         order built through this class's public constructors. Written in one place,
+		 *         {@link PatientClinicalContextBuilder}{@code .stampPrescriptions}, whose javadoc says what a repeat is: one
+		 *         orderable by core's own {@code Order.hasSameOrderableAs}, one care setting, one order type and one
+		 *         regimen.
+		 *
+		 *         <p>Two active orders sharing it are one prescription written again — a repeat order whose predecessor was
+		 *         never stopped, as the public demo's seed writes one at each visit — and not two in force. Core refuses a
+		 *         second active order of one orderable in one care setting, of the default drug order type and with an
+		 *         overlapping schedule, unless the client declares it parallel ({@code OrderServiceImpl.saveOrder},
+		 *         "Order.cannot.have.more.than.one"), so such pairs come from data written around that rule. A declared
+		 *         parallel order is not recorded as one, which is why the regimen must match too. Null is not a prescription
+		 *         shared with anything: an order whose prescription was not read is its own.
+		 */
+		public String getPrescription() {
+			return prescription;
+		}
+
+		/** This order, carrying {@code prescription} as {@link #getPrescription()} (ADR Decision 663). */
+		ActiveDrugOrder withPrescription(String prescription) {
+			return new ActiveDrugOrder(uuid, display, names, atcCodes, administrationTerms, nameKnown, conceptUuid,
+					scheduledStart, startedOn, conceptNames, prescription);
 		}
 
 		/** @return whether this order has started, which is every order {@link #getScheduledStart()}

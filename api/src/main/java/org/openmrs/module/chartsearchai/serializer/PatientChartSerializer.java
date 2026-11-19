@@ -1164,6 +1164,8 @@ public class PatientChartSerializer {
 
 		private final int orderCount;
 
+		private final int prescriptionCount;
+
 		private final String consequence;
 
 		/**
@@ -1175,9 +1177,22 @@ public class PatientChartSerializer {
 		 *        states and a one-order finding's sentence ends with ({@code DrugSafetyValidator.consequenceOfAdding})
 		 */
 		public AlreadyOrderedDrug(String drug, List<String> orders, int orderCount, String consequence) {
+			this(drug, orders, orderCount, orderCount, consequence);
+		}
+
+		/**
+		 * As {@link #AlreadyOrderedDrug(String, List, int, String)}, where those orders are fewer prescriptions (ADR
+		 * Decision 663).
+		 *
+		 * @param prescriptionCount how many prescriptions those orders are — fewer than {@code orderCount} where some are
+		 *        repeat orders of one ({@code DrugSafetyValidator.prescriptionCount})
+		 */
+		public AlreadyOrderedDrug(String drug, List<String> orders, int orderCount, int prescriptionCount,
+				String consequence) {
 			this.drug = drug;
 			this.orders = Collections.unmodifiableList(new ArrayList<String>(orders));
 			this.orderCount = orderCount;
+			this.prescriptionCount = prescriptionCount;
 			this.consequence = consequence;
 		}
 
@@ -1195,6 +1210,12 @@ public class PatientChartSerializer {
 			return orderCount;
 		}
 
+		/** How many prescriptions those orders are (ADR Decision 663). One where the orders are repeat orders of one
+		 *  prescription, which only the proposal would duplicate. */
+		public int getPrescriptionCount() {
+			return prescriptionCount;
+		}
+
 		/** What adding the drug would duplicate — the orders, or where one of them may carry another
 		 *  substance, the drug they carry (review round 3 of PR #554). Written beside the finding's sentence,
 		 *  so the clause after the question and a one-order finding cannot state two consequences. */
@@ -1209,7 +1230,7 @@ public class PatientChartSerializer {
 			}
 			AlreadyOrderedDrug that = (AlreadyOrderedDrug) other;
 			return drug.equals(that.drug) && orders.equals(that.orders) && orderCount == that.orderCount
-					&& consequence.equals(that.consequence);
+					&& prescriptionCount == that.prescriptionCount && consequence.equals(that.consequence);
 		}
 
 		@Override

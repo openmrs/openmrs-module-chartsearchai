@@ -1,0 +1,22 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!--
+  ADR Decision 663's control: a second active order of aspirin for patient 7 written for ANOTHER product of concept 88,
+  "Aspirin EC 325mg" (drug 966302), at order 111's regimen, in order 111's care setting (1). Core lets two products of one concept be active at once,
+  so these are two prescriptions carrying one substance: a possible duplicate therapy. Written at a later encounter (966302) than order 111,
+  so the product alone keeps the two apart.
+-->
+<dataset>
+	<encounter encounter_id="966302" encounter_type="2" patient_id="7" location_id="1" form_id="1"
+	           encounter_datetime="2009-01-10 00:00:00.0" creator="1" date_created="2009-01-10 00:00:00.0"
+	           voided="false" uuid="96630200-eeee-4000-8000-000000966302" />
+	<drug drug_id="966302" concept_id="88" name="Aspirin EC 325mg" combination="false" creator="1"
+	      date_created="2009-01-10 00:00:00.0" retired="false" uuid="96630200-cccc-4000-8000-000000966302" />
+	<orders order_id="966302" order_type_id="1" order_number="ORD-966302" urgency="ROUTINE"
+	        order_action="NEW" concept_id="88" orderer="1" instructions="1x daily"
+	        date_activated="2009-01-10 00:00:00.0" creator="1" date_created="2009-01-10 00:00:00.0"
+	        voided="false" patient_id="7" uuid="96630200-0000-4000-8000-000000966302"
+	        care_setting="1" encounter_id="966302" />
+	<drug_order order_id="966302" drug_inventory_id="966302" dose="325.0" dose_units="50" as_needed="false"
+	            frequency="1" dosing_type="org.openmrs.SimpleDosingInstructions" route="22"
+	            quantity="1.0" quantity_units="51" num_refills="0" dispense_as_written="0" />
+</dataset>

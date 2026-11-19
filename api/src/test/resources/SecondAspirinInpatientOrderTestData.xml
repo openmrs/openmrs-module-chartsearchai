@@ -1,0 +1,20 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!--
+  ADR Decision 663's control: a second active order of patient 7's aspirin (concept 88, drug 3, as order 111) written in
+  the INPATIENT care setting (2) while order 111 is OUTPATIENT (1). Core refuses a second active order of one orderable
+  only within one care setting, so these are two prescriptions, both in force: a possible duplicate therapy. Written at a later encounter (966301)
+  than order 111, so the care setting alone keeps the two apart.
+-->
+<dataset>
+	<encounter encounter_id="966301" encounter_type="2" patient_id="7" location_id="1" form_id="1"
+	           encounter_datetime="2009-01-10 00:00:00.0" creator="1" date_created="2009-01-10 00:00:00.0"
+	           voided="false" uuid="96630100-eeee-4000-8000-000000966301" />
+	<orders order_id="966301" order_type_id="1" order_number="ORD-966301" urgency="ROUTINE"
+	        order_action="NEW" concept_id="88" orderer="1" instructions="1x daily"
+	        date_activated="2009-01-10 00:00:00.0" creator="1" date_created="2009-01-10 00:00:00.0"
+	        voided="false" patient_id="7" uuid="96630100-0000-4000-8000-000000966301"
+	        care_setting="2" encounter_id="966301" />
+	<drug_order order_id="966301" drug_inventory_id="3" dose="325.0" dose_units="50" as_needed="false"
+	            frequency="1" dosing_type="org.openmrs.SimpleDosingInstructions" route="22"
+	            quantity="1.0" quantity_units="51" num_refills="0" dispense_as_written="0" />
+</dataset>

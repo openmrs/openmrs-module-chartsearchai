@@ -4700,7 +4700,10 @@ public class DrugReferenceInjector {
 		// branch), so the check compared the drug against what each resolves to — see the javadoc's residue.
 		// Beside orders the data does not identify, the count is of those it does: the drug was compared against
 		// them and no others, and the closing line names the rest (ADR Decision 161).
-		int n = context.getActiveDrugOrders().size() - unidentified;
+		// Repeat orders of one prescription are one medication (ADR Decision 663). Counted so only where every order is
+		// identified and started: those two clauses count ORDERS, and are left as they were.
+		int n = unidentified == 0 && scheduled == 0 ? DrugSafetyValidator.prescriptionCount(context.getActiveDrugOrders())
+				: context.getActiveDrugOrders().size() - unidentified;
 		String medications = scheduled > 0
 				? (n == 1 ? " medication order" : " medication orders")
 						+ (scheduled == n ? (n == 1 ? ", scheduled and not yet started" : ", all scheduled and not yet started")
@@ -7199,14 +7202,45 @@ public class DrugReferenceInjector {
 
 	/** Her orders were read and she has exactly ONE active order, of at most one substance the data screened — an order
 	 *  carrying several substances (a combination) screened those against each other, and is the screen note's, never
-	 *  this (ADR Decision 178). */
+	 *  this (ADR Decision 178) — or several started orders that are ONE prescription written again, which is one
+	 *  medication ({@link #onePrescription}, ADR Decision 663). */
 	private static boolean hasOneActiveOrder(PatientClinicalContext context, Set<Object> screenedSubstances) {
 		return hasOneActiveOrder(context, screenedSubstances.size());
 	}
 
 	private static boolean hasOneActiveOrder(PatientClinicalContext context, int screened) {
 		return context != null && screened <= 1 && context.activeDrugOrdersRead()
-				&& context.getActiveDrugOrders().size() == 1;
+				&& onePrescription(context.getActiveDrugOrders());
+	}
+
+	/** Whether {@code orders} are one active medication: one order, or several started orders of one prescription
+	 *  ({@link DrugSafetyValidator#prescriptionCount}, ADR Decision 663). */
+	private static boolean onePrescription(List<PatientClinicalContext.ActiveDrugOrder> orders) {
+		return orders.size() == 1 || orders.size() > 1 && DrugSafetyValidator.prescriptionCount(orders) == 1
+				&& !DrugSafetyValidator.anyHasNotStarted(orders);
+	}
+
+	/** {@code "This patient has one active medication order, NAME (started …), so there is no other active medication to
+	 *  "} — or, for repeat orders of one prescription, {@code "… one active medication, NAME (N orders, started …) …"}
+	 *  (ADR Decision 663) — followed by {@code verb}; the opening of a screen or a duplicate-therapy question with one
+	 *  active medication. A single order that has not started is a scheduled order (issue #553). */
+	private static String oneMedicationOpening(List<PatientClinicalContext.ActiveDrugOrder> orders, String verb) {
+		PatientClinicalContext.ActiveDrugOrder order = orders.get(0);
+		String display = order.getDisplay();
+		String name = order.hasKnownName() && display != null && !display.trim().isEmpty() ? display.trim()
+				: "recorded only by its codes";
+		// A started order says when, so one left unstopped for years is not read as taken today (ADR Decision 621).
+		String start = whenTheyStarted(orders);
+		if (orders.size() > 1) {
+			return "This patient has one active medication, " + name + " (" + orders.size() + " orders"
+					+ (start == null ? "" : ", " + start) + "), so there is no other active medication to " + verb;
+		}
+		return order.hasStarted()
+				? "This patient has one active medication order, " + name + (start == null ? "" : " (" + start + ")")
+						+ ", so there is no other active medication to " + verb
+				: "This patient has one medication order, " + name + " ("
+						+ PatientChartSerializer.scheduledToStart(order.getScheduledStart())
+						+ "), so there is no other active medication to " + verb;
 	}
 
 	/** Her orders were read and she has no active drug in any form — no order, no flattened name or code (issue #118's
@@ -7314,21 +7348,9 @@ public class DrugReferenceInjector {
 			return noneIdentifiedOpening(context) + "so there are none to check against each other.";
 		}
 		// ONE order has no pair to screen (ADR Decision 178).
+		// Repeat orders of one prescription are one medication too (ADR Decision 663).
 		if (findings.isEmpty() && hasOneActiveOrder(context, screened)) {
-			PatientClinicalContext.ActiveDrugOrder order = context.getActiveDrugOrders().get(0);
-			String display = order.getDisplay();
-			String name = order.hasKnownName() && display != null && !display.trim().isEmpty() ? display.trim()
-					: "recorded only by its codes";
-			// An order that has not started is a scheduled order, as every other sentence of the module's calls it
-			// (issue #553), and not one she is taking.
-			// A started order says when, so one left unstopped for years is not read as taken today (ADR Decision 621).
-			String start = whenTheyStarted(Collections.singletonList(order));
-			return order.hasStarted()
-					? "This patient has one active medication order, " + name + (start == null ? "" : " (" + start + ")")
-							+ ", so there is no other active medication to check it against."
-					: "This patient has one medication order, " + name + " ("
-							+ PatientChartSerializer.scheduledToStart(order.getScheduledStart())
-							+ "), so there is no other active medication to check it against.";
+			return oneMedicationOpening(context.getActiveDrugOrders(), "check it against.");
 		}
 		// ONE substance in several orders, every order identified and started, has no pair to screen either, and the
 		// finding that the orders share it follows (ADR Decision 228).
@@ -7993,7 +8015,7 @@ public class DrugReferenceInjector {
 		for (DrugReference entry : asProduct != null ? questionDrugs : questionDrugs.subList(0, 1)) {
 			ofIt.addAll(DrugSafetyValidator.ordersOfSubstance(drugReferenceService, entry, orderEntries, context));
 		}
-		int others = 0;
+		List<PatientClinicalContext.ActiveDrugOrder> otherOrders = new ArrayList<PatientClinicalContext.ActiveDrugOrder>();
 		for (PatientClinicalContext.ActiveDrugOrder order : context.getActiveDrugOrders()) {
 			if (ofIt.contains(order)) {
 				continue;
@@ -8001,8 +8023,10 @@ public class DrugReferenceInjector {
 			if (!order.hasStarted()) {
 				return null;
 			}
-			others++;
+			otherOrders.add(order);
 		}
+		// Her other MEDICATIONS: repeat orders of one prescription are one (ADR Decision 663).
+		int others = DrugSafetyValidator.prescriptionCount(otherOrders);
 		List<DrugReference> otherEntries = new ArrayList<DrugReference>();
 		for (DrugReference entry : orderEntries == null ? Collections.<DrugReference> emptyList() : orderEntries) {
 			if (!asked.contains(entry.substanceGroupKey())) {
@@ -10987,6 +11011,11 @@ public class DrugReferenceInjector {
 		List<PatientClinicalContext.ActiveDrugOrder> orders = context.getActiveDrugOrders();
 		if (hasNoActiveDrug(context)) {
 			return "This patient has no active medication orders, so there are none to compare.";
+		}
+		// Repeat orders of one prescription are one medication, with nothing to compare either (ADR Decision 663) — a
+		// repeat scheduled to start later included, which continues the one she takes.
+		if (orders.size() > 1 && DrugSafetyValidator.prescriptionCount(orders) == 1) {
+			return oneMedicationOpening(orders, "compare it with.");
 		}
 		if (orders.size() == 1) {
 			PatientClinicalContext.ActiveDrugOrder order = orders.get(0);

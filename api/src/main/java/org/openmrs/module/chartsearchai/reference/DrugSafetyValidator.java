@@ -5763,9 +5763,10 @@ public class DrugSafetyValidator {
 	 *     the drug through something other than its display — a code, a bridged concept, a recorded name
 	 *     the display is not — or is an order the module could read no name for, or the context carries no
 	 *     per-order structure. There is then no order whose printed name says it carries the drug.</li>
-	 * <li><b>One order is a caution</b> ({@link SafetyWarning#restsOnTheProposalAlone()}): only the
-	 *     proposal would duplicate it, so nothing about her current medication needs changing. Two or
-	 *     more orders of hers duplicate one another, and keep the unrated default.</li>
+	 * <li><b>One prescription is a caution</b> ({@link SafetyWarning#restsOnTheProposalAlone()}): only
+	 *     the proposal would duplicate it, so nothing about her current medication needs changing — one
+	 *     order, or repeat orders of one prescription ({@link #prescriptionCount}, ADR Decision 663). Two
+	 *     or more prescriptions of hers duplicate one another, and keep the unrated default.</li>
 	 * <li><b>And one order's sentence states what the proposal would do</b>
 	 *     ({@link #ADDING_IT_WOULD_DUPLICATE_THAT_ORDER}) where the others say <em>possible duplicate
 	 *     therapy</em>: with only the caution clause beside the order, the issue's cell restated that clause
@@ -5784,10 +5785,14 @@ public class DrugSafetyValidator {
 			CoMedications coMedications, boolean herOrder, List<PatientClinicalContext.ActiveDrugOrder> proposedHerOwn) {
 		List<PatientClinicalContext.ActiveDrugOrder> carriers =
 				coMedications.ordersWhoseDisplayNames(ref.substanceGroupKey());
-		if (carriers.size() < 2) {
+		// Repeat orders of one prescription duplicate nothing of hers (ADR Decision 663), so they are stated where one
+		// order is: as what a proposal would duplicate, and not at all otherwise.
+		if (carriers.size() < 2 || prescriptionCount(carriers) < 2) {
 			if (proposedHerOwn == null) {
 				return null;
 			}
+		}
+		if (carriers.size() < 2) {
 			carriers = new ArrayList<PatientClinicalContext.ActiveDrugOrder>();
 			for (PatientClinicalContext.ActiveDrugOrder order : proposedHerOwn) {
 				if (displayNamesADrug(order)
@@ -5803,12 +5808,12 @@ public class DrugSafetyValidator {
 		Map<String, Integer> ordersByDisplay = ordersByDisplay(carriers);
 		PatientChartSerializer.AlreadyOrderedDrug alreadyOrdered = proposedHerOwn != null
 				? new PatientChartSerializer.AlreadyOrderedDrug(ref.displayLabel(), orderLabels(ordersByDisplay, null),
-					carriers.size(), consequenceOfAdding(ref.displayLabel(), carriers.size(),
+					carriers.size(), prescriptionCount(carriers), consequenceOfAdding(ref.displayLabel(), carriers.size(),
 						anOrderMayCarryAnotherSubstance(carriers, ref.substanceGroupKey(), coMedications)))
 				: null;
-		// The one-order finding states the proposal's consequence where the others state duplicate therapy:
+		// The one-prescription finding states the proposal's consequence where the others state duplicate therapy:
 		// SafetyWarning.restsOnTheProposalAlone's condition, which is why its strength is a caution.
-		boolean proposalAlone = alreadyOrdered != null && alreadyOrdered.getOrderCount() == 1;
+		boolean proposalAlone = alreadyOrdered != null && alreadyOrdered.getPrescriptionCount() == 1;
 		SafetyWarning finding = SafetyWarning.substanceInSeveralActiveOrders(ref.displayLabel(),
 			ref.displayLabel() + (noneHasStarted(carriers) ? " is in " : " is already in ") + ordersNamed(carriers)
 					+ (proposalAlone ? " — " + alreadyOrdered.getConsequence() : " — possible duplicate therapy"),
@@ -5822,6 +5827,20 @@ public class DrugSafetyValidator {
 		return proposalAlone
 				? finding.withPartnerRows(Collections.singletonMap(ordersByDisplay.keySet().iterator().next(), rows))
 				: finding;
+	}
+
+	/**
+	 * How many prescriptions {@code orders} are (ADR Decision 663): orders sharing a
+	 * {@link PatientClinicalContext.ActiveDrugOrder#getPrescription()} count once, and an order whose prescription was not
+	 * read counts on its own. The one reading of that stamp, so the two duplicate-therapy findings cannot count it two ways.
+	 */
+	static int prescriptionCount(List<PatientClinicalContext.ActiveDrugOrder> orders) {
+		// An order whose prescription was not read stands for itself: ActiveDrugOrder keeps Object's identity equality.
+		Set<Object> prescriptions = new HashSet<Object>();
+		for (PatientClinicalContext.ActiveDrugOrder order : orders) {
+			prescriptions.add(order.getPrescription() == null ? order : order.getPrescription());
+		}
+		return prescriptions.size();
 	}
 
 	/**
@@ -5857,8 +5876,9 @@ public class DrugSafetyValidator {
 	 */
 	public static final String ADDING_IT_WOULD_DUPLICATE_THAT_ORDER = "adding it would duplicate that order";
 
-	/** {@link #ADDING_IT_WOULD_DUPLICATE_THAT_ORDER}'s plural, which only the clause after the question states:
-	 *  two or more orders keep issue #477's sentence. */
+	/** {@link #ADDING_IT_WOULD_DUPLICATE_THAT_ORDER}'s plural: the clause after the question states it, and so does the
+	 *  finding about repeat orders of one prescription (ADR Decision 663). Two or more prescriptions keep issue #477's
+	 *  sentence. */
 	static final String ADDING_IT_WOULD_DUPLICATE_THOSE_ORDERS = "adding it would duplicate those orders";
 
 	/**
@@ -6042,7 +6062,8 @@ public class DrugSafetyValidator {
 		for (List<DrugReference> rows : substanceRows(orderEntries).values()) {
 			Object substance = rows.get(0).substanceGroupKey();
 			List<PatientClinicalContext.ActiveDrugOrder> carriers = coMedications.ordersWhoseDisplayNames(substance);
-			if (carriers.size() < 2) {
+			// Repeat orders of one prescription are not a duplicate therapy (ADR Decision 663).
+			if (carriers.size() < 2 || prescriptionCount(carriers) < 2) {
 				continue;
 			}
 			shared.computeIfAbsent(carriers, k -> new ArrayList<String>())

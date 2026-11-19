@@ -1,0 +1,23 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!--
+  ADR Decision 663: an active mebendazole order for patient 7 (concept, name and drug supplied, since the standard dataset
+  carries none), which the shipped knowledge base relates to no row of her aspirin. Beside RepeatAspirinOrderTestData.xml
+  her other medication is one aspirin prescription in two orders. The encounter is order 111's own (3, patient 7).
+-->
+<dataset>
+	<concept concept_id="966307" retired="false" datatype_id="4" class_id="3" is_set="false" creator="1"
+	         date_created="2008-08-15 00:00:00.0" uuid="96630700-aaaa-4000-8000-000000966307" />
+	<concept_name concept_name_id="966307" concept_id="966307" name="Mebendazole" locale="en_GB" locale_preferred="1"
+	              concept_name_type="FULLY_SPECIFIED" creator="1" date_created="2008-08-15 00:00:00.0" voided="false"
+	              uuid="96630700-bbbb-4000-8000-000000966307" />
+	<drug drug_id="966307" concept_id="966307" name="Mebendazole" combination="false" creator="1"
+	      date_created="2008-08-15 00:00:00.0" retired="false" uuid="96630700-cccc-4000-8000-000000966307" />
+	<orders order_id="966307" order_type_id="1" order_number="ORD-966307" urgency="ROUTINE"
+	        order_action="NEW" concept_id="966307" orderer="1" instructions="1x daily"
+	        date_activated="2008-08-15 00:00:00.0" creator="1" date_created="2008-08-15 00:00:00.0"
+	        voided="false" patient_id="7" uuid="96630700-0000-4000-8000-000000966307"
+	        care_setting="1" encounter_id="3" />
+	<drug_order order_id="966307" drug_inventory_id="966307" dose="1.0" dose_units="51" as_needed="false"
+	            frequency="1" dosing_type="org.openmrs.SimpleDosingInstructions" route="22"
+	            quantity="1.0" quantity_units="51" num_refills="0" dispense_as_written="0" />
+</dataset>

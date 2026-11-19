@@ -35,6 +35,7 @@ import org.openmrs.api.context.Context;
 import org.openmrs.api.db.hibernate.HibernateUtil;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
+import org.openmrs.util.OpenmrsUtil;
 import org.openmrs.util.PrivilegeConstants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -129,6 +130,8 @@ final class PatientClinicalContextBuilder {
 		boolean activeDrugOrderUnaccountedFor = false;
 		boolean activeDrugIdentitiesComplete = true;
 		try {
+			// Each order this loop put on the list, by its position there, for stampPrescriptions (ADR Decision 663).
+			Map<Integer, DrugOrder> listed = new LinkedHashMap<Integer, DrugOrder>();
 			for (Order order : Context.getOrderService().getActiveOrders(patient, null, null, null)) {
 				if (!(order instanceof DrugOrder)) {
 					continue;
@@ -137,6 +140,17 @@ final class PatientClinicalContextBuilder {
 				int accountedOrders = activeOrders.size();
 				activeDrugOrderUnaccountedFor |= addDrugOrder(drugOrder, "Active", drugNames, atcCodes, activeOrders);
 				activeDrugIdentitiesComplete &= activeOrders.size() > accountedOrders;
+				if (activeOrders.size() > accountedOrders) {
+					listed.put(activeOrders.size() - 1, drugOrder);
+				}
+			}
+			try {
+				stampPrescriptions(listed, activeOrders);
+			}
+			catch (RuntimeException e) {
+				// Every order keeps its own prescription, which states every duplicate-therapy finding (ADR Decision 663).
+				log.warn("Could not group this patient's active drug orders into prescriptions ({}); each is taken for a "
+						+ "prescription of its own.", e.toString());
 			}
 		}
 		catch (RuntimeException e) {
@@ -753,6 +767,142 @@ final class PatientClinicalContextBuilder {
 		addRaw(names, codedDrugName);
 		addRaw(names, drugOrder.getDrugNonCoded());
 		addConceptName(names, drugOrder.getConcept());
+	}
+
+	/**
+	 * Stamps each order of {@code listed} — keyed by its position on {@code activeOrders} — with the PRESCRIPTION it is
+	 * (ADR Decision 663, {@code ActiveDrugOrder.getPrescription()}): the uuid of the earliest order of its prescription.
+	 *
+	 * <p>The orders are taken oldest first (then by uuid), so the answer is the chart's and never the order
+	 * {@code OrderService.getActiveOrders} returned them in, which it does not fix. Each joins the first prescription one
+	 * of whose orders it renews or {@link #repeats} and none of whose orders was written at its own visit, else starts its
+	 * own: an order continues the prescription when it repeats ANY order of it, so a repeat at a third visit of a renewal
+	 * at a changed dose joins the renewal's prescription; and two identical orders at one visit are a double entry — two
+	 * prescribers, or one twice — which is the duplicate the finding exists for, so a third order linking them both to an
+	 * earlier visit still leaves them two prescriptions.
+	 *
+	 * <p><b>A coded drug {@link #drug} could not READ is never compared</b>: that method is the one place this module
+	 * dereferences the association (issue #413), core's predicate compares the two {@code Drug}s, and a proxy
+	 * {@code drug} could not initialise is still uninitialised here. Such an order is its own prescription, and so is
+	 * one whose every comparison threw — each in its own try. Either way a duplicate-therapy finding a shared
+	 * prescription would have withdrawn is kept.
+	 */
+	private static void stampPrescriptions(Map<Integer, DrugOrder> listed,
+			List<PatientClinicalContext.ActiveDrugOrder> activeOrders) {
+		List<Map.Entry<Integer, DrugOrder>> oldestFirst = new ArrayList<Map.Entry<Integer, DrugOrder>>(listed.entrySet());
+		Collections.sort(oldestFirst, (x, y) -> {
+			Date a = x.getValue().getDateActivated();
+			Date b = y.getValue().getDateActivated();
+			int byDate = a == null ? (b == null ? 0 : 1) : b == null ? -1 : a.compareTo(b);
+			return byDate != 0 ? byDate : String.valueOf(x.getValue().getUuid()).compareTo(String.valueOf(y.getValue().getUuid()));
+		});
+		List<List<DrugOrder>> prescriptions = new ArrayList<List<DrugOrder>>();
+		for (Map.Entry<Integer, DrugOrder> entry : oldestFirst) {
+			DrugOrder order = entry.getValue();
+			List<DrugOrder> joined = null;
+			// Asked through drug(), the one accessor of the association (issue #413), so nothing here names it.
+			boolean comparable = !drug(order).unreadable;
+			if (comparable) {
+				for (List<DrugOrder> prescription : prescriptions) {
+					if (canJoin(order, prescription)) {
+						joined = prescription;
+						break;
+					}
+				}
+			}
+			if (joined == null) {
+				joined = new ArrayList<DrugOrder>();
+				// One that cannot be compared is its own prescription, and nothing is compared with it either.
+				if (comparable) {
+					prescriptions.add(joined);
+				}
+			}
+			joined.add(order);
+			activeOrders.set(entry.getKey(), activeOrders.get(entry.getKey()).withPrescription(joined.get(0).getUuid()));
+		}
+	}
+
+	/** Whether {@code order} may join {@code prescription}: it continues one of its orders, and none that it does not
+	 *  renew, nor is renewed by, was written at its own visit ({@link #sameVisit}). A member it could not be compared
+	 *  with joins nothing. */
+	private static boolean canJoin(DrugOrder order, List<DrugOrder> prescription) {
+		boolean continues = false;
+		for (DrugOrder member : prescription) {
+			try {
+				boolean renewal = renews(order, member);
+				if (!renewal && sameVisit(order, member)) {
+					return false;
+				}
+				continues |= renewal || repeats(order, member);
+			}
+			catch (RuntimeException e) {
+				log.warn("Could not compare active drug order {} with her active order {} ({}); they are taken for two "
+						+ "prescriptions, so a duplicate-therapy finding about them is still raised.", order.getUuid(),
+					member.getUuid(), e.toString());
+				return false;
+			}
+		}
+		return continues;
+	}
+
+	/** Whether one of two orders RENEWS the other — its {@code getPreviousOrder()} names it, either way, which core
+	 *  exempts from its refusal of a second active order — of one orderable, so a link written around core between two
+	 *  drugs never makes them one prescription. */
+	private static boolean renews(DrugOrder one, DrugOrder other) {
+		return (other.equals(one.getPreviousOrder()) || one.equals(other.getPreviousOrder())) && one.hasSameOrderableAs(other);
+	}
+
+	/** Whether two orders were written at one VISIT — the visit both encounters belong to, else one encounter where
+	 *  either has no visit — or where either records no encounter, which is never taken for a later visit. */
+	private static boolean sameVisit(Order one, Order other) {
+		if (one.getEncounter() == null || other.getEncounter() == null) {
+			return true;
+		}
+		if (one.getEncounter().getVisit() != null && other.getEncounter().getVisit() != null) {
+			return one.getEncounter().getVisit().equals(other.getEncounter().getVisit());
+		}
+		return one.getEncounter().equals(other.getEncounter());
+	}
+
+	/**
+	 * Whether {@code later} REPEATS {@code first} — written again with nothing changed:
+	 * <ul>
+	 * <li>core's own {@link Order#hasSameOrderableAs} calls them one orderable, in one care setting and of one order type,
+	 *     which is what core compares before refusing a second active order of the default drug order type;</li>
+	 * <li>and they state one regimen ({@link #sameDosing}): core lets a client save a second active order of one orderable
+	 *     where it declares them parallel, and nothing in the database records that, so 325 mg daily beside 650 mg as
+	 *     needed stay two prescriptions.</li>
+	 * </ul>
+	 * Core's predicate and never a drug comparison of our own, so what one orderable is (a coded drug, else a non-coded
+	 * name, on one concept) stays core's. The visit is {@link #canJoin}'s.
+	 */
+	private static boolean repeats(DrugOrder later, DrugOrder first) {
+		return first.hasSameOrderableAs(later) && sameCareSetting(first, later) && first.getOrderType() != null
+				&& first.getOrderType().equals(later.getOrderType()) && sameDosing(first, later);
+	}
+
+	private static boolean sameCareSetting(Order first, Order second) {
+		return first.getCareSetting() != null && first.getCareSetting().equals(second.getCareSetting());
+	}
+
+	/** Whether two drug orders state one regimen: the same dose and unit, frequency, route, as-needed and its condition,
+	 *  dosing type and free-text dosing instructions — each absent on both counting as the same, and blank text as absent
+	 *  (ADR Decision 663). */
+	private static boolean sameDosing(DrugOrder first, DrugOrder second) {
+		return OpenmrsUtil.nullSafeEquals(first.getDose(), second.getDose())
+				&& OpenmrsUtil.nullSafeEquals(first.getDoseUnits(), second.getDoseUnits())
+				&& OpenmrsUtil.nullSafeEquals(first.getFrequency(), second.getFrequency())
+				&& OpenmrsUtil.nullSafeEquals(first.getRoute(), second.getRoute())
+				&& Boolean.TRUE.equals(first.getAsNeeded()) == Boolean.TRUE.equals(second.getAsNeeded())
+				&& OpenmrsUtil.nullSafeEqualsIgnoreCase(text(first.getAsNeededCondition()), text(second.getAsNeededCondition()))
+				&& OpenmrsUtil.nullSafeEquals(first.getDosingType(), second.getDosingType())
+				&& OpenmrsUtil.nullSafeEqualsIgnoreCase(text(first.getDosingInstructions()),
+					text(second.getDosingInstructions()));
+	}
+
+	/** {@code value} trimmed, or null where it is blank. */
+	private static String text(String value) {
+		return value == null || value.trim().isEmpty() ? null : value.trim();
 	}
 
 	/**

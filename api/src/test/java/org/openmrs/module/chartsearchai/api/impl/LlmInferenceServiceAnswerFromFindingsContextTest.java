@@ -76,6 +76,9 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 
 	private static final String METFORMIN_ORDER = "AnswerFromFindingsMetforminOrderTestData.xml";
 
+	/** Patient 7's aspirin written again at a later visit, the earlier order never stopped (ADR Decision 663). */
+	private static final String REPEAT_ASPIRIN_ORDER = "RepeatAspirinOrderTestData.xml";
+
 	private static final String RIFAMPICIN_ORDER = "ListedMedicationsRifampicinOrderTestData.xml";
 
 	private static final String SECOND_RIFAMPICIN_ORDER = "ListedMedicationsSecondRifampicinOrderTestData.xml";
@@ -3771,6 +3774,198 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		assertTrue(answer.getAnswer().split("\n")[1].startsWith("Acetylsalicylic acid (aspirin) is in active orders ASPIRIN "
 				+ "(2 orders) — possible duplicate therapy."), answer.getAnswer());
 		assertEquals(0, provider.calls, answer.getAnswer());
+	}
+
+	/**
+	 * Repeat orders of one prescription are not a duplicate therapy (ADR Decision 663). On the public demo, which
+	 * re-orders every drug at each visit and never stops the earlier order, "is there a need for changing medications?" of
+	 * patient dd66e691 answered "4 possible duplicate therapies", each finding "a reason to change a medication this patient
+	 * is already taking": three NEW orders of one Retrovir drug in one care setting, a month apart. Such orders are one
+	 * prescription written again at each visit, never two in force. Patient 7's second ASPIRIN order here is order 111's
+	 * orderable, care setting and regimen, written at a later encounter.
+	 */
+	@Test
+	public void repeatOrdersOfOnePrescriptionAreNotADuplicateTherapy() throws Exception {
+		executeDataSet(REPEAT_ASPIRIN_ORDER);
+		for (String question : Arrays.asList(SCREEN, SAFETY_SCREEN, "is there a need for changing medications?",
+				"Does aspirin interact with his other medications?")) {
+			RecordingProvider provider = new RecordingProvider();
+			ChartAnswer answer = serviceWith(provider, shipped()).search(patient, question);
+
+			assertNoDuplicateTherapy(question, answer, provider);
+		}
+	}
+
+	/**
+	 * Her own drug proposed beside repeat orders of it states what the proposal would do, as one order does, and never a
+	 * duplicate therapy among her orders (ADR Decision 663): only the proposal would duplicate the prescription.
+	 */
+	@Test
+	public void herDrugProposedBesideRepeatOrdersOfItIsDuplicatedOnlyByTheProposal() throws Exception {
+		executeDataSet(REPEAT_ASPIRIN_ORDER);
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider, shipped()).search(patient, "Can I give him aspirin?");
+
+		assertNoDuplicateTherapy("Can I give him aspirin?", answer, provider);
+		boolean stated = false;
+		for (SafetyWarning chip : answer.getSafetyWarnings()) {
+			stated |= chip.getDetail().equals(
+				"Acetylsalicylic acid (aspirin) is already in active orders ASPIRIN (2 orders) — adding it would duplicate those "
+						+ "orders");
+		}
+		assertTrue(stated, "the proposal's consequence is stated: " + answer.getSafetyWarnings());
+	}
+
+	/**
+	 * Two prescriptions of one drug both in force are still a possible duplicate therapy (ADR Decision 663's controls): here
+	 * one order in each of two care settings, which core allows.
+	 */
+	@Test
+	public void twoPrescriptionsOfOneDrugInTwoCareSettingsAreStillAPossibleDuplicateTherapy() throws Exception {
+		assertPossibleDuplicateTherapy("SecondAspirinInpatientOrderTestData.xml");
+	}
+
+	/** {@link #twoPrescriptionsOfOneDrugInTwoCareSettingsAreStillAPossibleDuplicateTherapy}'s second control: two products
+	 *  of one concept in one care setting. */
+	@Test
+	public void twoProductsOfOneDrugInForceAreStillAPossibleDuplicateTherapy() throws Exception {
+		assertPossibleDuplicateTherapy("SecondAspirinProductOrderTestData.xml");
+	}
+
+	/** {@link #twoPrescriptionsOfOneDrugInTwoCareSettingsAreStillAPossibleDuplicateTherapy}'s third control: one product
+	 *  in one care setting at two regimens, as a client declaring them parallel writes them. */
+	@Test
+	public void twoRegimensOfOneProductInForceAreStillAPossibleDuplicateTherapy() throws Exception {
+		assertPossibleDuplicateTherapy("SecondAspirinParallelOrderTestData.xml");
+	}
+
+	/** {@link #twoPrescriptionsOfOneDrugInTwoCareSettingsAreStillAPossibleDuplicateTherapy}'s fourth control: one order
+	 *  entered twice at ONE visit — two prescribers, or one twice — is a double entry, not a repeat. */
+	@Test
+	public void oneOrderEnteredTwiceAtOneVisitIsStillAPossibleDuplicateTherapy() throws Exception {
+		assertPossibleDuplicateTherapy("SecondAspirinOrderTestData.xml");
+	}
+
+	/** A renewal of an order that was never stopped continues that prescription, as core's own refusal exempts it (ADR
+	 *  Decision 663): no duplicate therapy, though it states another dose. */
+	@Test
+	public void aRenewalOfAnOrderNeverStoppedIsNotADuplicateTherapy() throws Exception {
+		executeDataSet("RenewedAspirinOrderTestData.xml");
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider, shipped()).search(patient, SCREEN);
+
+		assertNoDuplicateTherapy(SCREEN, answer, provider);
+	}
+
+	/** A double entry at a later visit is still a duplicate therapy where each of its orders repeats an earlier one (ADR
+	 *  Decision 663): the earlier order links both, and still they are two prescriptions. */
+	@Test
+	public void aDoubleEntryAtAVisitAfterARepeatIsStillAPossibleDuplicateTherapy() throws Exception {
+		assertPossibleDuplicateTherapy("DoubleEntryAfterARepeatAspirinOrderTestData.xml");
+	}
+
+	/** Two prescribers at one visit, each in an encounter of their own, are a double entry too (ADR Decision 663): the
+	 *  visit decides it, never the encounter alone. */
+	@Test
+	public void aDoubleEntryInTwoEncountersOfOneVisitIsStillAPossibleDuplicateTherapy() throws Exception {
+		assertPossibleDuplicateTherapy("DoubleEntryInTwoEncountersOfOneVisitAspirinOrderTestData.xml");
+	}
+
+	/** A renewal link between two drugs, written around core, makes them no one medication (ADR Decision 663): asked
+	 *  about duplicate therapy, she has two to compare. */
+	@Test
+	public void aRenewalLinkBetweenTwoDrugsLeavesThemTwoMedications() throws Exception {
+		executeDataSet("RenewalLinkedToAnotherDrugOrderTestData.xml");
+		ChartAnswer answer = serviceWith(new RecordingProvider(), shipped()).search(patient, "Is she on any duplicate therapy?");
+
+		assertFalse(String.valueOf(answer.getAnswer()).startsWith("This patient has one active medication"),
+			String.valueOf(answer.getAnswer()));
+	}
+
+	/** A repeat at a later visit of a renewal at a changed dose is that renewal's prescription, so the three orders are
+	 *  one prescription and no duplicate therapy (ADR Decision 663). */
+	@Test
+	public void aRepeatOfARenewalAtAChangedDoseIsNotADuplicateTherapy() throws Exception {
+		executeDataSet("RenewedAspirinOrderTestData.xml");
+		executeDataSet("RepeatOfARenewedAspirinOrderTestData.xml");
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider, shipped()).search(patient, SCREEN);
+
+		assertNoDuplicateTherapy(SCREEN, answer, provider);
+	}
+
+	private void assertPossibleDuplicateTherapy(String... fixtures) throws Exception {
+		for (String fixture : fixtures) {
+			executeDataSet(fixture);
+		}
+		String fixture = Arrays.toString(fixtures);
+		ChartAnswer answer = serviceWith(new RecordingProvider(), shipped()).search(patient, SCREEN);
+
+		boolean stated = false;
+		for (SafetyWarning chip : answer.getSafetyWarnings()) {
+			stated |= chip.getDetail().startsWith("Acetylsalicylic acid (aspirin) is in active orders ")
+					&& chip.getDetail().endsWith(" — possible duplicate therapy");
+		}
+		assertTrue(stated, fixture + ": " + answer.getSafetyWarnings());
+	}
+
+	/**
+	 * Repeat orders of one prescription are ONE medication in the module's own answers, as one order is (ADR Decision
+	 * 663): a screen has nothing else to check it against, a duplicate-therapy question nothing to compare, and neither
+	 * goes to the model.
+	 */
+	@Test
+	public void repeatOrdersOfOnePrescriptionAreOneMedicationInTheModulesAnswer() throws Exception {
+		executeDataSet(REPEAT_ASPIRIN_ORDER);
+		String medication = "This patient has one active medication, ASPIRIN (2 orders, started 2008-08-15 and 2009-01-10), "
+				+ "so there is no other active medication to ";
+		for (String[] cell : new String[][] { { SCREEN, medication + "check it against." },
+				{ "Is she on any duplicate therapy?", medication + "compare it with." } }) {
+			RecordingProvider provider = new RecordingProvider();
+			ChartAnswer answer = serviceWith(provider, shipped()).search(patient, cell[0]);
+
+			assertEquals(0, provider.calls, cell[0] + " — " + answer.getAnswer());
+			assertTrue(answer.getAnswer().startsWith(cell[1]), cell[0] + " — " + answer.getAnswer());
+		}
+	}
+
+	/** A proposal related to none of her orders counts repeat orders of one prescription as the one medication they are
+	 *  (ADR Decision 663), as {@link #aProposalTheDataRelatesToNoneOfHerOrdersIsAnsweredWithWhatTheCheckEstablished}
+	 *  counts her one order. */
+	@Test
+	public void aProposalRelatedToNoneOfHerOrdersCountsRepeatOrdersAsOneMedication() throws Exception {
+		executeDataSet(REPEAT_ASPIRIN_ORDER);
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider, shipped()).search(patient, "Can I give her mebendazole?");
+
+		assertEquals(0, provider.calls, answer.getAnswer());
+		assertEquals("The interaction check relates Mebendazole to none of this patient's 1 active medication. ["
+				+ referenceRecordOf(answer, "mebendazole") + "]", answer.getAnswer());
+	}
+
+	/** Her drug asked about beside repeat orders of another of hers counts that other as ONE medication (ADR Decision
+	 *  663): her aspirin written again at a later visit is one other active medication, never two. */
+	@Test
+	public void herDrugAskedAboutCountsRepeatOrdersOfAnotherOfHersAsOneMedication() throws Exception {
+		executeDataSet("MebendazoleOrderTestData.xml");
+		executeDataSet(REPEAT_ASPIRIN_ORDER);
+		String question = "Does mebendazole interact with her other medications?";
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider, shipped()).search(patient, question);
+
+		assertEquals(0, provider.calls, answer.getAnswer());
+		assertTrue(answer.getAnswer().contains(". The interaction check relates it to none of this patient's 1 other active "
+				+ "medication. ["), answer.getAnswer());
+	}
+
+	private static void assertNoDuplicateTherapy(String question, ChartAnswer answer, RecordingProvider provider) {
+		for (SafetyWarning chip : answer.getSafetyWarnings()) {
+			assertFalse(chip.getDetail().contains("possible duplicate therapy"), question + " — chip: " + chip.getDetail());
+		}
+		assertFalse(String.valueOf(answer.getAnswer()).contains("possible duplicate therapy"),
+			question + " — answer: " + answer.getAnswer());
+		assertFalse(String.valueOf(provider.lastRecords).contains("possible duplicate therapy"),
+			question + " — prompt: " + provider.lastRecords);
 	}
 
 	/**

@@ -30192,3 +30192,83 @@ wrong one. The severity and the pair were right; the drug was not one she takes.
 Pinned by `NexiumOnEsomeprazoleConceptContextTest` (both cases failed on the earlier file: the screen named omeprazole,
 and the answer named no esomeprazole), `AmbiguousBrandNamedOrderTest.aBrandTheDataFilesUnderOneSubstanceIsThatSubstancesPrescription`,
 and the knowledge base's own `test_omeprazole_is_its_own_substance_and_esomeprazoles_brand_and_concepts_reach_only_esomeprazole`.
+
+## Decision 663: Repeat orders of one prescription are not a duplicate therapy
+
+**Status: Accepted** (November 2026) — the owner's request of 2026-11-20 to fix the duplicate-therapy false positive for
+repeat orders. It narrows the duplicate-therapy finding of issue #477
+([Decision 112](#decision-112-a-substance-already-in-two-of-the-patients-own-orders-is-stated-as-such-on-the-name-the-finding-prints)) and
+replaces the sentence of [Decision 622](#decision-622-repeat-orders-of-one-combination-are-not-a-pair-of-its-own-substances)
+that said *"The orders repeating it are still the duplicate-therapy finding."*
+
+### Context
+
+On the public demo (2026-11-20) *"is there a need for changing medications?"* for patient dd66e691 answered *"No Major
+interactions; 4 possible duplicate therapies and 9 cautions"*, each finding *"a reason to change a medication this patient
+is already taking"*. Read over REST, the twelve orders behind them are four drugs, each ordered as a NEW order at three
+monthly visits in 2006 (`Adult Visit` encounters), with no `previousOrder`, no stop or expiry date and no dosing: one
+prescription written again at each visit, the earlier never stopped. The demo seed writes every drug that way
+(Decisions 228 and 622 recorded it). OpenMRS core never lets that shape arise through its API: `OrderServiceImpl.saveOrder`
+refuses a second active order of one orderable, in one care setting, of the default drug order type and with an
+overlapping schedule ("Order.cannot.have.more.than.one") unless the client declares the two parallel. So two such active
+orders are either data written around that rule or a declared parallel order, and the evidence that settles which is the
+regimen and the visit.
+
+### The decision
+
+- **Her active drug orders are grouped into PRESCRIPTIONS** by `PatientClinicalContextBuilder.stampPrescriptions`, stamped
+  as `ActiveDrugOrder.getPrescription()` (the uuid of the prescription's earliest order). Oldest first, then by uuid, so
+  the grouping is the chart's and never the order `OrderService.getActiveOrders` returned. An order joins a prescription
+  where it continues ANY of its orders and none it does not renew was written at its own visit:
+  - it **repeats** one — core's own `Order.hasSameOrderableAs`, one care setting, one order type, and one regimen
+    (`sameDosing`: dose and unit, frequency, route, as-needed and its condition, dosing type, dosing instructions; blank
+    text as absent). The regimen separates a declared parallel order, which nothing in the database records;
+  - or it **renews** one — `getPreviousOrder()` names it, either way, of one orderable — which core exempts too;
+  - and two orders at one VISIT (the visit both encounters belong to, else one encounter) are a double entry — two
+    prescribers, or one twice — which is the duplicate the finding exists for, however a third order links them.
+  A coded drug `drug()` could not read is never compared (issue #413's single touch), and an order nothing could be
+  compared with is its own prescription, so every failure keeps the finding.
+- **`DrugSafetyValidator.prescriptionCount` is the one reading of the stamp.** Both duplicate-therapy producers
+  (`alreadyInSeveralOrders`, `addOrdersSharingASubstance`) need two prescriptions; repeat orders of her drug proposed
+  state what the proposal would do, a caution (`SafetyWarning.restsOnTheProposalAlone`, through
+  `AlreadyOrderedDrug.getPrescriptionCount()`), as one order does.
+- **The module's own answers count repeat orders as one medication**: a screen of one prescription says there is no other
+  active medication to check it against (*"This patient has one active medication, ASPIRIN (2 orders, started …)"*), a
+  duplicate-therapy question that there is none to compare it with, and *"relates X to none of this patient's N (other)
+  active medications"* counts prescriptions.
+
+### Measured
+
+On the demo replica (8088, the demo's seed), 22 patients × *"is there a need for changing medications?"*, *"any drug
+interactions?"* and *"Can I give him lamivudine?"*, through `/chartsearchai/search`, before (origin/main 9b811747e) and
+after this change; all 66 cells were module-answered both times. The patients were chosen by SQL over the replica's
+database (an approximation of core's active rule, used to pick the sample only): dd66e691, nine patients with repeat
+orders of single-drug products only, ten with a combination product beside a single drug it carries, and two more.
+Chips naming *"possible duplicate therapy"* fell from 175 in 61 cells to 73 in 41; all chips from 264 to 172; 28 of the
+66 answers changed. dd66e691 now reads *"No Major interactions; 9 cautions."* with the nine interaction cautions
+unchanged. Every duplicate finding left names two different products (a combination beside a drug it carries), a class
+(the ATC arm), or dd55bf65's two identical nevirapine orders at one encounter, a double entry. On the ten repeat-only
+lamivudine patients the proposal now states *"Lamivudine is already in active orders Lamivudine (N orders) — adding it
+would duplicate those orders"*. No chip other than a duplicate-therapy one was lost.
+
+### Residue
+
+- *"…to none of the N active medications the drug data identifies"* still counts orders where an order the data cannot
+  identify is present: the unidentified orders reach that sentence as a count, not a list.
+- No test isolates the order-type conjunct (a second drug order type would be needed).
+- Two orders of one product that differ only in free-text wording, or are filed under two `Drug` rows of one concept,
+  stay two prescriptions, and their finding stays: the module does not read wording as a regimen.
+
+Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest` — `.repeatOrdersOfOnePrescriptionAreNotADuplicateTherapy`,
+`.herDrugProposedBesideRepeatOrdersOfItIsDuplicatedOnlyByTheProposal`,
+`.repeatOrdersOfOnePrescriptionAreOneMedicationInTheModulesAnswer`,
+`.aProposalRelatedToNoneOfHerOrdersCountsRepeatOrdersAsOneMedication`,
+`.herDrugAskedAboutCountsRepeatOrdersOfAnotherOfHersAsOneMedication`, `.aRenewalOfAnOrderNeverStoppedIsNotADuplicateTherapy`,
+`.aRepeatOfARenewalAtAChangedDoseIsNotADuplicateTherapy`, `.aRenewalLinkBetweenTwoDrugsLeavesThemTwoMedications` — and
+its controls, each reddened by removing the conjunct it names:
+`.twoPrescriptionsOfOneDrugInTwoCareSettingsAreStillAPossibleDuplicateTherapy` (care setting),
+`.twoProductsOfOneDrugInForceAreStillAPossibleDuplicateTherapy` (orderable),
+`.twoRegimensOfOneProductInForceAreStillAPossibleDuplicateTherapy` (regimen),
+`.oneOrderEnteredTwiceAtOneVisitIsStillAPossibleDuplicateTherapy` and
+`.aDoubleEntryAtAVisitAfterARepeatIsStillAPossibleDuplicateTherapy` (encounter),
+`.aDoubleEntryInTwoEncountersOfOneVisitIsStillAPossibleDuplicateTherapy` (visit).

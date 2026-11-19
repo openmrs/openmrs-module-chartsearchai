@@ -1996,12 +1996,13 @@ public class SafetyWarning {
 	 * of PR #554). {@code DrugSafetyValidator.licensesWithholding} answers a caution for it: nothing about
 	 * the order she is on needs changing, and stated in the unrated default's withholding class, the record
 	 * would tell the model it is a reason to change her medication, and the prompt's ranking sentence would
-	 * hand it the lead over her other findings' cautions. Several orders of hers duplicate one another, so
-	 * that finding keeps the default. Set by the arm, through {@link #alreadyOrdered()}'s count, and never
-	 * read off the detail. Package-private, so it reaches no wire.
+	 * hand it the lead over her other findings' cautions. Several prescriptions of hers duplicate one another,
+	 * so that finding keeps the default; several repeat orders of ONE prescription do not, and are one order
+	 * here (ADR Decision 663). Set by the arm, through {@link #alreadyOrdered()}'s prescription count, and
+	 * never read off the detail. Package-private, so it reaches no wire.
 	 */
 	boolean restsOnTheProposalAlone() {
-		return alreadyOrdered != null && alreadyOrdered.getOrderCount() == 1;
+		return alreadyOrdered != null && alreadyOrdered.getPrescriptionCount() == 1;
 	}
 
 	/**

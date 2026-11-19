@@ -1,0 +1,16 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!--
+  ADR Decision 663: an active order of Triomune-30 (drug 2, concept 792) for patient 7 whose previous order is her aspirin
+  order 111 — a link between two drugs that core would refuse, written around it. A renewal is one prescription only of
+  one orderable, so these stay two medications. The encounter is order 111's own (3, patient 7).
+-->
+<dataset>
+	<orders order_id="966314" order_type_id="1" order_number="ORD-966314" urgency="ROUTINE"
+	        order_action="RENEW" previous_order_id="111" concept_id="792" orderer="1" instructions="1x daily"
+	        date_activated="2009-01-10 00:00:00.0" creator="1" date_created="2009-01-10 00:00:00.0"
+	        voided="false" patient_id="7" uuid="96631400-0000-4000-8000-000000966314"
+	        care_setting="1" encounter_id="3" />
+	<drug_order order_id="966314" drug_inventory_id="2" dose="1.0" dose_units="51" as_needed="false"
+	            frequency="1" dosing_type="org.openmrs.SimpleDosingInstructions" route="22"
+	            quantity="1.0" quantity_units="51" num_refills="0" dispense_as_written="0" />
+</dataset>

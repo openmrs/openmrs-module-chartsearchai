@@ -1,0 +1,20 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!--
+  ADR Decision 663's control: a second active order of patient 7's aspirin (concept 88, drug 3, outpatient, as order 111)
+  stating ANOTHER regimen — 650 mg beside order 111's 325 mg, all else alike — as a client declaring the two parallel writes
+  them. One orderable in one care setting, but two regimens both in force: a possible duplicate therapy. Written at a later encounter (966303) than order 111,
+  so the regimen alone keeps the two apart.
+-->
+<dataset>
+	<encounter encounter_id="966303" encounter_type="2" patient_id="7" location_id="1" form_id="1"
+	           encounter_datetime="2009-01-10 00:00:00.0" creator="1" date_created="2009-01-10 00:00:00.0"
+	           voided="false" uuid="96630300-eeee-4000-8000-000000966303" />
+	<orders order_id="966303" order_type_id="1" order_number="ORD-966303" urgency="ROUTINE"
+	        order_action="NEW" concept_id="88" orderer="1" instructions="1x daily"
+	        date_activated="2009-01-10 00:00:00.0" creator="1" date_created="2009-01-10 00:00:00.0"
+	        voided="false" patient_id="7" uuid="96630300-0000-4000-8000-000000966303"
+	        care_setting="1" encounter_id="966303" />
+	<drug_order order_id="966303" drug_inventory_id="3" dose="650.0" dose_units="50" as_needed="false"
+	            frequency="1" dosing_type="org.openmrs.SimpleDosingInstructions" route="22"
+	            quantity="1.0" quantity_units="51" num_refills="0" dispense_as_written="0" />
+</dataset>

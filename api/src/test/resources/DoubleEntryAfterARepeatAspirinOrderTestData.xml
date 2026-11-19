@@ -1,0 +1,27 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!--
+  ADR Decision 663: patient 7's aspirin (order 111's orderable, care setting and regimen) entered TWICE at one later visit
+  (encounter 966308): each repeats order 111, but two identical orders at one visit are a double entry — two prescribers,
+  or one twice — so they are two prescriptions, however order 111 links them.
+-->
+<dataset>
+	<encounter encounter_id="966308" encounter_type="2" patient_id="7" location_id="1" form_id="1"
+	           encounter_datetime="2009-01-10 00:00:00.0" creator="1" date_created="2009-01-10 00:00:00.0"
+	           voided="false" uuid="96630800-eeee-4000-8000-000000966308" />
+	<orders order_id="966308" order_type_id="1" order_number="ORD-966308" urgency="ROUTINE"
+	        order_action="NEW" concept_id="88" orderer="1" instructions="1x daily"
+	        date_activated="2009-01-10 00:00:00.0" creator="1" date_created="2009-01-10 00:00:00.0"
+	        voided="false" patient_id="7" uuid="96630800-0000-4000-8000-000000966308"
+	        care_setting="1" encounter_id="966308" />
+	<drug_order order_id="966308" drug_inventory_id="3" dose="325.0" dose_units="50" as_needed="false"
+	            frequency="1" dosing_type="org.openmrs.SimpleDosingInstructions" route="22"
+	            quantity="1.0" quantity_units="51" num_refills="0" dispense_as_written="0" />
+	<orders order_id="966309" order_type_id="1" order_number="ORD-966309" urgency="ROUTINE"
+	        order_action="NEW" concept_id="88" orderer="1" instructions="1x daily"
+	        date_activated="2009-01-10 00:00:00.0" creator="1" date_created="2009-01-10 00:00:00.0"
+	        voided="false" patient_id="7" uuid="96630900-0000-4000-8000-000000966309"
+	        care_setting="1" encounter_id="966308" />
+	<drug_order order_id="966309" drug_inventory_id="3" dose="325.0" dose_units="50" as_needed="false"
+	            frequency="1" dosing_type="org.openmrs.SimpleDosingInstructions" route="22"
+	            quantity="1.0" quantity_units="51" num_refills="0" dispense_as_written="0" />
+</dataset>

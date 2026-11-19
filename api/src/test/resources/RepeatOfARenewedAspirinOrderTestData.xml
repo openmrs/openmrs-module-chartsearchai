@@ -1,0 +1,18 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!--
+  ADR Decision 663: load after RenewedAspirinOrderTestData.xml. The renewal's regimen (162.5 mg) written again at a later
+  visit (encounter 966310): it repeats the renewal, not order 111, and is still that one prescription.
+-->
+<dataset>
+	<encounter encounter_id="966310" encounter_type="2" patient_id="7" location_id="1" form_id="1"
+	           encounter_datetime="2009-02-10 00:00:00.0" creator="1" date_created="2009-02-10 00:00:00.0"
+	           voided="false" uuid="96631000-eeee-4000-8000-000000966310" />
+	<orders order_id="966310" order_type_id="1" order_number="ORD-966310" urgency="ROUTINE"
+	        order_action="NEW" concept_id="88" orderer="1" instructions="1x daily"
+	        date_activated="2009-02-10 00:00:00.0" creator="1" date_created="2009-02-10 00:00:00.0"
+	        voided="false" patient_id="7" uuid="96631000-0000-4000-8000-000000966310"
+	        care_setting="1" encounter_id="966310" />
+	<drug_order order_id="966310" drug_inventory_id="3" dose="162.5" dose_units="50" as_needed="false"
+	            frequency="1" dosing_type="org.openmrs.SimpleDosingInstructions" route="22"
+	            quantity="1.0" quantity_units="51" num_refills="0" dispense_as_written="0" />
+</dataset>

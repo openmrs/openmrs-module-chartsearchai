@@ -1,0 +1,16 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!--
+  ADR Decision 663: a RENEW of patient 7's aspirin order 111 at a lower dose, naming order 111 as its previous order, while
+  order 111 was never stopped. Core exempts an order's own previous order from its refusal of a second active order, so
+  the renewal is that prescription continued, not a second one in force. The encounter is order 111's own (3, patient 7).
+-->
+<dataset>
+	<orders order_id="966305" order_type_id="1" order_number="ORD-966305" urgency="ROUTINE"
+	        order_action="RENEW" previous_order_id="111" concept_id="88" orderer="1" instructions="1x daily"
+	        date_activated="2009-01-10 00:00:00.0" creator="1" date_created="2009-01-10 00:00:00.0"
+	        voided="false" patient_id="7" uuid="96630500-0000-4000-8000-000000966305"
+	        care_setting="1" encounter_id="3" />
+	<drug_order order_id="966305" drug_inventory_id="3" dose="162.5" dose_units="50" as_needed="false"
+	            frequency="1" dosing_type="org.openmrs.SimpleDosingInstructions" route="22"
+	            quantity="1.0" quantity_units="51" num_refills="0" dispense_as_written="0" />
+</dataset>

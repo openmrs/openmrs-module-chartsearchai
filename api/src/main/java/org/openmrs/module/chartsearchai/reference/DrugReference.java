@@ -340,7 +340,7 @@ public class DrugReference {
 	 *   <li>{@link #getSubstanceId()} — the data's own IDENTITY for that substance, which either
 	 *       CONFIRMS the claim or withdraws it, because the claim over-merges. Among those 142 families
 	 *       sit pairs of genuinely different substances: {@code Omeprazole}/{@code Esomeprazole} (one
-	 *       {@code rxnorm_name}, one {@code rxcui}, one ATC code),
+	 *       {@code rxnorm_name}, one {@code rxcui}, one ATC code, until ADR Decision 662),
 	 *       {@code Amphetamine}/{@code Dextroamphetamine}, {@code Fenfluramine}/{@code Dexfenfluramine},
 	 *       {@code Gabapentin}/{@code Gabapentin enacarbil}, {@code Netupitant}/{@code Fosnetupitant},
 	 *       {@code Ketoconazole}/{@code Levoketoconazole}, {@code Fenofibrate}/{@code Fenofibric acid},
@@ -730,7 +730,7 @@ public class DrugReference {
 		// are NOT one — DrugSafetyValidator.entryForAtcCode folds every row publishing one ATC code, and
 		// 30 of the shipped KB's 2148 codes span more than one substance. Ungated the rung renames three
 		// of those across substances, including A02BC05 Omeprazole -> Esomeprazole: the shipped
-		// Omeprazole row carries rxnorm_name esomeprazole, so it does not name its own substance while
+		// Omeprazole row carried rxnorm_name esomeprazole until ADR Decision 662, so it does not name its own substance while
 		// Esomeprazole does, and the pair is the one DrugReference.substanceKey exists to keep apart.
 		if (incumbent.substanceGroupKey().equals(candidate.substanceGroupKey())
 		        && candidate.namesItsSubstance() && !incumbent.namesItsSubstance()) {
@@ -2266,7 +2266,7 @@ public class DrugReference {
 	 *         the mention is about this entry's substance. One alias is routinely shared by two
 	 *         substances — {@code hydrocortisone} is the display name of {@code Hydrocortisone} and an
 	 *         alias of {@code Hydrocortisone butyrate}, {@code esomeprazole} likewise for the two PPI rows
-	 *         the KB files under one {@code rxnorm_name} — so a set built by iterating the boolean admits
+	 *         the KB filed under one {@code rxnorm_name} until ADR Decision 662 — so a set built by iterating the boolean admits
 	 *         both, and only the name actually carried can be ranked. See
 	 *         {@link DrugReferenceService#findImpliedByQuery}.
 	 */

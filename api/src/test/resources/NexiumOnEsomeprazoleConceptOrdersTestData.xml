@@ -1,0 +1,65 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!--
+  A Nexium order written against the plain Esomeprazole concept (CIEL 75875), beside a Clopidogrel order,
+  for patient 7 of the standard test dataset — the shape measured on the 3.7.1 reference application demo
+  data (patient Patricia Garcia, 2026-11-18), where a screen of her medications named the prescription
+  "Omeprazole".
+
+  As that dictionary records it: the drug row is named "Nexium 40mg"; the concept's fully specified name is
+  "Esomeprazole" with "Nexium" among its synonyms; it maps to WHO ATC A02BC05; and its uuid is the one the
+  shipped knowledge base's CIEL bridge records for 75875. The knowledge base files that brand, that code and
+  that concept on its Omeprazole row as well as its Esomeprazole row. The encounter is order 111's own
+  (3, patient 7), so her aspirin order stays active beside these two.
+-->
+<dataset>
+	<concept_reference_source concept_source_id="9601" name="WHOATC" description="WHO ATC classification"
+	                          hl7_code="ATC9601" creator="1" date_created="2008-08-15 00:00:00.0" retired="false"
+	                          uuid="9601eeee-0000-4000-8000-00000009601a" />
+
+	<concept concept_id="9601" retired="false" datatype_id="4" class_id="3" is_set="false" creator="1"
+	         date_created="2008-08-15 00:00:00.0" uuid="75875AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" />
+	<concept_name concept_name_id="9601" concept_id="9601" name="Esomeprazole" locale="en_GB" locale_preferred="1"
+	              concept_name_type="FULLY_SPECIFIED" creator="1" date_created="2008-08-15 00:00:00.0" voided="false"
+	              uuid="9601bbbb-0000-4000-8000-00000009601a" />
+	<concept_name concept_name_id="9603" concept_id="9601" name="Nexium" locale="en_GB" locale_preferred="0"
+	              creator="1" date_created="2008-08-15 00:00:00.0" voided="false"
+	              uuid="9601bbbb-0000-4000-8000-00000009601b" />
+	<concept_reference_term concept_reference_term_id="9601" concept_source_id="9601" code="A02BC05"
+	                        retired="0" creator="1" date_created="2008-08-15 00:00:00.0"
+	                        uuid="9601ffff-0000-4000-8000-00000009601a" />
+	<concept_reference_map concept_map_id="9601" concept_reference_term_id="9601" concept_map_type_id="2"
+	                       concept_id="9601" creator="1" date_created="2008-08-15 00:00:00.0"
+	                       uuid="9601aaaa-1111-4000-8000-00000009601a" />
+	<drug drug_id="9601" concept_id="9601" name="Nexium 40mg" combination="false" creator="1"
+	      date_created="2008-08-15 00:00:00.0" retired="false" uuid="9601cccc-0000-4000-8000-00000009601a" />
+	<orders order_id="9601" order_type_id="1" order_number="ORD-9601" urgency="ROUTINE"
+	        order_action="NEW" concept_id="9601" orderer="1" instructions="1x daily"
+	        date_activated="2008-08-15 00:00:00.0" creator="1" date_created="2008-08-15 00:00:00.0"
+	        voided="false" patient_id="7" uuid="9601dddd-0000-4000-8000-00000009601a"
+	        care_setting="1" encounter_id="3" />
+	<drug_order order_id="9601" drug_inventory_id="9601" dose="1.0" dose_units="51" as_needed="false"
+	            frequency="1" dosing_type="org.openmrs.SimpleDosingInstructions" route="22"
+	            quantity="1.0" quantity_units="51" num_refills="0" dispense_as_written="0" />
+
+	<concept concept_id="9602" retired="false" datatype_id="4" class_id="3" is_set="false" creator="1"
+	         date_created="2008-08-15 00:00:00.0" uuid="9602aaaa-0000-4000-8000-00000009602a" />
+	<concept_name concept_name_id="9602" concept_id="9602" name="Clopidogrel" locale="en_GB" locale_preferred="1"
+	              concept_name_type="FULLY_SPECIFIED" creator="1" date_created="2008-08-15 00:00:00.0" voided="false"
+	              uuid="9602bbbb-0000-4000-8000-00000009602a" />
+	<concept_reference_term concept_reference_term_id="9602" concept_source_id="9601" code="B01AC04"
+	                        retired="0" creator="1" date_created="2008-08-15 00:00:00.0"
+	                        uuid="9602ffff-0000-4000-8000-00000009602a" />
+	<concept_reference_map concept_map_id="9602" concept_reference_term_id="9602" concept_map_type_id="2"
+	                       concept_id="9602" creator="1" date_created="2008-08-15 00:00:00.0"
+	                       uuid="9602aaaa-1111-4000-8000-00000009602a" />
+	<drug drug_id="9602" concept_id="9602" name="Clopidogrel 75mg" combination="false" creator="1"
+	      date_created="2008-08-15 00:00:00.0" retired="false" uuid="9602cccc-0000-4000-8000-00000009602a" />
+	<orders order_id="9602" order_type_id="1" order_number="ORD-9602" urgency="ROUTINE"
+	        order_action="NEW" concept_id="9602" orderer="1" instructions="1x daily"
+	        date_activated="2008-08-15 00:00:00.0" creator="1" date_created="2008-08-15 00:00:00.0"
+	        voided="false" patient_id="7" uuid="9602dddd-0000-4000-8000-00000009602a"
+	        care_setting="1" encounter_id="3" />
+	<drug_order order_id="9602" drug_inventory_id="9602" dose="1.0" dose_units="51" as_needed="false"
+	            frequency="1" dosing_type="org.openmrs.SimpleDosingInstructions" route="22"
+	            quantity="1.0" quantity_units="51" num_refills="0" dispense_as_written="0" />
+</dataset>

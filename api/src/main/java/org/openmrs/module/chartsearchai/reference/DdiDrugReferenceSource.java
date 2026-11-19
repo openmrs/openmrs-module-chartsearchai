@@ -68,12 +68,15 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * checkable by hash.
  *
  * <p><b>The release it came from, and the hash to check it against.</b> Commit
- * {@code 064e92699ac558edfe4764ca9c908bda01acad0e} of {@code dkayiwa/openmrs-ddi-knowledge-base} branch {@code cotrimoxazole} —
- * pull requests #9 (international names, schema 1.4) and #10 (clinical abbreviations, schema 1.5) of
- * {@code pbiondich/openmrs-ddi-knowledge-base}, bundled before upstream merged them on the owner's decision
- * (ADR Decision 183), and one commit on top of them mapping Sulfamethoxazole to its own RxCUI and naming
- * co-trimoxazole and co-amoxiclav under their ingredients (ADR Decision 266) — file {@code out/ddi_knowledge_base.json}:
- * 34,992,770 bytes, sha256 {@code 788bfbb7959dc96e54a8122a54669b912f241b2d8df7eaff92faf2f4a81ccaef}. Before that it was
+ * {@code b9c3188cc8db5976e12a0966b35b73db4714fcac} of {@code dkayiwa/openmrs-ddi-knowledge-base} branch
+ * {@code omeprazole-own-rxcui} — pull requests #9 (international names, schema 1.4) and #10 (clinical abbreviations,
+ * schema 1.5) of {@code pbiondich/openmrs-ddi-knowledge-base}, bundled before upstream merged them on the owner's
+ * decision (ADR Decision 183), one commit on top of them mapping Sulfamethoxazole to its own RxCUI and naming
+ * co-trimoxazole and co-amoxiclav under their ingredients (ADR Decision 266), and one mapping Omeprazole to its own
+ * RxCUI (ADR Decision 662) — file {@code out/ddi_knowledge_base.json}: 34,992,787 bytes, sha256
+ * {@code 817cc2fa486c7051510955a6995aab38eee6c84bc2697c5ebdc493ea6445823a}. Before that it was commit
+ * {@code 064e92699ac558edfe4764ca9c908bda01acad0e} of branch {@code cotrimoxazole} (sha256
+ * {@code 788bfbb7959dc96e54a8122a54669b912f241b2d8df7eaff92faf2f4a81ccaef}), before that
  * commit {@code c70fca0b96a33f57a0b41cbf26a2fbfb2aff7105} of branch {@code clinical-abbreviations} (sha256
  * {@code a96d18e76169fcb200027fa0f2665c771a953af117f6a5669018f6c3519f01a8}), and until ADR Decision 183 commit
  * {@code 66489ff3207bcb809968c3de81cfba94d05692ae} of the upstream repository (schema 1.3). In the source and not only
@@ -81,7 +84,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * commit message that is later superseded is not in the permanent record, and the file's own
  * {@code metadata} block carries a {@code schema_version} and no source ref, so nothing in-tree said
  * which release this is. Checkable without fetching 34 MB again: git's own blob id for this resource is
- * {@code 1b13f330356d3499aa4dbeeafde58d25f2e71600} ({@code git hash-object}), which is the id that
+ * {@code b531a3cd5e5b948a7cf000482caa53c3a039c926} ({@code git hash-object}), which is the id that
  * release's {@code out} tree entry carries — that identity is what was verified when this paragraph was
  * written, rather than the claim being taken on trust. A refresh moves every figure in this paragraph
  * and the packed size below, and whoever copies the file in restates them.
@@ -89,7 +92,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * <p>It used to be a 16-drug excerpt with the full file left to the operator to download,
  * which meant an install that enabled the feature and configured nothing got four curated drugs. Measured
  * through this parser on the shipped file: 0.6 s to parse cold, ~30 MB retained, 2.1 MB of packed jar for
- * the schema 1.0 file. The schema 1.3 refresh packs to 4,031,048 bytes, the schema 1.5 one to 4,033,159, and ADR Decision 266's to 4,033,250 (each
+ * the schema 1.0 file. The schema 1.3 refresh packs to 4,031,048 bytes, the schema 1.5 one to 4,033,159, ADR Decision 266's to 4,033,250 and Decision 662's to 4,033,229 (each
  * read off the built api jar's entry for it with {@code unzip -v}); all but about 40 KB of the 1.3 of the increase is three tables the schema 1.0 file
  * did not have, {@code disease_notes}, {@code disease_interactions} and {@code derived_interactions}
  * (issue #391). Of those, only {@code derived_interactions} is read, and only its rows whose rated side is
@@ -504,8 +507,8 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 	 * the rows publishing it share.
 	 *
 	 * <p><b>Why the DrugBank id, and why resolved per family rather than per row.</b> A
-	 * {@code rxnorm_name} over-merges: the KB files {@code Omeprazole} and {@code Esomeprazole} under
-	 * one, with one {@code rxcui} and one ATC code, and they are two substances (issue #121's
+	 * {@code rxnorm_name} over-merges: the KB filed {@code Omeprazole} and {@code Esomeprazole} under
+	 * one, with one {@code rxcui} and one ATC code, until ADR Decision 662, and they are two substances (issue #121's
 	 * {@code enalapril}/{@code enalaprilat} decision). Something has to veto that claim, and the
 	 * {@code drugbank_id} is the dataset's own substance-level registry — an identifier of a SUBSTANCE
 	 * rather than of a presentation, which is exactly the distinction a display name cannot make. So:

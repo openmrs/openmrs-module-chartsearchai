@@ -30133,3 +30133,62 @@ Pinned by `LocalLlmPromptCacheContextTest.theServerIsLaunchedWithItsInRamPromptC
 through `currentServerCommand`, the command `startServer` launches. The opt-in
 `LocalLlamaTokenCounterTest.realEngineCountMatchesInferenceUsageAndArmsIdleUnload`, which launches the bundled server
 through `startServer` and answers through it, passed with the flag.
+
+## Decision 662: Omeprazole is its own substance in the knowledge base, so a Nexium prescription is esomeprazole
+
+**Status: Accepted** (November 2026) — the owner's request of 2026-11-19 to finish and push the esomeprazole fix found
+by a DDI check on the 3.7.1 standalone; the knowledge-base half bundled before upstream review, as
+[Decision 266](#decision-266-co-trimoxazole-is-checked-as-both-of-its-ingredients-by-every-name-a-clinician-writes-it-with)'s
+was.
+
+### Context
+
+On the 3.7.1 standalone Patricia Garcia, on `Nexium 40mg` and `Clopidogrel 75mg`, asked *"Do any of her current
+medications interact with each other?"*, read *"1 Major interaction — Omeprazole with Clopidogrel … Omeprazole from
+Nexium 40mg."* Nexium is esomeprazole. The knowledge base's `Omeprazole` row (`DDInter1340`, DrugBank `DB00338`) had been
+matched to esomeprazole's RxCUI (283742), so it carried esomeprazole's `rxnorm_name`, its ATC code `A02BC05`, its brands
+`Nexium` and `Vimovo`, and its CIEL concepts (75875 `Esomeprazole`, 75876 `Esomeprazole magnesium` and three esomeprazole
+kits). Every leg resolving her order — its name, its code, its concept — reached both rows, and the module named the
+wrong one. The severity and the pair were right; the drug was not one she takes.
+
+### The decision
+
+- **The knowledge base maps the row to omeprazole** — `dkayiwa/openmrs-ddi-knowledge-base` commit `b9c3188` (branch
+  `omeprazole-own-rxcui`, on top of `cotrimoxazole`): a `mismatch` curation override (RxCUI 7646), and 7646's own facts
+  from RxNav in the caches (ATC `A02BC01`; brands `Gastrobim`, `Konvomep`, `Prilosec`, `Primeguard`, `Talicia`,
+  `UlcerGard`, `Yosprala`, `Zegerid Reformulated Aug 2006`), so the build gives the row omeprazole's CIEL concepts.
+  283742 keeps its own facts for the `Esomeprazole` row. The rebuilt file changes that one drug row and nothing else;
+  `DdiDrugReferenceSource`'s javadoc carries the commit, size and hashes.
+- **Nothing in this module changes but the bundled file.** A Nexium order now resolves to esomeprazole alone, so the
+  screen names it, and *"Can I give her esomeprazole?"* is told she already takes it. On the standalone after
+  deploying: Patricia Garcia's screen reads *"1 Major interaction — Esomeprazole with Clopidogrel"*; *"Can I give her
+  omeprazole?"* now also states *"Omeprazole is in the same ATC class (A02BC) as active order Esomeprazole — possible
+  duplicate therapy"*, which the shared brand had silenced; six other DDI questions on six other patients answered
+  byte-identically to the earlier file; and `drugreferencestatus` reports the row gone from both identity findings
+  (`alias-names-another-substance` 18 → 17, `substance-name-contradicted-by-the-bridge` 5 → 4).
+
+### What the change moved, read rather than absorbed
+
+- `AmbiguousBrandNamedOrderTest` listed Nexium as one of four brands filed under two substances. It is now one
+  substance's, so its row leaves the list and a case pins that instead; the cases that used it run on `Neurontin`
+  (gabapentin and gabapentin enacarbil, both `N02BF01`), asked about pregabalin where they asked about pantoprazole.
+- `DrugInPlayHerOwnOrderReferentTest`'s six proton-pump-inhibitor cases and one `CurrentMedicationOrdersTest` case need a
+  brand, a code and a bridged concept each filed under two substances. They run over
+  `ddi-ppi-brand-code-bridge-shared.json`, a verbatim slice of the release before this one, as Decision 266 kept its
+  slices; so do `ddi-duplicate-therapy-self.json` and `ddi-interaction-route-variants.json`, whose PPI shapes need the
+  earlier row: each says so in its note and leaves `SlicedReferenceRowProvenanceTest`'s list.
+- `BridgedConceptLegBoundsTest`'s figures, measured by running its two walks through the real accessors over both files
+  (the earlier file reproduced every pinned figure first): 4254 bridged concepts, up from 4251, the three omeprazole
+  concepts no row carried; 15 where the ranking drops a filed row, down from 16 (`Esomeprazole`); 239 intersection
+  narrowings, down from 241 (the two omeprazole and sodium bicarbonate combinations, now filed on the Omeprazole row);
+  1113 multi-substance concepts, unchanged by two moves that cancel; 103 of them not named whole, down from 107
+  (`Esomeprazole magnesium` and the three kits); 5829 attributions, up from 5828; 130 refused, down from 134.
+- `shipped-brand-aliases.txt` gains `gastrobim`, `prilosec`, `primeguard` and `ulcergard`, read first: none is a word
+  clinical prose uses in another sense.
+- Javadoc that stated the old row as the present shipped data now says it held until this decision, or names the
+  Neurontin family where a current example was wanted. The many places that cite the PPI shape as what a review or
+  issue measured are records of that time and stay as written.
+
+Pinned by `NexiumOnEsomeprazoleConceptContextTest` (both cases failed on the earlier file: the screen named omeprazole,
+and the answer named no esomeprazole), `AmbiguousBrandNamedOrderTest.aBrandTheDataFilesUnderOneSubstanceIsThatSubstancesPrescription`,
+and the knowledge base's own `test_omeprazole_is_its_own_substance_and_esomeprazoles_brand_and_concepts_reach_only_esomeprazole`.

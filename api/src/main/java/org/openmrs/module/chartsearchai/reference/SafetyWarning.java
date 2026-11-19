@@ -1254,8 +1254,8 @@ public class SafetyWarning {
 	 * she takes — a recorded name of hers names its substance, or puts it in play alone; a code of hers the
 	 * data files under it alone; or a concept of hers the dataset's bridge files it under by a name naming
 	 * it — and false where they do not (issue #402, ADR Decision 123). That includes a substance her orders
-	 * resolve to only as one of several readings: her {@code Nexium 40mg} resolves to omeprazole and
-	 * esomeprazole and establishes neither. It is false too where every order of hers establishing it is
+	 * resolve to only as one of several readings: her {@code Neurontin 300mg} resolves to gabapentin and
+	 * gabapentin enacarbil and establishes neither. It is false too where every order of hers establishing it is
 	 * coded only as a locally applied presentation of a drug the data also files outside those groups, the
 	 * question then possibly proposing that other presentation, unless the question lists the drug as one
 	 * she is on ({@code DrugSafetyValidator.currentMedicationsInPlay}). That one answer per drug in play is stated

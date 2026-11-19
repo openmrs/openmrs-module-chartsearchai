@@ -1,0 +1,142 @@
+{
+ "metadata": {
+  "note": "Verbatim DDInter slice of the knowledge base this module bundled before ADR Decision 662 (dkayiwa/openmrs-ddi-knowledge-base 064e926, sha256 788bfbb7959dc96e54a8122a54669b912f241b2d8df7eaff92faf2f4a81ccaef): omeprazole as that release filed it, under esomeprazole's RxCUI, rxnorm_name, ATC code A02BC05, brands Nexium and Vimovo and CIEL concepts 75875 and 75876, beside esomeprazole and clopidogrel. So one brand, one code and one bridged concept each resolve two substances, the shape DrugInPlayHerOwnOrderReferentTest's PPI cases need. Decision 662 corrected the omeprazole row upstream, so the shipped file no longer has that shape and this slice is not held to it. Rows are field-for-field their rows in that release, in KB order, and the interaction rows are every pair among them, with the mechanisms they cite."
+ },
+ "mechanisms": {
+  "3363": {
+   "text": "Coadministration with proton pump inhibitors (PPIs) may reduce the cardioprotective effects of clopidogrel. The proposed mechanism is PPI inhibition of the CYP450 2C19-mediated metabolic bioactivation of clopidogrel.",
+   "categories": [
+    "metabolism"
+   ]
+  }
+ },
+ "drugs": [
+  {
+   "id": "DDInter1340",
+   "name": "Omeprazole",
+   "rxcui": "283742",
+   "rxnorm_name": "esomeprazole",
+   "drugbank_id": "DB00338",
+   "atc": [
+    "A02BC05"
+   ],
+   "brand_names": [
+    "Nexium",
+    "Vimovo"
+   ],
+   "international_names": [],
+   "abbreviations": [],
+   "ciel": [
+    {
+     "code": "167977",
+     "uuid": "2d7b158c-5f97-449b-b0e9-46f75c82a42f",
+     "name": "Amoxicillin / Esomeprazole / Levofloxacin combination kit"
+    },
+    {
+     "code": "167978",
+     "uuid": "cb933181-fd92-4725-91d5-2e851c9eb0b5",
+     "name": "Clarithromycin / Esomeprazole / Levofloxacin combination kit"
+    },
+    {
+     "code": "167995",
+     "uuid": "a78c9f7d-87b8-4216-9153-53e14e5911aa",
+     "name": "Amoxicillin / clarithromycin / esomeprazole combination kit"
+    },
+    {
+     "code": "75875",
+     "uuid": "75875AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Esomeprazole"
+    },
+    {
+     "code": "75876",
+     "uuid": "75876AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Esomeprazole magnesium"
+    }
+   ]
+  },
+  {
+   "id": "DDInter413",
+   "name": "Clopidogrel",
+   "rxcui": "32968",
+   "rxnorm_name": "clopidogrel",
+   "drugbank_id": "DB00758",
+   "atc": [
+    "B01AC04"
+   ],
+   "brand_names": [
+    "Plavix"
+   ],
+   "international_names": [],
+   "abbreviations": [],
+   "ciel": [
+    {
+     "code": "169229",
+     "uuid": "1304b943-339f-403f-aca9-c47b7779c9c7",
+     "name": "Aspirin / clopidogrel"
+    },
+    {
+     "code": "73602",
+     "uuid": "73602AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Clopidogrel"
+    }
+   ]
+  },
+  {
+   "id": "DDInter676",
+   "name": "Esomeprazole",
+   "rxcui": "283742",
+   "rxnorm_name": "esomeprazole",
+   "drugbank_id": "DB00736",
+   "atc": [
+    "A02BC05"
+   ],
+   "brand_names": [
+    "Nexium",
+    "Vimovo"
+   ],
+   "international_names": [],
+   "abbreviations": [],
+   "ciel": [
+    {
+     "code": "167977",
+     "uuid": "2d7b158c-5f97-449b-b0e9-46f75c82a42f",
+     "name": "Amoxicillin / Esomeprazole / Levofloxacin combination kit"
+    },
+    {
+     "code": "167978",
+     "uuid": "cb933181-fd92-4725-91d5-2e851c9eb0b5",
+     "name": "Clarithromycin / Esomeprazole / Levofloxacin combination kit"
+    },
+    {
+     "code": "167995",
+     "uuid": "a78c9f7d-87b8-4216-9153-53e14e5911aa",
+     "name": "Amoxicillin / clarithromycin / esomeprazole combination kit"
+    },
+    {
+     "code": "75875",
+     "uuid": "75875AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Esomeprazole"
+    },
+    {
+     "code": "75876",
+     "uuid": "75876AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Esomeprazole magnesium"
+    }
+   ]
+  }
+ ],
+ "interactions": [
+  [
+   "DDInter1340",
+   "DDInter413",
+   "Major",
+   "3363"
+  ],
+  [
+   "DDInter413",
+   "DDInter676",
+   "Major",
+   "3363"
+  ]
+ ]
+}

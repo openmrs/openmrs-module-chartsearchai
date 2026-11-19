@@ -166,15 +166,17 @@ public class CurrentMedicationOrdersTest {
 	/**
 	 * Which of her orders a drug-in-play chip lists is which of them ESTABLISH she takes its substance — the
 	 * orders its {@code aboutACurrentMedication} was decided on (ADR Decision 123) — and not every order her
-	 * resolution reaches it through. The shipped knowledge base files the brand {@code Nexium} under
+	 * resolution reaches it through. The release before ADR Decision 662 filed the brand {@code Nexium} under
 	 * Omeprazole and Esomeprazole, so her {@code Nexium 40mg} order resolves to omeprazole without naming it
-	 * ({@code DrugInPlayHerOwnOrderReferentTest}); her {@code Omeprazole 20mg} order is what makes an
-	 * omeprazole chip about her medication, and it is the one the chip names.
+	 * ({@code DrugInPlayHerOwnOrderReferentTest}, whose slice of that release this case runs over, since the
+	 * shipped file no longer has the shape); her {@code Omeprazole 20mg} order is what makes an omeprazole chip
+	 * about her medication, and it is the one the chip names.
 	 */
 	@Test
-	public void aDrugInPlayChipListsTheOrdersThatEstablishSheTakesItAndNotOneThatMerelyResolvesToIt() {
-		DrugReferenceService service = DrugReferenceTestSupport.serviceWithGroups(
-				DrugReferenceTestSupport.shippedEntries());
+	public void aDrugInPlayChipListsTheOrdersThatEstablishSheTakesItAndNotOneThatMerelyResolvesToIt()
+			throws Exception {
+		DrugReferenceService service = DrugReferenceTestSupport.serviceWithGroups(DrugReferenceTestSupport
+				.ddiFixtureEntries("chartsearchai-test/ddi-ppi-brand-code-bridge-shared.json"));
 		PatientClinicalContext.ActiveDrugOrder omeprazole =
 				DrugReferenceTestSupport.activeOrder("uuid-omeprazole", "Omeprazole 20mg", "omeprazole 20mg");
 		PatientClinicalContext.ActiveDrugOrder nexium =

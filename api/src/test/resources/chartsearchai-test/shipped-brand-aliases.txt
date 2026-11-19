@@ -1428,6 +1428,7 @@ gardasil
 gardasil 9
 garzulys
 gas-x with maalox
+gastrobim
 gastrocrom
 gattex
 gavilax
@@ -2640,10 +2641,12 @@ prezista
 prialt
 pributazone
 priftin
+prilosec
 primatene mist inhaler
 primatene with ephedrine
 primatene with ephedrine & guaifenesin
 primaxin
+primeguard
 primlev
 primsol
 prinivil
@@ -3397,6 +3400,7 @@ uceris
 udderblend
 udderdine
 udenyca
+ulcergard
 uloric
 ulspira
 ultacan

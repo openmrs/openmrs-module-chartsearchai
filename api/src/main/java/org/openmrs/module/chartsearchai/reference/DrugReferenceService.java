@@ -655,7 +655,7 @@ public class DrugReferenceService {
 	 * unfiltered predicate made the residue look like a 1-in-92 carve-out rather than the 1-in-4 it
 	 * is. Among the 1112 are CIEL 77719 ({@code Hydrocortisone acetate} → Hydrocortisone AND
 	 * Hydrocortisone butyrate) and CIEL 75876 ({@code Esomeprazole magnesium} → Esomeprazole AND
-	 * Omeprazole), and also CIEL 103166 ({@code Abacavir / lamivudine} → Abacavir AND Lamivudine),
+	 * Omeprazole, until ADR Decision 662), and also CIEL 103166 ({@code Abacavir / lamivudine} → Abacavir AND Lamivudine),
 	 * which is a real fixed-dose combination and not an ambiguity at all. That is issue #209's own
 	 * shape, and it is not narrowed here for the reason the next paragraph gives.
 	 *
@@ -738,12 +738,12 @@ public class DrugReferenceService {
 	 * <p><b>Why naming and not counting.</b> The refusal it serves used to be "this order's bridged
 	 * answer spans more than one {@code substanceGroupKey}", which cannot tell "the module knows the
 	 * prescription is one of these and cannot say which" ({@code Esomeprazole magnesium} →
-	 * Esomeprazole AND Omeprazole) from "the prescription genuinely CONTAINS all of these"
+	 * Esomeprazole AND Omeprazole, before ADR Decision 662) from "the prescription genuinely CONTAINS all of these"
 	 * ({@code Abacavir / lamivudine} → Abacavir AND Lamivudine). Measured over the shipped knowledge
 	 * base, 990 of the 1112 multi-substance bridged concepts have a recorded name that NAMES every substance they
 	 * resolve, and the count refused every one of them — what the figure counts, and not a count of combinations: a
 	 * derivative name naming its parent moiety satisfies it too (ADR Decision 68 has both shares). Naming separates
-	 * the two PER SUBSTANCE: for CIEL 75876 it admits Esomeprazole and refuses Omeprazole out of one answer.
+	 * the two PER SUBSTANCE: for CIEL 75876 it admitted Esomeprazole and refused Omeprazole out of one answer.
 	 *
 	 * <p><b>{@link #findNamedSubstances} is the accessor for that question</b> — CLAUDE.md designates
 	 * it "ask it before PRINTING a substance's own label in a sentence reporting the patient's record"
@@ -1173,8 +1173,8 @@ public class DrugReferenceService {
 	 * sulfamethoxazole AND trimethoprim, {@code Augmentin} under amoxicillin AND clavulanate — so rows of different
 	 * published substances sharing a name are that product's ingredients, all of them in it. Rows sharing one published
 	 * substance name are rows the dataset filed under ONE ingredient, and a name of that ingredient cannot say which of
-	 * them a record means: {@code Nexium} reaches Esomeprazole and the Omeprazole row the dataset filed under
-	 * esomeprazole, which is why a shared name used to name no row at all (issue #392). Asked per name, so a kit naming
+	 * them a record means: {@code Nexium} reached Esomeprazole and the Omeprazole row the dataset filed under
+	 * esomeprazole until ADR Decision 662, which is why a shared name used to name no row at all (issue #392). Asked per name, so a kit naming
 	 * both those rows and a third substance names the third alone.
 	 *
 	 * <p><b>Not for a spelled name</b>, whose own words say which substances it holds — {@code labelNameOccursIn}

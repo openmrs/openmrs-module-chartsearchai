@@ -61,10 +61,12 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * ones its "every code". Mutate the gate and read the failures.
  *
  * <p><b>Established, and not merely resolved</b> (review round 3 of PR #544). Her orders' resolution holds
- * substances she need not take, and the cases over the shipped knowledge base that reach one — through a
- * brand two substances' rows share, a code the data files under two substances, and a bridged concept
- * filed on several — each sit beside a case where that same leg does establish the substance, so both
- * values of each leg are built. The gate asks the establishing orders alone, a drug the question lists as
+ * substances she need not take, and the cases that reach one — through a brand two substances' rows share,
+ * a code the data files under two substances, and a bridged concept filed on several — each sit beside a
+ * case where that same leg does establish the substance, so both values of each leg are built. The
+ * proton-pump-inhibitor cases run over {@link #PPI_SLICE}, the release before ADR Decision 662, because
+ * that decision corrected the shipped omeprazole row that gave all three legs their shape; the biosimilar
+ * case still runs over the shipped file. The gate asks the establishing orders alone, a drug the question lists as
  * current is not asked it, and the referent never widens the resolution: a case each.
  */
 public class DrugInPlayHerOwnOrderReferentTest {
@@ -93,7 +95,11 @@ public class DrugInPlayHerOwnOrderReferentTest {
 	 *  while 1200 mg/day does not exceed that band's 1200 ({@code WeightAwareOverdoseTest}'s arrangement). */
 	private static final String PER_DOSE_EXCESS = "Ibuprofen 400 mg every 8 hours.";
 
-	/** The uuid the shipped bridge records for CIEL 75876, {@code Esomeprazole magnesium}: filed on
+	/** The release before ADR Decision 662, sliced verbatim to omeprazole as it filed it (under esomeprazole's
+	 *  brand, code and CIEL concepts), esomeprazole and clopidogrel: the fixture's own note says how. */
+	private static final String PPI_SLICE = "chartsearchai-test/ddi-ppi-brand-code-bridge-shared.json";
+
+	/** The uuid {@link #PPI_SLICE}'s bridge records for CIEL 75876, {@code Esomeprazole magnesium}: filed on
 	 *  Omeprazole AND Esomeprazole, two substances, under a name that names Esomeprazole alone
 	 *  ({@code BridgedConceptOrderResolutionTest} carries the same concept). */
 	private static final String ESOMEPRAZOLE_MAGNESIUM_CONCEPT = "75876AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
@@ -103,7 +109,7 @@ public class DrugInPlayHerOwnOrderReferentTest {
 	 *  alone. */
 	private static final String TRASTUZUMAB_DKST_CONCEPT = "7d2c2d7a-a8ab-4add-997c-b27c2e759bb8";
 
-	/** A drug the question proposes that the shipped knowledge base files a PPI brand, a PPI code and the
+	/** A drug the question proposes that {@link #PPI_SLICE} files a PPI brand, a PPI code and the
 	 *  CIEL 75876 bridge under beside esomeprazole — the three ways review round 3 of PR #544 found her
 	 *  orders resolving to more substances than she takes. */
 	private static final String OMEPRAZOLE_QUESTION = "Can I give her omeprazole?";
@@ -119,6 +125,10 @@ public class DrugInPlayHerOwnOrderReferentTest {
 	private static final String WITHHOLD = "This finding is a reason to withhold it.";
 
 	private static final String CAUTION = "This finding is a caution to note, not a reason to withhold it.";
+
+	private static DrugReferenceService ppiSliceService() throws Exception {
+		return DrugReferenceTestSupport.serviceWithGroups(DrugReferenceTestSupport.ddiFixtureEntries(PPI_SLICE));
+	}
 
 	private static List<String> findings(DrugReferenceService service, PatientClinicalContext context,
 			String question) {
@@ -736,7 +746,7 @@ public class DrugInPlayHerOwnOrderReferentTest {
 
 	/**
 	 * Her orders resolving to a substance is not her taking it, where the resolution is one of several
-	 * readings of one name: review round 3 of PR #544. The shipped knowledge base files the brand
+	 * readings of one name: review round 3 of PR #544. {@link #PPI_SLICE} files the brand
 	 * {@code Nexium} under Omeprazole AND Esomeprazole, so her one {@code Nexium 40mg} order resolves to both
 	 * (the shape {@code AmbiguousBrandNamedOrderTest} records), and <em>"Can I give her omeprazole?"</em>
 	 * stated the Major clopidogrel finding as a reason to change her medication — the refusal of a drug she
@@ -745,9 +755,8 @@ public class DrugInPlayHerOwnOrderReferentTest {
 	 * {@code Esomeprazole magnesium} names Esomeprazole and not Omeprazole.
 	 */
 	@Test
-	public void aDrugHerOrdersNameResolvesWithoutNamingItStatesTheProposalCall() {
-		DrugReferenceService service = DrugReferenceTestSupport.serviceWithGroups(
-			DrugReferenceTestSupport.shippedEntries());
+	public void aDrugHerOrdersNameResolvesWithoutNamingItStatesTheProposalCall() throws Exception {
+		DrugReferenceService service = ppiSliceService();
 		Set<Object> asked = substancesAskedAbout(service, OMEPRAZOLE_QUESTION);
 		Set<Object> readings = substancesImpliedBy(service, "Nexium 40mg");
 		assertEquals(2, readings.size(), "precondition: the brand resolves two substances: " + readings);
@@ -776,9 +785,8 @@ public class DrugInPlayHerOwnOrderReferentTest {
 	/** The other value of that name leg, on the {@code en} order above: its concept name names Esomeprazole,
 	 *  so a question about esomeprazole is about her medication. */
 	@Test
-	public void aDrugANameOfHerOrderNamesStatesTheCurrentMedicationCall() {
-		DrugReferenceService service = DrugReferenceTestSupport.serviceWithGroups(
-			DrugReferenceTestSupport.shippedEntries());
+	public void aDrugANameOfHerOrderNamesStatesTheCurrentMedicationCall() throws Exception {
+		DrugReferenceService service = ppiSliceService();
 		String question = "Can I give her esomeprazole?";
 		assertEquals(2, substancesImpliedBy(service, "Esomeprazole magnesium").size(),
 				"precondition: the concept name resolves two substances, so naming is what tells them apart");
@@ -796,15 +804,14 @@ public class DrugInPlayHerOwnOrderReferentTest {
 	}
 
 	/**
-	 * The CODE leg's counterpart: the shipped knowledge base files {@code A02BC05}, esomeprazole's code, on
+	 * The CODE leg's counterpart: {@link #PPI_SLICE} files {@code A02BC05}, esomeprazole's code, on
 	 * its Omeprazole row too (issue #185's premise), so an {@code Esomeprazole 40mg} order the dictionary
 	 * mapped to it resolves to omeprazole as well. A code the loaded data files under two substances names
 	 * neither, and this order's name reaches esomeprazole alone.
 	 */
 	@Test
-	public void aDrugHerOrdersCodeIsFiledUnderBesideAnotherSubstanceStatesTheProposalCall() {
-		DrugReferenceService service = DrugReferenceTestSupport.serviceWithGroups(
-			DrugReferenceTestSupport.shippedEntries());
+	public void aDrugHerOrdersCodeIsFiledUnderBesideAnotherSubstanceStatesTheProposalCall() throws Exception {
+		DrugReferenceService service = ppiSliceService();
 		PatientClinicalContext context = chartOf(service, coded("Esomeprazole 40mg", "A02BC05"),
 			coded("Clopidogrel 75mg"));
 		Set<Object> asked = substancesAskedAbout(service, OMEPRAZOLE_QUESTION);
@@ -832,9 +839,8 @@ public class DrugInPlayHerOwnOrderReferentTest {
 	/** The other value of the code leg: an order the data knows only by a code it files under ONE substance
 	 *  is that substance's, so a question about it is about her medication. */
 	@Test
-	public void aDrugHerOrdersCodeIsFiledUnderAloneStatesTheCurrentMedicationCall() {
-		DrugReferenceService service = DrugReferenceTestSupport.serviceWithGroups(
-			DrugReferenceTestSupport.shippedEntries());
+	public void aDrugHerOrdersCodeIsFiledUnderAloneStatesTheCurrentMedicationCall() throws Exception {
+		DrugReferenceService service = ppiSliceService();
 		String question = "Can I give her clopidogrel?";
 		PatientClinicalContext context = chartOf(service, coded("Tab 75mg", "B01AC04"),
 			coded("Esomeprazole 40mg"));
@@ -859,15 +865,14 @@ public class DrugInPlayHerOwnOrderReferentTest {
 	}
 
 	/**
-	 * The BRIDGE leg's counterpart: an {@code Inexium 40mg} order written against CIEL 75876, which the shipped
-	 * bridge files on Omeprazole and Esomeprazole under the name {@code Esomeprazole magnesium}. That name
+	 * The BRIDGE leg's counterpart: an {@code Inexium 40mg} order written against CIEL 75876, which
+	 * {@link #PPI_SLICE}'s bridge files on Omeprazole and Esomeprazole under the name {@code Esomeprazole magnesium}. That name
 	 * names Esomeprazole alone, which is the refusal issue #353 already makes before a finding prints
 	 * {@code Omeprazole from Inexium 40mg}; a question about omeprazole is still a proposal.
 	 */
 	@Test
-	public void aDrugHerOrdersConceptIsFiledOnWithoutItsBridgeNamingItStatesTheProposalCall() {
-		DrugReferenceService service = DrugReferenceTestSupport.serviceWithGroups(
-			DrugReferenceTestSupport.shippedEntries());
+	public void aDrugHerOrdersConceptIsFiledOnWithoutItsBridgeNamingItStatesTheProposalCall() throws Exception {
+		DrugReferenceService service = ppiSliceService();
 		PatientClinicalContext context = chartOf(service,
 			writtenAgainst(ESOMEPRAZOLE_MAGNESIUM_CONCEPT, "Inexium 40mg"), coded("Clopidogrel 75mg"));
 		assertTrue(substancesImpliedBy(service, "Inexium 40mg").isEmpty(),
@@ -884,9 +889,8 @@ public class DrugInPlayHerOwnOrderReferentTest {
 
 	/** The other value of the bridge leg, on the same chart: the bridge's name names Esomeprazole. */
 	@Test
-	public void aDrugHerOrdersBridgeNamesStatesTheCurrentMedicationCall() {
-		DrugReferenceService service = DrugReferenceTestSupport.serviceWithGroups(
-			DrugReferenceTestSupport.shippedEntries());
+	public void aDrugHerOrdersBridgeNamesStatesTheCurrentMedicationCall() throws Exception {
+		DrugReferenceService service = ppiSliceService();
 		String question = "Can I give her esomeprazole?";
 		PatientClinicalContext context = chartOf(service,
 			writtenAgainst(ESOMEPRAZOLE_MAGNESIUM_CONCEPT, "Inexium 40mg"), coded("Clopidogrel 75mg"));

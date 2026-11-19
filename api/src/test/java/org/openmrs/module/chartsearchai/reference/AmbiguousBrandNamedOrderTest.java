@@ -60,25 +60,30 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Patien
  * own rule): those assertions are emptiness, non-emptiness, and what the production accessors resolve a
  * name to. The one case that reads a rendered sentence is the combination control, and it runs over a
  * curated fixture.
+ *
+ * <p><b>The Nexium pair the review reported is no longer one of them.</b> It was the knowledge base filing its Omeprazole
+ * row under esomeprazole's RxCUI, which ADR Decision 662 corrected upstream: Nexium is now esomeprazole's brand alone, so a
+ * Nexium prescription is that one substance and a question proposing esomeprazole is told she already takes it. That is
+ * pinned below beside the three families that still share a brand.
  */
 public class AmbiguousBrandNamedOrderTest {
 
 	/**
-	 * Four families the shipped knowledge base files a brand under two substances of — the four the
-	 * review drove, each raising a duplicate-therapy chip against its own prescription and none on
-	 * {@code main}. Row 0 is the order's display; row 1 the question; row 2 the substance the
-	 * question asks about; row 3 the sibling substance the chip named as a second active order.
+	 * Three families the shipped knowledge base files a brand under two substances of — three of the
+	 * four the review drove, each raising a duplicate-therapy chip against its own prescription and none
+	 * on {@code main}; the fourth, Nexium, is one substance's since ADR Decision 662. Row 0 is the
+	 * order's display; row 1 the question; row 2 the substance the question asks about; row 3 the sibling
+	 * substance the chip named as a second active order.
 	 */
 	private static final String[][] AMBIGUOUS_BRANDS = {
-			{ "Nexium 40mg", "Can I give her esomeprazole?", "Esomeprazole", "Omeprazole" },
 			{ "Neurontin 300mg", "Can I give her gabapentin?", "Gabapentin", "Gabapentin enacarbil" },
 			{ "Tricor 145mg", "Can I give her fenofibrate?", "Fenofibrate", "Fenofibric acid" },
 			{ "Nasonex", "Can I give her mometasone?", "Mometasone", "Mometasone furoate" } };
 
-	/** A third proton-pump inhibitor, in the same level-4 subgroup as both A02BC rows and neither of
-	 *  them — what the arm is asked about to show it is live on the very chart the cases below find
-	 *  silent. */
-	private static final String THIRD_DRUG_QUESTION = "Can I give her pantoprazole?";
+	/** A third gabapentinoid, in the same level-4 subgroup (N02BF) as both rows {@code Neurontin} resolves
+	 *  and neither of them — what the arm is asked about to show it is live on the very chart the cases
+	 *  below find silent. */
+	private static final String THIRD_DRUG_QUESTION = "Can I give her pregabalin?";
 
 	private static DrugSafetyValidator shippedValidator() {
 		return DrugReferenceTestSupport.validator(shippedService());
@@ -107,7 +112,7 @@ public class AmbiguousBrandNamedOrderTest {
 		// a level-4 subgroup, so the class arm has a relationship to find and is not silent for want of
 		// one; and the display spells neither name, which is why nothing can tell the module which of
 		// the two the prescription is. Repair those rows upstream and the cases below go green whichever
-		// skip is in force.
+		// skip is in force — which is what ADR Decision 662 did to the Nexium row this list used to open with.
 		DrugReferenceService service = shippedService();
 		for (String[] row : AMBIGUOUS_BRANDS) {
 			List<DrugReference> resolved = service.findImpliedByDrugName(row[0]);
@@ -151,6 +156,31 @@ public class AmbiguousBrandNamedOrderTest {
 							+ " to " + row[3] + " as a second active order states a prescription her chart"
 							+ " does not record");
 		}
+	}
+
+	@Test
+	public void aBrandTheDataFilesUnderOneSubstanceIsThatSubstancesPrescription() {
+		// Nexium, since ADR Decision 662: the brand resolves esomeprazole alone, so proposing esomeprazole to a patient
+		// on it states that she already takes it, and relates no second substance as another active order of hers.
+		DrugReferenceService service = shippedService();
+		List<DrugReference> resolved = service.findImpliedByDrugName("Nexium 40mg");
+		Set<Object> substances = new HashSet<Object>();
+		for (DrugReference entry : resolved) {
+			substances.add(entry.substanceGroupKey());
+			assertEquals("Esomeprazole", entry.getName(), "Nexium 40mg resolved " + DrugReferenceTestSupport.names(resolved));
+		}
+		assertEquals(1, substances.size(), "Nexium 40mg resolved " + DrugReferenceTestSupport.names(resolved));
+
+		List<SafetyWarning> chips = shippedValidator().validate("", "Can I give her esomeprazole?",
+				unmappedOrder("Nexium 40mg"));
+
+		assertFalse(chips.isEmpty(), "proposing the drug her one prescription is must say she already takes it");
+		for (SafetyWarning chip : chips) {
+			assertTrue(chip.statesAProposedDrugIsAlreadyOrdered(),
+					"every finding is the one that she already takes it, was: " + DrugReferenceTestSupport.details(chips));
+		}
+		assertEquals(Collections.<String> emptyList(), DrugReferenceTestSupport.classChipDetails(chips),
+				"no second substance is related to her one prescription");
 	}
 
 	@Test
@@ -223,16 +253,22 @@ public class AmbiguousBrandNamedOrderTest {
 		// The bound, stated rather than left to be rediscovered. This rule reads an order's NAME, so it
 		// reaches only the orders no dictionary classified. The same prescription mapped to a code the
 		// knowledge base carries is resolved by the code walk, which never asks what the name implies —
-		// the control that puts the defect on the name leg rather than on the class arm.
+		// the control that puts the defect on the name leg rather than on the class arm. Nexium mapped to
+		// esomeprazole's own code: since ADR Decision 662 its name is that one substance's too, so the one
+		// finding is that she already takes the drug proposed, and no class arm relates a second substance.
 		Set<String> names = DrugReferenceTestSupport.set("Nexium 40mg");
 		Set<String> codes = new LinkedHashSet<String>(Collections.singleton("A02BC05"));
 		PatientClinicalContext mapped = DrugReferenceTestSupport.ctx(60, null, names, codes, null, null,
 				Arrays.asList(DrugReferenceTestSupport.activeOrder("order-uuid-392b", "Nexium 40mg",
 						names, codes)));
 
-		assertEquals(Collections.<String> emptyList(),
-				DrugReferenceTestSupport.details(shippedValidator().validate("",
-						AMBIGUOUS_BRANDS[0][1], mapped)),
+		List<SafetyWarning> chips = shippedValidator().validate("", "Can I give her esomeprazole?", mapped);
+		assertEquals(Collections.<String> emptyList(), DrugReferenceTestSupport.classChipDetails(chips),
 				"a mapped order is classified by its code, and that code is the one substance's");
+		assertFalse(chips.isEmpty(), "her one prescription is the drug proposed, so that is said");
+		for (SafetyWarning chip : chips) {
+			assertTrue(chip.statesAProposedDrugIsAlreadyOrdered(),
+					"no finding but that she already takes it, was: " + DrugReferenceTestSupport.details(chips));
+		}
 	}
 }

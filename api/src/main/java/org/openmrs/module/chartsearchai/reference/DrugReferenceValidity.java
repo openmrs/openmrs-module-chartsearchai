@@ -1383,7 +1383,9 @@ public final class DrugReferenceValidity {
 	 * {@link #reportAliasesNamingAnotherSubstance}'s findings, because their substance name is another
 	 * row's display name. Re-measure before relying on the figures. Since ADR Decision 266 the shipped knowledge base
 	 * maps {@code Sulfamethoxazole} to its own RxCUI, so that row is no longer among them;
-	 * {@code ddi-substance-name-contradicted-by-the-bridge.json} keeps its earlier shape.
+	 * {@code ddi-substance-name-contradicted-by-the-bridge.json} keeps its earlier shape. Since ADR Decision 662 it maps
+	 * {@code Omeprazole} to its own RxCUI too, so that row has left both rules' findings;
+	 * {@code ddi-omeprazole-filed-as-esomeprazole.json} keeps its earlier shape.
 	 */
 	private void reportSubstanceNamesContradictedByTheBridge(List<DrugReference> entries) {
 		Map<String, Set<String>> conceptsNaming = new HashMap<String, Set<String>>();

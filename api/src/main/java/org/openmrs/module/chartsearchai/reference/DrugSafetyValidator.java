@@ -3109,7 +3109,7 @@ public class DrugSafetyValidator {
 	 * both rows' aliases from one {@code rxnorm_name}. So the shape wants a curated
 	 * {@code sourceFormat=json} dataset, which is what {@code PerRequestSubstanceSubjectTest}'s fixture
 	 * is, or a {@code ddinter} family whose {@code rxnorm_name} is not word-bounded inside the display
-	 * name (the {@code Omeprazole}/{@code esomeprazole} shape). No live instance was ever observed, and
+	 * name (the {@code Omeprazole}/{@code esomeprazole} shape, before ADR Decision 662). No live instance was ever observed, and
 	 * no count over the shipped KB is published here — the property is that the two passes stop disagreeing
 	 * over {@code answer}, which does not depend on how often they would otherwise have differed.
 	 *
@@ -3262,9 +3262,9 @@ public class DrugSafetyValidator {
 	 * <p><b>Established, and not merely resolved</b> (review round 3 of PR #544). {@code orderEntries} is
 	 * {@link DrugReferenceService#findForActiveOrders}' answer, additive by design because it is a CANDIDATE
 	 * set: a screen that leaves out one of her drugs leaves out its warnings. Along three legs it holds
-	 * substances she need not take at all — a brand two substances' rows share ({@code Nexium} → Omeprazole
-	 * and Esomeprazole), a code the loaded data files under two substances ({@code A02BC05}), and a bridged
-	 * concept filed on several ({@code Esomeprazole magnesium}; {@code Trastuzumab-dkst}, on three).
+	 * substances she need not take at all — a brand two substances' rows share ({@code Neurontin} → Gabapentin
+	 * and Gabapentin enacarbil), a code the loaded data files under two substances ({@code N02BF01}), and a
+	 * bridged concept filed on several ({@code Trastuzumab-dkst}, on three).
 	 * {@link EndedOrders} and the injector's composed-answer gate read that answer too, and there the
 	 * over-reach errs toward the proposal: no ended-order referent is stated, and the model rather than the
 	 * module answers. This referent states a CLAIM about her record, and there it fails open: said of a drug the question proposes and she does not take, the current-medication clause
@@ -3378,7 +3378,7 @@ public class DrugSafetyValidator {
 	 * name that NAMES it ({@link BridgedOrders#recordedNameNames}, the reading issue #353's
 	 * {@link #restsOnAnAmbiguousBridge} refuses a finding's chart-order clause without). So an order written
 	 * against CIEL 75876, {@code Esomeprazole magnesium}, establishes Esomeprazole and not the Omeprazole the
-	 * same concept is filed on, and one written against {@code Trastuzumab-dkst} establishes Trastuzumab and
+	 * same concept was filed on until ADR Decision 662, and one written against {@code Trastuzumab-dkst} establishes Trastuzumab and
 	 * neither conjugate. These are the orders {@link #mayBeProposingAPresentationSheDoesNotTake} asks.
 	 *
 	 * @param rows the rows of {@code substance} {@code orderEntries} holds, which the bridge is asked about
@@ -3429,8 +3429,8 @@ public class DrugSafetyValidator {
 
 	/**
 	 * The one substance {@code orderEntries} files {@code code} under, or null where it files it under none
-	 * or under more than one — the shipped knowledge base files esomeprazole's {@code A02BC05} on its
-	 * Omeprazole row too, which is issue #185's premise. Asked of her orders' resolution and not of the whole
+	 * or under more than one — the knowledge base bundled until ADR Decision 662 filed esomeprazole's
+	 * {@code A02BC05} on its Omeprazole row too, which is issue #185's premise. Asked of her orders' resolution and not of the whole
 	 * dataset: its code leg ({@code DrugReferenceService.findByActiveOrders}) takes every row the loaded data
 	 * publishes one of the chart's flattened codes under, so for such a code the two answer alike without a
 	 * second walk (issue #151). A code an order carries that the flattened set does not, which only a
@@ -7039,7 +7039,7 @@ public class DrugSafetyValidator {
 	 * ({@code entryForAtcCode} resolves {@code N02BF01} to {@code Gabapentin enacarbil}, an alias claim,
 	 * while the {@code Gabapentin} row claims it outright) — the instance among the chips ADR Decision 52
 	 * measured, and not the extent of the shape, which is not gabapentin's alone: {@code A02BC05}
-	 * resolves to {@code Omeprazole} against the token {@code esomeprazole} the same way, and there
+	 * resolved to {@code Omeprazole} against the token {@code esomeprazole} the same way until ADR Decision 662, and there
 	 * refusing is the whole point of the guard. Issue #296 closed the rest of what ADR
 	 * Decision 39 recorded here; a rule carrying only an ATC code keeps naming its partner by that code;
 	 * and an order the loaded dataset covers NO entry for reaches no co-medication with a
@@ -7966,8 +7966,8 @@ public class DrugSafetyValidator {
 	 * Which of two rules reaching {@code partner} — an order entry of hers — is about that very row, as the source recorded
 	 * each rule's partner ({@link DrugReference.Interaction#getPartnerName()}, ADR Decision 238): positive for {@code
 	 * candidate} alone, negative for {@code incumbent} alone, zero where both or neither are, or the source records none.
-	 * The shipped knowledge base files Omeprazole under esomeprazole's rxnorm_name, so a drug's rule about the Esomeprazole
-	 * row reaches an omeprazole order through the token both rows carry. One step for the chip's collapse and the record's
+	 * The knowledge base bundled until ADR Decision 662 filed Omeprazole under esomeprazole's rxnorm_name, so a drug's rule
+	 * about the Esomeprazole row reached an omeprazole order through the token both rows carry. One step for the chip's collapse and the record's
 	 * ({@link DrugReferenceInjector}'s {@code onePerPartner}), so the two cannot keep different rules for one partner.
 	 */
 	static int aboutItsOwnPartnerRow(DrugReference.Interaction candidate, DrugReference.Interaction incumbent,
@@ -11326,8 +11326,8 @@ public class DrugSafetyValidator {
 	 *         hit and not a nested-token one — and an {@code en} session records that very concept
 	 *         name on the order. {@code ddi-bridged-concept-two-substances.json}, adapted from the
 	 *         shipped KB, carries it: {@code Esomeprazole magnesium} is an alias of BOTH Omeprazole and
-	 *         Esomeprazole (CIEL 75876, one of the 122 multi-substance bridged concepts of the shipped
-	 *         knowledge base whose recorded name does not name every substance they resolve — the
+	 *         Esomeprazole (CIEL 75876, until ADR Decision 662 one of the multi-substance bridged concepts of
+	 *         the shipped knowledge base whose recorded name does not name every substance they resolve — the
 	 *         difference of the two figures
 	 *         {@code BridgedConceptLegBoundsTest.theRefusalsReachOverTheShippedKnowledgeBase}
 	 *         asserts). The part of it that PRINTS a claim about the patient is refused at the
@@ -11349,7 +11349,7 @@ public class DrugSafetyValidator {
 	 *         rather than left to be found;</li>
 	 *         <li>the BRIDGED leg's has a constructed shipped-KB instance — 1112 of the 4251 bridged
 	 *         concepts are filed on more than one substance, CIEL 75876
-	 *         {@code Esomeprazole magnesium} among them — and the part of it that is a false claim is
+	 *         {@code Esomeprazole magnesium} among them until ADR Decision 662 — and the part of it that is a false claim is
 	 *         refused at the printing site by {@link #restsOnAnAmbiguousBridge} rather than here, so
 	 *         the leg keeps resolving and only the sentence naming a prescription is withheld. Part,
 	 *         not all: 990 of the 1112 have a recorded name that names every substance they resolve, and
@@ -11481,7 +11481,7 @@ public class DrugSafetyValidator {
 	 *         took the FIRST candidate {@link #identifies} admitted, and this knowledge base gives one
 	 *         token to two substances routinely: the {@code ddinter} parser writes a rule's token from
 	 *         the partner's {@code rxnorm_name} and files that name in the partner's own aliases, so
-	 *         {@code esomeprazole} is Esomeprazole's display name AND Omeprazole's alias. A chip
+	 *         {@code esomeprazole} was Esomeprazole's display name AND Omeprazole's alias until ADR Decision 662. A chip
 	 *         printing that token then had issue #349's chart-order clause decided against the OTHER
 	 *         substance's rows — {@link #restsOnAnAmbiguousBridge} is asked of
 	 *         {@link #rowsOfSubstance} of whatever this answers — so the substance the bridge's own name
@@ -12741,7 +12741,7 @@ public class DrugSafetyValidator {
 	 *       actually asking, and it
 	 *       is the one the code comparison cannot answer, because the code a co-medication carries and
 	 *       the code the reference row publishes can be different codes of ONE substance. The shipped
-	 *       KB's {@code Omeprazole} row publishes only {@code A02BC05} — esomeprazole's, alongside
+	 *       KB's {@code Omeprazole} row published only {@code A02BC05} until ADR Decision 662 — esomeprazole's, alongside
 	 *       {@code rxnorm_name} "esomeprazole" — while an omeprazole order on a dictionary that maps
 	 *       the concept correctly carries {@code A02BC01}, which appears nowhere in that KB. Disjoint
 	 *       code sets, one shared subgroup, and the chip read {@code Omeprazole is in the same ATC
@@ -12762,12 +12762,12 @@ public class DrugSafetyValidator {
 	 *       to add, and why the leg is wrong on a partner reached by name. Where the context carries only
 	 *       the flattened code set (issue #118's fallback) no order names the partner, so the partner
 	 *       is whichever row {@link #entryForAtcCode} picks for the code — and that row's substance
-	 *       need not be the queried one. An order known only as {@code A02BC05} resolves to
-	 *       {@code Omeprazole}, the earlier row, so dropping this leg would newly raise a chip about
+	 *       need not be the queried one. Until ADR Decision 662 an order known only as {@code A02BC05}
+	 *       resolved to {@code Omeprazole}, the earlier row, so dropping this leg would newly raise a chip about
 	 *       {@code Esomeprazole} against it, which this arm has never raised.
 	 *       <p>Not because a level-5 code cannot be shared by two substances — in THIS knowledge base
-	 *       it can, and the pair just named is the counterexample: {@code Omeprazole} and
-	 *       {@code Esomeprazole} publish one {@code A02BC05} and differ in {@code drugbank_id}. (The
+	 *       it can, and the pair just named was the counterexample until ADR Decision 662: {@code Omeprazole}
+	 *       and {@code Esomeprazole} published one {@code A02BC05} and differ in {@code drugbank_id}. (The
 	 *       unqualified "sharing an exact ATC code means being the same substance" on
 	 *       {@link #resolvesFrom} is a claim about ATC the standard, and is false of this KB.) So the
 	 *       leg CAN over-skip, and does exactly there — deliberately, because what it skips is a
@@ -13193,10 +13193,11 @@ public class DrugSafetyValidator {
 		 * <p><b>Not the same question as {@link #substances}</b>, and the two must not be merged. That
 		 * one is what the prescription CONTAINS — a combination's constituents, each a therapy of its
 		 * own; this one is what it might be INSTEAD — one drug the module cannot name, reached through
-		 * an alias two rows share. A brand is the shape that produces it: {@code Nexium} is an alias of
-		 * both the {@code Esomeprazole} and the {@code Omeprazole} rows, so one prescription resolves
+		 * an alias two rows share. A brand is the shape that produces it: {@code Nexium} was an alias of
+		 * both the {@code Esomeprazole} and the {@code Omeprazole} rows, so one prescription resolved
 		 * twice and a question about either was related to the other as a second active order
-		 * (pull request #392).
+		 * (pull request #392). ADR Decision 662 corrected that row; {@code Neurontin}, {@code Tricor} and
+		 * {@code Nasonex} are the shipped instances ({@code AmbiguousBrandNamedOrderTest}).
 		 *
 		 * <p><b>Read by {@link DrugSafetyValidator#classRelationships}' restating-existing-therapy skip
 		 * and by nothing else.</b> Not by {@link DrugSafetyValidator#alreadyACoMedication}, which would
@@ -13207,8 +13208,8 @@ public class DrugSafetyValidator {
 		 *
 		 * <p><b>The residue, which this does not close and is not the defect it was written for.</b>
 		 * Both readings remain co-medications, so a question about a THIRD substance of the subgroup
-		 * still relates it to each of them by name: on the shipped knowledge base a chart whose only
-		 * order is {@code Nexium 40mg}, asked about pantoprazole, raises one chip naming
+		 * still relates it to each of them by name: on the knowledge base bundled before ADR Decision 662
+		 * a chart whose only order is {@code Nexium 40mg}, asked about pantoprazole, raises one chip naming
 		 * {@code active order Omeprazole} and one naming {@code active order Esomeprazole} (measured
 		 * through the real {@code validate}). Keeping both is what a combination BRAND needs — RxNorm
 		 * files one under each ingredient it really contains, so dropping the second reading loses
@@ -13652,8 +13653,8 @@ public class DrugSafetyValidator {
 		 * {@code substances} set naming a different substance, and {@code reconciledPartnerName} then
 		 * takes the ENTRY rung, where {@link DrugSafetyValidator#namesNamingOrder} never runs. The third
 		 * rung above widens it much further still, deliberately: an ATC correlation is not identity, and
-		 * {@link DrugReference#substanceKey()} exists because this knowledge base publishes one
-		 * {@code A02BC05} for {@code Omeprazole} and {@code Esomeprazole} alike.
+		 * {@link DrugReference#substanceKey()} exists because this knowledge base publishes one level-5
+		 * code for two substances ({@code N02BF01} for {@code Gabapentin} and {@code Gabapentin enacarbil}).
 		 *
 		 * <p>What actually refuses is {@link DrugSafetyValidator#unambiguouslyNames}, asked of the row
 		 * about to be PRINTED: the rule's token must name that row and outrank every rival claimant, so
@@ -13715,8 +13716,8 @@ public class DrugSafetyValidator {
 		 *
 		 * <p>Read {@link #partnerNaming}'s third paragraph for why this rung exists at all. What it is
 		 * NOT is an assertion that the two are one substance — {@link DrugReference#substanceKey()}
-		 * exists because this knowledge base publishes one level-5 code for {@code Omeprazole} and
-		 * {@code Esomeprazole} alike. It asserts only that {@code entry} is on this chart BY THAT CODE,
+		 * exists because this knowledge base publishes one level-5 code for two substances ({@code N02BF01}
+		 * for {@code Gabapentin} and {@code Gabapentin enacarbil}). It asserts only that {@code entry} is on this chart BY THAT CODE,
 		 * which is exactly the predicate {@link DrugReferenceService#findByActiveOrders} used to admit
 		 * it, and it hands the answer to a gate that decides separately whether that co-medication's
 		 * name may be printed for this rule.
@@ -13822,8 +13823,8 @@ public class DrugSafetyValidator {
 		 * {@link DrugReferenceService#findImpliedByDrugName} reads the name to put in play, less the ones
 		 * {@link DrugSafetyValidator#substancesTheOrderNameDoesNotName} finds it does not name, which it finds
 		 * only where the name puts two or more in play. So {@code Tirosint 50mcg/ml}, which puts levothyroxine
-		 * alone in play, establishes it; {@code Nexium 40mg}, which puts Omeprazole and Esomeprazole in play and
-		 * names neither, establishes neither; and {@code Isoniazid / pyrazinamide / rifampin} establishes all
+		 * alone in play, establishes it; {@code Neurontin 300mg}, which puts Gabapentin and Gabapentin enacarbil
+		 * in play and names neither, establishes neither; and {@code Isoniazid / pyrazinamide / rifampin} establishes all
 		 * three substances it names.
 		 *
 		 * <p>Unlike {@link #substancesItsDisplayNames}, which asks of an order's DISPLAY before a finding prints
@@ -14233,8 +14234,8 @@ public class DrugSafetyValidator {
 	 *
 	 * <p><b>The bound this leaves at the cross-arm fold.</b> {@link #ruleAbout} correlates a partner to a
 	 * rule through {@link #entryForAtcCode}, which answers with the CANONICAL row publishing a code — and
-	 * a level-5 code can be published by two substances in this KB ({@code Omeprazole} and
-	 * {@code Esomeprazole} share {@code A02BC05}; see {@link #classRelationships}). A partner reached
+	 * a level-5 code can be published by two substances in this KB ({@code Gabapentin} and
+	 * {@code Gabapentin enacarbil} share {@code N02BF01}; see {@link #classRelationships}). A partner reached
 	 * here carries the reference row's codes rather than an order's, so where the patient is ALSO on a
 	 * dictionary-mapped order of the other substance, both partners hold that one code and the fold can
 	 * attach this one's sentence to the other one's rule chip — or drop it, which is what
@@ -14309,8 +14310,8 @@ public class DrugSafetyValidator {
 	 *
 	 *         <p><b>The question is naming and not counting</b>, and the distinction is the one
 	 *         {@link DrugReferenceService#substancesNamedByBridge} draws for the dictionary bridge
-	 *         (issue #353), on the same pair of substances: "the module knows the prescription is one
-	 *         of these and cannot say which" ({@code Nexium} → Esomeprazole AND Omeprazole) is not
+	 *         (issue #353): "the module knows the prescription is one
+	 *         of these and cannot say which" ({@code Neurontin} → Gabapentin AND Gabapentin enacarbil) is not
 	 *         "the prescription genuinely CONTAINS all of these" ({@code Metronidazole and
 	 *         secnidazole}). A brand is an ALIAS of every row that carries it, so both claim the order's
 	 *         name at one rank and {@link DrugReference#nameMatchStrength} has no tie to break; a

@@ -30399,10 +30399,11 @@ On the demo replica (8088), 20 demo patients × *"Is she on any TB drugs?"*, *"w
 ARVs is he on?"* (60 cells, no errors). Before, the model answered all 60. After, the module answers all 60, with no
 chip:
 - *"Trimethoprim and sulfamethoxazole"* is named as an ARV or a TB drug in none of them. Before, it was named in 7, over
-  `dd86f5f8`, `dd78ff2c`, `dda915f3` and `dda1d7e1`, whose list also named isoniazid as an ARV.
+  `dd86f5f8`, `dd78ff2c` and `dda915f3`. The model's ARV list for `dda1d7e1` named isoniazid.
 - `dda1d7e1` and `dd9a3a85`, each on isoniazid, are told so. The model had said *"No TB drugs are currently recorded"*
   and *"No tuberculosis drugs are currently being used or planned"*.
-- Each of the 40 ARV answers names her lamivudine, stavudine, nevirapine or efavirenz orders and nothing else.
+- 38 of the 40 ARV answers name her lamivudine, stavudine, nevirapine or efavirenz orders and nothing else. The other
+  two, `dd84c8de`'s, say none of the orders the data identifies is one, and name her 16 unidentified vaccination orders.
 
 The answer counts orders, as Decision 379's does: *"6 of this patient's active medication orders are among the
 antiretrovirals …: Lamivudine (2 orders), Nevirapine (2 orders) and Stavudine (2 orders)."*

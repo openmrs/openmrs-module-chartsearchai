@@ -896,6 +896,12 @@ public class DrugReferenceInjector {
 		// nothing else (ADR Decision 294).
 		boolean duplicateQuestion = questionDrugs.isEmpty() && QueryScopeRouter.asksAboutDuplicateTherapy(question)
 				&& context != null && context.chartReadForSafety();
+		// Nor does whether, or which of, her antiretrovirals or TB drugs she is on, answered where nothing resolved too: on a
+		// slice scoped to such a question no order of hers is missing, and nothing else stops the return (ADR Decision 666).
+		boolean herArvOrTbGroupAsked = questionDrugs.isEmpty() && namedClass == null && context != null
+				&& context.chartReadForSafety() && DrugClassTerms.arvOrTbGroupNamed(question) != null
+				&& (QueryScopeRouter.asksWhetherSheIsOnADrugClass(question)
+						|| QueryScopeRouter.asksWhichOfADrugClassSheIsOn(question));
 		// Nor does a screen of ONE order, which has nothing to pair it with (ADR Decision 178).
 		boolean screenOfOneOrder = questionDrugs.isEmpty() && findings.isEmpty()
 				&& QueryScopeRouter.asksOnlyToScreenHerMedications(question) && hasOneActiveOrder(context, screenedSubstances);
@@ -935,6 +941,7 @@ public class DrugReferenceInjector {
 								&& !screensAGroupOfHers(question, drugReferenceService));
 		if (nothingResolved && unrepresented.isEmpty() && !screenRelatedNothing && !screenOfNoMedications
 				&& !screenOfOneOrder && !allergyToHerMedications && !herDrugAllergiesAsked && !duplicateQuestion
+				&& !herArvOrTbGroupAsked
 				&& listed.stated().isEmpty() && unrecognised == null
 				&& !stopOfHerOrderByName
 				// Nor a question the model judged, whose findings it found none bear on: still the chart built for it, naming
@@ -1623,6 +1630,14 @@ public class DrugReferenceInjector {
 				: askedAtcGroup != null ? " in the " + DrugClassMembersStatement.groupPhrase(askedAtcGroup)
 						+ (DrugClassMembersStatement.namesSeveralGroups(askedAtcGroup) ? "" : " (" + namedClass + ")")
 				: null;
+		// Whether, or which of, her antiretrovirals or TB drugs she is on, where the question names no class: her orders in that
+		// group by their ATC codes, as Decision 630 reads her groups (ADR Decision 666). The model called co-trimoxazole both.
+		boolean asksWhichOfAClass = QueryScopeRouter.asksWhichOfADrugClassSheIsOn(question);
+		String askedHerGroup = askedClass == null && namedClass == null && questionDrugs.isEmpty()
+				&& (asksWhichOfAClass || QueryScopeRouter.asksWhetherSheIsOnADrugClass(question))
+						? DrugClassTerms.arvOrTbGroupNamed(question) : null;
+		Predicate<Set<String>> askedHerGroupMembers = askedHerGroup == null ? null
+				: DrugClassTerms.membersOf(askedHerGroup, drugReferenceService.getCrossReactivityGroups());
 		// A question whether her medications duplicate one another: what the screen found, each a line, and what the check
 		// does not cover (ADR Decision 232); found none, what it compared, and never "No" (ADR Decision 294). Naming a class,
 		// about that class (ADR Decision 530).
@@ -1667,27 +1682,32 @@ public class DrugReferenceInjector {
 		}
 		// Whether she is on any drug of a group this module carries: her orders in it (ADR Decision 298), or of a class an ATC
 		// group IS, by that group (ADR Decision 368).
-		if (moduleAnswer == null && askedClass != null && questionDrugs.isEmpty()
-				&& QueryScopeRouter.asksWhetherSheIsOnADrugClass(question)
+		Predicate<Set<String>> onClass = askedClass != null ? askedClass : askedHerGroupMembers;
+		String onCarried = askedClass != null ? carried
+				: askedHerGroupMembers != null ? " among the " + DrugClassTerms.spokenName(askedHerGroup, true)
+						+ " this module reads by their ATC codes" : null;
+		if (moduleAnswer == null && onClass != null && questionDrugs.isEmpty()
+				&& (QueryScopeRouter.asksWhetherSheIsOnADrugClass(question) || asksWhichOfAClass)
 				&& ChartSearchAiUtils.getBooleanGlobalProperty(
 						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
 						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS)) {
 			// One name per ORDER, so two orders of one drug count as two (ADR Decision 379).
-			List<String> inIt = eachOrderFiledUnder(askedClass, orderEntries, context);
+			List<String> inIt = eachOrderFiledUnder(onClass, orderEntries, context);
 			// Beside an order the drug data does not identify, what holds of the orders it identifies, Decision 161's line
 			// naming the rest (ADR Decision 597).
-			if (inIt == null && noneItIdentifiesIsIn(askedClass, unidentified, orderEntries, context)) {
-				moduleAnswer = NONE_IT_IDENTIFIES_OPENING + carried.trim() + ".";
+			if (inIt == null && noneItIdentifiesIsIn(onClass, unidentified, orderEntries, context)) {
+				moduleAnswer = NONE_IT_IDENTIFIES_OPENING + onCarried.trim() + ".";
 			}
 			if (inIt != null) {
 				// Whether she is on MORE than one: "Yes —" only for two or more; one is stated, and neither "Yes" nor "No"
-				// (ADR Decision 379).
+				// (ADR Decision 379). Which of them she is on is answered with no "Yes" at all (ADR Decision 666).
 				boolean moreThanOne = QueryScopeRouter.asksWhetherSheIsOnMoreThanOneOfADrugClass(question);
+				String yes = asksWhichOfAClass ? "" : "Yes — ";
 				String named = DrugSafetyValidator.joinPartners(collapsedByName(inIt));
-				moduleAnswer = inIt.isEmpty() ? "None of this patient's active medication orders is" + carried + "."
-						: inIt.size() == 1 ? (moreThanOne ? "One" : "Yes — one") + " of this patient's active medication orders is"
-								+ carried + ": " + named + "."
-						: "Yes — " + inIt.size() + " of this patient's active medication orders are" + carried + ": " + named
+				moduleAnswer = inIt.isEmpty() ? "None of this patient's active medication orders is" + onCarried + "."
+						: inIt.size() == 1 ? (moreThanOne || asksWhichOfAClass ? "One" : "Yes — one")
+								+ " of this patient's active medication orders is" + onCarried + ": " + named + "."
+						: yes + inIt.size() + " of this patient's active medication orders are" + onCarried + ": " + named
 								+ ".";
 			}
 		}

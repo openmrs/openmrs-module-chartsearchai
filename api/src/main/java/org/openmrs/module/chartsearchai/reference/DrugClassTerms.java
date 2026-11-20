@@ -10,6 +10,7 @@
 package org.openmrs.module.chartsearchai.reference;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -562,6 +563,28 @@ final class DrugClassTerms {
 			}
 		}
 		named.addAll(classes.keySet());
+		return named;
+	}
+
+	/**
+	 * The one group of {@link #ATC_GROUP_OF_HER_MEDICATIONS} among the antiretrovirals and the TB drugs whose words {@code
+	 * question} uses anywhere — "Is she on any TB drugs?" names no possessive — or {@code null} where it names neither or
+	 * both (ADR Decision 666). Antibiotics are not read here: the group counts her TB drugs among them (Decision 634), and
+	 * whether she is on any is the model's (`OnADrugGroupQuestionTest.aClassNoGroupCarriesIsNotThisQuestion`).
+	 */
+	static String arvOrTbGroupNamed(String question) {
+		if (question == null) {
+			return null;
+		}
+		String named = null;
+		for (String group : Arrays.asList("antiretroviral", "TB drug")) {
+			if (WORDS_OF_HER_MEDICATION_GROUP.get(group).matcher(question).find()) {
+				if (named != null) {
+					return null;
+				}
+				named = group;
+			}
+		}
 		return named;
 	}
 

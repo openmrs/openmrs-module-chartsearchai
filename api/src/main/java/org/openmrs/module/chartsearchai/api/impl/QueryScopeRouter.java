@@ -4082,6 +4082,23 @@ public final class QueryScopeRouter {
 				&& fitsAShape(words(question), MORE_THAN_ONE_OF_A_DRUG_CLASS_SHAPES);
 	}
 
+	/**
+	 * Whether a question asks WHICH of a class's drugs she takes, and nothing else — <em>"What are her current ARVs?"</em>,
+	 * <em>"Which TB drugs is she on?"</em> (ADR Decision 666). As {@link #asksWhetherSheIsOnADrugClass}, the class is not
+	 * read here, and the answer names her orders in it with no "Yes".
+	 */
+	public static boolean asksWhichOfADrugClassSheIsOn(String question) {
+		return question != null && question.indexOf('?') == question.lastIndexOf('?')
+				&& fitsAShape(words(question), WHICH_OF_A_DRUG_CLASS_SHAPES);
+	}
+
+	private static final List<Pattern> WHICH_OF_A_DRUG_CLASS_SHAPES = shapes(
+			// "What are her current ARVs?", "What are his TB drugs?"
+			"(?:what|which) (?:are|is) " + POSSESSIVE + " (?:current |active )?(?:\\p{L}+ ){0,2}\\p{L}+",
+			// "Which ARVs is she on?", "What TB drugs is he taking?"
+			"(?:what|which) (?:\\p{L}+ ){0,2}\\p{L}+ (?:is|are) " + SUBJECT
+					+ " (?:currently |still )?(?:on|taking|receiving|using)");
+
 	private static final List<Pattern> MORE_THAN_ONE_OF_A_DRUG_CLASS_SHAPES = shapes(
 			// "Is she on more than one steroid?"
 			"(?:is|are) " + SUBJECT + " (?:currently |still )?(?:on|taking|receiving|using) (?:more than one|two|2|multiple|several)(?: \\p{L}+){1,3}",

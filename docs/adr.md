@@ -30354,3 +30354,61 @@ two prescriptions (Decision 663).
 
 Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aProposalOfNoPairBesideAnOrderTheDataCannotNameCountsRepeatOrdersAsOneMedication`
 (the count before this decision reddens it with *"none of the 2 active medications"*).
+
+## Decision 666: Whether, and which of, her antiretrovirals or TB drugs she is on is answered with her orders in that group
+
+**Status: Accepted** (November 2026). Extends
+[Decision 298](#decision-298-whether-she-is-on-any-drug-of-a-group-this-module-carries-is-answered-with-her-orders-in-it)
+to the groups [Decision 630](#decision-630-a-group-of-her-medications-asked-about-by-name-is-answered-over-that-group)
+reads. Found on the public demo on 2026-11-20.
+
+### Context
+
+The model answered these questions:
+- *"what are her current ARVs?"*: it listed *"Trimethoprim and sulfamethoxazole"* among the ARVs (`dd78ff2c`,
+  `dda915f3`).
+- *"Is she on any TB drugs?"*: it answered *"Yes — the patient is on Trimethoprim and sulfamethoxazole"* (`dd9e1da4`, and
+  `dd92feb8`, `dd8b571f` alike). It told `dd84d74a`, whose isoniazid order is in force, *"No tuberculosis treatment or
+  prophylaxis is recorded"*.
+
+The module already files her orders under these groups by their ATC codes (Decision 630). It answered only questions
+about their interactions.
+
+### The decision
+
+- `DrugClassTerms.arvOrTbGroupNamed` reads the antiretrovirals or the TB drugs by Decision 630's words, anywhere in the
+  question: *"Is she on any TB drugs?"* has no possessive.
+- Where the question names no class, the class-membership answer of Decisions 298 and 368 takes that group's membership
+  (`DrugClassTerms.membersOf`). It names her orders in it: *"Yes — one of this patient's active medication orders is among
+  the TB drugs this module reads by their ATC codes: Isoniazid."*, or *"None of …"*.
+- `QueryScopeRouter.asksWhichOfADrugClassSheIsOn` reads *"What are her current ARVs?"*, *"Which ARVs is she on?"* and
+  *"What TB drugs is he taking?"*. It is answered the same way, without *"Yes"*. A class Decision 298 or 368 resolves is
+  answered alike.
+- Decision 597's gate is kept: an order the drug data cannot identify leaves *"None of the orders the drug data
+  identifies …"*, and Decision 161's line names it.
+- `injectRecords` does not return early for such a question (`herArvOrTbGroupAsked`). Nothing resolves for it, and on
+  the query-scoped slice the deployed module builds by default no order of hers is missing. Nothing else stopped the
+  return there, so on the demo replica the first build of this change answered none of 60 cells.
+
+Antibiotics are left to the model. Decision 634 counts her TB drugs among them, and
+`OnADrugGroupQuestionTest.aClassNoGroupCarriesIsNotThisQuestion` pins *"Is she on any antibiotics?"* as the model's.
+
+### Measured
+
+On the demo replica (8088), 20 demo patients × *"Is she on any TB drugs?"*, *"what are her current ARVs?"* and *"Which
+ARVs is he on?"* (60 cells, no errors). Before, the model answered all 60. After, the module answers all 60, with no
+chip:
+- *"Trimethoprim and sulfamethoxazole"* is named as an ARV or a TB drug in none of them. Before, it was named in 7, over
+  `dd86f5f8`, `dd78ff2c`, `dda915f3` and `dda1d7e1`, whose list also named isoniazid as an ARV.
+- `dda1d7e1` and `dd9a3a85`, each on isoniazid, are told so. The model had said *"No TB drugs are currently recorded"*
+  and *"No tuberculosis drugs are currently being used or planned"*.
+- Each of the 40 ARV answers names her lamivudine, stavudine, nevirapine or efavirenz orders and nothing else.
+
+The answer counts orders, as Decision 379's does: *"6 of this patient's active medication orders are among the
+antiretrovirals …: Lamivudine (2 orders), Nevirapine (2 orders) and Stavudine (2 orders)."*
+
+Pinned by `OnADrugGroupQuestionTest.whetherSheIsOnATbDrugIsAnsweredOverAQueryScopedSlice` (the early return),
+`.whetherSheIsOnAnyTbDrugOrArvIsAnsweredWithHerOrdersInThatGroup` and
+`.whichArvsOrTbDrugsSheIsOnIsAnsweredWithHerOrdersInThatGroup` (the list shape's gate and its unasserted *"Yes"* each
+redden the second), and `LlmInferenceServiceAnswerFromFindingsContextTest.whichOfHerArvsAndTbDrugsSheIsOnIsTheModulesAnswer`
+(no model call).

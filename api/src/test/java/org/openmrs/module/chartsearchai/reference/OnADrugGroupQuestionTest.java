@@ -22,6 +22,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 
 /**
@@ -112,7 +113,90 @@ public class OnADrugGroupQuestionTest extends BaseModuleContextSensitiveTest {
 					DrugReferenceTestSupport.activeOrder("order-pred", "Prednisone Co 5mg", "Prednisone")));
 	}
 
+	/**
+	 * Whether she is on any TB drug or antiretroviral is answered with her orders in that group by their ATC codes (ADR
+	 * Decision 666): on the demo the model called co-trimoxazole a TB drug and an ARV, and told a patient on isoniazid "No
+	 * tuberculosis treatment or prophylaxis is recorded".
+	 */
+	@Test
+	public void whetherSheIsOnAnyTbDrugOrArvIsAnsweredWithHerOrdersInThatGroup() {
+		PatientClinicalContext.ActiveDrugOrder isoniazid = DrugReferenceTestSupport.activeOrder("order-inh", "Isoniazid",
+			"Isoniazid");
+		PatientClinicalContext.ActiveDrugOrder cotrimoxazole = DrugReferenceTestSupport.activeOrder("order-ctx",
+			"Trimethoprim and sulfamethoxazole", "Trimethoprim and sulfamethoxazole");
+		PatientClinicalContext.ActiveDrugOrder lamivudine = DrugReferenceTestSupport.activeOrder("order-3tc", "Lamivudine",
+			"Lamivudine");
+		PatientClinicalContext.ActiveDrugOrder nevirapine = DrugReferenceTestSupport.activeOrder("order-nvp", "Nevirapine",
+			"Nevirapine");
+		for (String question : Arrays.asList("Is she on any TB drugs?", "Is she taking any TB medications?")) {
+			assertEquals("Yes — one of this patient's active medication orders is among the TB drugs this module reads by "
+					+ "their ATC codes: Isoniazid.", ask(question, isoniazid, cotrimoxazole, lamivudine), question);
+			assertEquals("None of this patient's active medication orders is among the TB drugs this module reads by their "
+					+ "ATC codes.", ask(question, cotrimoxazole, lamivudine, nevirapine), question);
+		}
+		assertEquals("Yes — 2 of this patient's active medication orders are among the antiretrovirals this module reads by "
+				+ "their ATC codes: Lamivudine and Nevirapine.", ask("Is he on any ARVs?", cotrimoxazole, lamivudine, nevirapine));
+	}
+
+	/** Which of her TB drugs or antiretrovirals she is on is answered with her orders in the group, and no "Yes" (ADR
+	 *  Decision 666). */
+	@Test
+	public void whichArvsOrTbDrugsSheIsOnIsAnsweredWithHerOrdersInThatGroup() {
+		PatientClinicalContext.ActiveDrugOrder cotrimoxazole = DrugReferenceTestSupport.activeOrder("order-ctx",
+			"Trimethoprim and sulfamethoxazole", "Trimethoprim and sulfamethoxazole");
+		PatientClinicalContext.ActiveDrugOrder lamivudine = DrugReferenceTestSupport.activeOrder("order-3tc", "Lamivudine",
+			"Lamivudine");
+		PatientClinicalContext.ActiveDrugOrder nevirapine = DrugReferenceTestSupport.activeOrder("order-nvp", "Nevirapine",
+			"Nevirapine");
+		for (String question : Arrays.asList("what are her current ARVs?", "Which ARVs is she on?", "What ARVs is he taking?")) {
+			assertEquals("2 of this patient's active medication orders are among the antiretrovirals this module reads by "
+					+ "their ATC codes: Lamivudine and Nevirapine.", ask(question, cotrimoxazole, lamivudine, nevirapine),
+				question);
+		}
+		assertEquals("One of this patient's active medication orders is among the antiretrovirals this module reads by their "
+				+ "ATC codes: Lamivudine.", ask("what are her current ARVs?", cotrimoxazole, lamivudine));
+		assertEquals("None of this patient's active medication orders is among the TB drugs this module reads by their ATC "
+				+ "codes.", ask("What are his TB drugs?", cotrimoxazole, lamivudine));
+	}
+
+	/** Where her orders raise no finding at all, whether she is on a TB drug is still answered (ADR Decision 666): on the demo
+	 *  replica the injection returned before the answer for a patient whose orders the check relates nothing among. */
+	@Test
+	public void whetherSheIsOnATbDrugIsAnsweredWhereHerOrdersRaiseNoFinding() {
+		PatientClinicalContext.ActiveDrugOrder isoniazid = DrugReferenceTestSupport.activeOrder("order-inh", "Isoniazid",
+			"Isoniazid");
+		assertEquals("Yes — one of this patient's active medication orders is among the TB drugs this module reads by their ATC "
+				+ "codes: Isoniazid.", ask("Is she on any TB drugs?", isoniazid));
+		assertEquals("None of this patient's active medication orders is among the antiretrovirals this module reads by their "
+				+ "ATC codes.", ask("what are her current ARVs?", isoniazid));
+	}
+
+	/** On the chart the deployed module builds by default — a slice scoped to the question, which a question of her TB drugs
+	 *  does not scope to drug orders — whether she is on one is still answered (ADR Decision 666): on the demo replica the
+	 *  injection returned before the answer, nothing having resolved and no order being missing from such a slice. */
+	@Test
+	public void whetherSheIsOnATbDrugIsAnsweredOverAQueryScopedSlice() {
+		PatientClinicalContext.ActiveDrugOrder isoniazid = DrugReferenceTestSupport.activeOrder("order-inh", "Isoniazid",
+			"Isoniazid");
+		PatientClinicalContext.ActiveDrugOrder lamivudine = DrugReferenceTestSupport.activeOrder("order-3tc", "Lamivudine",
+			"Lamivudine");
+		assertEquals("Yes — one of this patient's active medication orders is among the TB drugs this module reads by their ATC "
+				+ "codes: Isoniazid.", askOverAQueryScopedSlice("Is she on any TB drugs?", isoniazid, lamivudine));
+		assertEquals("One of this patient's active medication orders is among the antiretrovirals this module reads by their "
+				+ "ATC codes: Lamivudine.", askOverAQueryScopedSlice("what are her current ARVs?", isoniazid, lamivudine));
+	}
+
+	private static String askOverAQueryScopedSlice(String question, PatientClinicalContext.ActiveDrugOrder... orders) {
+		PatientChart slice = DrugReferenceTestSupport.oneRecordChart();
+		slice.markQueryScoped();
+		return ask(slice, question, orders);
+	}
+
 	private static String ask(String question, PatientClinicalContext.ActiveDrugOrder... orders) {
+		return ask(DrugReferenceTestSupport.oneRecordChart(), question, orders);
+	}
+
+	private static String ask(PatientChart chart, String question, PatientClinicalContext.ActiveDrugOrder... orders) {
 		Set<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : orders) {
 			names.addAll(order.getNames());
@@ -120,7 +204,7 @@ public class OnADrugGroupQuestionTest extends BaseModuleContextSensitiveTest {
 		List<PatientClinicalContext.ActiveDrugOrder> list = new ArrayList<PatientClinicalContext.ActiveDrugOrder>(
 				Arrays.asList(orders));
 		return DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.shippedServiceWithGroups()).injectRecords(
-			DrugReferenceTestSupport.oneRecordChart(), DrugReferenceTestSupport.ctx(70, null, names, null, null, null, list),
+			chart, DrugReferenceTestSupport.ctx(70, null, names, null, null, null, list),
 			question).getModuleAnswer();
 	}
 }

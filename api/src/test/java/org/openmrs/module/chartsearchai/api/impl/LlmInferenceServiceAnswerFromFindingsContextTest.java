@@ -4045,6 +4045,35 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 				+ recordOf(answer, "9636dddd-0000-4000-8000-000000009636") + "]"), line);
 	}
 
+	/** Whether, and which of, her antiretrovirals or TB drugs she is on is the module's answer, never the model's (ADR
+	 *  Decision 666): on the demo the model named co-trimoxazole as an ARV and as a TB drug. */
+	@Test
+	public void whichOfHerArvsAndTbDrugsSheIsOnIsTheModulesAnswer() throws Exception {
+		executeDataSet("GroupAnswerEfavirenzRhzeCotrimoxazoleOrdersTestData.xml");
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer arvs = serviceWith(provider, shipped()).search(patient, "what are her current ARVs?");
+		ChartAnswer tb = serviceWith(provider, shipped()).search(patient, "Is she on any TB drugs?");
+
+		assertEquals(0, provider.calls, arvs.getAnswer() + " / " + tb.getAnswer());
+		assertEquals("2 of this patient's active medication orders are among the antiretrovirals this module reads by their ATC "
+				+ "codes: Efavirenz and Lamivudine / zidovudine.", arvs.getAnswer());
+		assertEquals("Yes — one of this patient's active medication orders is among the TB drugs this module reads by their "
+				+ "ATC codes: Rifampicin isoniazid pyrazinamide and ethambutol.", tb.getAnswer());
+	}
+
+	/** Where her orders raise no finding, whether she is on a TB drug is still the module's answer (ADR Decision 666): on the
+	 *  demo replica the injection returned before it for a patient whose orders the check relates nothing among. */
+	@Test
+	public void whetherSheIsOnATbDrugIsTheModulesAnswerWhereHerOrdersRaiseNoFinding() throws Exception {
+		executeDataSet("IsoniazidOrderTestData.xml");
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider, shipped()).search(patient, "Is she on any TB drugs?");
+
+		assertEquals(0, provider.calls, answer.getAnswer());
+		assertEquals("Yes — one of this patient's active medication orders is among the TB drugs this module reads by their ATC "
+				+ "codes: Isoniazid.", answer.getAnswer());
+	}
+
 	private static void assertNoDuplicateTherapy(String question, ChartAnswer answer, RecordingProvider provider) {
 		for (SafetyWarning chip : answer.getSafetyWarnings()) {
 			assertFalse(chip.getDetail().contains("possible duplicate therapy"), question + " — chip: " + chip.getDetail());

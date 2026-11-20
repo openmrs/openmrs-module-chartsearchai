@@ -135,6 +135,27 @@ public class OwnMedicationSafetyContextTest extends BaseModuleContextSensitiveTe
 	}
 
 	@Test
+	public void aQuestionWhetherADrugIsStillActiveIsAnsweredAsWhetherSheIsOnIt() throws IOException {
+		// Measured on the demo (ADR Decision 667): "Is nevirapine still active?", asked of a patient on nelfinavir and not on
+		// nevirapine, was answered by the model "Yes, Nelfinavir is still active", while "Is he still on nevirapine?" was the
+		// module's "Nevirapine is not one of this patient's active medications." The same question, the drug its subject.
+		for (String question : Arrays.asList("Is ibuprofen still active?", "Is ibuprofen active?",
+			"Is her ibuprofen still active?", "Is the ibuprofen order still active?", "Is ibuprofen still in force?",
+			"Is ibuprofen still current?")) {
+			String answer = answer(question);
+
+			assertNotNull(answer, "the module answers " + question);
+			assertTrue(answer.split("\n")[0].matches("Ibuprofen is one of this patient's active medications \\(Ibuprofen 400mg "
+					+ "\\[\\d+\\]\\)\\. 3 interactions with this patient's other active medications:"), question + " was: " + answer);
+		}
+		String notHers = answer("Is celecoxib still active?", null,
+			Arrays.asList(DrugReferenceTestSupport.activeOrder("order-ibuprofen", "Ibuprofen 400mg"),
+				DrugReferenceTestSupport.activeOrder("order-prednisone", "Prednisone 5mg")));
+		assertNotNull(notHers, "the module answers");
+		assertEquals("Celecoxib is not one of this patient's active medications.", notHers.split("\n")[0], "was: " + notHers);
+	}
+
+	@Test
 	public void aQuestionWhetherSheIsOnADrugNoneOfHerOrdersCarriesIsNotAnsweredAsHers() throws IOException {
 		// The statement rests on her orders: a drug none of them carries is not called hers. It is said not to be, then
 		// what the check found about it, and no verdict (ADR Decision 287): left to the model, "Is she on efavirenz?" was

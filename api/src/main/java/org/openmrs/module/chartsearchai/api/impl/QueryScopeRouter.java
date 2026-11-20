@@ -1573,7 +1573,11 @@ public final class QueryScopeRouter {
 			"(?:does|do) " + SUBJECT + " (?:currently |still )?(?:take|use|receive) " + D + "(?: now| currently)?",
 			// "Is prednisone one of her medications?", "Is ibuprofen in her current meds?", "Is ibuprofen on her medication list?"
 			"is " + D + " (?:one of " + POSSESSIVE + " " + MEDICATIONS + "|in " + POSSESSIVE + " " + MEDICATIONS + "|on "
-					+ POSSESSIVE + " (?:medication|med|drug) list)");
+					+ POSSESSIVE + " (?:medication|med|drug) list)",
+			// "Is nevirapine still active?", "Is the ibuprofen order still in force?", "Is her warfarin current?" — the drug
+			// the subject, the same question (ADR Decision 667)
+			"is (?:the |" + POSSESSIVE + " )?" + D + "(?: order| prescription)? (?:still |currently |now )?(?:active|in force"
+					+ "|current|ongoing)(?: now| currently)?");
 
 	/**
 	 * Whether a question asks whether the patient is on ONE drug now, and nothing else — one of {@link #PRESENCE_SHAPES}

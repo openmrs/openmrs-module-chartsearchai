@@ -30413,3 +30413,35 @@ Pinned by `OnADrugGroupQuestionTest.whetherSheIsOnATbDrugIsAnsweredOverAQuerySco
 `.whichArvsOrTbDrugsSheIsOnIsAnsweredWithHerOrdersInThatGroup` (the list shape's gate and its unasserted *"Yes"* each
 redden the second), and `LlmInferenceServiceAnswerFromFindingsContextTest.whichOfHerArvsAndTbDrugsSheIsOnIsTheModulesAnswer`
 (no model call).
+
+## Decision 667: Whether a drug is still active is answered as whether she is on it
+
+**Status: Accepted** (November 2026). Extends
+[Decision 202](#decision-202-a-question-whether-she-is-on-her-own-drug-or-whether-it-is-safe-with-her-other-medications-is-answered-as-her-own-medication-and-the-answer-names-the-order)'s
+question shapes. Found on the public demo on 2026-11-20.
+
+### Context
+
+*"Is nevirapine still active?"*, asked of `dd6690df`, who is on nelfinavir and has no nevirapine order, was answered by
+the model *"Yes, Nelfinavir is still active: 12 apples on 2006-05-24 [3], …"*. Four other patients with no nevirapine
+order were told *"The records do not address nevirapine."* *"Is he still on nevirapine?"*, the same question with the
+patient as its subject, is one of Decision 202's shapes, and the module answered it from her orders: *"Nevirapine is not
+one of this patient's active medications."*
+
+### The decision
+
+`QueryScopeRouter`'s `PRESENCE_SHAPES` takes the drug as the subject too: *"Is nevirapine still active?"*, *"Is the
+stavudine order still active?"*, *"Is her warfarin current?"*, *"Is ibuprofen still in force?"*. The question is then
+answered as Decision 202 and Decision 287 answer *"Is she on it?"*, with nothing else changed.
+
+### Measured
+
+On the demo replica (8088), the 20 patients of the demo's sixth sweep batch × *"Is nevirapine still active?"*, *"Is the
+stavudine order still active?"* and *"Is efavirenz still current?"* (60 cells, no errors). The module answers all 60;
+on the demo, the model had answered every *"Is nevirapine still active?"* cell. The 15 patients the model told nevirapine
+was active are the 15 the module says are on it. The other 5 (`dd66eef9`, `dd7993b1`, `dd9023c6`, `dd6690df`,
+`dd83c087`) are told nevirapine is not one of their active medications, as the demo's own *"Can I stop his
+nevirapine?"* told the same 5.
+
+Pinned by `OwnMedicationSafetyContextTest.aQuestionWhetherADrugIsStillActiveIsAnsweredAsWhetherSheIsOnIt`, which the
+shape's removal reddens.

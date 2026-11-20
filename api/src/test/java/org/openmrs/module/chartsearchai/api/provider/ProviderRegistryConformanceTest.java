@@ -116,6 +116,10 @@ public class ProviderRegistryConformanceTest {
 				}
 				StubRegistry registry = registry(enabled.toString(),
 						new FakeProvider("bundled", true), new FakeProvider("hub", hubReady));
+				if (fixtureCase.has("default_provider")) {
+					registry.gps.put(ChartSearchAiConstants.GP_DEFAULT_PROVIDER,
+							fixtureCase.get("default_provider").asText());
+				}
 
 				assertEquals(fixtureCase.get("expected_picker").asBoolean(), registry.isPickerVisible(), id);
 				assertEquals(fixtureCase.get("default_provider").asText(),
@@ -149,44 +153,54 @@ public class ProviderRegistryConformanceTest {
 	}
 
 	@Test
-	public void theDefaultDescriptorIsMarkedDefaultAndOthersAreNot() {
+	public void onlyOneSystemProviderIsExposedAndPickerRemainsHidden() {
 		StubRegistry registry = registry("bundled,hub", new FakeProvider("bundled", true),
 				new FakeProvider("hub", true));
 
-		for (ProviderDescriptor descriptor : registry.descriptors()) {
-			assertEquals("bundled".equals(descriptor.getId()), descriptor.isDefault());
-		}
-		assertTrue(registry.isPickerVisible());
+		assertFalse(registry.isPickerVisible());
+		assertEquals(1, registry.descriptors().size());
+		assertEquals("bundled", registry.descriptors().get(0).getId());
+		assertTrue(registry.descriptors().get(0).isDefault());
+
+		registry.gps.put(ChartSearchAiConstants.GP_DEFAULT_PROVIDER, "hub");
+		assertFalse(registry.isPickerVisible());
+		assertEquals(1, registry.descriptors().size());
+		assertEquals("hub", registry.descriptors().get(0).getId());
+		assertTrue(registry.descriptors().get(0).isDefault());
 	}
 
 	@Test
 	public void aConfiguredProviderWithNoImplementationStaysVisibleButUnavailable() {
-		StubRegistry registry = registry("bundled,hub", new FakeProvider("bundled", true));
+		StubRegistry registry = registry("hub", new FakeProvider("bundled", true));
 
 		ProviderDescriptor hub = registry.descriptors().stream().filter(d -> "hub".equals(d.getId()))
 				.findFirst().orElse(null);
-		assertNotNull(hub, "a configured provider must not silently disappear");
+		assertNotNull(hub, "an active configured provider must not silently disappear");
 		assertFalse(hub.isReady());
 		assertNotNull(hub.getUnavailableReason());
+		assertFalse(registry.isPickerVisible());
 	}
 
 	@Test
 	public void requireRejectsUnknownDisabledAndUnreadyProvidersInsteadOfFallingBack() {
-		StubRegistry registry = registry("bundled,hub", new FakeProvider("bundled", true),
+		StubRegistry hubActive = registry("hub", new FakeProvider("bundled", true),
 				new FakeProvider("hub", false));
 
-		assertEquals("bundled", registry.require("bundled").descriptor().getId());
 		ProviderUnavailableException unknown = assertThrows(ProviderUnavailableException.class,
-				() -> registry.require("nonsense"));
+				() -> hubActive.require("nonsense"));
 		assertEquals("unknown_provider", unknown.getProblemCode());
 		ProviderUnavailableException unready = assertThrows(ProviderUnavailableException.class,
-				() -> registry.require("hub"));
+				() -> hubActive.require("hub"));
 		assertEquals("provider_not_ready", unready.getProblemCode());
+		ProviderUnavailableException nonActive = assertThrows(ProviderUnavailableException.class,
+				() -> hubActive.require("bundled"));
+		assertEquals("provider_not_enabled", nonActive.getProblemCode());
 
-		StubRegistry bundledOnly = registry("bundled", new FakeProvider("bundled", true),
+		StubRegistry bundledActive = registry("bundled,hub", new FakeProvider("bundled", true),
 				new FakeProvider("hub", true));
+		assertEquals("bundled", bundledActive.require("bundled").descriptor().getId());
 		ProviderUnavailableException disabled = assertThrows(ProviderUnavailableException.class,
-				() -> bundledOnly.require("hub"));
+				() -> bundledActive.require("hub"));
 		assertEquals("provider_not_enabled", disabled.getProblemCode());
 	}
 

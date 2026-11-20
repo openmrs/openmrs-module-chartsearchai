@@ -64,7 +64,7 @@ public class TemporalGateRelayConformanceTest {
 
 	private static TurnRequest request() {
 		return new TurnRequest(patient(), "When was the last visit?", "conversation-1", "request-1",
-				ProviderMode.QUERY_SCOPED, "product-profile-a",
+				ProviderMode.QUERY_SCOPED, "gemma-4-12b",
 				Collections.singletonList(new PriorClinicalTurn("prior q", "prior a")), AccountContext.unavailable());
 	}
 
@@ -134,6 +134,7 @@ public class TemporalGateRelayConformanceTest {
 					.execute(request(), event -> { }, CancellationSignal.NONE)
 					.toCompletableFuture().get();
 
+			org.junit.jupiter.api.Assertions.assertNotNull(result.getAnswer(), id + ": answer must be present");
 			Object relayedGate = result.getAnswer().getPayload().get("temporalGate");
 			assertTrue(relayedGate instanceof Map, id + ": temporalGate must survive relay as an object");
 			assertEquals(expectedStatus, ((Map<?, ?>) relayedGate).get("status"),

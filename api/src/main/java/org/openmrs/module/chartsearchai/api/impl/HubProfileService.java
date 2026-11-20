@@ -16,6 +16,9 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -35,9 +38,14 @@ import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.api.provider.ClinicalAnswerProviderRegistry;
 import org.openmrs.module.chartsearchai.api.provider.HubClinicalAnswerProvider;
+import org.openmrs.module.chartsearchai.api.provider.HubPreset;
+import org.openmrs.module.chartsearchai.api.provider.HubPresetCatalog;
 import org.springframework.stereotype.Component;
 
-/** Relays med-agent-hub's authoritative product-profile metadata without reshaping it. */
+/**
+ * Combines OpenMRS-configured clinician presets with {@code med-agent-hub}'s backing model and
+ * execution-mode inventory from {@code GET /v1/models}.
+ */
 @Component("chartSearchAi.hubProfileService")
 public class HubProfileService {
 
@@ -62,18 +70,30 @@ public class HubProfileService {
 			.build();
 
 	public Map<String, Object> listProfiles() {
-		// Profiles of a provider require() refuses would offer the picker choices no turn can use.
-		if (!ClinicalAnswerProviderRegistry.enabledProviderIds(Context.getAdministrationService().getGlobalProperty(
-				ChartSearchAiConstants.GP_PROVIDERS_ENABLED, ChartSearchAiConstants.DEFAULT_PROVIDER))
-				.contains(HubClinicalAnswerProvider.PROVIDER_ID)) {
-			throw new APIException("Cannot list profiles: the Hub provider is not in "
-					+ ChartSearchAiConstants.GP_PROVIDERS_ENABLED + ".");
+		String activeProvider = ClinicalAnswerProviderRegistry.activeProviderId(
+				Context.getAdministrationService().getGlobalProperty(
+						ChartSearchAiConstants.GP_PROVIDERS_ENABLED, ChartSearchAiConstants.DEFAULT_PROVIDER),
+				Context.getAdministrationService().getGlobalProperty(
+						ChartSearchAiConstants.GP_DEFAULT_PROVIDER, ChartSearchAiConstants.DEFAULT_PROVIDER));
+		if (!HubClinicalAnswerProvider.PROVIDER_ID.equals(activeProvider)) {
+			throw new APIException("Cannot list profiles: the Hub provider is not the active provider in "
+					+ ChartSearchAiConstants.GP_PROVIDERS_ENABLED + "/"
+					+ ChartSearchAiConstants.GP_DEFAULT_PROVIDER + ".");
 		}
 		String endpoint = Context.getAdministrationService()
 				.getGlobalProperty(ChartSearchAiConstants.GP_HUB_ENDPOINT_URL);
 		if (endpoint == null || endpoint.trim().isEmpty()) {
 			throw new APIException("Cannot list profiles: "
 					+ ChartSearchAiConstants.GP_HUB_ENDPOINT_URL + " is not set.");
+		}
+		HubPresetCatalog catalog;
+		try {
+			catalog = HubPresetCatalog.load(Context.getAdministrationService()
+					.getGlobalProperty(ChartSearchAiConstants.GP_HUB_PRESETS, ""));
+		}
+		catch (IllegalArgumentException e) {
+			throw new APIException(
+					"Invalid " + ChartSearchAiConstants.GP_HUB_PRESETS + " configuration: " + e.getMessage(), e);
 		}
 		HttpRequest.Builder request = HttpRequest.newBuilder()
 				.uri(modelsUri(endpoint))
@@ -96,7 +116,7 @@ public class HubProfileService {
 			if (!(payload.get("data") instanceof List)) {
 				throw new APIException("Hub profile discovery returned no data list.");
 			}
-			return payload;
+			return buildDiscoveryPayload(catalog, payload);
 		}
 		catch (InterruptedException e) {
 			Thread.currentThread().interrupt();
@@ -112,6 +132,45 @@ public class HubProfileService {
 			// The exception, not its message: a refused connection's carries none on Java 17 and 21.
 			throw new APIException("Hub profile discovery failed: " + e, e);
 		}
+	}
+
+	/**
+	 * Resolves the Hub's default product profile id when a request omits {@code profile}, preferring
+	 * an available product profile marked {@code default=true} and falling back to the first
+	 * available product profile, or {@code null} when none is usable.
+	 */
+	public String resolveDefaultProfileId() {
+		Map<String, Object> payload = listProfiles();
+		Object dataObj = payload.get("data");
+		if (!(dataObj instanceof List)) {
+			return null;
+		}
+		String firstAvailable = null;
+		for (Object item : (List<?>) dataObj) {
+			if (!(item instanceof Map)) {
+				continue;
+			}
+			Map<?, ?> entry = (Map<?, ?>) item;
+			Object idObj = entry.get("id");
+			if (!(idObj instanceof String) || ((String) idObj).trim().isEmpty()) {
+				continue;
+			}
+			Object visibility = entry.get("visibility");
+			if (visibility != null && !"product".equals(visibility)) {
+				continue;
+			}
+			if (Boolean.FALSE.equals(entry.get("available"))) {
+				continue;
+			}
+			String id = ((String) idObj).trim();
+			if (Boolean.TRUE.equals(entry.get("default"))) {
+				return id;
+			}
+			if (firstAvailable == null) {
+				firstAvailable = id;
+			}
+		}
+		return firstAvailable;
 	}
 
 	/** Parses the body on its own thread and gives up, closing the body, when the deadline passes. */
@@ -151,6 +210,49 @@ public class HubProfileService {
 		}
 		return URI.create(normalized.substring(
 				0, normalized.length() - "/v1/chat/completions".length()) + "/v1/models");
+	}
+
+	@SuppressWarnings("unchecked")
+	private static Map<String, Object> buildDiscoveryPayload(HubPresetCatalog catalog,
+			Map<String, Object> hubPayload) {
+		Map<String, Map<String, Object>> backingModelsById = new LinkedHashMap<>();
+		for (Object item : (List<?>) hubPayload.get("data")) {
+			if (!(item instanceof Map)) {
+				continue;
+			}
+			Map<?, ?> entry = (Map<?, ?>) item;
+			Object idObj = entry.get("id");
+			if (!(idObj instanceof String) || ((String) idObj).trim().isEmpty()) {
+				continue;
+			}
+			Map<String, Object> copy = new LinkedHashMap<>();
+			for (Map.Entry<?, ?> kv : entry.entrySet()) {
+				if (kv.getKey() != null) {
+					copy.put(String.valueOf(kv.getKey()), kv.getValue());
+				}
+			}
+			backingModelsById.put(((String) idObj).trim(), copy);
+		}
+		Map<String, Object> executionModes = null;
+		Object modesObj = hubPayload.get("execution_modes");
+		if (modesObj instanceof Map) {
+			executionModes = (Map<String, Object>) modesObj;
+		}
+		List<HubPreset> presets = catalog.getPresets();
+		List<Map<String, Object>> data = new ArrayList<>(presets.size());
+		for (int i = 0; i < presets.size(); i++) {
+			data.add(presets.get(i).toDiscoveryEntry((i + 1) * 10, backingModelsById, executionModes));
+		}
+		Map<String, Object> result = new LinkedHashMap<>();
+		result.put("object", "list");
+		result.put("data", Collections.unmodifiableList(data));
+		if (hubPayload.containsKey("execution_modes")) {
+			result.put("execution_modes", hubPayload.get("execution_modes"));
+		}
+		if (hubPayload.containsKey("backend")) {
+			result.put("backend", hubPayload.get("backend"));
+		}
+		return result;
 	}
 
 	private String runtimeApiKey() {

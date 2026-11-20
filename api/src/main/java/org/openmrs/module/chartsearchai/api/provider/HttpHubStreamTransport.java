@@ -174,6 +174,9 @@ public class HttpHubStreamTransport implements HubStreamTransport {
 	static String requestJson(HubCallRequest request) throws IOException {
 		Map<String, Object> root = new LinkedHashMap<>();
 		root.put("model", request.getProfileId());
+		if (!request.getExecution().isEmpty()) {
+			root.put("execution", request.getExecution());
+		}
 		root.put("stream", Boolean.TRUE);
 		root.put("patient", request.getPatientUuid());
 		List<Map<String, Object>> messages = new ArrayList<>();

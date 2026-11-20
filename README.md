@@ -1159,13 +1159,14 @@ remain in the inference pipeline. Model-bound requests check the complete inject
 prompt against the input budget before any model pass. Answers composed directly
 from module findings remain available without model tokenization or inference.
 
-`ClinicalAnswerProviderRegistry` exposes configured providers and their actual
-availability. A fresh installation enables bundled inference only; missing or
-unready implementations remain visible with a reason, and a requested provider is
-never silently replaced. This contribution provides the bundled implementation and
-registry. The conversation endpoints expose discovery and execute the selected
-provider without cross-provider fallback. Combined frontend/model acceptance
-remains separate from local component checks.
+`ClinicalAnswerProviderRegistry` resolves one system-wide provider for the
+deployment and exposes its actual availability in `/providers` (`pickerVisible`
+is always `false`). A fresh installation activates bundled inference only; an
+unready active provider remains visible with its reason, and a requested
+provider override that differs from the active provider is rejected explicitly
+with `provider_not_enabled` rather than switching or falling back silently. This
+contribution provides the bundled implementation and registry. Combined
+frontend/model acceptance remains separate from local component checks.
 
 ## Conversation persistence
 
@@ -1225,7 +1226,7 @@ bundled provider's remote engine, the Hub is not probed, so an unreachable Hub i
 reported when profiles are listed or a turn runs. The optional Bearer token belongs
 in the runtime property `chartsearchai.hub.apikey`, never in a global property.
 `HubProfileService` relays profile metadata from `/v1/models` on the same configured
-Hub, and only while `hub` is listed in `chartsearchai.providers.enabled`.
+Hub, and only while `hub` is the active system provider.
 
 The Hub reads the chart as its own QueryStore account, so it cannot leave out the
 record types QueryStore withholds from the asking user (a role with `AI Query Patient
@@ -1233,8 +1234,10 @@ Data` but not, say, `Get Allergies`). Until the Hub can be told what to omit, a 
 from such a user ends in `provider_not_permitted` without calling the Hub, as does
 one where QueryStore cannot say what it withholds.
 
-The conversation endpoint can select this adapter explicitly. The existing search
-endpoints remain bundled; enabling Hub does not silently redirect them.
+When `hub` is the active system provider, legacy bundled `/search` and `/search/stream`
+requests fail explicitly with HTTP `409` (`provider_not_enabled`), and `/warmup` returns
+`204 No Content`. Conversely, `/chat/stream` executes the single active system provider
+and never silently falls back between providers.
 
 ## Conversation endpoints
 
@@ -1244,16 +1247,22 @@ OpenMRS user and keep the provider/mode that produced their turns.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| GET | `/providers` | Configured providers, capabilities, availability and default |
+| GET | `/providers` | Single active system provider metadata (`pickerVisible: false`), capabilities, availability and default |
 | GET | `/models` | Hub product-profile metadata from the configured Hub |
 | GET | `/chat?patient=<uuid>&session=<optional uuid>` | Recorded history; omitted session restores the user's latest active conversation |
 | POST | `/chat/new` | Close the current conversation and open a fresh one |
-| POST | `/chat/stream` | Execute and persist one provider-neutral turn with canonical lifecycle events |
+| POST | `/chat/stream` | Execute and persist (or stream statelessly when `ephemeral: true`) one provider-neutral turn with canonical lifecycle events |
 
-New-chat requests carry `patient` and an optional explicit `provider`/`mode`. Chat
-requests also carry `question`, optional `session` and, for Hub, the required
-`profile`. An omitted mode uses the selected provider's configured mode. A provider
-switch starts a new conversation. Unavailable selections fail explicitly.
+New-chat requests carry `patient` and optional `mode`. Chat requests carry
+`patient`, `question`, optional `session`, optional `ephemeral` (`false` by
+default), and optional `profile` (for Hub, omitted `profile` resolves to the
+Hub's active default product profile from `/v1/models`, failing with
+`profiles_unavailable` if none is available). Client `provider` overrides that
+do not match the active system provider fail explicitly with
+`provider_not_enabled`. An omitted mode uses the active provider's configured mode.
+Setting `ephemeral: true` executes the turn with no conversation session or prior
+history (`session: null`), writes no conversation or turn rows, and still records a
+`ChartSearchAuditLog` entry carrying the resolved provider, mode, and `requestId`.
 
 Chat streams use the same keep-alive comments and complete Unicode-character framing
 as `/search/stream`. The bundled gateway applies streaming proxy settings to both

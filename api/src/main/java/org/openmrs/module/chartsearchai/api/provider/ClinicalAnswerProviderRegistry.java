@@ -53,9 +53,26 @@ public class ClinicalAnswerProviderRegistry {
 		return Context.getAdministrationService().getGlobalProperty(property, defaultValue);
 	}
 
-	/** The configured enabled provider ids, in configuration order. */
+	/** The active system-wide provider id as a singleton list. */
 	public List<String> enabledProviderIds() {
-		return enabledProviderIds(gp(ChartSearchAiConstants.GP_PROVIDERS_ENABLED, ChartSearchAiConstants.DEFAULT_PROVIDER));
+		return java.util.Collections.singletonList(getDefaultProviderId());
+	}
+
+	/**
+	 * Resolves the single active system provider id from configured global properties. Uses the
+	 * configured default when it appears in the enabled list, otherwise falls back to bundled when
+	 * enabled, otherwise to the first configured entry (or bundled when unconfigured).
+	 */
+	public static String activeProviderId(String enabledGp, String defaultGp) {
+		List<String> enabled = enabledProviderIds(enabledGp);
+		String configured = defaultGp == null ? "" : defaultGp.trim();
+		if (!configured.isEmpty() && enabled.contains(configured)) {
+			return configured;
+		}
+		if (enabled.contains(ChartSearchAiConstants.DEFAULT_PROVIDER)) {
+			return ChartSearchAiConstants.DEFAULT_PROVIDER;
+		}
+		return enabled.isEmpty() ? ChartSearchAiConstants.DEFAULT_PROVIDER : enabled.get(0);
 	}
 
 	/** The provider ids {@code configured} (the {@code chartsearchai.providers.enabled} value) enables, in its
@@ -102,21 +119,19 @@ public class ClinicalAnswerProviderRegistry {
 	 * falls back to the fresh-install default when it is enabled, otherwise to the first enabled
 	 * provider. Discovery never advertises a disabled provider as the default.
 	 */
+	/**
+	 * The single active system-wide provider for all turns. A configured default that is not
+	 * enabled falls back to bundled when enabled, otherwise to the first enabled provider.
+	 */
 	public String getDefaultProviderId() {
-		List<String> enabled = enabledProviderIds();
-		String configured = gp(ChartSearchAiConstants.GP_DEFAULT_PROVIDER, ChartSearchAiConstants.DEFAULT_PROVIDER);
-		if (enabled.contains(configured)) {
-			return configured;
-		}
-		if (enabled.contains(ChartSearchAiConstants.DEFAULT_PROVIDER)) {
-			return ChartSearchAiConstants.DEFAULT_PROVIDER;
-		}
-		return enabled.isEmpty() ? ChartSearchAiConstants.DEFAULT_PROVIDER : enabled.get(0);
+		return activeProviderId(
+				gp(ChartSearchAiConstants.GP_PROVIDERS_ENABLED, ChartSearchAiConstants.DEFAULT_PROVIDER),
+				gp(ChartSearchAiConstants.GP_DEFAULT_PROVIDER, ChartSearchAiConstants.DEFAULT_PROVIDER));
 	}
 
-	/** The picker only exists when there is an actual choice. */
+	/** A deployment runs one system-wide provider, so client-side provider switching is hidden. */
 	public boolean isPickerVisible() {
-		return enabledProviderIds().size() > 1;
+		return false;
 	}
 
 	/**

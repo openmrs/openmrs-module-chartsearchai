@@ -11,6 +11,7 @@ package org.openmrs.module.chartsearchai.api.provider;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -73,11 +74,14 @@ public class HubClinicalAnswerProviderHttpTest extends BaseModuleContextSensitiv
 				"http://127.0.0.1:" + server.getAddress().getPort() + "/v1/chat/completions");
 		Patient patient = Context.getPatientService().getPatient(7);
 		TurnRequest request = new TurnRequest(patient, "What is recorded?", "conversation-1", "request-1",
-				ProviderMode.QUERY_SCOPED, "product-profile-a", Collections.emptyList(), AccountContext.unavailable());
+				ProviderMode.QUERY_SCOPED, "gemma-4-12b", Collections.emptyList(), AccountContext.unavailable());
 		TurnResult result = provider.execute(request, events::add, CancellationSignal.NONE)
 				.toCompletableFuture().get();
+		assertNotNull(receivedRequest.get());
 		assertEquals(patient.getUuid(), receivedRequest.get().path("patient").asText());
-		assertEquals("product-profile-a", receivedRequest.get().path("model").asText());
+		assertEquals("gemma-4-12b", receivedRequest.get().path("model").asText());
+		assertEquals("quick", receivedRequest.get().path("execution").path("mode").asText());
+		assertEquals("gemma-4-12b", receivedRequest.get().path("execution").path("preset_id").asText());
 		assertTrue(receivedRequest.get().path("context").path("require_product_profile").asBoolean());
 		List<TurnEventType> types = events.stream().map(TurnEvent::getType).collect(Collectors.toList());
 		assertTrue(TurnLifecycleValidator.violations(provider.descriptor().getCapabilities(), types).isEmpty());
@@ -119,7 +123,7 @@ public class HubClinicalAnswerProviderHttpTest extends BaseModuleContextSensitiv
 		assertNull(result.getAnswer());
 		Map<String, Object> answer = events.stream()
 				.filter(event -> event.getType() == TurnEventType.INDEPTH_ERROR)
-				.findFirst().orElseThrow(AssertionError::new).getAnswer().getPayload();
+				.findFirst().orElseThrow(() -> new AssertionError("expected INDEPTH_ERROR event")).getAnswer().getPayload();
 		assertEquals("Retained answer.", answer.get("answer"));
 		assertEquals("Inspectable draft.", answer.get("originalAnswer"));
 		assertEquals("checked", ((Map<?, ?>) answer.get("answerValidation")).get("status"));
@@ -151,12 +155,50 @@ public class HubClinicalAnswerProviderHttpTest extends BaseModuleContextSensitiv
 		Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_HUB_ENDPOINT_URL,
 				"http://127.0.0.1:" + server.getAddress().getPort() + "/v1/chat/completions");
 		TurnRequest request = new TurnRequest(Context.getPatientService().getPatient(7), "Any allergies?",
-				"conversation-1", "request-1", ProviderMode.QUERY_SCOPED, "product-profile-a", Collections.emptyList(),
+				"conversation-1", "request-1", ProviderMode.QUERY_SCOPED, "gemma-4-12b", Collections.emptyList(),
 				AccountContext.unavailable());
 		TurnResult result = org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport.refusingPrivilege(
 				org.openmrs.util.PrivilegeConstants.GET_ALLERGIES,
 				() -> provider.execute(request, event -> {}, CancellationSignal.NONE).toCompletableFuture().join());
 		assertEquals("provider_not_permitted", result.getProblemCode());
 		assertNull(receivedRequest.get());
+	}
+
+	@Test
+	public void unknownPresetFailsWithModelNotFoundWithoutCallingTheHub() throws Exception {
+		server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+		server.createContext("/v1/chat/completions", exchange -> {
+			receivedRequest.set(MAPPER.readTree(exchange.getRequestBody()));
+			exchange.sendResponseHeaders(500, -1);
+		});
+		server.start();
+		Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_HUB_ENDPOINT_URL,
+				"http://127.0.0.1:" + server.getAddress().getPort() + "/v1/chat/completions");
+		TurnRequest request = new TurnRequest(Context.getPatientService().getPatient(7), "What is recorded?",
+				"conversation-1", "request-1", ProviderMode.QUERY_SCOPED, "nonexistent-preset",
+				Collections.emptyList(), AccountContext.unavailable());
+		TurnResult result = provider.execute(request, event -> {}, CancellationSignal.NONE).toCompletableFuture().join();
+		assertEquals("model_not_found", result.getProblemCode());
+		assertNull(receivedRequest.get());
+	}
+
+	@Test
+	public void answerDeltaOverHttpStreamsBeforeAnswerDone() throws Exception {
+		String payload = "{\"answer\":\"Supported answer.\",\"references\":[]}";
+		List<TurnEvent> events = new ArrayList<>();
+		TurnResult result = executeOverHttp(
+				"event: answer_delta\ndata: {\"delta\":\"Supported \"}\n\n"
+						+ "event: answer_delta\ndata: {\"delta\":\"answer.\"}\n\n"
+						+ "event: answer_done\ndata: " + payload + "\n\n"
+						+ "event: done\ndata: " + payload + "\n\n",
+				events);
+		assertEquals(TurnEventType.TURN_DONE, result.getTerminalState());
+		List<String> deltas = events.stream()
+				.filter(event -> event.getType() == TurnEventType.ANSWER_DELTA)
+				.map(TurnEvent::getTextDelta)
+				.collect(Collectors.toList());
+		assertEquals(2, deltas.size());
+		assertEquals("Supported ", deltas.get(0));
+		assertEquals("answer.", deltas.get(1));
 	}
 }

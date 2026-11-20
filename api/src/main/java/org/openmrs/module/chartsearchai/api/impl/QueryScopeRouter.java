@@ -1699,6 +1699,12 @@ public final class QueryScopeRouter {
 	private static final String ONE_OF_HER_D_ORDERS_STOPPED = "(?:should|must) one of " + POSSESSIVE + " " + D
 			+ " orders be (?:stopped|discontinued|held)(?: now)?";
 
+	/** "Should her nevirapine be stopped?", "Does his nevirapine need to be stopped?" — her drug the passive subject, whether
+	 *  to stop it (ADR Decision 668). Named as hers: the bare "Should ibuprofen be stopped?" stays with the model, as ADR
+	 *  Decision 134's passive giving shapes leave it. */
+	private static final String HER_D_BE_STOPPED = "(?:(?:should|must) " + POSSESSIVE + " " + D + "|(?:does|do) " + POSSESSIVE
+			+ " " + D + " need to) be (?:stopped|discontinued|held)(?: now)?";
+
 	/** "Is it safe to stop her nevirapine?", "Can I stop her nevirapine?" — whether to stop her drug (ADR Decision 335). */
 	/** "… before surgery", "… ahead of the procedure" — the occasion a question whether to stop her drug names, which asks
 	 *  nothing else of it (ADR Decision 391). */
@@ -1720,7 +1726,7 @@ public final class QueryScopeRouter {
 			// and "… because of interactions" (ADR Decision 609)
 			"(?:should|must|do) (?:i|we) (?:need to )?(?:stop|discontinue|hold) " + HER_D + "(?: now)?"
 					+ BEFORE_AN_OCCASION + BECAUSE_OF_INTERACTIONS,
-			ONE_OF_HER_D_ORDERS_STOPPED);
+			ONE_OF_HER_D_ORDERS_STOPPED, HER_D_BE_STOPPED);
 
 	/** Whether it asks whether stopping it is safe or allowed — not whether it should be stopped, which ADR Decision 259
 	 *  answers of her own drug as her medication with no lead (ADR Decision 335). */
@@ -1790,6 +1796,7 @@ public final class QueryScopeRouter {
 			"(?:should|must|do) (?:i|we) (?:need to )?(?:stop|discontinue|hold) " + HER_D + "(?: now)?"
 					+ BEFORE_AN_OCCASION + BECAUSE_OF_INTERACTIONS,
 			ONE_OF_HER_D_ORDERS_STOPPED,
+			HER_D_BE_STOPPED,
 			// "If I stop her rifampicin, which interactions go away?" (ADR Decision 333)
 			"if (?:i|we) (?:stop|discontinue|remove|hold) " + POSSESSIVE + " " + D + " (?:which|what) (?:drug )?interactions? "
 					+ GO_AWAY,

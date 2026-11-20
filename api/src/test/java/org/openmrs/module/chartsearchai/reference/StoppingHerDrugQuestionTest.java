@@ -88,6 +88,27 @@ public class StoppingHerDrugQuestionTest extends BaseModuleContextSensitiveTest 
 		}
 	}
 
+	/**
+	 * Whether her drug should be stopped, the drug the passive subject, is whether to stop it (ADR Decision 668): on the demo
+	 * "Should her nevirapine be stopped?" fitted no shape, and the model told three of 20 patients "No — Nevirapine should not
+	 * be given", which answers neither question.
+	 */
+	@Test
+	public void whetherHerDrugShouldBeStoppedIsWhetherToStopIt() {
+		List<String> questions = Arrays.asList("Should her nevirapine be stopped?", "Should his nevirapine be discontinued?",
+			"Does his nevirapine need to be stopped?", "Should her nevirapine be held now?");
+		PatientClinicalContext.ActiveDrugOrder[] orders = {
+				DrugReferenceTestSupport.activeOrder("order-nvp", "Nevirapine 200mg", "Nevirapine"),
+				DrugReferenceTestSupport.activeOrder("order-rif", "Rifampicin 150mg", "Rifampicin") };
+		String stop = ask("Should I stop her nevirapine?", orders);
+		assertNotNull(stop, "precondition: the module answers whether to stop her drug");
+		for (String question : questions) {
+			assertEquals(mask(stop), mask(ask(question, orders)), question);
+			assertEquals("Nevirapine is not one of this patient's active medications, so there is no order of it to stop.",
+				ask(question, DrugReferenceTestSupport.activeOrder("order-mtz", "Metronidazole", "Metronidazole")), question);
+		}
+	}
+
 	/** A name the data does not recognise, called hers, in the same question: said so (ADR Decision 335) — after the chart
 	 *  answer, since the data has no near name for it and it may be no drug at all (ADR Decision 384). */
 	@Test

@@ -30445,3 +30445,39 @@ nevirapine?"* told the same 5.
 
 Pinned by `OwnMedicationSafetyContextTest.aQuestionWhetherADrugIsStillActiveIsAnsweredAsWhetherSheIsOnIt`, which the
 shape's removal reddens.
+
+## Decision 668: Whether her drug should be stopped, the drug the passive subject, is whether to stop it
+
+**Status: Accepted** (November 2026). Gives [Decision 335](#decision-335-whether-to-stop-her-drug-is-answered-with-what-relates-it-to-her-other-medications-the-stopping-itself-not-weighed)'s stop grammar another wording, as Decision 345 did.
+Found on the public demo on 2026-11-20.
+
+### Context
+
+*"Should her nevirapine be stopped?"* fitted no shape, and the model answered all 20 patients of the demo's eighth sweep
+batch. It told three patients who are not on nevirapine (`dd6616cd`, `dd6fdda7`, `dd88b43a`) *"No — Nevirapine should
+not be given: …"*, which answers neither whether to stop it nor whether she is on it, and 15 others *"The records do not
+address whether Nevirapine should be stopped."* *"Should I stop her nevirapine?"* is already the module's.
+
+### The decision
+
+*"Should her X be stopped (discontinued, held)?"* and *"Does his X need to be stopped?"* are stop shapes
+(`QueryScopeRouter`'s `HER_D_BE_STOPPED`, in the stop shapes and the shapes beside her medications), answered as
+*"Should I stop her X?"* is. The drug must be named as hers. The bare *"Should ibuprofen be stopped?"* stays with the
+model, as [Decision 134](#decision-134-two-drug-first-proposal-shapes-are-admitted-because-the-gate-was-run) left it and
+`LlmInferenceServiceAnswerFromFindingsContextTest.aQuestionTheModuleDidNotResolveAsASuitabilityQuestionStillAsksTheModel`
+pins.
+
+### Measured
+
+On the demo replica (8088), the batch's 20 patients × *"Should her nevirapine be stopped?"*, *"Does his nevirapine need
+to be stopped?"* and *"Should nevirapine be stopped?"* (60 cells, no errors). The module answers all 40 cells of the
+first two. 16 patients are told nevirapine is one of their active medications, then what the check found. The other 4
+(`dd6616cd`, `dd6fdda7`, `dd88b43a`, `dd8be71c`) are told *"Nevirapine is not one of this patient's active
+medications, so there is no order of it to stop."*
+
+Residue: the bare wording is still the model's. It answered 5 of the 20 with a *"No —"* lead that reads backwards:
+*"No — nevirapine should not be given"* or *"… should be withheld"* to the three patients above, and *"No — nevirapine
+should be changed because it is already in active orders"* to `dd8350a7` and `dd86cc40`.
+
+Pinned by `StoppingHerDrugQuestionTest.whetherHerDrugShouldBeStoppedIsWhetherToStopIt`. Taking the shape out of either
+list reddens it.

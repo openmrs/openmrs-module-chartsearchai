@@ -1557,7 +1557,7 @@ public class DrugReferenceInjector {
 				// none of them: "relates X to none of …" answers it as it answers a proposal (ADR Decision 181). Not
 				// below the floor, whose sentence is about withholding and leaves "does it interact?" unanswered.
 				moduleAnswer = composeFromNoPair(proposes || asksWhetherItInteracts(question, questionDrugs) || onIt, questionDrugs,
-						screenedSubstances, orderEntries, extent, mappings, matched, context, reading.states(), unidentified.size(),
+						screenedSubstances, orderEntries, extent, mappings, matched, context, reading.states(), unidentified,
 						product);
 			}
 			if (moduleAnswer == null) {
@@ -1585,7 +1585,7 @@ public class DrugReferenceInjector {
 			moduleAnswer = composeAfterAList(question, questionDrugs, screenedSubstances, orderEntries, findings,
 					findingNumbers, orderRecordNumbers,
 					orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers,
-					pairExtent, mappings, matched, context, reading.states(), unidentified.size());
+					pairExtent, mappings, matched, context, reading.states(), unidentified);
 			// Its bottom line as the drug asked alone records it (ADR Decision 561).
 			summary = moduleAnswer == null ? null : proposalBottomLine(moduleAnswer);
 		}
@@ -1610,7 +1610,7 @@ public class DrugReferenceInjector {
 						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS)
 				&& context.chartReadForSafety()) {
 			moduleAnswer = composeProposedBesideHerOwnUnrated(question, questionDrugs, screenedSubstances, findings,
-					pairExtent, mappings, orderEntries, matched, context, reading.states(), unidentified.size());
+					pairExtent, mappings, orderEntries, matched, context, reading.states(), unidentified);
 		}
 		// The class a question names, where it is a drug group this module carries (ADR Decision 298) or an ATC group (ADR
 		// Decision 368), and how a sentence names it.
@@ -4653,7 +4653,7 @@ public class DrugReferenceInjector {
 	private static String composeFromNoPair(boolean proposes, List<DrugReference> questionDrugs,
 			Set<Object> herSubstances, List<DrugReference> orderEntries, PairChipExtent extent,
 			List<RecordMapping> mappings, Map<DrugReference, SubstanceRendering> matched, PatientClinicalContext context,
-			boolean contraindicationsChecked, int unidentified) {
+			boolean contraindicationsChecked, List<PatientClinicalContext.ActiveDrugOrder> unidentified) {
 		return composeFromNoPair(proposes, questionDrugs, herSubstances, orderEntries, extent, mappings, matched, context,
 				contraindicationsChecked, unidentified, null);
 	}
@@ -4662,7 +4662,7 @@ public class DrugReferenceInjector {
 	private static String composeFromNoPair(boolean proposes, List<DrugReference> questionDrugs,
 			Set<Object> herSubstances, List<DrugReference> orderEntries, PairChipExtent extent,
 			List<RecordMapping> mappings, Map<DrugReference, SubstanceRendering> matched, PatientClinicalContext context,
-			boolean contraindicationsChecked, int unidentified, String product) {
+			boolean contraindicationsChecked, List<PatientClinicalContext.ActiveDrugOrder> unidentified, String product) {
 		if (extent == null || extent.getFound() != 0 || extent.getBelowFloor() == null
 				|| !extent.getBelowFloor().isEmpty() || herSubstances.isEmpty()) {
 			return null;
@@ -4702,17 +4702,27 @@ public class DrugReferenceInjector {
 		// branch), so the check compared the drug against what each resolves to — see the javadoc's residue.
 		// Beside orders the data does not identify, the count is of those it does: the drug was compared against
 		// them and no others, and the closing line names the rest (ADR Decision 161).
-		// Repeat orders of one prescription are one medication (ADR Decision 663). Counted so only where every order is
-		// identified and started: those two clauses count ORDERS, and are left as they were.
-		int n = unidentified == 0 && scheduled == 0 ? DrugSafetyValidator.prescriptionCount(context.getActiveDrugOrders())
-				: context.getActiveDrugOrders().size() - unidentified;
+		// Repeat orders of one prescription are one medication (ADR Decision 663), the ones the data identifies among them
+		// too (ADR Decision 665). Counted so only where every order has started: that clause counts ORDERS, and is left as
+		// it was.
+		List<PatientClinicalContext.ActiveDrugOrder> identified = new ArrayList<PatientClinicalContext.ActiveDrugOrder>();
+		for (PatientClinicalContext.ActiveDrugOrder order : context.getActiveDrugOrders()) {
+			boolean unread = false;
+			for (PatientClinicalContext.ActiveDrugOrder other : unidentified) {
+				unread |= other == order;
+			}
+			if (!unread) {
+				identified.add(order);
+			}
+		}
+		int n = scheduled == 0 ? DrugSafetyValidator.prescriptionCount(identified) : identified.size();
 		String medications = scheduled > 0
 				? (n == 1 ? " medication order" : " medication orders")
 						+ (scheduled == n ? (n == 1 ? ", scheduled and not yet started" : ", all scheduled and not yet started")
 								: " (" + (scheduled == 1 ? "one" : String.valueOf(scheduled)) + " of them scheduled and not yet started)")
 				: n == 1 ? " active medication" : " active medications";
 		return "The interaction check relates " + (product != null ? product : subject.displayLabel())
-				+ (unidentified == 0 ? " to none of this patient's " + n + medications
+				+ (unidentified.isEmpty() ? " to none of this patient's " + n + medications
 						: " to none of the " + n + medications + " the drug data identifies for this patient")
 				+ "." + recordMarkers(records);
 	}
@@ -4835,7 +4845,7 @@ public class DrugReferenceInjector {
 			Set<Object> herSubstances, List<DrugReference> orderEntries, List<SafetyWarning> findings,
 			List<Integer> findingNumbers, Map<String, Integer> orderRecordNumbers, Map<String, Integer> herOrderRecords,
 			PairChipExtent.Sink pairExtent, List<RecordMapping> mappings, Map<DrugReference, SubstanceRendering> matched,
-			PatientClinicalContext context, boolean contraindicationsChecked, int unidentified) {
+			PatientClinicalContext context, boolean contraindicationsChecked, List<PatientClinicalContext.ActiveDrugOrder> unidentified) {
 		List<DrugReference> listed = listedBeforeTheProposal(question, questionDrugs);
 		PairChipExtent questionPairs = pairExtent.stated();
 		if (listed.isEmpty() || questionPairs == null || questionPairs.getFound() != questionPairs.getReported()) {
@@ -9319,7 +9329,7 @@ public class DrugReferenceInjector {
 	private String composeProposedBesideHerOwnUnrated(String question, List<DrugReference> questionDrugs,
 			Set<Object> herSubstances, List<SafetyWarning> findings, PairChipExtent.Sink pairExtent, List<RecordMapping> mappings,
 			List<DrugReference> orderEntries, Map<DrugReference, SubstanceRendering> matched, PatientClinicalContext context,
-			boolean states, int unidentified) {
+			boolean states, List<PatientClinicalContext.ActiveDrugOrder> unidentified) {
 		List<AskedDrug> asked = askedDrugs(question, questionDrugs, context, false);
 		if (asked.size() != 2 || !QueryScopeRouter.asksWhetherToGiveDrugsTogether(wordsBesideItsNames(question, questionDrugs))) {
 			return null;

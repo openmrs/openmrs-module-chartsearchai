@@ -1532,6 +1532,23 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 				+ "asked about is not established.", answer.getAnswer());
 	}
 
+	/** Beside an order the data cannot name, repeat orders of one prescription it does identify are still one medication
+	 *  (ADR Decisions 161, 665): on the demo a patient on co-trimoxazole written twice and two vaccinations was told the
+	 *  check related isoniazid to "none of the 2 active medications the drug data identifies". */
+	@Test
+	public void aProposalOfNoPairBesideAnOrderTheDataCannotNameCountsRepeatOrdersAsOneMedication() throws Exception {
+		executeDataSet("AnswerFromFindingsUnnamedWarfarinOrderTestData.xml");
+		executeDataSet(REPEAT_ASPIRIN_ORDER);
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider, shipped()).search(patient, "Can I give her mebendazole?");
+
+		assertEquals(0, provider.calls, "the module answers: " + answer.getAnswer());
+		assertEquals("The interaction check relates Mebendazole to none of the 1 active medication the drug data "
+				+ "identifies for this patient. [" + referenceRecordOf(answer, "mebendazole") + "]\n"
+				+ "Not checked: 1 active order the drug data does not identify — Marevan. Whether it is the drug "
+				+ "asked about is not established.", answer.getAnswer());
+	}
+
 	/** The arm reads the PROPOSED drug's rows; a curated file need not mirror a pair, so a row only her aspirin's
 	 *  entry carries relates zolfixan to her while the arm relates nothing — the model answers (issue #592). */
 	@Test

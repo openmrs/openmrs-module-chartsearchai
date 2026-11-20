@@ -30254,7 +30254,8 @@ would duplicate those orders"*. No chip other than a duplicate-therapy one was l
 ### Residue
 
 - *"…to none of the N active medications the drug data identifies"* still counts orders where an order the data cannot
-  identify is present: the unidentified orders reach that sentence as a count, not a list.
+  identify is present: the unidentified orders reach that sentence as a count, not a list. Closed by
+  [Decision 665](#decision-665-beside-orders-the-data-cannot-identify-repeat-orders-of-one-prescription-are-still-one-medication).
 - No test isolates the order-type conjunct (a second drug order type would be needed).
 - Two orders of one product that differ only in free-text wording, or are filed under two `Drug` rows of one concept,
   stay two prescriptions, and their finding stays: the module does not read wording as a regimen.
@@ -30320,3 +30321,36 @@ Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aFindingAboutACombin
 names there reddens it with *"against 2 of this patient's medications, Lamivudine / zidovudine and Lamivudine"*), and
 `.oneMechanismOverSeveralOrdersCitesEveryOrderItMerged` (the merged chip's union; dropping it leaves the line citing
 the finding alone).
+
+## Decision 665: Beside orders the data cannot identify, repeat orders of one prescription are still one medication
+
+**Status: Accepted** (November 2026). Closes the first residue of
+[Decision 663](#decision-663-repeat-orders-of-one-prescription-are-not-a-duplicate-therapy). Found on the public demo
+on 2026-11-20.
+
+### Context
+
+*"can we start isoniazid prophylaxis?"* (patient `dd8fe4bb-1691-11df-97a5-7038c432aabf`: co-trimoxazole ordered twice
+as repeat orders, plus infant formula and vaccinations the drug data does not identify) answered *"The interaction
+check relates Isoniazid to none of the 2 active medications the drug data identifies for this patient."* The same
+patient's Panadol answer named one medication, co-trimoxazole. Decision 663 counted prescriptions only where every
+order was identified. Beside an unidentified order, `DrugReferenceInjector.composeFromNoPair` counted the identified
+ORDERS.
+
+### The decision
+
+`composeFromNoPair` takes the unidentified orders themselves, not their count, from the one list
+`DrugSafetyValidator.unresolvedActiveOrders` gives (Decision 161). It counts the prescriptions of the orders left
+(`DrugSafetyValidator.prescriptionCount`). Where an order has not started, that sentence still counts orders, as
+Decision 310 words it. `composeAfterAList` and `composeProposedBesideHerOwnUnrated` pass the list through.
+
+### Measured
+
+On the demo replica (8088), the 6 demo patients whose answers named unidentified orders × 4 proposals (isoniazid
+prophylaxis, mebendazole, albendazole, amoxicillin), before and after (24 cells, no errors). 7 answers changed and no
+chip did. Each lowered the count to her prescriptions: `dd86f28b` 12 → 4, `dd84c8de` 5 → 2, `dd8fe4bb` 2 → 1.
+`dd84b45e` went 9 → 6: lamivudine and nevirapine were each entered twice at one encounter, and a double entry stays
+two prescriptions (Decision 663).
+
+Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aProposalOfNoPairBesideAnOrderTheDataCannotNameCountsRepeatOrdersAsOneMedication`
+(the count before this decision reddens it with *"none of the 2 active medications"*).

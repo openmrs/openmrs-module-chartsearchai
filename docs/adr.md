@@ -30455,8 +30455,9 @@ Found on the public demo on 2026-11-20.
 
 *"Should her nevirapine be stopped?"* fitted no shape, and the model answered all 20 patients of the demo's eighth sweep
 batch. It told three patients who are not on nevirapine (`dd6616cd`, `dd6fdda7`, `dd88b43a`) *"No — Nevirapine should
-not be given: …"*, which answers neither whether to stop it nor whether she is on it, and 15 others *"The records do not
-address whether Nevirapine should be stopped."* *"Should I stop her nevirapine?"* is already the module's.
+not be given: …"*, which answers neither whether to stop it nor whether she is on it. It told 14 others *"The records do
+not address whether Nevirapine should be stopped."*, one *"The records do not address Nevirapine."*, and two that
+nevirapine *"is related to possible duplicate therapy"*. *"Should I stop her nevirapine?"* is already the module's.
 
 ### The decision
 
@@ -30481,3 +30482,35 @@ should be changed because it is already in active orders"* to `dd8350a7` and `dd
 
 Pinned by `StoppingHerDrugQuestionTest.whetherHerDrugShouldBeStoppedIsWhetherToStopIt`. Taking the shape out of either
 list reddens it.
+
+## Decision 669: Whether a drug should be stopped, not named as hers, is whether to stop it too
+
+**Status: Accepted** (November 2026). Takes [Decision 668](#decision-668-whether-her-drug-should-be-stopped-the-drug-the-passive-subject-is-whether-to-stop-it)'s
+residue, and revises what [Decision 134](#decision-134-two-drug-first-proposal-shapes-are-admitted-because-the-gate-was-run)
+kept with the model, on new evidence.
+
+### Context
+
+Decision 134 kept *"Should ibuprofen be stopped?"* out of its passive giving shapes because their *"No"* lead would answer
+it backwards. Decision 668 left the bare wording with the model for that reason. On the demo replica the model itself
+answered *"Should nevirapine be stopped?"* backwards for 5 of 20 patients: *"No — nevirapine should not be given"* or
+*"… should be withheld"* to `dd6616cd`, `dd6fdda7` and `dd88b43a`, who are not on it, and *"No — nevirapine should be
+changed because it is already in active orders"* to `dd8350a7` and `dd86cc40`.
+
+### The decision
+
+`HER_D_BE_STOPPED` takes the drug with or without a possessive: *"Should nevirapine be stopped?"*, *"Does efavirenz need
+to be stopped?"*. It is a stop shape, not a giving shape, so it is answered as *"Should I stop her X?"* is, and that answer
+opens with neither *"Yes"* nor *"No"*. *"Can ibuprofen be avoided?"* stays with the model.
+
+### Measured
+
+On the demo replica (8088), the 20 patients of Decision 668's batch × *"Should nevirapine be stopped?"*, *"Should
+stavudine be discontinued?"* and *"Does efavirenz need to be stopped?"* (60 cells, no errors). The module answers all 60,
+and none opens with *"No"*. For nevirapine they match Decision 668's answers to *"Should her nevirapine be stopped?"*,
+patient by patient: 16 on it, and `dd6616cd`, `dd6fdda7`, `dd88b43a` and `dd8be71c` told there is no order of it to
+stop.
+
+Pinned by `StoppingHerDrugQuestionTest.whetherHerDrugShouldBeStoppedIsWhetherToStopIt` and
+`LlmInferenceServiceAnswerFromFindingsContextTest.aBareDrugAskedWhetherItShouldBeStoppedIsTheModulesStopAnswer` (no model
+call).

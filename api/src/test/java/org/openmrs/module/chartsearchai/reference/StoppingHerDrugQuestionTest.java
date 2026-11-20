@@ -96,7 +96,9 @@ public class StoppingHerDrugQuestionTest extends BaseModuleContextSensitiveTest 
 	@Test
 	public void whetherHerDrugShouldBeStoppedIsWhetherToStopIt() {
 		List<String> questions = Arrays.asList("Should her nevirapine be stopped?", "Should his nevirapine be discontinued?",
-			"Does his nevirapine need to be stopped?", "Should her nevirapine be held now?");
+			"Does his nevirapine need to be stopped?", "Should her nevirapine be held now?",
+			// and not named as hers (ADR Decision 669)
+			"Should nevirapine be stopped?", "Does nevirapine need to be discontinued?");
 		PatientClinicalContext.ActiveDrugOrder[] orders = {
 				DrugReferenceTestSupport.activeOrder("order-nvp", "Nevirapine 200mg", "Nevirapine"),
 				DrugReferenceTestSupport.activeOrder("order-rif", "Rifampicin 150mg", "Rifampicin") };

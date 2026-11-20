@@ -2626,6 +2626,22 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 				"with the withholding call first, was: " + answer.getAnswer());
 	}
 
+	/**
+	 * "Should ibuprofen be stopped?" is whether to stop it (ADR Decision 669). Left to the model, the bare passive was answered
+	 * backwards: on the demo replica "Should nevirapine be stopped?" was told "No — nevirapine should not be given" or "No —
+	 * nevirapine should be changed" for 5 of 20 patients. The module's stop answer opens with neither "Yes" nor "No".
+	 */
+	@Test
+	public void aBareDrugAskedWhetherItShouldBeStoppedIsTheModulesStopAnswer() {
+		answerFromFindings(true);
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider).search(patient, "Should ibuprofen be stopped?");
+
+		assertEquals(0, provider.calls, "the module answers");
+		assertTrue(answer.isAnsweredByTheModule());
+		assertFalse(answer.getAnswer().startsWith("No") || answer.getAnswer().startsWith("Yes"), "was: " + answer.getAnswer());
+	}
+
 	/** Questions the module must NOT answer for the model, each for its own reason — the predicate is
 	 *  fail-closed, so a question it does not recognise keeps today's path. */
 	@Test
@@ -2663,8 +2679,9 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 			"Can I give her ibuprofen for her kidney pain?",
 			// (a second drug added to the first, "Is ibuprofen safe to add to omeprazole?", is the pair proposal it spells since
 			// ADR Decision 469, anyIssuesAskedOfTwoDrugsAndADrugStartedAfterAnotherAreThePairQuestionsTheySpell)
-			// inverse polarity in the passive: a "No" lead would answer it backwards
-			"Should ibuprofen be stopped?",
+			// inverse polarity in the passive: a "No" lead would answer it backwards. ("Should ibuprofen be stopped?" is the
+			// stop question since ADR Decision 669, whose answer has no such lead:
+			// aBareDrugAskedWhetherItShouldBeStoppedIsTheModulesStopAnswer)
 			"Can ibuprofen be avoided?",
 		};
 		for (String question : questions) {

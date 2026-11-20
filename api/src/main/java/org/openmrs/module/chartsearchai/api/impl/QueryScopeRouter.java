@@ -1700,10 +1700,10 @@ public final class QueryScopeRouter {
 			+ " orders be (?:stopped|discontinued|held)(?: now)?";
 
 	/** "Should her nevirapine be stopped?", "Does his nevirapine need to be stopped?" — her drug the passive subject, whether
-	 *  to stop it (ADR Decision 668). Named as hers: the bare "Should ibuprofen be stopped?" stays with the model, as ADR
-	 *  Decision 134's passive giving shapes leave it. */
-	private static final String HER_D_BE_STOPPED = "(?:(?:should|must) " + POSSESSIVE + " " + D + "|(?:does|do) " + POSSESSIVE
-			+ " " + D + " need to) be (?:stopped|discontinued|held)(?: now)?";
+	 *  to stop it (ADR Decision 668); and not named as hers, "Should ibuprofen be stopped?" (ADR Decision 669), which ADR
+	 *  Decision 134 kept from the giving shapes because their "No" lead would answer it backwards. The stop answer has none. */
+	private static final String HER_D_BE_STOPPED = "(?:(?:should|must) " + HER_D + "|(?:does|do) " + HER_D + " need to) be "
+			+ "(?:stopped|discontinued|held)(?: now)?";
 
 	/** "Is it safe to stop her nevirapine?", "Can I stop her nevirapine?" — whether to stop her drug (ADR Decision 335). */
 	/** "… before surgery", "… ahead of the procedure" — the occasion a question whether to stop her drug names, which asks

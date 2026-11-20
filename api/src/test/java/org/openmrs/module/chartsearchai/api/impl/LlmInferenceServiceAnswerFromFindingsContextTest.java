@@ -11,6 +11,7 @@ package org.openmrs.module.chartsearchai.api.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -78,6 +79,10 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 
 	/** Patient 7's aspirin written again at a later visit, the earlier order never stopped (ADR Decision 663). */
 	private static final String REPEAT_ASPIRIN_ORDER = "RepeatAspirinOrderTestData.xml";
+
+	private static final String LAMIVUDINE_ZIDOVUDINE_ORDER_UUID = "9664dddd-0000-4000-8000-000000009664";
+
+	private static final String LAMIVUDINE_ORDER_UUID = "9665dddd-0000-4000-8000-000000009665";
 
 	private static final String RIFAMPICIN_ORDER = "ListedMedicationsRifampicinOrderTestData.xml";
 
@@ -3956,6 +3961,71 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		assertEquals(0, provider.calls, answer.getAnswer());
 		assertTrue(answer.getAnswer().contains(". The interaction check relates it to none of this patient's 1 other active "
 				+ "medication. ["), answer.getAnswer());
+	}
+
+	/** A finding about one substance of a combination order cites that order, never another order displayed by the
+	 *  combination's other substance (ADR Decision 664): ibuprofen meets the zidovudine of her lamivudine / zidovudine,
+	 *  and her lamivudine order carries no zidovudine. On the demo this cited the lamivudine order too. */
+	@Test
+	public void aFindingAboutACombinationsSubstanceCitesNoOrderOfItsOtherSubstance() throws Exception {
+		executeDataSet("LamivudineZidovudineBesideLamivudineOrdersTestData.xml");
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider, shipped()).search(patient, "Can I give her ibuprofen?");
+
+		assertEquals(0, provider.calls, answer.getAnswer());
+		String line = null;
+		for (String candidate : answer.getAnswer().split("\n")) {
+			if (candidate.startsWith("Ibuprofen interacts with active order ") && candidate.contains("idovudine — ")) {
+				line = candidate;
+			}
+		}
+		assertNotNull(line, answer.getAnswer());
+		int combination = recordOf(answer, LAMIVUDINE_ZIDOVUDINE_ORDER_UUID);
+		assertTrue(line.endsWith(" [" + combination + "]"), line);
+		for (RecordReference reference : answer.getReferences()) {
+			assertNotEquals(LAMIVUDINE_ORDER_UUID, reference.getResourceUuid(), answer.getAnswer());
+		}
+	}
+
+	/** The orders an unrated pair lists a proposal against are the orders carrying its partner (ADR Decision 664):
+	 *  dextromethorphan meets the zidovudine of her lamivudine / zidovudine, and her lamivudine order is not one of them. */
+	@Test
+	public void anUnratedPairListsNoOrderOfACombinationsOtherSubstance() throws Exception {
+		executeDataSet("LamivudineZidovudineBesideLamivudineOrdersTestData.xml");
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider, shipped()).search(patient, "Can I give her dextromethorphan?");
+
+		assertEquals(0, provider.calls, answer.getAnswer());
+		assertEquals("The interaction data gives no rated reason to withhold Dextromethorphan.\n"
+				+ "The data lists Dextromethorphan against one of this patient's medications, Lamivudine / zidovudine, with no "
+				+ "severity or mechanism on file. [" + referenceRecordOf(answer, "dextromethorphan") + "]", answer.getAnswer());
+		for (RecordReference reference : answer.getReferences()) {
+			assertNotEquals(LAMIVUDINE_ORDER_UUID, reference.getResourceUuid(), answer.getAnswer());
+		}
+	}
+
+	/** One mechanism stated over several of her orders cites every order it merged (ADR Decisions 99, 664): efavirenz's
+	 *  hepatotoxicity caution over her lamivudine / zidovudine, RHZE and co-trimoxazole cites each of those orders, as the
+	 *  chips it merged each did. */
+	@Test
+	public void oneMechanismOverSeveralOrdersCitesEveryOrderItMerged() throws Exception {
+		executeDataSet("GroupAnswerEfavirenzRhzeCotrimoxazoleOrdersTestData.xml");
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider, shipped()).search(patient,
+			"Does efavirenz interact with her other medications?");
+
+		assertEquals(0, provider.calls, answer.getAnswer());
+		String line = null;
+		for (String candidate : answer.getAnswer().split("\\n")) {
+			if (candidate.startsWith("Efavirenz interacts with active order Lamivudine, Pyrazinamide, ")) {
+				line = candidate;
+			}
+		}
+		assertNotNull(line, answer.getAnswer());
+		assertTrue(line.endsWith(" [" + recordOf(answer, "9633dddd-0000-4000-8000-000000009633") + "] ["
+				+ recordOf(answer, "9634dddd-0000-4000-8000-000000009634") + "] ["
+				+ recordOf(answer, "9635dddd-0000-4000-8000-000000009635") + "] ["
+				+ recordOf(answer, "9636dddd-0000-4000-8000-000000009636") + "]"), line);
 	}
 
 	private static void assertNoDuplicateTherapy(String question, ChartAnswer answer, RecordingProvider provider) {

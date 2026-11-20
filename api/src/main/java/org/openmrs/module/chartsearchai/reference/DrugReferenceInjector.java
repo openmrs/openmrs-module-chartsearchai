@@ -4249,7 +4249,7 @@ public class DrugReferenceInjector {
 
 	/**
 	 * The markers of the chart records a composed line's finding is about — each active order its arm
-	 * matched the finding's drugs against ({@code SafetyWarning.matchedOrderNames()}), by every number
+	 * matched the finding's drugs against ({@code SafetyWarning.matchedOrderDisplays()}), by every number
 	 * {@link #orderRecordNumbers} resolved for an order spelling that display ({@link #everyRecordOf}, ADR Decision 539),
 	 * ascending, skipping a number the
 	 * line already cites (ADR Decision 140). A model's answer cites her order where it reports the
@@ -4270,15 +4270,17 @@ public class DrugReferenceInjector {
 
 	/**
 	 * The chart records of the active orders {@code finding} is about — each order its arm matched the finding's drugs
-	 * against ({@code SafetyWarning.matchedOrderNames()}), by every number {@link #orderRecordNumbers} resolved for an
-	 * order spelling that display ({@link #everyRecordOf}, ADR Decision 539), ascending and mutable. ONE join for both its
+	 * against ({@code SafetyWarning.matchedOrderDisplays()}), by every number {@link #orderRecordNumbers} resolved for an
+	 * order spelling that display ({@link #everyRecordOf}, ADR Decision 539), ascending and mutable. Its displays and
+	 * never its substance labels, which name a combination's other substance and so every order of it (ADR Decision
+	 * 664). ONE join for both its
 	 * readers — a composed line's markers ({@link #orderRecordMarkers}) and an interaction finding's provenance
 	 * ({@link #chartRecordNumbers}, ADR Decision 554) — so the record a module answer cites for an order and the record a
 	 * cited finding publishes for it cannot differ. An order with no citable record contributes nothing.
 	 */
 	private static Set<Integer> orderRecordsOf(SafetyWarning finding, Map<String, Integer> herOrderRecords) {
 		Set<Integer> numbers = new TreeSet<Integer>();
-		for (String name : finding.matchedOrderNames()) {
+		for (String name : finding.matchedOrderDisplays()) {
 			numbers.addAll(everyRecordOf(herOrderRecords, name == null ? null : name.trim()));
 		}
 		return numbers;

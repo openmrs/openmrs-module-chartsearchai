@@ -30272,3 +30272,51 @@ its controls, each reddened by removing the conjunct it names:
 `.oneOrderEnteredTwiceAtOneVisitIsStillAPossibleDuplicateTherapy` and
 `.aDoubleEntryAtAVisitAfterARepeatIsStillAPossibleDuplicateTherapy` (encounter),
 `.aDoubleEntryInTwoEncountersOfOneVisitIsStillAPossibleDuplicateTherapy` (visit).
+
+## Decision 664: A finding cites the orders it is about, never an order named after a combination's other substance
+
+**Status: Accepted** (November 2026). Narrows [Decision 554](#decision-554-a-cited-interaction-finding-publishes-the-record-of-the-order-it-is-about)
+and [Decision 142](#decision-142-a-proposal-related-to-her-orders-only-below-the-severity-floor-is-answered-with-those-rows).
+Found on the public demo on 2026-11-20.
+
+### Context
+
+*"Can I give him ibuprofen?"* (patient `dd55a928-1691-11df-97a5-7038c432aabf`, three Lamivudine / zidovudine orders
+and one Lamivudine order) answered *"Ibuprofen interacts with active order Lamivudine / zidovudine (3 orders) —
+Moderate. [136] [2] [37] [69] [103]"*. Record 69 is the Lamivudine order. The mechanism is zidovudine's, and that order
+carries no zidovudine. `dd55bf65` and `dd556a73` cited their Lamivudine orders the same way.
+
+`DrugReferenceInjector.orderRecordsOf` joined a finding to her records through `SafetyWarning.matchedOrderNames()`.
+Since issue #514 that list holds each matched order's display and, beside it, the label of every substance that order
+resolves, so that a sentence naming the order by any of its substances reads as about it. The Lamivudine / zidovudine
+order put *"Lamivudine"* in the list, and the record join matched it against every order displayed *"Lamivudine"*. The
+below-floor walk (`DrugSafetyValidator`, the orders a pair lists a proposal against) made the same join. With this
+fixture it answered *"The data lists Dextromethorphan against 2 of this patient's medications, Lamivudine / zidovudine
+and Lamivudine"*, and dextromethorphan has no pair with lamivudine.
+
+### The decision
+
+A finding carries the displays of the orders its arm matched (`SafetyWarning.matchedOrderDisplays()`) apart from the
+names those orders go by. The walk fills both (`DrugSafetyValidator.MatchedOrders`), and a merged chip unions both.
+Every join that cites or lists an order reads the displays: `orderRecordsOf`, and so the composed line's markers and a
+cited finding's provenance, and the below-floor pair's orders. The labels stay in `orderNamesOf` for the prose checks
+#514 wrote them for.
+
+Rejected: dropping the labels from the list (#514's prose check would again miss a sentence naming her order by the
+knowledge base's spelling), and filtering the labels at the join (a label and a display cannot be told apart once
+they are in one list: *"Lamivudine"* is both).
+
+### Measured
+
+On the demo replica (8088), 42 demo patients × *"Can I give him ibuprofen?"*, *"any drug interactions?"* and *"Can I
+give him dextromethorphan?"*, through `/chartsearchai/search`, before and after (126 cells each, no errors). 7 answers
+changed and no chip did. Every change removed a citation of a Lamivudine-only order from a zidovudine finding (5 order
+citations over `dd556a73`, `dd55a928` and `dd55bf65`), or a Lamivudine order from a below-floor list where it was the
+combination's label (`dd556a73`, `dd55a928`). No citation was added. Two below-floor lists (`dd557008`, `dd65af1c`)
+name the same four orders in chart order instead of label order.
+
+Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aFindingAboutACombinationsSubstanceCitesNoOrderOfItsOtherSubstance`
+(the record join) and `.anUnratedPairListsNoOrderOfACombinationsOtherSubstance` (the below-floor walk; reading the
+names there reddens it with *"against 2 of this patient's medications, Lamivudine / zidovudine and Lamivudine"*), and
+`.oneMechanismOverSeveralOrdersCitesEveryOrderItMerged` (the merged chip's union; dropping it leaves the line citing
+the finding alone).

@@ -316,7 +316,7 @@ public final class PairChipExtent {
 
 		/**
 		 * The displays of her active orders the partner was matched against, by the walk a chip's
-		 * {@code SafetyWarning.matchedOrderNames()} comes from, in chart order — what a module-composed answer
+		 * {@code SafetyWarning.matchedOrderDisplays()} comes from, in chart order — what a module-composed answer
 		 * cites her order by (ADR Decision 142). Empty where the partner side resolved to no entry. Never on
 		 * the wire: a partner is one of her medications (ADR Decision 102), and the wire states it by label.
 		 */

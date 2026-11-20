@@ -5395,7 +5395,7 @@ public class DrugSafetyValidator {
 			// subject was allowed to witness the partner here and the bridge must be able to name it.
 			// Passing the screening arm's reduction would leave the partner unbridged on a combination
 			// prescription carrying both substances — issue #349's own defect, one shape along.
-			Set<String> matchedNames = new LinkedHashSet<String>();
+			MatchedOrders matchedNames = new MatchedOrders();
 			Set<PatientClinicalContext.ActiveDrugOrder> partnerOrders =
 					new LinkedHashSet<PatientClinicalContext.ActiveDrugOrder>();
 			List<SafetyWarning.ChartOrderBridge> bridges = chartOrderBridges(rows, ref, rule.partner,
@@ -5424,7 +5424,7 @@ public class DrugSafetyValidator {
 			// names of the finding for InteractionClaimPairFidelityCheck, printed nowhere (#514). And the
 			// rows of the partner entry this chip names by partnerName, the rows chartOrderBridges took
 			// for it, so a check of the answer asks the prose rule of them (#555).
-			chip = chip.withMatchedOrderNames(matchedNames).withPartnerRows(
+			chip = chip.withMatchedOrderNames(matchedNames.names, matchedNames.displays).withPartnerRows(
 					Collections.singletonMap(partnerName, rowsOfSubstance(orderEntries, rule.partner)))
 					.withPartnerOrderCounts(partnerOrderCount(partnerName, partnerOrders,
 							rowsOfSubstance(orderEntries, rule.partner)))
@@ -5648,7 +5648,7 @@ public class DrugSafetyValidator {
 		List<SafetyWarning.ChartOrderBridge> bridges =
 				new ArrayList<SafetyWarning.ChartOrderBridge>();
 		Set<String> seenBridges = new HashSet<String>();
-		Set<String> matchedNames = new LinkedHashSet<String>();
+		MatchedOrders matchedNames = new MatchedOrders();
 		Map<String, List<DrugReference>> partnerRows = new LinkedHashMap<String, List<DrugReference>>();
 		Map<String, Integer> partnerOrderCounts = new LinkedHashMap<String, Integer>();
 		for (MechanismStatement member : group) {
@@ -5656,7 +5656,8 @@ public class DrugSafetyValidator {
 				partners.add(member.partnerName);
 			}
 			partnerOrderCounts.putAll(member.chip.partnerOrderCounts());
-			matchedNames.addAll(member.chip.matchedOrderNames());
+			matchedNames.names.addAll(member.chip.matchedOrderNames());
+			matchedNames.displays.addAll(member.chip.matchedOrderDisplays());
 			for (Map.Entry<String, List<DrugReference>> rows : member.chip.partnerRows().entrySet()) {
 				unionPartnerRows(partnerRows, rows.getKey(), rows.getValue());
 			}
@@ -5682,7 +5683,7 @@ public class DrugSafetyValidator {
 		// wrote it into (the two-resolutions-that-agree shape issue #151 forbids).
 		// No member names a not-started order (collapseKey), so the merged chip names active orders only.
 		SafetyWarning merged = interactionWarning(ref, group.get(0).rule, joinPartners(partners), null, null, false,
-				bridges, herOrder, partners, subjectStart, null).withMatchedOrderNames(matchedNames).withPartnerRows(partnerRows)
+				bridges, herOrder, partners, subjectStart, null).withMatchedOrderNames(matchedNames.names, matchedNames.displays).withPartnerRows(partnerRows)
 				.withPartnerOrderCounts(partnerOrderCounts);
 		return merged.withRestrictor(keep -> {
 			List<MechanismStatement> kept = new ArrayList<MechanismStatement>();
@@ -7826,7 +7827,7 @@ public class DrugSafetyValidator {
 			}
 			// Her orders the partner was matched against, by the walk an interaction chip's matched order names
 			// come from (ADR Decision 142): the partner side only, the subject being a proposal.
-			Set<String> matchedNames = new LinkedHashSet<String>();
+			MatchedOrders matchedNames = new MatchedOrders();
 			chartOrderBridges(Collections.<DrugReference> emptyList(), null,
 				activeOrderEntryFor(orderEntries, ref, i), partnerLabel(i), context, context.getActiveDrugOrders(),
 				orderEntries, bridgedOrders, subjects, matchedNames);
@@ -7837,7 +7838,7 @@ public class DrugSafetyValidator {
 			String atc = DrugReference.normalizeAtcToken(i.getAtc());
 			for (PatientClinicalContext.ActiveDrugOrder order : context.getActiveDrugOrders()) {
 				String display = order.getDisplay() == null ? null : order.getDisplay().trim();
-				boolean matched = display != null && (matchedNames.contains(display)
+				boolean matched = display != null && (matchedNames.displays.contains(display)
 						|| (!order.hasKnownName() && atc != null && order.getAtcCodes().contains(atc)));
 				if (matched && !herOrders.contains(display)) {
 					herOrders.add(display);
@@ -9251,7 +9252,7 @@ public class DrugSafetyValidator {
 				new LinkedHashMap<String, List<DrugReference.ConditionMediatedRisk>>();
 		List<SafetyWarning.ChartOrderBridge> bridges = new ArrayList<SafetyWarning.ChartOrderBridge>();
 		Set<String> seenBridges = new HashSet<String>();
-		Set<String> matchedNames = new LinkedHashSet<String>();
+		MatchedOrders matchedNames = new MatchedOrders();
 		// Each printed name -> the rows of every substance printed under it, what a check of the answer
 		// asks the prose rule of (issue #555) — the rows the rule-chip sites hand withPartnerRows too.
 		Map<String, List<DrugReference>> rowsByName = new LinkedHashMap<String, List<DrugReference>>();
@@ -9349,7 +9350,7 @@ public class DrugSafetyValidator {
 					+ " (DDInter drug-disease). " + CONDITION_MEDIATED_PROVENANCE;
 		}
 		return SafetyWarning.conditionMediated(subject.displayLabel(), detail, bridges, names, herOrder)
-				.withMatchedOrderNames(matchedNames).withPartnerRows(rowsByName);
+				.withMatchedOrderNames(matchedNames.names, matchedNames.displays).withPartnerRows(rowsByName);
 	}
 
 	/**
@@ -9536,7 +9537,7 @@ public class DrugSafetyValidator {
 			String partnerName, PatientClinicalContext context,
 			List<PatientClinicalContext.ActiveDrugOrder> partnerWitnesses,
 			List<DrugReference> orderEntries, BridgedOrders bridged, SubstanceSubjects subjects,
-			Set<String> matchedNames) {
+			MatchedOrders matchedNames) {
 		return chartOrderBridges(subjectRows, subjectRow, partnerRow, partnerName, context, partnerWitnesses, orderEntries,
 			bridged, subjects, matchedNames, null);
 	}
@@ -9550,7 +9551,7 @@ public class DrugSafetyValidator {
 			String partnerName, PatientClinicalContext context,
 			List<PatientClinicalContext.ActiveDrugOrder> partnerWitnesses,
 			List<DrugReference> orderEntries, BridgedOrders bridged, SubstanceSubjects subjects,
-			Set<String> matchedNames, Set<PatientClinicalContext.ActiveDrugOrder> partnerOrders) {
+			MatchedOrders matchedNames, Set<PatientClinicalContext.ActiveDrugOrder> partnerOrders) {
 		// The null half of this guard is unreachable and defensive only — both arms have already
 		// dereferenced or early-returned on a null context. Said so that the guard does not look
 		// better defended than it is, as addChartOrderBridge's own javadoc does for its blank-name
@@ -9778,6 +9779,20 @@ public class DrugSafetyValidator {
 	}
 
 	/**
+	 * What one walk of {@link #chartOrderBridges} matched: {@code names}, every name the finding's drugs go by through her
+	 * orders — each matched order's display and the label of every substance it resolves (issue #514), for
+	 * {@link SafetyWarning#orderNamesOf} — and {@code displays}, those orders' displays alone, the orders the finding is
+	 * about. Kept apart because a label is no order: on the demo, ibuprofen's zidovudine caution about her lamivudine /
+	 * zidovudine cited her lamivudine order too, its display being that combination's other label (ADR Decision 664).
+	 */
+	static final class MatchedOrders {
+
+		final Set<String> names = new LinkedHashSet<String>();
+
+		final Set<String> displays = new LinkedHashSet<String>();
+	}
+
+	/**
 	 * Adds the one bridge {@code order} states about {@code rows}' substance, or nothing.
 	 *
 	 * <p>Every refusal here is a claim this record must not make — no name to print, no row to be
@@ -9806,13 +9821,14 @@ public class DrugSafetyValidator {
 	private static boolean addChartOrderBridge(List<SafetyWarning.ChartOrderBridge> out,
 			List<DrugReference> rows, String printedName,
 			PatientClinicalContext.ActiveDrugOrder order, BridgedOrders bridged, List<DrugReference> orderEntries,
-			SubstanceSubjects subjects, Set<String> matchedNames) {
+			SubstanceSubjects subjects, MatchedOrders matchedNames) {
 		if (ChartSearchAiUtils.isBlank(printedName) || !displayNamesADrug(order)
 				|| !resolvesFromAny(rows, order, bridged)) {
 			return false;
 		}
-		matchedNames.add(order.getDisplay().trim());
-		addSubstanceLabelsOf(order, orderEntries, bridged, subjects, matchedNames);
+		matchedNames.names.add(order.getDisplay().trim());
+		matchedNames.displays.add(order.getDisplay().trim());
+		addSubstanceLabelsOf(order, orderEntries, bridged, subjects, matchedNames.names);
 		if (displaysAnOwnNameOfAny(rows, order, orderEntries) || restsOnAnAmbiguousBridge(rows, order, bridged)) {
 			return true;
 		}
@@ -10530,7 +10546,7 @@ public class DrugSafetyValidator {
 					// Only the orders THIS arm let witness the partner — the same reduction
 					// activeOrdersOtherThan applied to `others` above, through its own predicate, so the
 					// bridge cannot name an order this arm refused as a self-witness.
-					Set<String> matchedNames = new LinkedHashSet<String>();
+					MatchedOrders matchedNames = new MatchedOrders();
 					Set<PatientClinicalContext.ActiveDrugOrder> partnerOrders =
 							new LinkedHashSet<PatientClinicalContext.ActiveDrugOrder>();
 					List<SafetyWarning.ChartOrderBridge> bridges = chartOrderBridges(substance, subject,
@@ -10551,7 +10567,7 @@ public class DrugSafetyValidator {
 					SafetyWarning chip = (reconciled == null
 							? interactionWarning(subject, i, bridges, true, subjectStart, partnerStart)
 							: interactionWarning(subject, i, reconciled.chipName, reconciled.noteName, null,
-								bridges, true, subjectStart, partnerStart)).withMatchedOrderNames(matchedNames)
+								bridges, true, subjectStart, partnerStart)).withMatchedOrderNames(matchedNames.names, matchedNames.displays)
 							.withPartnerRows(Collections.singletonMap(chipPartnerName,
 									rowsOfSubstance(orderDrugs, partner)))
 							.withPartnerOrderCounts(partnerOrderCount(chipPartnerName, partnerOrders,

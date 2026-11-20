@@ -275,7 +275,7 @@ final class LlmAnswerExtractor {
 		for (JsonNode n : citationsNode) {
 			Integer index = citationIndex(n);
 			if (index == null) {
-				unusable.add(abbreviate(n.toString()));
+				unusable.add(n.getNodeType().toString());
 			} else {
 				if (!n.isIntegralNumber()) {
 					coerced++;
@@ -327,15 +327,17 @@ final class LlmAnswerExtractor {
 	 * someone already looking rather than a signal that arrives.
 	 */
 	private static void readNonArrayCitations(JsonNode citationsNode, List<Integer> citations) {
+		// Security (CWE-532): Log only the structural node type or list size, never the raw model output.
+		// The LLM may hallucinate Protected Health Information (PHI), which must not leak into server logs.
 		Integer index = citationIndex(citationsNode);
 		if (index == null) {
-			log.warn(NON_ARRAY_CITATIONS_MSG + ", and names no index — it was dropped: {}",
-					abbreviate(citationsNode.toString()));
+			log.warn(NON_ARRAY_CITATIONS_MSG + ", and names no index - it was dropped. Node Type: {}",
+					citationsNode.getNodeType());
 			return;
 		}
 		citations.add(index);
-		log.warn(NON_ARRAY_CITATIONS_MSG + ": read as the one index its single value names: {}",
-				abbreviate(citationsNode.toString()));
+		log.warn(NON_ARRAY_CITATIONS_MSG + ": read as the one index its single value names. Node Type: {}",
+				citationsNode.getNodeType());
 	}
 
 	/**
@@ -351,19 +353,16 @@ final class LlmAnswerExtractor {
 	 * already WARNs on entry that the response did not parse.
 	 */
 	private static void reportNonConformantCitations(int coerced, List<String> unusable) {
+		// Security (CWE-532): Log list sizes rather than raw content to prevent potential PHI leaks.
 		if (coerced == 0 && unusable.isEmpty()) {
 			return;
 		}
 		log.warn("The LLM's citations array did not honour the integer schema the request asked for: "
 				+ "{} index(es) recovered from a numeric string, {} entry(ies) named no index and were "
-				+ "dropped {}", coerced, unusable.size(),
-				unusable.subList(0, Math.min(MAX_REPORTED_UNUSABLE, unusable.size())));
+				+ "dropped", coerced, unusable.size());
 	}
 
 	/** {@code value} capped for a log line, so one degenerate entry cannot dominate it. */
-	private static String abbreviate(String value) {
-		return value.length() <= 40 ? value : value.substring(0, 40) + "…";
-	}
 
 	/**
 	 * Unconditional split: rewrites every {@code [a/b/...]} group into {@code [a], [b], ...}.

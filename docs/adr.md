@@ -30549,3 +30549,56 @@ between them:"* and states the findings: rifampicin against nevirapine Major for
 
 Pinned by `DrugBesideAResolvedGroupTest.whatHappensIfHeTakesADrugWithAGroupOfHisIsAnsweredOverThatGroup` and
 `.whatHappensIfHeTakesADrugWithHisMedicationsIsAnsweredWithNoLead`.
+
+## Decision 671: How a drug affects her medications, which of hers not to combine with it, continuing them with it, and the risks of adding it are the module's questions
+
+**Status: Accepted** (November 2026). Widens [Decision 281](#decision-281-whether-one-drug-changes-an-effect-of-a-group-of-her-medications-is-answered-with-neither-yes-nor-no),
+[Decision 319](#decision-319-which-of-her-medications-interact-with-a-drug-is-answered-with-the-findings-and-whether-anything-she-takes-interacts-with-it-as-whether-it-interacts),
+[Decision 508](#decision-508-continuing-her-medications-with-a-new-drug-proposes-the-new-drug-beside-them) and
+[Decision 670](#decision-670-what-happens-if-she-takes-a-drug-with-a-group-of-hers-is-the-drug-asked-beside-that-group)
+to four wordings a clinician typed on the demo.
+
+### Context
+
+The demo's thirteenth batch asked 18 patients eight drug-interaction questions. Four fitted no shape, and the model
+answered every patient:
+
+- *"How does rifampicin affect her ARVs?"*: 2 of 18 got *"The records do not address how rifampicin affects her ARVs"*
+  beside a Major finding against nevirapine. Most of the rest were led *"No — Rifampicin should not be given"*, a lead
+  that answers no question asked.
+- *"Which of her drugs should not be combined with clarithromycin?"*: one patient was told *"Efavirenz should not be
+  combined with clarithromycin due to a Moderate interaction"*, and others *"Nevirapine can be combined with
+  clarithromycin"*. The first states a Moderate caution as a reason to withhold. The second answers which of hers should
+  not be combined with it by saying one can be.
+- *"Are her ARVs ok to continue with isoniazid?"*: 2 of 18 got *"The records do not address …"*.
+- *"What are the risks of adding erythromycin to her current treatment?"*: every answer was led either *"can be
+  given"* or *"No —"*, a verdict on a question asked about risks.
+
+### The decision
+
+- *"How does / will X affect her ARVs?"* joins `CHANGES_A_GROUP_OF_HER_MEDICATIONS_SHAPES` as *"Does X affect her
+  ARVs?"* is. Its answer is Decision 281's: the findings, with neither *"Yes"* nor *"No"*.
+- *"Which of her drugs should not / never be combined / given / taken / used / mixed with X?"* joins
+  `WHICH_OF_HER_MEDICATIONS_INTERACT_SHAPES`. It is *"Which of her medications interact with X?"*, the module choosing
+  none to withhold, as Decision 429's *"Which of her drugs should I avoid giving with X?"* is.
+- *"Are her ARVs / meds ok to continue with X?"* is read by the residual reader as Decision 508's *"Ok to continue
+  her ARVs with X?"*: her medications, said ok to continue, followed by the drug. It proposes the drug beside them.
+- *"What are the risks / dangers of adding / giving / starting / prescribing X with / to her medications or a group of
+  them?"* joins `NEGATED_PROPOSAL_SHAPES` beside Decision 670's *"What happens if I add X to her meds?"*, with no lead.
+
+### Measured
+
+The demo batch was the before: the model answered all 18 patients for each of the four wordings. After, on the demo
+replica (8088), the four wordings were asked of 10 of the batch's patients (40 cells, no errors). The module answered all
+40, and none opens *"Yes"* or *"No"*:
+
+- *"How does rifampicin affect her ARVs?"* opens *"Rifampicin (rifampin) and this patient's antiretrovirals (…): what
+  the interaction check relates between them:"* and states the Major finding against nevirapine. `dd889a25`, whom the
+  model had told *"The records do not address …"*, is on no antiretroviral, and the answer says so.
+- *"Which of her drugs should not be combined with clarithromycin?"* states each caution with its own rating, Moderate
+  against nevirapine and Minor against sulfamethoxazole, and calls neither a reason to withhold.
+- *"Are her ARVs ok to continue with isoniazid?"* states the Moderate finding against stavudine. For `dd889a25` it says
+  the check relates isoniazid to none of her medications, where the model had said *"The records do not address …"*.
+- *"What are the risks of adding erythromycin to her current treatment?"* states each finding with its rating.
+
+Pinned by `ClinicianWordingsTest.howADrugAffectsHerMedicationsAndWhichNotToCombineAreTheModulesQuestions`.

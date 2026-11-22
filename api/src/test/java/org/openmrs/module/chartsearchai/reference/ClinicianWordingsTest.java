@@ -2103,6 +2103,32 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/**
+	 * ADR Decision 671: how a drug affects a group of hers, which of her drugs should not be combined with it, whether her
+	 * medications are ok to continue with it, and the risks of adding it are the module's questions. On the demo each went
+	 * to the model, which told 2 of 18 patients "The records do not address how rifampicin affects her ARVs" beside a Major
+	 * finding, led "How does …" with "No —", and said "Efavirenz should not be combined with clarithromycin due to a Moderate
+	 * interaction".
+	 */
+	@Test
+	public void howADrugAffectsHerMedicationsAndWhichNotToCombineAreTheModulesQuestions() {
+		String[][] pairs = { { "How does warfarin affect her ARVs?", "Does warfarin affect her ARVs?" },
+			{ "How will warfarin affect her ARVs?", "Does warfarin affect her ARVs?" },
+			{ "Which of her drugs should not be combined with warfarin?", "Which of her medications interact with warfarin?" },
+			{ "Which of her medications should not be given with warfarin?",
+					"Which of her medications interact with warfarin?" },
+			{ "Are her ARVs ok to continue with warfarin?", "Can I give her warfarin?" },
+			{ "Are her meds okay to continue with warfarin?", "Can I give her warfarin?" },
+			{ "What are the risks of adding warfarin to her current treatment?", "What happens if I add warfarin to her meds?" },
+			{ "What are the risks of giving her warfarin with her medications?",
+					"What happens if I add warfarin to her meds?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+	}
+
 	/** ADR Decision 505: giving a drug or avoiding it, asked either way, is a harm asked of it, which no "Yes" or "No" answers. */
 	@Test
 	public void givingADrugOrAvoidingItIsAHarmAskedOfIt() {

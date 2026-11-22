@@ -824,6 +824,11 @@ public final class QueryScopeRouter {
 					+ "are given|gets?|starts?|uses?) |(?:i|we) (?:give|add|start|prescribe) (?:" + PATIENT + " )?(?:on )?)" + D
 					+ " (?:with|alongside|together with|to|while (?:on|taking)) (?:any of )?(?:" + POSSESSIVE + " (?:other )?"
 					+ MEDICATIONS + "|" + HER_MEDICATION_GROUP + ")",
+			// "What are the risks of adding erythromycin to her current treatment?" — the model led it "No —" or "can be given",
+			// a lead on what was asked as a risk (ADR Decision 671)
+			"what (?:are|is) the (?:risks?|dangers?) of (?:adding|giving|starting|prescribing) (?:" + PATIENT + " )?(?:on )?" + D
+					+ " (?:with|alongside|together with|to) (?:any of )?(?:" + POSSESSIVE + " (?:other )?" + MEDICATIONS + "|"
+					+ HER_MEDICATION_GROUP + ")",
 			// "Any problems if I start her on ibuprofen?", "Are there any issues if I give her ibuprofen?" (ADR Decision 299)
 			"(?:(?:is|are) there )?any (?:problems?|issues?|concerns?|risks?) if (?:i|we) (?:give|start|prescribe|add) (?:"
 					+ PATIENT + " )?(?:on )?" + D + "(?: (?:to|for) " + PATIENT + ")?",
@@ -1071,6 +1076,10 @@ public final class QueryScopeRouter {
 			"(?:which|what) (?:of )?" + POSSESSIVE + " (?:other |current |active )?(?:medications|meds|medicines|drugs|"
 					+ "prescriptions) (?:interact|interacts|interfere|interferes) with " + D,
 			"which of " + POSSESSIVE + " (?:medications|meds|medicines|drugs) (?:is|are) the problems? with " + D,
+			// "Which of her drugs should not be combined with clarithromycin?" — the model told one patient "Efavirenz should
+			// not be combined with clarithromycin due to a Moderate interaction" (ADR Decision 671)
+			"which of " + POSSESSIVE + " (?:medications|meds|medicines|drugs) should (?:not|never) be (?:combined|given|taken|used|"
+					+ "mixed) (?:with|alongside) " + D,
 			// "Fluconazole: what interactions does she have?" (ADR Decision 446)
 			D + " what (?:drug )?interactions (?:does|do|would|will) (?:she|he|they|the patient|this patient) have",
 			"what (?:drug )?interactions (?:does|do|would|will) (?:she|he|they|the patient|this patient) have with " + D,
@@ -2305,7 +2314,8 @@ public final class QueryScopeRouter {
 	 */
 	private static final List<Pattern> CHANGES_A_GROUP_OF_HER_MEDICATIONS_SHAPES = shapes(
 			// and "Will starting rifampicin affect her ARVs?" (ADR Decision 428)
-			"(?:does|do|will|would|can|could|might) (?:starting |giving |adding )?" + D + " (?:increase|raise|elevate|boost|decrease"
+			// and "How does rifampicin affect her ARVs?", which the model led "No —" (ADR Decision 671)
+			"(?:how )?(?:does|do|will|would|can|could|might) (?:starting |giving |adding )?" + D + " (?:increase|raise|elevate|boost|decrease"
 					+ "|lower|reduce|change|alter|potentiate|affect) (?:the " + MEASURE + " of )?(?:any of )?" + HER_MEDICATION_GROUP
 					+ "(?: " + MEASURE + ")?",
 			// "Will fluconazole cause problems with her HIV drugs?" — whose "No" would say it will not (ADR Decision 433)
@@ -3540,10 +3550,15 @@ public final class QueryScopeRouter {
 		// Continuing her medications as a whole with a drug proposes the drug beside them: "Ok to continue her ARVs with
 		// fluconazole?" (ADR Decision 508). Never her one drug named, whose continuing is its own question (ADR Decision 480).
 		boolean continuingHerMedications = false;
-		for (int i = 0; i + 2 < wordsWithTheDrugMarked.size(); i++) {
-			if ("continue".equals(wordsWithTheDrugMarked.get(i))
+		// And her medications said ok to continue with it: "Are her ARVs ok to continue with isoniazid?" (ADR Decision 671).
+		for (int i = 0; i < wordsWithTheDrugMarked.size(); i++) {
+			if ("continue".equals(wordsWithTheDrugMarked.get(i)) && (i + 2 < wordsWithTheDrugMarked.size()
 					&& RESIDUAL_POSSESSIVES.contains(wordsWithTheDrugMarked.get(i + 1))
-					&& RESIDUAL_HER_MEDICATIONS.contains(wordsWithTheDrugMarked.get(i + 2))) {
+					&& RESIDUAL_HER_MEDICATIONS.contains(wordsWithTheDrugMarked.get(i + 2))
+					|| i >= 4 && "to".equals(wordsWithTheDrugMarked.get(i - 1))
+							&& RESIDUAL_SAFE.contains(wordsWithTheDrugMarked.get(i - 2))
+							&& RESIDUAL_HER_MEDICATIONS.contains(wordsWithTheDrugMarked.get(i - 3))
+							&& RESIDUAL_POSSESSIVES.contains(wordsWithTheDrugMarked.get(i - 4)))) {
 				List<String> read = new ArrayList<String>(wordsWithTheDrugMarked);
 				read.remove(i);
 				wordsWithTheDrugMarked = read;

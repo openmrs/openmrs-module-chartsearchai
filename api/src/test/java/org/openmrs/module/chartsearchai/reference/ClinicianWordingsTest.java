@@ -2169,6 +2169,30 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/**
+	 * ADR Decision 674: which of her ARVs a drug affects is which of them interact with it, and whether to change her ARVs
+	 * if she starts a drug is whether the drug affects them. On the demo both went to the model for 18 of 18 patients,
+	 * which told one on efavirenz "Efavirenz can be given" and another "No — the ARV regimen needs to be changed".
+	 */
+	@Test
+	public void whichOfHerArvsADrugAffectsAndWhetherToChangeThemAreTheModulesQuestions() {
+		String[][] pairs = { { "Which of her ARVs is affected by warfarin?", "Which of her ARVs interact with warfarin?" },
+			{ "Which of her ARVs are affected by warfarin?", "Which of her ARVs interact with warfarin?" },
+			{ "Which of her ARVs would be affected by warfarin?", "Which of her ARVs interact with warfarin?" },
+			{ "Do I need to change her ARV regimen if she starts warfarin?", "Does warfarin affect her ARVs?" },
+			{ "Do I need to change her ARVs if she starts treatment with warfarin?", "Does warfarin affect her ARVs?" },
+			{ "Should I change her ARVs if I start warfarin?", "Does warfarin affect her ARVs?" },
+			{ "Does her ARV regimen need to be changed if she starts warfarin?", "Does warfarin affect her ARVs?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+		// and TB treatment with rifampicin is rifampicin
+		assertEquals(ask("Does rifampicin affect her ARVs?"),
+			ask("Do I need to change her ARV regimen if she starts TB treatment with rifampicin?"));
+	}
+
 	/** ADR Decision 505: giving a drug or avoiding it, asked either way, is a harm asked of it, which no "Yes" or "No" answers. */
 	@Test
 	public void givingADrugOrAvoidingItIsAHarmAskedOfIt() {

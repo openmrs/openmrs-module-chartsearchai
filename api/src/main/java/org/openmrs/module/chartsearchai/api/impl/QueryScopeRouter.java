@@ -1342,7 +1342,11 @@ public final class QueryScopeRouter {
 
 	/** "Which of her ARVs interact with rifampicin?" — which of a group of hers interact with one drug (ADR Decision 432). */
 	private static final List<Pattern> WHICH_OF_A_GROUP_INTERACT_SHAPES = shapes("(?:which|what) of " + HER_MEDICATION_GROUP
-			+ " (?:interact|interacts|interfere|interferes) with " + D);
+			+ " (?:interact|interacts|interfere|interferes) with " + D,
+			// "Which of her ARVs is affected by rifampicin?" — the model told one patient "Efavirenz can be given" (ADR Decision
+			// 674)
+			"(?:which|what) of " + HER_MEDICATION_GROUP + " (?:is|are|(?:would|will|could|might|may) be) (?:affected|impacted) by "
+					+ D);
 
 	private static final Pattern ENDS_ON_A_MEDICATION_GROUP_NOUN = Pattern.compile("(?:^| )" + MEDICATION_GROUP_NOUN + "$");
 
@@ -2308,6 +2312,12 @@ public final class QueryScopeRouter {
 				|| residualPairReading(wordsWithTheDrugsMarked) == Residual.HARMS;
 	}
 
+	/** She starting a drug, or the speaker starting her on it, its treatment named or not: "she starts TB treatment with
+	 *  rifampicin", "I start rifampicin" (ADR Decision 674). */
+	private static final String STARTS_A_DRUG = "(?:(?:she|he|they|the patient|this patient) (?:starts?|takes?|begins?|gets?|is "
+			+ "given|is started on) |(?:i|we) (?:start|give|add|prescribe) (?:" + PATIENT + " )?(?:on )?)(?:(?:\\p{L}+ )?(?:treatment|"
+			+ "therapy) (?:with|on) )?" + D;
+
 	/**
 	 * One drug asked whether it changes an effect of a GROUP of her medications — "Will rifampicin reduce the effect of her
 	 * ARVs?", "Does rifampicin affect her ARVs?", "Will rifampicin lower her ARV levels?" — answered as ADR Decision 249
@@ -2325,7 +2335,13 @@ public final class QueryScopeRouter {
 					+ "(?:any of )?" + HER_MEDICATION_GROUP,
 			// "Will rifampicin make her ARVs less effective?" (ADR Decision 431)
 			"(?:does|do|will|would|can|could|might) (?:starting |giving |adding )?" + D + " make (?:any of )?" + HER_MEDICATION_GROUP
-					+ " " + LESS_EFFECTIVE);
+					+ " " + LESS_EFFECTIVE,
+			// "Do I need to change her ARV regimen if she starts TB treatment with rifampicin?" — whose "No" the model wrote
+			// beside "the ARV regimen needs to be changed" (ADR Decision 674)
+			"(?:do|should|must|will|would) (?:i|we) (?:need to |have to )?(?:change|switch|adjust|modify|alter) "
+					+ HER_MEDICATION_GROUP + " (?:if|when|before) " + STARTS_A_DRUG,
+			"(?:does|do|will|would) " + HER_MEDICATION_GROUP + " (?:need to|have to) be (?:changed|switched|adjusted|modified|"
+					+ "altered) (?:if|when|before) " + STARTS_A_DRUG);
 
 	/**
 	 * Whether a question asks whether ONE drug changes an effect of a group of her medications, and nothing else — one of

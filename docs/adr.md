@@ -30671,3 +30671,40 @@ both wordings were asked of 10 of the batch's patients (20 cells, no errors). Th
   *"No — Nevirapine should not be given with Rifampicin"*, as if they took it.
 
 Pinned by `ClinicianWordingsTest.whatToBeCarefulAboutIfADrugIsPrescribedIsWhatToWatchFor`.
+
+## Decision 674: Which of her ARVs a drug affects, and whether to change them if she starts it, are the module's questions
+
+**Status: Accepted** (November 2026). Widens [Decision 432](#decision-432-when-she-started-a-drug-is-her-record-a-fragment-a-plan-a-pair-at-once-and-a-group-of-hers-are-the-questions-they-spell)'s
+*"Which of her ARVs interact with X?"* and [Decision 281](#decision-281-whether-one-drug-changes-an-effect-of-a-group-of-her-medications-is-answered-with-neither-yes-nor-no)'s
+*"Does X affect her ARVs?"* to two wordings a clinician typed on the demo.
+
+### Context
+
+The demo's sixteenth batch asked 18 patients eight questions. Two fitted no shape, and the model answered all 18 for
+each:
+
+- *"Which of her ARVs is affected by rifampicin?"*: some answers were led *"No — Nevirapine should not be given"*, a
+  verdict nobody asked for, and the one patient on efavirenz was told *"Efavirenz can be given"*.
+- *"Do I need to change her ARV regimen if she starts TB treatment with rifampicin?"*: every answer was led *"No"*. One
+  read *"No — the ARV regimen needs to be changed"*, a lead its own sentence contradicts. Most read *"No — Rifampicin
+  should not be started"*, an answer to a question nobody asked.
+
+### The decision
+
+- *"Which of her ARVs is / are / would be affected or impacted by X?"* joins `WHICH_OF_A_GROUP_INTERACT_SHAPES` as
+  *"Which of her ARVs interact with X?"*.
+- *"Do / should I (need to) change, switch, adjust, modify or alter her ARVs if / when / before she starts X?"* and
+  *"Does her ARV regimen need to be changed if she starts X?"* join `CHANGES_A_GROUP_OF_HER_MEDICATIONS_SHAPES`. Starting
+  X covers her starting it, the speaker starting her on it, and *"treatment with X"* with or without a word naming the
+  treatment. The question is answered as *"Does X affect her ARVs?"*: the findings between the drug and that group,
+  with neither *"Yes"* nor *"No"*. The data relates the drug to her orders. It does not say whether a regimen should
+  change.
+
+### Measured
+
+The demo batch was the before: the model answered all 18 patients for each wording. After, on the demo replica (8088),
+both wordings were asked of 10 of the batch's patients (20 cells, no errors). The module answered all 20, and none opens
+*"Yes"* or *"No"*. Each opens *"Rifampicin (rifampin) and this patient's antiretrovirals (…): what the interaction check
+relates between them:"* and states the Major finding against nevirapine.
+
+Pinned by `ClinicianWordingsTest.whichOfHerArvsADrugAffectsAndWhetherToChangeThemAreTheModulesQuestions`.

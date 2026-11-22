@@ -30514,3 +30514,38 @@ stop.
 Pinned by `StoppingHerDrugQuestionTest.whetherHerDrugShouldBeStoppedIsWhetherToStopIt` and
 `LlmInferenceServiceAnswerFromFindingsContextTest.aBareDrugAskedWhetherItShouldBeStoppedIsTheModulesStopAnswer` (no model
 call).
+
+## Decision 670: What happens if she takes a drug with a group of hers is the drug asked beside that group
+
+**Status: Accepted** (November 2026). Widens [Decision 251](#decision-251-more-questions-whose-no-would-read-backwards-are-answered-with-the-finding-and-neither-yes-nor-no)'s
+*"What happens if I give her X?"* to a drug taken with her medications or a group of them, which
+[Decision 632](#decision-632-one-drug-asked-about-beside-a-group-of-her-medications-the-module-resolves-is-answered-over-that-group)
+answers.
+
+### Context
+
+On the demo, *"What happens if she takes rifampicin with her ARVs?"* fitted no shape. The model answered all 18 patients
+of the batch *"The records do not address the interaction between rifampicin and her ARVs"*, most of them on nevirapine
+beside a Major finding. *"Is carbamazepine safe with her ARVs?"*, asked of other patients in the batch before, was
+answered by the module over her antiretrovirals.
+
+### The decision
+
+A shape in `NEGATED_PROPOSAL_SHAPES` reads *"what happens / would happen / will happen if / when she takes, is given,
+gets, starts or uses X with / alongside / together with / to / while on Y"* and *"… if I give, add, start or prescribe
+(her) X with … Y"*, where Y is her medications or a group of them. It is Decision 251's question, so its answer carries
+neither *"Yes"* nor *"No"*. Beside a group the module resolves, Decision 632's answer states what the check relates
+between the drug and that group. Beside a group she has none of, the proposal's own answer stands, as Decisions 402 and
+649 keep it.
+
+### Measured
+
+On the demo replica (8088), 10 of the batch's patients. Before: *"What happens if she takes rifampicin with her ARVs?"*
+was answered by the model for all 10, *"The records do not address …"* for 9. After, with that wording and *"What
+happens if I give her fluconazole with her ARVs?"* (20 cells, no errors), the module answers all 20. For the 8 patients
+on antiretrovirals, the answer opens *"X and this patient's antiretrovirals (…): what the interaction check relates
+between them:"* and states the findings: rifampicin against nevirapine Major for six, against efavirenz Moderate for
+`dd809487`. `dd9023c6` and `dd8e64d8`, on no antiretroviral, get the drug's own proposal answer over their medications.
+
+Pinned by `DrugBesideAResolvedGroupTest.whatHappensIfHeTakesADrugWithAGroupOfHisIsAnsweredOverThatGroup` and
+`.whatHappensIfHeTakesADrugWithHisMedicationsIsAnsweredWithNoLead`.

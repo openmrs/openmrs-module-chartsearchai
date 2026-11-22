@@ -818,6 +818,12 @@ public final class QueryScopeRouter {
 			"what (?:happens|would happen|will happen) if (?:i|we) (?:give|add|start|prescribe) (?:" + PATIENT + " )?(?:on )?" + D
 					// and "… to her regimen" (ADR Decision 449)
 					+ "(?: (?:to|for) " + PATIENT + "| to (?:" + POSSESSIVE + " )?(?:other )?" + MEDICATIONS + ")?",
+			// "What happens if she takes rifampicin with her ARVs?", "What happens if I give him fluconazole with his TB drugs?"
+			// — answered by the model "The records do not address …" for 18 of 18 patients (ADR Decision 670)
+			"what (?:happens|would happen|will happen) (?:if|when) (?:(?:she|he|they|the patient|this patient) (?:takes?|is given|"
+					+ "are given|gets?|starts?|uses?) |(?:i|we) (?:give|add|start|prescribe) (?:" + PATIENT + " )?(?:on )?)" + D
+					+ " (?:with|alongside|together with|to|while (?:on|taking)) (?:any of )?(?:" + POSSESSIVE + " (?:other )?"
+					+ MEDICATIONS + "|" + HER_MEDICATION_GROUP + ")",
 			// "Any problems if I start her on ibuprofen?", "Are there any issues if I give her ibuprofen?" (ADR Decision 299)
 			"(?:(?:is|are) there )?any (?:problems?|issues?|concerns?|risks?) if (?:i|we) (?:give|start|prescribe|add) (?:"
 					+ PATIENT + " )?(?:on )?" + D + "(?: (?:to|for) " + PATIENT + ")?",

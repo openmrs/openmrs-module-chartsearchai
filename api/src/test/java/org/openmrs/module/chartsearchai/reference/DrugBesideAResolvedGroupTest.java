@@ -63,6 +63,53 @@ public class DrugBesideAResolvedGroupTest extends BaseModuleContextSensitiveTest
 		}
 	}
 
+	/**
+	 * What happens if he takes a drug with a group of his is the same question (ADR Decision 670): on the demo "What happens if
+	 * she takes rifampicin with her ARVs?" fitted no shape, and the model told 18 of 18 patients "The records do not address
+	 * the interaction between rifampicin and her ARVs", most of them on nevirapine beside a Major finding.
+	 */
+	@Test
+	public void whatHappensIfHeTakesADrugWithAGroupOfHisIsAnsweredOverThatGroup() {
+		for (String question : Arrays.asList("What happens if he takes fluconazole with his TB drugs?",
+			"What would happen if he takes fluconazole alongside his TB treatment?",
+			"What happens when he is given fluconazole with his TB drugs?",
+			"What happens if I give him fluconazole with his TB drugs?",
+			"What will happen if we add fluconazole to his TB drugs?")) {
+			PatientChart chart = ask(question);
+			String answer = chart.getModuleAnswer();
+
+			assertNotNull(answer, question);
+			assertEquals("Fluconazole and this patient's TB drugs (Rifampicin): what the interaction check relates between them:",
+				answer.split("\n")[0], question);
+			assertFalse(answer.contains("Nevirapine") || answer.contains("Simvastatin"), question
+					+ " — nothing outside his TB drugs: " + answer);
+		}
+		// and beside a group none of his orders is in, the proposal's own answer, as "What happens if I give him fluconazole?"
+		// is (ADR Decisions 251, 402, 649) — never the model's "The records do not address …"
+		List<PatientClinicalContext.ActiveDrugOrder> noArvs = Arrays.asList(
+			DrugReferenceTestSupport.activeOrder("order-rif", "Rifampicin"),
+			DrugReferenceTestSupport.activeOrder("order-sim", "Simvastatin"));
+		String proposed = ask("What happens if I give him fluconazole?", noArvs).getModuleAnswer();
+		assertNotNull(proposed, "precondition: the module answers what giving it does");
+		for (String question : Arrays.asList("What happens if he takes fluconazole with his ARVs?",
+			"What happens if I give him fluconazole with his ARVs?")) {
+			assertEquals(proposed, ask(question, noArvs).getModuleAnswer(), question);
+		}
+	}
+
+	/** And with his medications, what happens is what giving it does: no "Yes" or "No" lead (ADR Decisions 251, 670). */
+	@Test
+	public void whatHappensIfHeTakesADrugWithHisMedicationsIsAnsweredWithNoLead() {
+		for (String question : Arrays.asList("What happens if he takes fluconazole with his medications?",
+			"What happens if I give him fluconazole with his other meds?")) {
+			String answer = ask(question).getModuleAnswer();
+
+			assertNotNull(answer, question);
+			assertFalse(answer.startsWith("No") || answer.startsWith("Yes"), question + ": " + answer);
+			assertTrue(answer.contains("Nevirapine") && answer.contains("Rifampicin"), question + ": " + answer);
+		}
+	}
+
 	@Test
 	public void aDrugBesideAClassOfHisIsAnsweredOverThatClass() {
 		PatientChart chart = ask("Is ketoconazole safe with his statins?");
@@ -123,12 +170,19 @@ public class DrugBesideAResolvedGroupTest extends BaseModuleContextSensitiveTest
 	}
 
 	private static PatientChart ask(String question) {
-		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
+		return ask(question, Arrays.asList(
 			DrugReferenceTestSupport.activeOrder("order-nvp", "Nevirapine"),
 			DrugReferenceTestSupport.activeOrder("order-rif", "Rifampicin"),
-			DrugReferenceTestSupport.activeOrder("order-sim", "Simvastatin"));
+			DrugReferenceTestSupport.activeOrder("order-sim", "Simvastatin")));
+	}
+
+	private static PatientChart ask(String question, List<PatientClinicalContext.ActiveDrugOrder> orders) {
+		LinkedHashSet<String> names = new LinkedHashSet<String>();
+		for (PatientClinicalContext.ActiveDrugOrder order : orders) {
+			names.addAll(order.getNames());
+		}
 		return DrugReferenceTestSupport.injectorWithSafety(new DrugReferenceService()).injectRecords(
-			DrugReferenceTestSupport.oneRecordChart(), DrugReferenceTestSupport.ctx(40, null, new LinkedHashSet<String>(
-				Arrays.asList("Nevirapine", "Rifampicin", "Simvastatin")), null, null, null, orders), question);
+			DrugReferenceTestSupport.oneRecordChart(), DrugReferenceTestSupport.ctx(40, null, names, null, null, null, orders),
+			question);
 	}
 }

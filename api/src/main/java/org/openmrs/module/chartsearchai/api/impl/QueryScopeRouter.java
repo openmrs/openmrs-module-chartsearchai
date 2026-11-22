@@ -575,6 +575,12 @@ public final class QueryScopeRouter {
 
 	private static final String D = Pattern.quote(DRUG_NAME);
 
+	/** Starting one drug, by her or by the speaker: "she starts X", "I start her on X", "she starts TB treatment with X"
+	 *  (ADR Decisions 674, 677). */
+	private static final String STARTS_A_DRUG = "(?:(?:she|he|they|the patient|this patient) (?:starts?|takes?|begins?|gets?|is "
+			+ "given|is started on) |(?:i|we) (?:start|give|add|prescribe) (?:" + PATIENT + " )?(?:on )?)(?:(?:\\p{L}+ )?(?:treatment|"
+			+ "therapy) (?:with|on) )?" + D;
+
 	/** The tail a screen question may close with: what the clinician should know, or worry, about. */
 	private static final String KNOW_ABOUT = "(?: i (?:should|need to) (?:know|worry) about)?";
 
@@ -820,8 +826,9 @@ public final class QueryScopeRouter {
 					+ "(?: (?:to|for) " + PATIENT + "| to (?:" + POSSESSIVE + " )?(?:other )?" + MEDICATIONS + ")?",
 			// "What happens if she takes rifampicin with her ARVs?", "What happens if I give him fluconazole with his TB drugs?"
 			// — answered by the model "The records do not address …" for 18 of 18 patients (ADR Decision 670)
-			"what (?:happens|would happen|will happen) (?:if|when) (?:(?:she|he|they|the patient|this patient) (?:takes?|is given|"
-					+ "are given|gets?|starts?|uses?) |(?:i|we) (?:give|add|start|prescribe) (?:" + PATIENT + " )?(?:on )?)" + D
+			"what (?:happens|would happen|will happen) (?:if|when) (?:(?:she|he|they|the patient|this patient) (?:takes?|took|is given|"
+					+ "are given|was given|were given|gets?|got|starts?|started|uses?|used) |(?:i|we) (?:give|add|start|prescribe) (?:"
+					+ PATIENT + " )?(?:on )?)" + D
 					+ " (?:with|alongside|together with|to|while (?:on|taking)) (?:any of )?(?:" + POSSESSIVE + " (?:other )?"
 					+ MEDICATIONS + "|" + HER_MEDICATION_GROUP + ")",
 			// "What are the risks of adding erythromycin to her current treatment?" — the model led it "No —" or "can be given",
@@ -1079,6 +1086,10 @@ public final class QueryScopeRouter {
 			// prescribe her ketoconazole?" (ADR Decision 673)
 			"what (?:should|do|would|must) (?:i|we) (?:need to )?(?:watch|look out|monitor|be careful)(?: for| about| of)? if "
 					+ "(?:i|we) (?:add|give|start|prescribe) (?:" + PATIENT + " )?(?:on )?" + D,
+			// and if SHE starts it: "What should I monitor if she starts phenytoin?", which the model answered "Phenytoin can
+			// be given" (ADR Decision 677)
+			"what (?:should|do|would|must) (?:i|we) (?:need to )?(?:watch|look out|monitor|be careful)(?: for| about| of)? (?:if|"
+					+ "when) " + STARTS_A_DRUG,
 			"(?:which|what) (?:of )?" + POSSESSIVE + " (?:other |current |active )?(?:medications|meds|medicines|drugs|"
 					// and "Which of her medications could interact with efavirenz?" (ADR Decision 672)
 					+ "prescriptions) (?:(?:could|might|may|would|will|can) )?(?:interact|interacts|interfere|interferes) with " + D,
@@ -2320,12 +2331,6 @@ public final class QueryScopeRouter {
 		return fitsAShape(wordsWithTheDrugsMarked, ONE_DRUG_CHANGES_THE_OTHER_SHAPES)
 				|| residualPairReading(wordsWithTheDrugsMarked) == Residual.HARMS;
 	}
-
-	/** She starting a drug, or the speaker starting her on it, its treatment named or not: "she starts TB treatment with
-	 *  rifampicin", "I start rifampicin" (ADR Decision 674). */
-	private static final String STARTS_A_DRUG = "(?:(?:she|he|they|the patient|this patient) (?:starts?|takes?|begins?|gets?|is "
-			+ "given|is started on) |(?:i|we) (?:start|give|add|prescribe) (?:" + PATIENT + " )?(?:on )?)(?:(?:\\p{L}+ )?(?:treatment|"
-			+ "therapy) (?:with|on) )?" + D;
 
 	/**
 	 * One drug asked whether it changes an effect of a GROUP of her medications — "Will rifampicin reduce the effect of her

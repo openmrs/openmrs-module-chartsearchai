@@ -30774,3 +30774,66 @@ own rifampicin count three and five interactions, matching the lines they state.
 
 Pinned by `CombinationOrderCautionCountTest.oneCombinationOrderIsOneCaution` and
 `.aScreenCountsOneCombinationOrderAsOneCaution`, both of which redden when `namedOrderCount` returns 0.
+
+## Decision 677: What would happen if she took a drug, and what to monitor if she starts one, are the module's questions
+
+**Status: Accepted** (November 2026). Widens [Decision 670](#decision-670-what-happens-if-she-takes-a-drug-with-a-group-of-hers-is-the-drug-asked-beside-that-group)'s
+*"What happens if she takes X with her medications?"* and [Decision 391](#decision-391-eight-wordings-a-clinician-types-are-answered-as-the-questions-they-ask)'s
+*"What should I watch for if I add X?"* to two wordings a clinician typed on the demo.
+
+### Context
+
+The demo's eighteenth batch asked 18 patients eight questions. Two fitted no shape, and the model answered every patient
+whose cells completed (14 of 14 for each):
+
+- *"What would happen if she took carbamazepine with her current meds?"*: answers opened *"The patient can take
+  Carbamazepine with her current medications"* or *"Carbamazepine can be given, with one caution"*.
+- *"What should I monitor if she starts phenytoin?"*: answers opened *"Phenytoin can be given, with one caution"*.
+
+Both are clearances, which the module never gives.
+
+### The decision
+
+- Decision 670's shape reads the subject's verb in the past too: *took*, *was / were given*, *got*, *started*, *used*.
+- *"What should / do I (need to) watch for, look out for, monitor or be careful about if / when she starts X?"* is
+  Decision 391's question. Starting X is `QueryScopeRouter.STARTS_A_DRUG`, Decision 674's phrase, now declared beside
+  `D` so that both lists can use it.
+
+### Measured
+
+The demo batch was the before. After, on the demo replica (8088), both wordings were asked of 10 of the batch's patients
+(20 cells, no errors): the module answered all 20. Each opens with its cautions counted, *"1 interaction caution for
+Phenytoin — Moderate, with Nevirapine."*, or with the withhold lead where a finding licenses it.
+
+Pinned by `ClinicianWordingsTest.whatWouldHappenIfSheTookADrugAndWhatToMonitorIfSheStartsItAreTheModulesQuestions`.
+
+## Decision 678: Of two drugs asked about together, one named as hers that she is not on is said not to be hers
+
+**Status: Accepted** (November 2026). Carries [Decision 315](#decision-315-a-drug-the-question-names-as-hers-and-she-is-not-on-it-is-said-so-before-whatever-the-module-answers)'s
+statement into [Decision 264](#decision-264-what-the-interaction-between-two-drugs-is-is-answered-with-the-findings-relating-them-whole)'s
+answer about a pair.
+
+### Context
+
+In the demo's eighteenth batch, *"Any problems combining her isoniazid with rifampicin?"* was answered for patients on no
+isoniazid (SQL: no active order of it) with the pair's Minor interaction alone. *"Her isoniazid"* stood uncorrected.
+Decision 315 says it only of a question about one drug, and the pair answer names two.
+
+### The decision
+
+`DrugReferenceInjector.composeAboutThePair` opens with *"X is not one of this patient's active medications."*
+(`NOT_HER_MEDICATION`) for each of the two drugs that `believedHers` holds: named as hers, and she takes none of it
+([Decision 655](#decision-655-a-drug-named-as-hers-that-she-is-not-on-is-never-proposed)). Then it says which of the two
+are hers, as before.
+
+Widening Decision 315's own block to every drug a question names was tried first and rejected. It printed the line a
+second time over the comparison answers that already state which drugs are hers
+(`ClinicianWordingsTest.whichOfTwoIsSaferBesideAThirdSheDoesNotTakeChoosesNeither` and
+`.whichOfTwoIsSaferWhenSheTakesOneOfThemStatesHersWithNoVerdict` reddened).
+
+### Measured
+
+On the demo replica, asked of the same 10 patients: the module answered all 10. The 8 on no active isoniazid order (SQL)
+open *"Isoniazid is not one of this patient's active medications."* The 2 with one (4 and 3 orders) are not told so.
+
+Pinned by `ClinicianWordingsTest.aSecondDrugNamedAsHersThatSheIsNotOnIsSaidToBeNotHers`.

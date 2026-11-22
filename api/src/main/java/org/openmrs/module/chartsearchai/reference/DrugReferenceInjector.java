@@ -10809,6 +10809,13 @@ public class DrugReferenceInjector {
 			}
 		}
 		List<String> lead = new ArrayList<String>();
+		// Either drug the question names as hers that she is not on, said first as ADR Decision 315 says it of one drug:
+		// "Any problems combining her isoniazid with rifampicin?" of a patient on no isoniazid (ADR Decision 678).
+		for (AskedDrug drug : pair) {
+			if (believedHers(question, drug, herSubstances)) {
+				lead.add(drug.label + NOT_HER_MEDICATION);
+			}
+		}
 		if (hers.size() == 1) {
 			lead.add(hers.get(0) + OWN_MEDICATION_LEAD + ".");
 		} else if (hers.size() == 2) {

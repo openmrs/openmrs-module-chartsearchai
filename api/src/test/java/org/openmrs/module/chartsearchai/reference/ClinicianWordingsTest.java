@@ -2219,6 +2219,46 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/**
+	 * ADR Decision 677: what would happen if she TOOK a drug with her medications is what happens if she takes it, and what
+	 * to monitor if SHE starts a drug is what to watch for if it is given her. On the demo both went to the model for 14
+	 * of 14 patients answered, which told them "Phenytoin can be given" and "The patient can take Carbamazepine", a
+	 * clearance the module never gives.
+	 */
+	@Test
+	public void whatWouldHappenIfSheTookADrugAndWhatToMonitorIfSheStartsItAreTheModulesQuestions() {
+		String[][] pairs = {
+			{ "What would happen if she took warfarin with her current meds?",
+				"What happens if she takes warfarin with her medications?" },
+			{ "What would happen if she took warfarin with her medications?",
+				"What happens if she takes warfarin with her medications?" },
+			{ "What should I monitor if she starts warfarin?", "What should I watch for if I add warfarin?" },
+			{ "What should I watch for if she takes warfarin?", "What should I watch for if I add warfarin?" },
+			{ "What do I need to monitor if the patient starts warfarin?", "What should I watch for if I add warfarin?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+	}
+
+	/**
+	 * ADR Decision 678: a question naming TWO drugs, one of them as hers that she is not on, says so before the answer, as
+	 * ADR Decision 315 says it of one. On the demo "Any problems combining her isoniazid with rifampicin?" was answered for
+	 * patients on no isoniazid with the pair's interaction alone, leaving "her isoniazid" standing.
+	 */
+	@Test
+	public void aSecondDrugNamedAsHersThatSheIsNotOnIsSaidToBeNotHers() {
+		String plain = ask("Any problems combining isoniazid with rifampicin?");
+		assertNotNull(plain, "precondition: the module answers the pair");
+		assertEquals("Isoniazid is not one of this patient's active medications.\n" + plain,
+			ask("Any problems combining her isoniazid with rifampicin?"));
+		// and a drug she IS on is not said to be otherwise
+		String hers = ask("Any problems combining her nevirapine with rifampicin?");
+		assertNotNull(hers, "precondition: the module answers the pair");
+		assertEquals(false, hers.contains(" is not one of this patient's active medications"), hers);
+	}
+
 	/** ADR Decision 505: giving a drug or avoiding it, asked either way, is a harm asked of it, which no "Yes" or "No" answers. */
 	@Test
 	public void givingADrugOrAvoidingItIsAHarmAskedOfIt() {

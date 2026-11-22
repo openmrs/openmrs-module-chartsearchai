@@ -1069,6 +1069,11 @@ public final class QueryScopeRouter {
 			// none to stop (ADR Decision 400)
 			"which of " + POSSESSIVE + " (?:medications|meds|medicines|drugs) should (?:i|we) stop if (?:i|we) (?:start|give|add|"
 					+ "prescribe) (?:" + PATIENT + " )?(?:on )?" + D,
+			// "If I add fluconazole, which of her medicines should I stop?" — the same question with the drug first; the model
+			// answered "Nevirapine can be given" and "The records do not address which medication should be stopped" (ADR
+			// Decision 680)
+			"if (?:i|we) (?:add|give|start|prescribe) (?:" + PATIENT + " )?(?:on )?" + D + " (?:which|what) of " + POSSESSIVE
+					+ " (?:medications|meds|medicines|drugs) should (?:i|we) (?:stop|discontinue|hold)",
 			// "What drugs should she avoid with fluconazole?" (ADR Decision 444)
 			"(?:what|which) (?:drugs|medications|medicines|meds) should (?:she|he|they|the patient|this patient|i|we) avoid "
 					+ "(?:taking |giving |combining |using )?(?:with|alongside|while on|while taking) " + D,
@@ -1573,6 +1578,12 @@ public final class QueryScopeRouter {
 					+ "biggest|riskiest) (?:drug )?(?:interactions?|ddis?)(?: (?:in|on|among|between|of) (?:" + POSSESSIVE + " "
 					+ MEDICATIONS + "|the (?:drugs|medicines|medications) " + SUBJECT_TAKES + ")| (?:she|he|they|the patient|"
 					+ "this patient) (?:has|have))?",
+			// "Which of her drugs is the most dangerous combination?", "What is the most dangerous combination in her
+			// medications?" — the screen, as the most dangerous interaction is; the model answered "No — the most dangerous
+			// combination is …" and called a Moderate pair one that "can be taken" (ADR Decision 680)
+			"(?:what|which) (?:of " + POSSESSIVE + " " + MEDICATIONS + " )?(?:is|are) the (?:most (?:dangerous|serious|severe|"
+					+ "important|significant|concerning|risky)|worst|riskiest) (?:drug |medication )?(?:combinations?|combos?)(?: (?:in|on|"
+					+ "among|of) " + POSSESSIVE + " " + MEDICATIONS + ")?",
 			// "List her drug interactions"
 			"(?:please )?list " + POSSESSIVE + " " + QUALIFIER + "(?:drug )?(?:interactions|ddis)",
 			// "Check her medications for interactions", "Review her meds for drug interactions", "Please screen her current

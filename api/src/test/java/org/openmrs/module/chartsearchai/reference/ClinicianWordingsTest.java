@@ -2275,6 +2275,28 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/**
+	 * ADR Decision 680: "Which of her drugs is the most dangerous combination?" is the screen, as "the most dangerous
+	 * interaction" is; "If I add fluconazole, which of her medicines should I stop?" is which of hers interact with it. On
+	 * the demo both went to the model, which answered "No — the most dangerous combination is …", "Nevirapine can be given",
+	 * and "The records do not address which medication should be stopped" beside a Moderate finding.
+	 */
+	@Test
+	public void theMostDangerousCombinationAndWhichToStopIfADrugIsAddedAreTheModulesQuestions() {
+		String screen = ask("What is the most dangerous interaction in her list?");
+		assertNotNull(screen, "precondition: the module answers the screen");
+		for (String question : Arrays.asList("Which of her drugs is the most dangerous combination?",
+			"What is the most dangerous combination in her medications?", "Which of her medicines are the worst combination?")) {
+			assertEquals(screen, ask(question), question);
+		}
+		String which = ask("Which of her medications should I stop if I start warfarin?");
+		assertNotNull(which, "precondition: the module answers which of hers to stop");
+		for (String question : Arrays.asList("If I add warfarin, which of her medicines should I stop?",
+			"If we start warfarin which of her drugs should we stop?", "If I give her warfarin, which of her medications should I hold?")) {
+			assertEquals(which, ask(question), question);
+		}
+	}
+
 	/** ADR Decision 505: giving a drug or avoiding it, asked either way, is a harm asked of it, which no "Yes" or "No" answers. */
 	@Test
 	public void givingADrugOrAvoidingItIsAHarmAskedOfIt() {

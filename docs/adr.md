@@ -30862,3 +30862,41 @@ The demo batch was the before. After, on the demo replica (8088), asked of 10 of
 errors), the module answered all 10. None opens *"No"*, and none says the drug can be given.
 
 Pinned by `ClinicianWordingsTest.whatDoseAdjustmentSheNeedsIfADrugIsStartedIsWhetherAnyDoseNeedsAdjusting`.
+
+## Decision 680: The most dangerous combination of her drugs, and which of hers to stop if a drug is added, are the module's questions
+
+**Status: Accepted** (November 2026). Widens [Decision 610](#decision-610-the-worst-interaction-a-drug-to-stop-now-spacing-a-drug-from-her-medications-and-two-more-wordings-are-the-modules-questions)'s
+*"What is the most dangerous interaction in her list?"* and [Decision 400](#decision-400-five-more-wordings-a-clinician-types-are-answered-as-the-questions-they-ask)'s
+*"Which of her medications should I stop if I start X?"* to two wordings a clinician typed on the demo.
+
+### Context
+
+In the demo's twentieth batch, both went to the model for all 16 patients that answered (2 client aborts each):
+
+- *"Which of her drugs is the most dangerous combination?"* The model opened *"No — the most dangerous combination is
+  Stavudine and Isoniazid"*. It called a Moderate pair *"Lopinavir and Didanosine can be taken"*. And it said a
+  duplicate therapy *"should be changed"*.
+- *"If I add fluconazole, which of her medicines should I stop?"* The model answered *"Nevirapine can be given"*, putting
+  her own drug in the place of the proposed one, and *"Fluconazole can be given, with one caution"*, a clearance the module
+  never gives. Four times it said *"The records do not address which medication should be stopped"* beside a finding.
+
+### The decision
+
+- *"Which of her drugs is / What is the most dangerous (serious, severe, …) or worst combination (in her medications)"*
+  is the screen, as the most dangerous interaction is (`QueryScopeRouter.SCREEN_SHAPES`).
+- *"If I (we) add / give / start / prescribe X, which of her medications should I stop / discontinue / hold"* is
+  Decision 400's question with the drug first. The answer is which of hers interact with X. It chooses none to stop.
+
+The second shape requires *"of her"*. *"If I give her warfarin, which medications should I hold?"* reaches the same
+answer but opens with a line saying the check cannot tell which of her medications are *"warfarin which medications"*.
+The extra line comes from the drug-name reader, not from this router. That wording was not seen on the demo, and it is
+left as residue.
+
+### Measured
+
+On the demo replica (8088), the two questions were asked of 10 of the batch's patients (20 cells, no errors). Before:
+the model answered all 20. After: the module answered all 20. Each combination answer is that patient's screen. No
+fluconazole answer opens *"No"* or says a drug can be given. The one patient on rifampin is told of a reason to withhold
+fluconazole (Major).
+
+Pinned by `ClinicianWordingsTest.theMostDangerousCombinationAndWhichToStopIfADrugIsAddedAreTheModulesQuestions`.

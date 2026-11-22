@@ -892,7 +892,12 @@ public final class QueryScopeRouter {
 					+ PATIENT + ")?",
 			// "Is there a serious interaction between fluconazole and her ARVs?" — a grade a "Yes" would claim of every finding
 			"(?:is|are) there (?:a |an |any )?(?:clinically )?(?:dangerous|serious|major|significant|severe|important|relevant) "
-					+ "(?:drug )?interactions? between " + D + " and (?:any of )?" + HER_MEDICATION_GROUP);
+					+ "(?:drug )?interactions? between " + D + " and (?:any of )?" + HER_MEDICATION_GROUP,
+			// and asked of giving it: "Is there a major interaction if I give her erythromycin?", which the model answered "The
+			// records do not address a major interaction" beside a Minor finding (ADR Decision 675)
+			"(?:is|are) there (?:a |an |any )?(?:clinically )?(?:dangerous|serious|major|significant|severe|important|relevant) "
+					+ "(?:drug )?interactions? if (?:i|we) (?:give|start|prescribe|add) (?:" + PATIENT + " )?(?:on )?" + D + "(?: to "
+					+ PATIENT + ")?");
 
 	/**
 	 * Whether a question asks whether NOT to give one drug, and nothing else — one of {@link #NEGATED_PROPOSAL_SHAPES}
@@ -1085,6 +1090,10 @@ public final class QueryScopeRouter {
 			// "Fluconazole: what interactions does she have?" (ADR Decision 446)
 			D + " what (?:drug )?interactions (?:does|do|would|will) (?:she|he|they|the patient|this patient) have",
 			"what (?:drug )?interactions (?:does|do|would|will) (?:she|he|they|the patient|this patient) have with " + D,
+			// "What interactions does rifampicin have with her medicines?" — the drug the subject, which the model answered
+			// for 18 of 18 demo patients, once "No — Rifampicin should not be given" (ADR Decision 675)
+			"what (?:drug )?interactions (?:does|do|would|will|might|could|can) " + D + " have with (?:any of )?" + POSSESSIVE
+					+ " (?:other )?" + MEDICATIONS,
 			// "What are the interactions of fluconazole?" (ADR Decision 427)
 			"(?:what|which) are (?:the )?(?:drug )?interactions (?:of|for|with) " + D,
 			// "What interacts with her lamivudine?" — which of hers interact with it, of a drug named as hers (ADR Decision

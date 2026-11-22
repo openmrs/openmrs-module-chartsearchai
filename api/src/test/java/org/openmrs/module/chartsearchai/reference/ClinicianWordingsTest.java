@@ -2193,6 +2193,32 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 			ask("Do I need to change her ARV regimen if she starts TB treatment with rifampicin?"));
 	}
 
+	/**
+	 * ADR Decision 675: what interactions a drug has with her medicines is which of them interact with it, and whether
+	 * there is a MAJOR interaction if she is given a drug is whether there is a serious one between it and her medications
+	 * — a grade no "Yes" may claim of every finding. On the demo both went to the model for 18 of 18 patients, which told
+	 * one "The records do not address a major interaction" beside a Minor finding and another named one of three findings.
+	 */
+	@Test
+	public void whatInteractionsADrugHasAndWhetherOneIsMajorAreTheModulesQuestions() {
+		String[][] pairs = {
+			{ "What interactions does warfarin have with her medicines?", "Which of her medications interact with warfarin?" },
+			{ "What interactions does warfarin have with her meds?", "Which of her medications interact with warfarin?" },
+			{ "What drug interactions would warfarin have with any of her medications?",
+				"Which of her medications interact with warfarin?" },
+			{ "Is there a major interaction if I give her warfarin?",
+				"Is there a serious interaction between warfarin and her medications?" },
+			{ "Is there any serious interaction if I start her on warfarin?",
+				"Is there a serious interaction between warfarin and her medications?" },
+			{ "Are there any significant interactions if we add warfarin?",
+				"Is there a serious interaction between warfarin and her medications?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+	}
+
 	/** ADR Decision 505: giving a drug or avoiding it, asked either way, is a harm asked of it, which no "Yes" or "No" answers. */
 	@Test
 	public void givingADrugOrAvoidingItIsAHarmAskedOfIt() {

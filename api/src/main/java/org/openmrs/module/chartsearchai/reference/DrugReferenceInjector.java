@@ -6667,9 +6667,13 @@ public class DrugReferenceInjector {
 	}
 
 	/** How many of her orders {@code finding} relates the drug to — each order a chip names, or the one pair a chip
-	 *  naming none states; what {@link #screenSummary} and {@link #cautionSummary} both count. */
-	private static int pairsOf(SafetyWarning finding) {
-		return Math.max(1, finding.namedPartners().size());
+	 *  naming none states; what {@link #screenSummary}, {@link #cautionSummary}, the warnings line and the screen's
+	 *  chip cap ({@code DrugSafetyValidator}) all count. A chip collapsing two substances of ONE combination order names
+	 *  both and is one caution about one order: {@link SafetyWarning#namedOrderCount()} says so (ADR Decision 676). */
+	static int pairsOf(SafetyWarning finding) {
+		int named = finding.namedPartners().size();
+		int orders = finding.namedOrderCount();
+		return Math.max(1, orders > 0 ? Math.min(orders, named) : named);
 	}
 
 	/**
@@ -7156,7 +7160,7 @@ public class DrugReferenceInjector {
 		for (Integer i : cautions) {
 			SafetyWarning finding = findings.get(i);
 			partnersOf.computeIfAbsent(finding.getDrug(), d -> new LinkedHashSet<String>()).addAll(finding.namedPartners());
-			int pairs = Math.max(1, finding.namedPartners().size());
+			int pairs = pairsOf(finding);
 			count += pairs;
 			allInteractions &= SafetyWarning.TYPE_INTERACTION.equals(finding.getType());
 			String severity = finding.getSeverity();
@@ -7806,7 +7810,7 @@ public class DrugReferenceInjector {
 			if (finding.statesOrdersSharingASubstance() || namesOnlyItsOwnOrders(finding, itsOwnOrders)) {
 				sharing++;
 			} else if (SafetyWarning.TYPE_INTERACTION.equals(finding.getType())) {
-				interactions += Math.max(1, finding.namedPartners().size());
+				interactions += pairsOf(finding);
 			} else {
 				contraindications++;
 			}
@@ -7828,7 +7832,7 @@ public class DrugReferenceInjector {
 			SafetyWarning finding = findings.get(i);
 			if (SafetyWarning.TYPE_INTERACTION.equals(finding.getType()) && !finding.statesOrdersSharingASubstance()
 					&& !namesOnlyItsOwnOrders(finding, itsOwnOrders) && statesNoSeverity(finding)) {
-				unrated += Math.max(1, finding.namedPartners().size());
+				unrated += pairsOf(finding);
 			}
 		}
 		boolean unratedSaidOnce = unrated > 0;

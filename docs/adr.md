@@ -30708,3 +30708,69 @@ both wordings were asked of 10 of the batch's patients (20 cells, no errors). Th
 relates between them:"* and states the Major finding against nevirapine.
 
 Pinned by `ClinicianWordingsTest.whichOfHerArvsADrugAffectsAndWhetherToChangeThemAreTheModulesQuestions`.
+
+## Decision 675: What interactions a drug has with her medicines, and whether one is major if she is given it, are the module's questions
+
+**Status: Accepted** (November 2026). Widens [Decision 319](#decision-319-which-of-her-medications-interact-with-a-drug-is-answered-with-the-findings-and-whether-anything-she-takes-interacts-with-it-as-whether-it-interacts)'s
+*"Which of her medications interact with X?"* and [Decision 181](#decision-181-a-question-whether-not-to-give-a-drug-or-whether-it-interacts-is-answered-without-an-inverted-no)'s
+negated proposal shapes to two wordings a clinician typed on the demo.
+
+### Context
+
+The demo's seventeenth batch asked 18 patients eight questions. Two fitted no shape, and the model answered all 18 for
+each:
+
+- *"What interactions does rifampicin have with her medicines?"*: one answer was led *"No — Rifampicin should not be
+  given"*, a verdict nobody asked for.
+- *"Is there a major interaction if I give her erythromycin?"*: one patient with a Minor finding was told *"The records
+  do not address a major interaction"*. Another, with three findings, was told one of them.
+
+### The decision
+
+- *"What (drug) interactions does / would / might X have with (any of) her medications?"* joins
+  `WHICH_OF_HER_MEDICATIONS_INTERACT_SHAPES`, answered as *"Which of her medications interact with X?"*.
+- *"Is / are there a / any dangerous, serious, major, significant, severe, important or relevant interaction(s) if I
+  give / start / prescribe / add X?"* joins `NEGATED_PROPOSAL_SHAPES` beside *"Is there a serious interaction between X
+  and her ARVs?"*: a grade no *"Yes"* may claim of every finding, so it states the findings with no lead.
+
+### Measured
+
+The demo batch was the before. After, on the demo replica (8088), both wordings were asked of 10 of the batch's patients
+(20 cells, no errors): the module answered all 20. Each erythromycin answer counts its findings and their ratings,
+*"2 interaction cautions for Erythromycin — 1 Moderate, 1 Minor."*, or opens with the withhold lead where a finding is
+Major.
+
+Pinned by `ClinicianWordingsTest.whatInteractionsADrugHasAndWhetherOneIsMajorAreTheModulesQuestions`.
+
+## Decision 676: One combination order is one caution, however many of its substances a collapsed chip names
+
+**Status: Accepted** (November 2026). Corrects [Decision 545](#decision-545-a-proposal-counts-its-cautions-by-pair-as-a-screen-does)'s
+count where [Decision 99](#decision-99-one-mechanism-is-stated-once-naming-every-active-order-it-covers)'s collapse
+names a combination's substances.
+
+### Context
+
+On the demo replica, asked of a patient whose one active co-trimoxazole order rifampicin relates to,
+*"What interactions does rifampicin have with her medicines?"* opened *"2 interaction cautions for Rifampicin
+(rifampin) — Moderate, with Sulfamethoxazole and Trimethoprim."* above the one finding. The knowledge base relates
+rifampin to each substance by one note, so the collapse makes one chip naming both, and `DrugReferenceInjector.pairsOf`
+counted names. Decision 545 counts each ORDER a chip names, and the patient has one order (SQL).
+
+### The decision
+
+- `SafetyWarning.namedOrderCount` records how many of her orders stand behind a collapsed chip's partners, where that is
+  fewer than it names. `DrugSafetyValidator.mergedChip` writes it: members whose arms matched the same orders
+  (`matchedOrderDisplays`) are one order. Otherwise it is 0, which says nothing.
+- `pairsOf` reads it, and every pair count goes through `pairsOf`: the proposal lead, the screen summary, the warnings
+  line, the list composer and the screen's chip cap. Before, three of them spelled the count again.
+- Nothing a chip prints changes. It still names both substances.
+
+### Measured
+
+On the demo replica, the build before and this one, over the same 10 patients and two Decision 675 wordings (20 cells):
+the one answer that changes is that patient's, now *"1 interaction caution …"*. *"Can I give her rifampicin?"* asked of
+10 patients with an active co-trimoxazole order: the patient above now reads *"1 interaction caution"*. The two on their
+own rifampicin count three and five interactions, matching the lines they state.
+
+Pinned by `CombinationOrderCautionCountTest.oneCombinationOrderIsOneCaution` and
+`.aScreenCountsOneCombinationOrderAsOneCaution`, both of which redden when `namedOrderCount` returns 0.

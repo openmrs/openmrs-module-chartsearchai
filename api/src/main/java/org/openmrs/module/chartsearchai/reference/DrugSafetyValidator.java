@@ -5684,7 +5684,7 @@ public class DrugSafetyValidator {
 		// No member names a not-started order (collapseKey), so the merged chip names active orders only.
 		SafetyWarning merged = interactionWarning(ref, group.get(0).rule, joinPartners(partners), null, null, false,
 				bridges, herOrder, partners, subjectStart, null).withMatchedOrderNames(matchedNames.names, matchedNames.displays).withPartnerRows(partnerRows)
-				.withPartnerOrderCounts(partnerOrderCounts);
+				.withPartnerOrderCounts(partnerOrderCounts).withNamedOrderCount(namedOrderCount(group, partners.size()));
 		return merged.withRestrictor(keep -> {
 			List<MechanismStatement> kept = new ArrayList<MechanismStatement>();
 			for (MechanismStatement member : group) {
@@ -5695,6 +5695,20 @@ public class DrugSafetyValidator {
 			return kept.isEmpty() ? null : kept.size() == 1 ? kept.get(0).chip
 					: kept.size() == group.size() ? merged : mergedChip(ref, kept, herOrder, subjectStart);
 		});
+	}
+
+	/**
+	 * How many of her orders stand behind a collapsed group's {@code partners} named partners, where fewer than that (ADR
+	 * Decision 676): members whose arms matched the same orders are about one order, as the two substances of one
+	 * combination are; else 0. A member that recorded no orders counts alone.
+	 */
+	private static int namedOrderCount(List<MechanismStatement> group, int partners) {
+		Set<Object> orders = new HashSet<Object>();
+		for (MechanismStatement member : group) {
+			List<String> displays = member.chip.matchedOrderDisplays();
+			orders.add(displays.isEmpty() ? member : new HashSet<String>(displays));
+		}
+		return orders.size() < partners ? orders.size() : 0;
 	}
 
 	/** {@code a}, {@code a and b}, {@code a, b and c} — the list form a collapsed chip names its
@@ -10595,7 +10609,7 @@ public class DrugSafetyValidator {
 				for (SafetyWarning chip : collapseSharedMechanisms(subjects.subjectOf(ref), statements, true, subjectStart)) {
 					pairs.add(new ScreenedPair(chip, severityPriority(chip.getSeverity()),
 							ChartSearchAiUtils.firstNonBlank(chip.getSeverity(), "unrated"),
-							Math.max(1, chip.namedPartners().size())));
+							DrugReferenceInjector.pairsOf(chip)));
 				}
 			}
 		}

@@ -2144,6 +2144,31 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/**
+	 * ADR Decision 673: what to be careful about if a drug is prescribed is what to watch for if it is. On the demo "What
+	 * should I be careful about if I prescribe her ketoconazole?" went to the model for 18 of 18 patients, which led it
+	 * "can be given" or "No — Ketoconazole should not be prescribed", a verdict on a question asking what to watch.
+	 */
+	@Test
+	public void whatToBeCarefulAboutIfADrugIsPrescribedIsWhatToWatchFor() {
+		String canonical = ask("What should I watch for if I add warfarin?");
+		assertNotNull(canonical, "precondition: the module answers what to watch for");
+		for (String question : Arrays.asList("What should I be careful about if I prescribe her warfarin?",
+			"What should I be careful of if I give her warfarin?", "What do I need to be careful about if I start warfarin?",
+			"What should I look out for if I start her on warfarin?")) {
+			assertEquals(canonical, ask(question), question);
+		}
+		// and a drug of hers given TOGETHER with another is given with it: "Can her nevirapine be given together with
+		// rifampicin?" went to the model for 18 of 18 patients
+		String[][] pairs = { { "Can her nevirapine be given together with warfarin?", "Can her nevirapine be given with warfarin?" },
+			{ "Can nevirapine be given together with warfarin?", "Can her nevirapine be given with warfarin?" } };
+		for (String[] pair : pairs) {
+			String given = ask(pair[1]);
+			assertNotNull(given, "precondition: the module answers " + pair[1]);
+			assertEquals(given, ask(pair[0]), pair[0]);
+		}
+	}
+
 	/** ADR Decision 505: giving a drug or avoiding it, asked either way, is a harm asked of it, which no "Yes" or "No" answers. */
 	@Test
 	public void givingADrugOrAvoidingItIsAHarmAskedOfIt() {

@@ -30630,3 +30630,44 @@ a Moderate finding a reason to withhold. The one *"reason to withhold"* is fluco
 for `dd84c8de`.
 
 Pinned by `ClinicianWordingsTest.whichOfHerMedicationsCouldInteractWithADrugIsWhichInteract`.
+
+## Decision 673: What to be careful about if a drug is prescribed is what to watch for, and a drug given together with hers is given with it
+
+**Status: Accepted** (November 2026). Widens [Decision 391](#decision-391-eight-wordings-a-clinician-types-are-answered-as-the-questions-they-ask)'s
+*"What should I watch for if I add X?"* and
+[Decision 428](#decision-428-an-abbreviated-technical-or-dosed-wording-is-the-question-it-spells-and-a-proposal-after-a-drug-her-chart-holds-only-as-ended-is-the-modules)'s
+*"Can X be given with Y?"* to two wordings a clinician typed on the demo.
+
+### Context
+
+The demo's fifteenth batch asked 18 patients eight questions. Two fitted no shape, and the model answered all 18 for
+each:
+
+- *"What should I be careful about if I prescribe her ketoconazole?"*: Decision 391's shape read *"be careful"* followed
+  by *"for"* only. The model led most answers *"Ketoconazole can be given"* or *"No — Ketoconazole should not be
+  prescribed"*, a verdict on a question that asks what to watch for.
+- *"Can her nevirapine be given together with rifampicin?"*: the shape for one drug given with another read *"given
+  with"* and *"given alongside"*, not *"given together with"*. *"Can her nevirapine be given with rifampicin?"* was
+  already the module's.
+
+### The decision
+
+- Decision 391's shape admits *"about"* and *"of"* after its verb as well as *"for"*: *"What should I be careful about
+  / of if I prescribe her X?"*. Its answer is the drug's findings, with no verdict.
+- The *"Can X be given / taken / used … with / alongside Y?"* shape admits *"together with"*.
+
+### Measured
+
+The demo batch was the before: the model answered all 18 patients for each wording. After, on the demo replica (8088),
+both wordings were asked of 10 of the batch's patients (20 cells, no errors). The module answered all 20:
+
+- *"What should I be careful about if I prescribe her ketoconazole?"* states each finding with its rating. For the three
+  patients on efavirenz, it states the Major finding as a reason to withhold. The model had led one of those *"No —"* and
+  told six others *"can be given"*.
+- *"Can her nevirapine be given together with rifampicin?"* is answered as *"Can her nevirapine be given with
+  rifampicin?"* is: the Major finding, under Decision 428's lead. `dd7fb7ff` and `dd55e1e6` have no active nevirapine
+  order; their active drug orders in the replica database are efavirenz, lamivudine, stavudine and, for one of them,
+  co-trimoxazole. For them the module says neither drug is one of their active medications. The model had told both
+  *"No — Nevirapine should not be given with Rifampicin"*, as if they took it.
+
+Pinned by `ClinicianWordingsTest.whatToBeCarefulAboutIfADrugIsPrescribedIsWhatToWatchFor`.

@@ -1070,9 +1070,10 @@ public final class QueryScopeRouter {
 			// "How should I monitor her if I add fluconazole?" (ADR Decision 426)
 			"how (?:should|do|would|must) (?:i|we) (?:need to )?monitor " + PATIENT + " (?:if|when) (?:i|we) (?:add|give|start|"
 					+ "prescribe) (?:" + PATIENT + " )?(?:on )?" + D,
-			// "What should I watch for if I add clarithromycin?" (ADR Decision 391)
-			"what (?:should|do|would|must) (?:i|we) (?:need to )?(?:watch|look out|monitor|be careful)(?: for)? if (?:i|we) (?:add|give|"
-					+ "start|prescribe) (?:" + PATIENT + " )?(?:on )?" + D,
+			// "What should I watch for if I add clarithromycin?" (ADR Decision 391), and "What should I be careful about if I
+			// prescribe her ketoconazole?" (ADR Decision 673)
+			"what (?:should|do|would|must) (?:i|we) (?:need to )?(?:watch|look out|monitor|be careful)(?: for| about| of)? if "
+					+ "(?:i|we) (?:add|give|start|prescribe) (?:" + PATIENT + " )?(?:on )?" + D,
 			"(?:which|what) (?:of )?" + POSSESSIVE + " (?:other |current |active )?(?:medications|meds|medicines|drugs|"
 					// and "Which of her medications could interact with efavirenz?" (ADR Decision 672)
 					+ "prescriptions) (?:(?:could|might|may|would|will|can) )?(?:interact|interacts|interfere|interferes) with " + D,
@@ -1170,9 +1171,9 @@ public final class QueryScopeRouter {
 					+ " (?:go|be (?:safely )?(?:given|started|prescribed|administered|taken|used|co administered|coadministered|co prescribed"
 					+ "|coprescribed|combined))(?: together| at the same time| concurrently| simultaneously| (?:all )?at once)?(?: safely)?(?: (?:to|for) "
 					+ PATIENT + ")?(?: now| today)?",
-			// and "co-administered" (ADR Decision 428)
+			// and "co-administered" (ADR Decision 428), and "together with" (ADR Decision 673)
 			"(?:can|could|may|should) " + HER_D + " be (?:safely )?(?:given|started|prescribed|administered|taken|used|co administered"
-					+ "|coadministered|co prescribed|coprescribed|combined) (?:with|alongside) " + HER_DS + "(?: (?:to|for) " + PATIENT + ")?(?: now| today)?",
+					+ "|coadministered|co prescribed|coprescribed|combined) (?:(?:together )?with|alongside) " + HER_DS + "(?: (?:to|for) " + PATIENT + ")?(?: now| today)?",
 			// "Can I give her warfarin with ibuprofen?", "Can I give her warfarin and ibuprofen together?", and the first joining
 			// word optional where the list ends in "and", a list's commas being no words — "ibuprofen, naproxen and aspirin"
 			// (ADR Decision 356); never two names with nothing between, which an unrecognised word beside a drug would make

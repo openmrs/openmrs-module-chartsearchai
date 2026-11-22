@@ -30900,3 +30900,46 @@ fluconazole answer opens *"No"* or says a drug can be given. The one patient on 
 fluconazole (Major).
 
 Pinned by `ClinicianWordingsTest.theMostDangerousCombinationAndWhichToStopIfADrugIsAddedAreTheModulesQuestions`.
+
+## Decision 681: Changing or switching her drug, with no drug named to change it to, is whether to stop it
+
+**Status: Accepted** (November 2026). Widens [Decision 335](#decision-335-whether-to-stop-her-drug-is-answered-with-what-relates-it-to-her-other-medications-the-stopping-itself-not-weighed)'s
+*"Should I stop her X?"* to *"Should I change / switch / replace her X (to something else)?"*.
+
+### Context
+
+In the demo's twenty-first batch, *"Should I change her efavirenz to something else if she starts TB treatment?"* went
+to the model for all 17 patients that answered. None of the 18 patients has an active efavirenz order (SQL on the demo
+replica, calibrated against nevirapine, which the module names for the same patients). Fifteen answers said the records
+do not address it, only two of them saying she is not on efavirenz. One said *"Efavirenz can be given, with two
+cautions"*, a clearance the module never gives. Another said *"No — Efavirenz should not be given"*.
+
+On the replica, the plainer *"Should I change her efavirenz to something else?"* and *"Should I switch her efavirenz?"*
+also went to the model. It told a patient on no efavirenz *"No. Efavirenz should be withheld"*. Asked *"Should I stop her
+efavirenz?"*, the module told that patient *"Efavirenz is not one of this patient's active medications, so there is no
+order of it to stop."* It told a patient on efavirenz which of her medications it interacts with.
+
+### The decision
+
+*"Should / must / do I (we) (need to) change / switch / replace / substitute her X"*, optionally *"to / for / with
+something else / another drug / an alternative"*, is `QueryScopeRouter.CHANGE_HER_D`. It is one of the stop shapes, so
+it gets Decision 335's answer for a drug she is not on. And it is one of `BESIDE_HER_MEDICATIONS_SHAPES`, which already
+copies the stop shapes for a drug she is on. Without that second entry, the drug she takes went to the model: the
+mutation reddens the efavirenz half of the test.
+
+A switch that names the drug to switch to, *"Should I switch her nevirapine to efavirenz?"*, is not read by this shape.
+It stays [Decision 504](#decision-504-a-switch-asked-with-a-bare-verb-is-the-switch-its-can-i-wording-asks)'s.
+
+*"… if she starts TB treatment"*, the batch's own wording, is **not** admitted. It names no TB drug, so the module has
+nothing to check efavirenz against. The stop answer would state only her current medications and say nothing about TB
+treatment, which for a patient on efavirenz could read as clearing it. That wording stays with the model, as residue.
+
+### Measured
+
+On the demo replica (8088), *"Should I change her efavirenz to something else?"* and *"Should I switch her nevirapine?"*
+were asked of 10 patients: 6 from the batch and 4 with active efavirenz orders (20 cells, no errors). Before: the model
+answered all 20, among them *"No. The patient should change her efavirenz"* and, to a patient on no nevirapine,
+*"Nevirapine should not be continued"*. After: the module answered all 20. Each answer's statement that she is or is
+not on the drug matches the active orders in SQL, for both drugs and all 10 patients.
+
+Pinned by `ClinicianWordingsTest.changingOrSwitchingHerDrugIsWhetherToStopIt`.

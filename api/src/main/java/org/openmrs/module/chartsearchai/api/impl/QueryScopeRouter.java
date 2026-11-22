@@ -1772,6 +1772,13 @@ public final class QueryScopeRouter {
 			+ "|(?:she|he|they|the patient|this patient|patient|pt) (?:wants|would like|wishes|plans|is planning|is asking) to "
 			+ "|(?:can|could|may) (?:she|he|they|the patient|this patient) (?:safely )?)";
 
+	/** "Should I change her efavirenz to something else?", "Should I switch her efavirenz?" — whether to stop it, with no
+	 *  drug named to change it to; the model told a patient on no efavirenz "No. Efavirenz should be withheld" (ADR
+	 *  Decision 681). A stop shape, and of her own drug one {@link #BESIDE_HER_MEDICATIONS_SHAPES} reads as well. */
+	private static final String CHANGE_HER_D = "(?:should|must|do) (?:i|we) (?:need to )?(?:change|switch|replace|substitute) "
+			+ HER_D + "(?: (?:to|for|with) (?:something else|another (?:drug|medication|medicine|agent|one)|an alternative))?"
+			+ "(?: now)?";
+
 	// Her drug, "her" or not: "Can I stop nevirapine?" is "Can I stop her nevirapine?", as continuing it is (ADR Decisions
 	// 480, 498).
 	private static final List<Pattern> STOP_HER_DRUG_SHAPES = shapes(
@@ -1782,7 +1789,7 @@ public final class QueryScopeRouter {
 			// and "… because of interactions" (ADR Decision 609)
 			"(?:should|must|do) (?:i|we) (?:need to )?(?:stop|discontinue|hold) " + HER_D + "(?: now)?"
 					+ BEFORE_AN_OCCASION + BECAUSE_OF_INTERACTIONS,
-			ONE_OF_HER_D_ORDERS_STOPPED, HER_D_BE_STOPPED);
+			CHANGE_HER_D, ONE_OF_HER_D_ORDERS_STOPPED, HER_D_BE_STOPPED);
 
 	/** Whether it asks whether stopping it is safe or allowed — not whether it should be stopped, which ADR Decision 259
 	 *  answers of her own drug as her medication with no lead (ADR Decision 335). */
@@ -1853,6 +1860,8 @@ public final class QueryScopeRouter {
 					+ BEFORE_AN_OCCASION + BECAUSE_OF_INTERACTIONS,
 			ONE_OF_HER_D_ORDERS_STOPPED,
 			HER_D_BE_STOPPED,
+			// "Should I switch her efavirenz?" (ADR Decision 681)
+			CHANGE_HER_D,
 			// "If I stop her rifampicin, which interactions go away?" (ADR Decision 333)
 			"if (?:i|we) (?:stop|discontinue|remove|hold) " + POSSESSIVE + " " + D + " (?:which|what) (?:drug )?interactions? "
 					+ GO_AWAY,

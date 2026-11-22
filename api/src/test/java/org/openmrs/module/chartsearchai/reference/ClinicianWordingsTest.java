@@ -2297,6 +2297,24 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/**
+	 * ADR Decision 681: "Should I change her efavirenz to something else?" is whether to stop it, of a drug she takes and of
+	 * one she does not. On the demo replica the model answered a patient on no efavirenz "No. Efavirenz should be withheld";
+	 * the module, asked to stop it, says she has no order of it.
+	 */
+	@Test
+	public void changingOrSwitchingHerDrugIsWhetherToStopIt() {
+		for (String drug : Arrays.asList("warfarin", "efavirenz")) {
+			String stop = ask("Should I stop her " + drug + "?");
+			assertNotNull(stop, "precondition: the module answers whether to stop her " + drug);
+			for (String question : Arrays.asList("Should I change her " + drug + " to something else?",
+				"Should I switch her " + drug + "?", "Do I need to replace her " + drug + " with another drug?",
+				"Should we change her " + drug + "?")) {
+				assertEquals(stop, ask(question), question);
+			}
+		}
+	}
+
 	/** ADR Decision 505: giving a drug or avoiding it, asked either way, is a harm asked of it, which no "Yes" or "No" answers. */
 	@Test
 	public void givingADrugOrAvoidingItIsAHarmAskedOfIt() {

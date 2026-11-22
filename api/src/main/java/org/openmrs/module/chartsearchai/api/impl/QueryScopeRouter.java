@@ -1057,6 +1057,10 @@ public final class QueryScopeRouter {
 			// "Do I need to adjust any doses if I start rifampicin?" (ADR Decision 411)
 			"(?:do|should|must) (?:i|we) (?:need to )?(?:adjust|change|reduce|increase|lower) any (?:doses?|of " + POSSESSIVE
 					+ " " + MEDICATIONS + "(?: doses?)?) if (?:i|we) (?:start|give|add|prescribe) (?:" + PATIENT + " )?(?:on )?" + D,
+			// "What dose adjustment does she need if I start rifampicin?" — the model answered it with a verdict on starting the
+			// drug, "No — Rifampicin should not be started" (ADR Decision 679)
+			"(?:what|which) (?:dose |dosage |dosing )(?:adjustments?|changes?) (?:does|do|would|will|might|is|are) (?:(?:she|he|they"
+					+ "|the patient|this patient) )?(?:need|require|needed|required) (?:if|when) " + STARTS_A_DRUG,
 			// "Is there no interaction between fluconazole and her meds?" — which interact, with no "Yes" or "No" (ADR Decision
 			// 406)
 			"(?:is|are) there no (?:drug )?interactions? (?:between " + D + " and " + POSSESSIVE + " " + MEDICATIONS + "|with " + D

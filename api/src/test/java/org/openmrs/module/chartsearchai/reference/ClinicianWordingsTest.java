@@ -2259,6 +2259,22 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		assertEquals(false, hers.contains(" is not one of this patient's active medications"), hers);
 	}
 
+	/**
+	 * ADR Decision 679: what dose adjustment she needs if a drug is started is whether any dose needs adjusting if it is.
+	 * On the demo the model answered all 18 patients with a verdict on starting the drug, "No — Rifampicin should not be
+	 * started" or "Rifampicin can be given", neither of which is a dose.
+	 */
+	@Test
+	public void whatDoseAdjustmentSheNeedsIfADrugIsStartedIsWhetherAnyDoseNeedsAdjusting() {
+		String canonical = ask("Do I need to adjust any doses if I start warfarin?");
+		assertNotNull(canonical, "precondition: the module answers whether any dose needs adjusting");
+		for (String question : Arrays.asList("What dose adjustment does she need if I start warfarin?",
+			"What dose adjustments does she need if she starts warfarin?", "What dose changes are needed if I start warfarin?",
+			"Which dose adjustments would the patient need if we add warfarin?")) {
+			assertEquals(canonical, ask(question), question);
+		}
+	}
+
 	/** ADR Decision 505: giving a drug or avoiding it, asked either way, is a harm asked of it, which no "Yes" or "No" answers. */
 	@Test
 	public void givingADrugOrAvoidingItIsAHarmAskedOfIt() {

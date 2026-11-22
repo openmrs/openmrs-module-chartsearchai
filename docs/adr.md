@@ -30837,3 +30837,28 @@ On the demo replica, asked of the same 10 patients: the module answered all 10. 
 open *"Isoniazid is not one of this patient's active medications."* The 2 with one (4 and 3 orders) are not told so.
 
 Pinned by `ClinicianWordingsTest.aSecondDrugNamedAsHersThatSheIsNotOnIsSaidToBeNotHers`.
+
+## Decision 679: What dose adjustment she needs if a drug is started is whether any dose needs adjusting
+
+**Status: Accepted** (November 2026). Widens [Decision 411](#decision-411-changing-one-drug-for-another-or-choosing-which-of-two-to-stop-is-answered-with-what-relates-them-and-no-choice)'s
+*"Do I need to adjust any doses if I start X?"* to the wording a clinician typed on the demo.
+
+### Context
+
+In the demo's nineteenth batch, *"What dose adjustment does she need if I start rifampicin?"* went to the model for all
+18 patients. Every answer was a verdict on starting the drug, not a dose. Most read *"No — Rifampicin should not be
+started"*. Four read *"Rifampicin can be given / started, with one caution"*, a clearance the module never gives.
+
+### The decision
+
+*"What / which dose (dosage, dosing) adjustment(s) or change(s) does she / would the patient need, or are needed, if /
+when X is started"* joins Decision 411's shape. Starting X is `QueryScopeRouter.STARTS_A_DRUG`: she starts it, or the
+speaker starts, gives, adds or prescribes it. The answer is the findings relating X to her medications. It states no
+dose, and no verdict on starting X.
+
+### Measured
+
+The demo batch was the before. After, on the demo replica (8088), asked of 10 of the batch's patients (10 cells, no
+errors), the module answered all 10. None opens *"No"*, and none says the drug can be given.
+
+Pinned by `ClinicianWordingsTest.whatDoseAdjustmentSheNeedsIfADrugIsStartedIsWhetherAnyDoseNeedsAdjusting`.

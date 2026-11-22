@@ -1433,7 +1433,11 @@ public final class QueryScopeRouter {
 			+ "|(?:do|does|will|would) " + HER_MEDICATION_GROUP + " and " + HER_MEDICATION_GROUP + " (?:interact|clash)(?: with "
 			+ "(?:each other|one another))?"
 			+ "|(?:can|could|may|should) (?:she|he|they|the patient|this patient) (?:safely )?(?:take|have|continue|stay on) "
-			+ HER_MEDICATION_GROUP + " (?:with|and|alongside) " + HER_MEDICATION_GROUP + "(?: together)?)";
+			+ HER_MEDICATION_GROUP + " (?:with|and|alongside) " + HER_MEDICATION_GROUP + "(?: together)?"
+			// "Can her TB drugs be given with her ARVs?" — the same question in the passive; the model said "The records do not
+			// address" it for 13 of 13 demo patients (ADR Decision 682)
+			+ "|(?:can|could|may|should) " + HER_MEDICATION_GROUP + " (?:safely )?be (?:given|taken|used|continued|combined) "
+			+ "(?:with|alongside|together with) " + HER_MEDICATION_GROUP + "(?: together)?)";
 
 	/** "Is it safe to continue all her ARVs together?", "Are her ARVs safe together?" — whether a group of her own
 	 *  medications is safe together, a screen of them (ADR Decision 254). */
@@ -2051,7 +2055,9 @@ public final class QueryScopeRouter {
 			+ "|(?:should|must) " + HER_D + " not be (?:given|taken|used|combined|prescribed) (?:with|alongside) " + HER_D
 			// "Is there a problem combining rifampicin with nevirapine?" (ADR Decision 445)
 			+ "|is there (?:a |any )?(?:problems?|issues?|risks?|dangers?|harm|concerns?) (?:(?:in|with) )?(?:combining|giving|mixing|"
-			+ "using|taking) " + HER_D + " (?:and|with|alongside) " + HER_D + "(?: together)?"
+			// and "… at the same time", "… concurrently" (ADR Decision 682)
+			+ "using|taking) " + HER_D + " (?:and|with|alongside) " + HER_D + "(?: together| at the same time| concurrently"
+			+ "| simultaneously)?"
 			// "How bad is rifampicin with nevirapine?", "Clarithromycin while on nevirapine - risky?" (ADR Decision 444)
 			+ "|how (?:bad|dangerous|risky|harmful|serious|safe) is " + HER_D + " (?:with|alongside|and|plus|while on|while taking) "
 			+ HER_D

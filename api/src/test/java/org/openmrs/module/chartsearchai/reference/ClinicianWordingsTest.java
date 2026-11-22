@@ -2315,6 +2315,26 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/**
+	 * ADR Decision 682: a problem giving two drugs "at the same time" is Decision 445's problem combining them, and her TB drugs
+	 * "given with" her ARVs is Decision 449's question of the two groups. On the demo the first was answered "No — Fluconazole
+	 * and Rifampicin should not be given together", its "No" answering "is there a problem?" backwards, for 13 of 13 patients;
+	 * the second "The records do not address" it for 13 of 13.
+	 */
+	@Test
+	public void aProblemGivingTwoAtTheSameTimeAndOneGroupGivenWithAnotherAreTheModulesQuestions() {
+		String[][] pairs = {
+			{ "Is there a problem giving her warfarin and nevirapine at the same time?", "Is warfarin dangerous with her nevirapine?" },
+			{ "Is there any risk in giving warfarin with nevirapine concurrently?", "Is warfarin dangerous with her nevirapine?" },
+			{ "Can her TB drugs be given with her ARVs?", "Are her TB and HIV meds safe together?" },
+			{ "Can her ARVs be taken alongside her TB treatment?", "Are her TB and HIV meds safe together?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+	}
+
 	/** ADR Decision 505: giving a drug or avoiding it, asked either way, is a harm asked of it, which no "Yes" or "No" answers. */
 	@Test
 	public void givingADrugOrAvoidingItIsAHarmAskedOfIt() {

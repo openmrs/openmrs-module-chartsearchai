@@ -30943,3 +30943,39 @@ answered all 20, among them *"No. The patient should change her efavirenz"* and,
 not on the drug matches the active orders in SQL, for both drugs and all 10 patients.
 
 Pinned by `ClinicianWordingsTest.changingOrSwitchingHerDrugIsWhetherToStopIt`.
+
+## Decision 682: A problem giving two drugs at the same time, and her TB drugs given with her ARVs, are the module's questions
+
+**Status: Accepted** (November 2026). Widens two shapes to the wordings a clinician typed on the demo.
+[Decision 445](#decision-445-a-substance-she-would-eat-and-a-drug-acceptable-beside-another-are-the-questions-they-spell)'s
+problem combining two drugs gains *"… at the same time / concurrently / simultaneously"*.
+[Decision 449](#decision-449-two-of-her-groups-that-clash-a-drug-of-hers-interacting-with-anything-and-a-drug-added-to-her-regimen-are-the-questions-they-spell)'s
+*"Can she take her TB drugs with her ARVs?"* gains the passive.
+
+### Context
+
+In the demo's twenty-third batch (13 patients answered; 5 lost to a network drop), two wordings went to the model for
+every patient:
+
+- *"Is there a problem giving her fluconazole and rifampicin at the same time?"* was answered *"No — Fluconazole and
+  Rifampicin should not be given together"* 13 times. Its "No" answers "is there a problem?" backwards, the failure
+  `QueryScopeRouter.DANGEROUS_TOGETHER` exists to prevent. The Decision 445 shape already read *"Is there a problem
+  giving X and Y (together)"*. Only the closing *"at the same time"* kept it out.
+- *"Can her TB drugs be given with her ARVs?"* was answered *"The records do not address"* it 13 times. In batch 21,
+  *"Are there any interactions between her ARVs and her TB drugs?"* was answered by the module for all 18 patients.
+
+### The decision
+
+- The Decision 445 alternative of `DANGEROUS_TOGETHER` may close with *"together"*, *"at the same time"*,
+  *"concurrently"* or *"simultaneously"*.
+- `TWO_OF_HER_MEDICATION_GROUPS_INTERACT` reads *"Can / could / may / should her group (safely) be given / taken / used /
+  continued / combined with / alongside her other group"*.
+
+### Measured
+
+On the demo replica (8088), both questions were asked of 10 of the batch's patients (20 cells, no errors). Before: the
+model answered all 20. After: the module answered all 20, and none opens *"No"*. Every statement of what she takes
+matches the active orders in SQL. None of the 10 is on fluconazole or rifampicin. The two with only vaccination orders
+are told no antiretroviral is among her medications. The one on isoniazid is told how her TB drug and her ARVs relate.
+
+Pinned by `ClinicianWordingsTest.aProblemGivingTwoAtTheSameTimeAndOneGroupGivenWithAnotherAreTheModulesQuestions`.

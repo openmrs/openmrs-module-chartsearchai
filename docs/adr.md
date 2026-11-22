@@ -30602,3 +30602,31 @@ replica (8088), the four wordings were asked of 10 of the batch's patients (40 c
 - *"What are the risks of adding erythromycin to her current treatment?"* states each finding with its rating.
 
 Pinned by `ClinicianWordingsTest.howADrugAffectsHerMedicationsAndWhichNotToCombineAreTheModulesQuestions`.
+
+## Decision 672: Which of her medications could interact with a drug is which of them interact with it
+
+**Status: Accepted** (November 2026). Widens [Decision 319](#decision-319-which-of-her-medications-interact-with-a-drug-is-answered-with-the-findings-and-whether-anything-she-takes-interacts-with-it-as-whether-it-interacts)'s
+shape to the same question asked with a modal.
+
+### Context
+
+The demo's fourteenth batch asked *"Which of her medications could interact with efavirenz?"* of 18 patients. The
+`WHICH_OF_HER_MEDICATIONS_INTERACT_SHAPES` shape read *"which of her medications interact with X"* but not *"… could
+interact with X"*, so the model answered all 18. It told three of them a Moderate finding against nevirapine was *"a
+reason to withhold it"*. Others got several orders run together under one rating, such as *"Lamivudine, Stavudine, and
+Sulfamethoxazole (Moderate)"*.
+
+### The decision
+
+The shape admits *could*, *might*, *may*, *would*, *will* or *can* before *interact* or *interfere*. The question is
+Decision 319's, answered with the findings, each carrying its own rating.
+
+### Measured
+
+The demo batch was the before: the model answered all 18 patients. After, on the demo replica (8088), *"Which of her
+medications could interact with efavirenz?"* and *"Which of her drugs might interact with fluconazole?"* were asked of 10
+of the batch's patients (20 cells, no errors). The module answered all 20, each finding with its own rating. None calls
+a Moderate finding a reason to withhold. The one *"reason to withhold"* is fluconazole's Major finding against rifampin
+for `dd84c8de`.
+
+Pinned by `ClinicianWordingsTest.whichOfHerMedicationsCouldInteractWithADrugIsWhichInteract`.

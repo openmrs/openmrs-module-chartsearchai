@@ -2129,6 +2129,21 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		}
 	}
 
+	/**
+	 * ADR Decision 672: which of her medications could, might or may interact with a drug is which of them interact with
+	 * it. On the demo "Which of her medications could interact with efavirenz?" went to the model for 18 of 18 patients,
+	 * which told 3 of them a Moderate finding was "a reason to withhold it".
+	 */
+	@Test
+	public void whichOfHerMedicationsCouldInteractWithADrugIsWhichInteract() {
+		for (String modal : Arrays.asList("could", "might", "may", "would", "will", "can")) {
+			String canonical = ask("Which of her medications interact with warfarin?");
+			assertNotNull(canonical, "precondition: the module answers which interact");
+			assertEquals(canonical, ask("Which of her medications " + modal + " interact with warfarin?"), modal);
+			assertEquals(canonical, ask("Which of her drugs " + modal + " interfere with warfarin?"), modal);
+		}
+	}
+
 	/** ADR Decision 505: giving a drug or avoiding it, asked either way, is a harm asked of it, which no "Yes" or "No" answers. */
 	@Test
 	public void givingADrugOrAvoidingItIsAHarmAskedOfIt() {

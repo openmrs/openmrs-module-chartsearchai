@@ -1074,7 +1074,8 @@ public final class QueryScopeRouter {
 			"what (?:should|do|would|must) (?:i|we) (?:need to )?(?:watch|look out|monitor|be careful)(?: for)? if (?:i|we) (?:add|give|"
 					+ "start|prescribe) (?:" + PATIENT + " )?(?:on )?" + D,
 			"(?:which|what) (?:of )?" + POSSESSIVE + " (?:other |current |active )?(?:medications|meds|medicines|drugs|"
-					+ "prescriptions) (?:interact|interacts|interfere|interferes) with " + D,
+					// and "Which of her medications could interact with efavirenz?" (ADR Decision 672)
+					+ "prescriptions) (?:(?:could|might|may|would|will|can) )?(?:interact|interacts|interfere|interferes) with " + D,
 			"which of " + POSSESSIVE + " (?:medications|meds|medicines|drugs) (?:is|are) the problems? with " + D,
 			// "Which of her drugs should not be combined with clarithromycin?" — the model told one patient "Efavirenz should
 			// not be combined with clarithromycin due to a Moderate interaction" (ADR Decision 671)

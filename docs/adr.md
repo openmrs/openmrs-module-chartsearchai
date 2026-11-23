@@ -31256,3 +31256,43 @@ them on no nevirapine and 9 on no efavirenz (20 cells, no errors).
 
 Pinned by `ClinicianWordingsTest.whatToWatchForIfSheTakesTwoDrugsTogetherIsWhatToMonitorOnBoth`. Removing `AT_ONCE` from
 the branch reddens it.
+
+## Decision 690: Whether her drug is safe to continue with another is whether to keep it beside the other
+
+**Status: Accepted** (November 2026).
+[Decision 432](#decision-432-when-she-started-a-drug-is-her-record-a-fragment-a-plan-a-pair-at-once-and-a-group-of-hers-are-the-questions-they-spell)'s
+*"Is it safe to continue X while she is on Y?"* also reads with her drug the subject: *"Is X safe / ok / fine to continue
+/ keep taking with / alongside (her) Y?"*.
+
+### Context
+
+In the demo's thirty-second batch (18 patients, 144 cells, no errors), *"Is stavudine safe to continue with her
+isoniazid?"* went to the model for every patient. It led 17 answers *"Stavudine can be continued"*, a clearance the
+module never gives. SQL shows 3 of the 18 on no stavudine and 13 on no isoniazid. Two of the 3 got that clearance, and
+no answer told a patient she is not on either drug.
+
+### The decision
+
+`KEEP_HERS_BESIDE_THE_OTHER` gains *"is X safe / ok / okay / fine to continue / keep (giving | taking) with / alongside /
+while on / while taking Y"*. When the second drug is named as hers and she is not on it, the answer first says so, as for
+every possessive drug she is not on.
+
+### Measured
+
+Measured on the demo replica (8088): *"Is stavudine safe to continue with her isoniazid?"* and *"Is nevirapine ok to
+keep taking with fluconazole?"* asked of 10 batch-32 patients. SQL shows 3 of them on no stavudine and 5 on no
+nevirapine (20 cells, no errors).
+
+- Before: the model answered all 20. It led 14 answers with a clearance and 6 with *"No"*, and told no patient she is
+  not on a drug. It told 4 of the 5 patients on no nevirapine that nevirapine *"can be kept taking"* or *"can be kept
+  being taken"* with fluconazole.
+- After: the module answered all 20. Each patient SQL shows on neither drug is told so; a patient on stavudine but no
+  isoniazid is told *"Isoniazid is not one of this patient's active medications"*.
+
+### Residue
+
+dd88589e is on isoniazid in two combination orders but on no stavudine. Her answer reads stavudine as the drug proposed
+and does not say she is not on it, as the answer to *"Is it safe to continue X while she is on Y?"* already does.
+
+Pinned by `ClinicianWordingsTest.whetherHerDrugIsSafeToContinueWithAnotherIsWhetherToKeepItBesideTheOther`. Mutating the
+new alternative's *"to"* token reddens it.

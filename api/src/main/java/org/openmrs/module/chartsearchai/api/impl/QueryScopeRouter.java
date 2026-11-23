@@ -2190,7 +2190,10 @@ public final class QueryScopeRouter {
 			+ HER_D + " (?:with|alongside|while on|while taking) " + HER_D
 			// "Can nevirapine be continued with rifampicin?" (ADR Decision 441)
 			+ "|(?:can|could|should|may) " + HER_D + " be (?:safely )?(?:continued|kept|maintained) (?:with|alongside|while on|while "
-			+ "taking|if (?:i|we) (?:start|give|add|prescribe)) " + HER_D + ")";
+			+ "taking|if (?:i|we) (?:start|give|add|prescribe)) " + HER_D
+			// "Is stavudine safe to continue with her isoniazid?" (ADR Decision 690)
+			+ "|is " + HER_D + " (?:safe|ok|okay|fine) to (?:continue|keep(?: giving| taking)?) (?:with|alongside|while on|while "
+			+ "taking) " + HER_D + ")";
 
 	/** "Is his warfarin dose safe with his amiodarone?" — whether her drug's dose is safe beside another (ADR Decision 258). */
 	private static final String DOSE_SAFE_WITH_THE_OTHER = "is " + POSSESSIVE + " " + D + " dose (?:still )?(?:safe|ok|okay"

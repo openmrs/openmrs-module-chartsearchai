@@ -2316,6 +2316,24 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 	}
 
 	/**
+	 * Whether her drug is safe to continue with another is whether to keep it beside the other (ADR Decision 690). On the
+	 * demo the model answered all 18 patients and led 17 answers "Stavudine can be continued", a clearance the module
+	 * never gives, 2 of them to patients on no stavudine.
+	 */
+	@Test
+	public void whetherHerDrugIsSafeToContinueWithAnotherIsWhetherToKeepItBesideTheOther() {
+		String keep = ask("Is it safe to continue nevirapine while she is on warfarin?");
+		assertNotNull(keep, "precondition: the module answers whether to keep her drug beside the other");
+		for (String question : Arrays.asList("Is her nevirapine safe to continue with warfarin?",
+			"Is nevirapine ok to keep taking with warfarin?", "Is nevirapine safe to continue alongside warfarin?")) {
+			assertEquals(keep, ask(question), question);
+		}
+		// "her warfarin" names a drug she is not on, and the answer says so first
+		assertEquals("Warfarin is not one of this patient's active medications.\n" + keep,
+			ask("Is nevirapine safe to continue with her warfarin?"));
+	}
+
+	/**
 	 * What to watch for if she takes two drugs TOGETHER is what to watch for if she takes them (ADR Decision 689). On the
 	 * demo the model answered all 18 patients, leading most with a clearance, and told the 2 on no nevirapine nothing of
 	 * it.

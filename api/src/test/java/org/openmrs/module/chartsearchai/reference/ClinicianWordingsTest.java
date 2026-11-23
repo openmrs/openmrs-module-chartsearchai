@@ -2316,6 +2316,33 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 	}
 
 	/**
+	 * What would happen if a drug WERE given is what happens if it is: "if I gave", "if she took" read as "if I give", "if
+	 * she takes" (ADR Decision 686). And checking her liver function if a drug is added is monitoring it. On the demo the
+	 * first went to the model for all 18 patients, which led every answer "No — Rifampicin should not be given", and told
+	 * the 4 patients on no nevirapine nothing of it; the second it answered "Isoniazid can be given", a clearance.
+	 */
+	@Test
+	public void whatWouldHappenIfADrugWereGivenAndCheckingHerLiverIfOneIsAddedAreTheModulesQuestions() {
+		String pair = ask("What happens if I give warfarin with nevirapine?");
+		assertNotNull(pair, "precondition: the module answers what combining the two does");
+		for (String question : Arrays.asList("What would happen if I gave her warfarin and nevirapine together?",
+			"What would happen if I gave warfarin with nevirapine?", "What would happen if she took warfarin with nevirapine?",
+			"What would happen if I added warfarin to nevirapine?", "What would happen if I started her on warfarin with nevirapine?",
+			"What would happen if I prescribed warfarin with nevirapine?", "What would happen if we combined warfarin and nevirapine?")) {
+			assertEquals(pair, ask(question), question);
+		}
+		assertEquals(ask("What happens if she takes warfarin with her ARVs?"),
+			ask("What would happen if I gave her warfarin with her ARVs?"));
+		assertNotNull(ask("What happens if she takes warfarin with her ARVs?"), "precondition: the group reading");
+		String monitor = ask("Do I need to monitor her LFTs if I give warfarin?");
+		assertNotNull(monitor, "precondition: the module answers monitoring her if a drug is given");
+		for (String question : Arrays.asList("Should I check her liver function if I add warfarin?",
+			"Do I need to check her LFTs if I start warfarin?")) {
+			assertEquals(monitor, ask(question), question);
+		}
+	}
+
+	/**
 	 * Which drugs to avoid giving with her drug is what her drug interacts with (ADR Decision 685). On the demo the model
 	 * told one patient "Yes — there are drugs to avoid giving with Nevirapine: lamivudine and stavudine", her own
 	 * antiretrovirals, off rows the drug data rates at no severity, and two patients on no nevirapine "No — Nevirapine

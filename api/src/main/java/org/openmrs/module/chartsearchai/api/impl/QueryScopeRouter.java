@@ -352,11 +352,19 @@ public final class QueryScopeRouter {
 		// "at the same time" is "together" (ADR Decision 683): "Is there a problem giving her clarithromycin and her ARVs at the
 		// same time?" went to the model, which counted her sulfamethoxazole among her ARVs. Never "at the same time each day",
 		// when she takes it, nor "at the same time as", which names what it is beside.
+		// A drug that WOULD be given is asked as one that is (ADR Decision 686): "What would happen if I gave her rifampicin and
+		// nevirapine together?" went to the model, which led every answer "No — Rifampicin should not be given".
 		// "x 14 days" is "for 14 days", as a prescription writes a duration (ADR Decision 470).
 		// and its shorthand, "x14d", "x 2 wk" (ADR Decision 523).
 		String[] parts = text.toLowerCase(Locale.ROOT).replace("+", " plus ")
 				.replaceAll("(?<![\\p{L}\\p{N}])at the same time(?![\\p{L}\\p{N}])(?![\\s\\p{Punct}]*(?:each|every|as)(?![\\p{L}]))",
 						"together")
+				.replaceAll("(?<![\\p{L}\\p{N}])if (i|we) gave(?![\\p{L}\\p{N}])", "if $1 give")
+				.replaceAll("(?<![\\p{L}\\p{N}])if (i|we) added(?![\\p{L}\\p{N}])", "if $1 add")
+				.replaceAll("(?<![\\p{L}\\p{N}])if (i|we) started(?![\\p{L}\\p{N}])", "if $1 start")
+				.replaceAll("(?<![\\p{L}\\p{N}])if (i|we) prescribed(?![\\p{L}\\p{N}])", "if $1 prescribe")
+				.replaceAll("(?<![\\p{L}\\p{N}])if (i|we) combined(?![\\p{L}\\p{N}])", "if $1 combine")
+				.replaceAll("(?<![\\p{L}\\p{N}])if (she|he|they|the patient|this patient) took(?![\\p{L}\\p{N}])", "if $1 takes")
 				.replaceAll("(?<![\\p{L}\\p{N}])x\\s*(\\d+)\\s*(?:d|dys?)(?![\\p{L}])", " for $1 days ")
 				.replaceAll("(?<![\\p{L}\\p{N}])x\\s*(\\d+)\\s*(?:wk|wks)(?![\\p{L}])", " for $1 weeks ")
 				.replaceAll("(?<![\\p{L}\\p{N}])x\\s*(?=\\d+\\s*(?:days?|weeks?|months?)(?![\\p{L}]))", " for ")
@@ -796,7 +804,9 @@ public final class QueryScopeRouter {
 			"(?:is there )?(?:any |a )?reason (?:why )?(?:she|he|they|the patient|this patient) (?:can't|cant|cannot|can not|"
 					+ "shouldn't|shouldnt|should not) (?:have|take|get|receive|be given|use) " + D + "(?: now| today)?",
 			// "Do I need to monitor her LFTs if I give fluconazole?" (ADR Decision 431)
-			"(?:do|should|must) (?:i|we) (?:need to )?monitor " + POSSESSIVE + " (?:\\p{L}+ ){1,2}(?:if|when) (?:i|we) (?:add|give|"
+			// and "Should I check her liver function if I add isoniazid?", answered by the model "Isoniazid can be given" (ADR
+			// Decision 686)
+			"(?:do|should|must) (?:i|we) (?:need to )?(?:monitor|check) " + POSSESSIVE + " (?:\\p{L}+ ){1,2}(?:if|when) (?:i|we) (?:add|give|"
 					+ "start|prescribe) (?:" + PATIENT + " )?(?:on )?" + D,
 			// "Thinking of fluconazole for her - concerns?" (ADR Decision 432)
 			"(?:(?:i am|i'm|we are|we're) )?(?:thinking|considering) (?:of |about )?(?:giving |starting |prescribing |adding )?(?:"

@@ -31109,3 +31109,44 @@ yes-or-no question asked of a which-question.
 
 Pinned by `ClinicianWordingsTest.whichDrugsToAvoidGivingWithHerDrugIsWhatHerDrugInteractsWith`. Each of the four shapes,
 mutated, reddens it.
+
+## Decision 686: What would happen if a drug were given is what happens if it is, and checking her liver if one is added is monitoring it
+
+**Status: Accepted** (November 2026). `QueryScopeRouter.words` reads *"if I / we gave / added / started / prescribed /
+combined"* as the present tense, and *"if she / he / they / the patient took"* as *"takes"*. A clinician asks what
+would happen if a drug WERE given in the past tense, and every reading spells the present. The readings that already
+answer *"What happens if I give X with Y?"*
+([Decision 615](#decision-615-a-question-about-two-drugs-interaction-publishes-only-the-chips-its-answer-states)'s
+shape) and *"What happens if she takes X with her ARVs?"*
+([Decision 670](#decision-670-what-happens-if-she-takes-a-drug-with-a-group-of-hers-is-the-drug-asked-beside-that-group)) now
+read it. Separately,
+[Decision 431](#decision-431-an-abbreviation-a-monitoring-severity-or-effect-question-and-a-comparison-are-the-questions-they-spell)'s
+*"Do I need to monitor her LFTs if I give X?"* also reads *"check her …"*.
+
+### Context
+
+In the demo's twenty-eighth batch (18 patients, 144 cells, no errors), two wordings went to the model for every
+patient:
+
+- *"What would happen if I gave her rifampicin and nevirapine together?"* Every answer led *"No — … should not be given"*,
+  a verdict on a question that asks what happens. SQL shows 4 of the 18 on no nevirapine, and none of their answers
+  said so.
+- *"Should I check her liver function if I add isoniazid?"* Five answers read *"Isoniazid can be given, with one
+  caution"*, a clearance the module never gives. The other 13 said the records do not address it.
+
+### The decision
+
+- `words` rewrites *"if (i|we) gave"* → *"give"*, and likewise *added*, *started*, *prescribed*, *combined*, and *"if
+  (she|he|they|the patient|this patient) took"* → *"takes"*. Only after *"if"*: *"after I gave her …"* is not rewritten.
+- Decision 431's monitoring shape reads *"(monitor|check) her … if I add / give / start / prescribe X"*.
+
+### Measured
+
+Measured on the demo replica (8088): both questions asked of 10 batch-28 patients (20 cells, no errors). Before: the
+model answered all 20. After: the module answered all 20, none leading "Yes" or "No". All 10 are on nevirapine by SQL
+and each answer says so. The one on isoniazid is told it is hers. Asked of the two batch-28 patients SQL shows on
+neither drug, the pair question answers *"Neither Rifampicin (rifampin) nor Nevirapine is one of this patient's active
+medications"*.
+
+Pinned by `ClinicianWordingsTest.whatWouldHappenIfADrugWereGivenAndCheckingHerLiverIfOneIsAddedAreTheModulesQuestions`,
+one wording per rewritten verb. Each rewrite and the monitoring change, mutated, reddens it.

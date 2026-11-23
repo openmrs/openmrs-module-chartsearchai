@@ -2316,6 +2316,22 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 	}
 
 	/**
+	 * Whether her drug needs to be stopped if another is started, her drug the passive subject, is whether to stop it if
+	 * the other is started (ADR Decision 688). On the demo the model answered all 18 patients, 15 of them "Isoniazid can be
+	 * given" and 3 "Rifampicin can be started", and told none of the 17 on no isoniazid that she is not on it.
+	 */
+	@Test
+	public void whetherHerDrugNeedsToBeStoppedIfAnotherIsStartedIsWhetherToStopIt() {
+		String stop = ask("Should I stop her nevirapine if I start warfarin?");
+		assertNotNull(stop, "precondition: the module answers whether to stop her drug if another is started");
+		for (String question : Arrays.asList("Does her nevirapine need to be stopped if I start warfarin?",
+			"Should her nevirapine be stopped if I add warfarin?", "Does her nevirapine need to be discontinued if I give warfarin?",
+			"Will her nevirapine need to be stopped if I start warfarin?")) {
+			assertEquals(stop, ask(question), question);
+		}
+	}
+
+	/**
 	 * Whether adding a drug could make her drug toxic is whether one drug changes the other (ADR Decision 687). On the demo
 	 * the model answered all 18 patients "Fluconazole can be given, with one caution", a clearance the module never gives,
 	 * and told two patients on no nevirapine "Nevirapine can be given".

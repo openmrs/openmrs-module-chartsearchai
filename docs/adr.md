@@ -31183,3 +31183,45 @@ antiretroviral are told so, and every list of her antiretrovirals matches her ac
 
 Pinned by `ClinicianWordingsTest.whetherAddingADrugCouldMakeHerDrugToxicIsWhetherOneChangesTheOther`. The gerund
 prefix and the *"toxic"* alternative, each mutated, redden it.
+
+## Decision 688: Whether her drug needs to be stopped if another is started, her drug the passive subject, is whether to stop it
+
+**Status: Accepted** (November 2026).
+[Decision 402](#decision-402-six-more-wordings-a-clinician-types-are-answered-as-the-questions-they-ask)'s
+*"Should I stop her X if I start Y?"* also reads with her drug the passive subject: *"Does her X need to be stopped if I
+start Y?"*, *"Should her X be stopped if I add Y?"*. That is the shape
+[Decision 668](#decision-668-whether-her-drug-should-be-stopped-the-drug-the-passive-subject-is-whether-to-stop-it)
+reads, with the second drug added.
+
+### Context
+
+In the demo's thirtieth batch (18 patients, 144 cells, all answered after reruns), *"Does her isoniazid need to be
+stopped if I start rifampicin?"* went to the model for every patient. It led 15 answers *"Isoniazid can be given"* and 3
+*"Rifampicin can be started"*, both clearances the module never gives. SQL shows 17 of the 18 on no isoniazid, and none
+of their answers said so.
+
+### The decision
+
+`CHANGE_HERS_IF_STARTING` gains *"should / must X be"* and *"does / do / will X need to be"*, followed by *"stopped /
+discontinued / held / changed / switched if I / we start / give / add / prescribe (her) (on) Y"*.
+
+### Measured
+
+Measured on the demo replica (8088): *"Does her isoniazid need to be stopped if I start rifampicin?"* and *"Should her
+nevirapine be stopped if I add fluconazole?"* asked of 10 patients. Nine are from batch 30. The tenth, dd55aeac, is on
+isoniazid, so 2 of the 10 are on isoniazid and 3 on no nevirapine (20 cells, no errors).
+
+- Before: the model answered all 20.
+  - It led 8 isoniazid answers *"No"*, one of them *"No, the drug can be given"*, and the other 2 with clearances.
+  - It told no patient on no isoniazid that she is not on it.
+  - It cleared nevirapine (*"… can be given"*) in all 10 answers, including those to the 3 patients on no nevirapine.
+- After: the module answered all 20. Each patient SQL shows on neither drug is told so, and the patients on isoniazid or
+  nevirapine are told it is one of theirs.
+
+### Residue
+
+The answer is Decision 402's: what the two drugs' interaction is, led *"Yes — … interact"*. That lead answers whether
+they interact, not whether to stop; no finding chooses a drug to stop.
+
+Pinned by `ClinicianWordingsTest.whetherHerDrugNeedsToBeStoppedIfAnotherIsStartedIsWhetherToStopIt`. Mutating the new
+alternative's *"be"* token reddens it.

@@ -2235,6 +2235,9 @@ public final class QueryScopeRouter {
 			// Decision 459)
 			+ "modify|reduce|lower|decrease|increase|hold|pause) (?:the )?" + HER_D + "(?: dose)? if (?:i|we) (?:start|give|add|prescribe) (?:"
 			+ PATIENT + " )?(?:on )?" + HER_D
+			// "Does her isoniazid need to be stopped if I start rifampicin?" — her drug the passive subject (ADR Decision 688)
+			+ "|(?:(?:should|must) " + HER_D + "|(?:does|do|will) " + HER_D + " need to) be (?:stopped|discontinued|held|changed"
+			+ "|switched) if (?:i|we) (?:start|give|add|prescribe) (?:" + PATIENT + " )?(?:on )?" + HER_D
 			// "Should I change her nevirapine because of rifampicin?", "Does she need a dose change of efavirenz with
 			// rifampicin?" (ADR Decision 427)
 			+ "|(?:should|must|do) (?:i|we) (?:need to )?(?:change|stop|switch|adjust|modify|reduce|lower|decrease|increase|hold"

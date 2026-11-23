@@ -2148,7 +2148,8 @@ public final class QueryScopeRouter {
 			// "watch (out) for", "check", "look out for" are what "monitor" asks
 			+ "|what (?:should|do|must) (?:i|we) (?:need to )?" + TO_MONITOR + " (?:if|when) (?:(?:she|he|they|the patient) (?:takes|"
 			+ "take|is on|are on|is taking)|(?:i|we) (?:give|add|start|prescribe)(?: " + PATIENT + ")?) " + HER_D + " (?:with|and|"
-			+ "alongside) " + HER_D
+			// and "… together", "… at the same time" (ADR Decision 689)
+			+ "alongside) " + HER_D + AT_ONCE
 			// "Fluconazole and nevirapine - what to monitor?", "What to monitor with fluconazole and nevirapine?" (ADR Decision 475)
 			+ "|" + HER_D + " (?:and|with|plus) " + HER_D + " what (?:to|should (?:i|we)|do (?:i|we) need to) " + TO_MONITOR
 			+ "|what (?:to|should (?:i|we)|do (?:i|we) need to) " + TO_MONITOR + " (?:with|on|for) " + HER_D + " (?:and|with|plus) "

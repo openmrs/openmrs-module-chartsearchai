@@ -31225,3 +31225,34 @@ they interact, not whether to stop; no finding chooses a drug to stop.
 
 Pinned by `ClinicianWordingsTest.whetherHerDrugNeedsToBeStoppedIfAnotherIsStartedIsWhetherToStopIt`. Mutating the new
 alternative's *"be"* token reddens it.
+
+## Decision 689: What to watch for if she takes two drugs together is what to watch for if she takes them
+
+**Status: Accepted** (November 2026).
+[Decision 475](#decision-475-what-to-watch-for-or-monitor-on-two-drugs-is-the-monitoring-question-and-its-if-i-give-branch-fits)'s
+*"What should I watch for if she takes X and Y?"* also reads *"… together"*, *"… at the same time"* and the rest of
+`AT_ONCE`.
+
+### Context
+
+In the demo's thirty-first batch (18 patients, 144 cells, all answered after a rerun), *"What should I watch for if she
+takes fluconazole and nevirapine together?"* went to the model for every patient. It led 15 of the 18 answers with a
+clearance (*"… can be given"*, *"… can be taken together"*), which the module never gives. SQL shows 2 of the 18 on no
+nevirapine. Both were cleared, and neither was told she is not on it.
+
+### The decision
+
+The *"if she takes / if I give X with / and / alongside Y"* branch of `MONITORING_ON_BOTH` ends in `AT_ONCE`.
+
+### Measured
+
+Measured on the demo replica (8088): *"What should I watch for if she takes fluconazole and nevirapine together?"* and
+*"What should I look out for if I give rifampicin and efavirenz together?"* asked of 10 batch-31 patients. SQL shows 2 of
+them on no nevirapine and 9 on no efavirenz (20 cells, no errors).
+
+- Before: the model answered all 20. It led 6 answers *"No"*/*"No —"* and told no patient she is not on either drug.
+- After: the module answered all 20. Each patient SQL shows on neither drug is told so, and each patient on nevirapine
+  or efavirenz is told it is one of hers.
+
+Pinned by `ClinicianWordingsTest.whatToWatchForIfSheTakesTwoDrugsTogetherIsWhatToMonitorOnBoth`. Removing `AT_ONCE` from
+the branch reddens it.

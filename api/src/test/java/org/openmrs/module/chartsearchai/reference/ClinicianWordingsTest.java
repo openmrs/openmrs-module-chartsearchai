@@ -2316,6 +2316,22 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 	}
 
 	/**
+	 * What to watch for if she takes two drugs TOGETHER is what to watch for if she takes them (ADR Decision 689). On the
+	 * demo the model answered all 18 patients, leading most with a clearance, and told the 2 on no nevirapine nothing of
+	 * it.
+	 */
+	@Test
+	public void whatToWatchForIfSheTakesTwoDrugsTogetherIsWhatToMonitorOnBoth() {
+		String monitor = ask("What should I watch for if she takes warfarin and nevirapine?");
+		assertNotNull(monitor, "precondition: the module answers what to watch for on both");
+		for (String question : Arrays.asList("What should I watch for if she takes warfarin and nevirapine together?",
+			"What should I monitor if she takes warfarin and nevirapine at the same time?",
+			"What should I look out for if I give warfarin and nevirapine together?")) {
+			assertEquals(monitor, ask(question), question);
+		}
+	}
+
+	/**
 	 * Whether her drug needs to be stopped if another is started, her drug the passive subject, is whether to stop it if
 	 * the other is started (ADR Decision 688). On the demo the model answered all 18 patients, 15 of them "Isoniazid can be
 	 * given" and 3 "Rifampicin can be started", and told none of the 17 on no isoniazid that she is not on it.

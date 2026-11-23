@@ -973,6 +973,11 @@ public final class QueryScopeRouter {
 					+ "(?:takes|is taking|is on)",
 			// "Does her simvastatin interact with anything?" (ADR Decision 449)
 			"(?:does|will|would|could|can) (?:" + POSSESSIVE + " )?" + D + " interact with anything(?: else)?",
+			// "What interactions does her co-trimoxazole have?", "What does her nevirapine interact with?" — the model listed
+			// reference rows for drugs she is not on, and told no patient on no co-trimoxazole that she is not on it (ADR
+			// Decision 691)
+			"(?:what|which) (?:drug )?interactions (?:does|do) " + POSSESSIVE + " " + D + " have",
+			"what (?:does|do) " + POSSESSIVE + " " + D + " interact with",
 			// "Is her efavirenz going to interact with anything new I prescribe?" — the model answered "No — Efavirenz should
 			// not be prescribed" for her own drug (ADR Decision 684)
 			"is (?:" + POSSESSIVE + " )?" + D + " going to interact with anything (?:new|else)(?: (?:i|we) (?:prescribe|give|add|start)"

@@ -31296,3 +31296,42 @@ and does not say she is not on it, as the answer to *"Is it safe to continue X w
 
 Pinned by `ClinicianWordingsTest.whetherHerDrugIsSafeToContinueWithAnotherIsWhetherToKeepItBesideTheOther`. Mutating the
 new alternative's *"to"* token reddens it.
+
+## Decision 691: What interactions her drug has is what her drug interacts with
+
+**Status: Accepted** (November 2026).
+[Decision 449](#decision-449-two-of-her-groups-that-clash-a-drug-of-hers-interacting-with-anything-and-a-drug-added-to-her-regimen-are-the-questions-they-spell)'s
+*"Does her X interact with anything?"* also reads as *"What / which (drug) interactions does her X have?"* and *"What
+does her X interact with?"*.
+
+### Context
+
+In the demo's thirty-third batch (18 patients, 144 cells, no errors), *"What interactions does her co-trimoxazole
+have?"* went to the model for every patient. SQL shows 8 of the 18 on no co-trimoxazole, and none of their answers said
+so. 13 of the 18 answers listed reference rows for drugs (levobupivacaine, lidocaine, lomitapide, mepivacaine,
+methenamine) that none of the 18 is on.
+
+### The decision
+
+Two possessive shapes beside Decision 449's: *"what / which (drug) interactions does / do her X have"*, and *"what does
+/ do her X interact with"*.
+
+### Measured
+
+Measured on the demo replica (8088): *"What interactions does her co-trimoxazole have?"* and *"What does her efavirenz
+interact with?"* asked of 10 batch-33 patients. SQL shows 5 of them on no co-trimoxazole and 8 on no efavirenz (20
+cells, no errors).
+
+- Before: the model answered all 20, and told no patient she is not on a drug. It told dda69844, who is on no
+  co-trimoxazole, *"The patient's co-trimoxazole interacts with lamivudine"*.
+- After: the module answered all 20. Each of the 5 and the 8 is told *"… is not one of this patient's active
+  medications"*, and each patient on the drug is told it is hers, with its interactions with her other active
+  medications.
+
+### Residue
+
+A drug she is not on is answered as one proposed, under a *"Yes — X interacts with this patient's active medications"*
+lead: [Decision 685](#decision-685-which-drugs-to-avoid-giving-with-her-drug-is-what-her-drug-interacts-with)'s residue.
+
+Pinned by `ClinicianWordingsTest.whatInteractionsHerDrugHasIsWhatHerDrugInteractsWith`. Mutating the first shape's
+*"interactions"* or the second's *"interact"* reddens it on that shape's wording.

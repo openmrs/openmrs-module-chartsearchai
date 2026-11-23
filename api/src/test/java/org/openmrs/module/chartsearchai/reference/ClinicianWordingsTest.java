@@ -2316,6 +2316,22 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 	}
 
 	/**
+	 * What interactions her drug has is what her drug interacts with (ADR Decision 691). On the demo the model answered
+	 * all 18 patients, 13 of them with reference rows for drugs none of them is on, and told none of the 8 on no
+	 * co-trimoxazole that she is not on it.
+	 */
+	@Test
+	public void whatInteractionsHerDrugHasIsWhatHerDrugInteractsWith() {
+		String interacts = ask("Does her nevirapine interact with anything?");
+		assertNotNull(interacts, "precondition: the module answers what her drug interacts with");
+		for (String question : Arrays.asList("What interactions does her nevirapine have?",
+			"Which interactions does her nevirapine have?", "What drug interactions does her nevirapine have?",
+			"What does her nevirapine interact with?")) {
+			assertEquals(interacts, ask(question), question);
+		}
+	}
+
+	/**
 	 * Whether her drug is safe to continue with another is whether to keep it beside the other (ADR Decision 690). On the
 	 * demo the model answered all 18 patients and led 17 answers "Stavudine can be continued", a clearance the module
 	 * never gives, 2 of them to patients on no stavudine.

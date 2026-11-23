@@ -2316,6 +2316,21 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 	}
 
 	/**
+	 * Adjusting her drug's dose if she starts another is adjusting it if I start the other (ADR Decision 694). On the demo the
+	 * model answered all 18 patients "Efavirenz can be given", 16 of them on no efavirenz.
+	 */
+	@Test
+	public void adjustingHerDoseIfSheStartsAnotherIsAdjustingItWithTheOther() {
+		String ifIStart = ask("Should I adjust her efavirenz dose if I start warfarin?");
+		assertNotNull(ifIStart, "precondition: the module answers adjusting her dose if I start the other");
+		for (String question : Arrays.asList("Should I adjust her efavirenz dose if she starts warfarin?",
+			"Should I change her efavirenz dose if she starts warfarin?", "Should we adjust her efavirenz dose when she starts "
+				+ "warfarin?", "Should I reduce the efavirenz dose if she is started on warfarin?")) {
+			assertEquals(ifIStart, ask(question), question);
+		}
+	}
+
+	/**
 	 * A safer one of her groups if she needs a drug is an alternative to the drug that does not interact with that group
 	 * (ADR Decision 693). On the demo the model answered all 18 patients, 6 of them under a "No —" lead such as "No —
 	 * Rifampicin should not be given".

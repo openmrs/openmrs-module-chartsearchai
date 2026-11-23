@@ -31404,3 +31404,43 @@ has to take fluconazole?"* asked of the same 10 patients (20 cells, no errors).
 
 Pinned by `ClinicianWordingsTest.aSaferOneOfHerGroupsIfSheNeedsADrugIsAnAlternativeBesideThatGroup`. Mutating the
 router shape's *"safer|better"* or the group reading's *"there"* reddens it.
+
+## Decision 694: Her drug's dose changed if she starts another is her drug's dose changed if I start it
+
+**Status: Accepted** (November 2026).
+[Decision 402](#decision-402-six-more-wordings-a-clinician-types-are-answered-as-the-questions-they-ask)'s
+*"Should I change her X if I start Y?"*, and
+[Decision 459](#decision-459-a-reason-not-to-give-two-drugs-together-a-dose-changed-when-the-other-starts-and-a-single-dose-are-the-questions-they-spell)'s
+dose of it, also read with her starting the drug: *"Should I adjust her efavirenz dose if she starts rifampicin?"*.
+
+### Context
+
+In the demo's thirty-sixth batch (18 patients, 144 cells, no errors once a transient outage's 52 cells were re-run),
+*"Should I adjust her efavirenz dose if she starts rifampicin?"* went to the model for every patient. Every answer led
+*"Efavirenz can be given"*, Decision 402's error again; SQL shows 16 of the 18 on no efavirenz, and none was told so.
+
+### The decision
+
+`QueryScopeRouter.CHANGE_HERS_IF_STARTING`'s first shape takes *"if / when"* and Decision 674's `STARTS_A_DRUG` after
+her drug, beside *"if I start Y"*, so either wording gets the one answer.
+
+### Measured
+
+Measured on the demo replica (8088): *"Should I adjust her efavirenz dose if she starts rifampicin?"* and *"Should I
+change her nevirapine dose if she starts fluconazole?"* asked of 10 batch-36 patients. SQL shows 8 of them on no
+efavirenz and 1 on no nevirapine (20 cells, no errors).
+
+- Before: the model answered all 20, and told no patient she is not on the drug. dd55571f was told *"the patient should
+  change a medication"*, and dd74d301 *"do not start rifampicin"*.
+- After: the module answered all 20. Each of the 8 and the 1 is told *"… and … interact; neither is one of this
+  patient's active medications"*, each patient on the drug that it is hers, with its interaction, and each that the dose
+  asked about was not checked.
+
+### Residue
+
+The answer is Decision 402's, which leads *"Yes — Y interacts with this patient's active medications"* where her drug
+is one Y interacts with: a *"Yes"* that a dose question does not ask for, as Decision 688's residue records for stopping
+her drug.
+
+Pinned by `ClinicianWordingsTest.adjustingHerDoseIfSheStartsAnotherIsAdjustingItWithTheOther`. Mutating the new
+alternative's *"if|when"* reddens it.

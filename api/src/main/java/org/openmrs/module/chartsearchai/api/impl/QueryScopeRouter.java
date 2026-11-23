@@ -2248,8 +2248,11 @@ public final class QueryScopeRouter {
 	private static final String CHANGE_HERS_IF_STARTING = "(?:should|must|do) (?:i|we) (?:need to )?(?:change|stop|switch|adjust|"
 			// and "the": "Should I reduce the nevirapine dose if I add fluconazole?", answered "Nevirapine can be given" (ADR
 			// Decision 459)
-			+ "modify|reduce|lower|decrease|increase|hold|pause) (?:the )?" + HER_D + "(?: dose)? if (?:i|we) (?:start|give|add|prescribe) (?:"
+			+ "modify|reduce|lower|decrease|increase|hold|pause) (?:the )?" + HER_D + "(?: dose)? (?:if (?:i|we) (?:start|give|add|prescribe) (?:"
 			+ PATIENT + " )?(?:on )?" + HER_D
+			// and her starting it, "Should I adjust her efavirenz dose if she starts rifampicin?" — answered "Efavirenz can be
+			// given" to patients on no efavirenz (ADR Decision 694)
+			+ "|(?:if|when) " + STARTS_A_DRUG + ")"
 			// "Does her isoniazid need to be stopped if I start rifampicin?" — her drug the passive subject (ADR Decision 688)
 			+ "|(?:(?:should|must) " + HER_D + "|(?:does|do|will) " + HER_D + " need to) be (?:stopped|discontinued|held|changed"
 			+ "|switched) if (?:i|we) (?:start|give|add|prescribe) (?:" + PATIENT + " )?(?:on )?" + HER_D

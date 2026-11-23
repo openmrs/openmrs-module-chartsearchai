@@ -2316,6 +2316,40 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 	}
 
 	/**
+	 * A safer one of her groups if she needs a drug is an alternative to the drug that does not interact with that group
+	 * (ADR Decision 693). On the demo the model answered all 18 patients, 6 of them under a "No —" lead such as "No —
+	 * Rifampicin should not be given".
+	 */
+	@Test
+	public void aSaferOneOfHerGroupsIfSheNeedsADrugIsAnAlternativeBesideThatGroup() {
+		String alternative = ask("Is there an alternative to warfarin that doesn't interact with her ARVs?");
+		assertNotNull(alternative, "precondition: the module answers an alternative beside her ARVs");
+		for (String question : Arrays.asList("Is there a safer ARV if she needs warfarin?",
+			"Is there a better ARV if she needs warfarin?", "Is there a safer ARV regimen if she needs warfarin?",
+			"Is there a safer ARV to use if she has to take warfarin?", "Are there safer ARVs if she needs warfarin?")) {
+			assertEquals(alternative, ask(question), question);
+		}
+	}
+
+	/**
+	 * A group of her medications asked about beside her own drug, "Do her TB meds interact with her co-trimoxazole?", is
+	 * the same question as beside the drug unowned (ADR Decision 692). On the demo the model answered all 18 patients.
+	 */
+	@Test
+	public void herGroupBesideHerOwnDrugIsHerGroupBesideTheDrug() {
+		for (String group : Arrays.asList("ARVs", "TB meds")) {
+			String beside = ask("Do her " + group + " interact with aspirin?");
+			assertNotNull(beside, "precondition: the module answers her " + group + " beside a drug");
+			for (String question : Arrays.asList("Do her " + group + " interact with her aspirin?",
+				"Will her " + group + " interact with her aspirin?", "Does her aspirin interact with her " + group + "?")) {
+				assertEquals(beside, ask(question), question);
+			}
+		}
+		assertEquals("Warfarin is not one of this patient's active medications.\n" + ask("Do her ARVs interact with warfarin?"),
+			ask("Do her ARVs interact with her warfarin?"));
+	}
+
+	/**
 	 * What interactions her drug has is what her drug interacts with (ADR Decision 691). On the demo the model answered
 	 * all 18 patients, 13 of them with reference rows for drugs none of them is on, and told none of the 8 on no
 	 * co-trimoxazole that she is not on it.

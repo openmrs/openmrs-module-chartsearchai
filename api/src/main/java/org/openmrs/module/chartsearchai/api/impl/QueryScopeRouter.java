@@ -1043,7 +1043,12 @@ public final class QueryScopeRouter {
 			+ "(?: (?:that|which) (?:does not|doesn't|doesnt|won't|will not|wouldn't|would not) interact with (?:any of )?" + POSSESSIVE
 			+ " (?:\\p{L}+ ){0,2}(?:medications|meds|medicines|drugs|regimen|arvs|art|antiretrovirals|treatment|therapy))?"
 			+ "|what (?:else )?(?:can|could|should|may) (?:i|we) (?:use|give|prescribe) instead of (?:" + POSSESSIVE + " )?" + D
-			+ "|(?:can|could|should|may) (?:i|we) replace (?:" + POSSESSIVE + " )?" + D + " with something (?:safer|else|better))";
+			+ "|(?:can|could|should|may) (?:i|we) replace (?:" + POSSESSIVE + " )?" + D + " with something (?:safer|else|better)"
+			// "Is there a safer ARV if she needs rifampicin?" — the model answered "No — Rifampicin should not be given" to
+			// patients whose prescriber needs it (ADR Decision 693)
+			+ "|(?:is|are) there (?:a |an |any )?(?:safer|better) (?:\\p{L}+ )?" + MEDICATION_GROUP_NOUN + "(?: to (?:use|give))? if"
+			+ " (?:she|he|they|the patient) (?:needs?|has to (?:take|start)|must (?:take|start)|is (?:starting|taking|on)) "
+			+ "(?:on )?" + D + ")";
 
 	/** Whether {@code words} ask for an alternative to their one drug (ADR Decision 418). */
 	public static boolean asksForAnAlternativeTo(List<String> wordsWithTheDrugMarked) {
@@ -1497,7 +1502,8 @@ public final class QueryScopeRouter {
 			// and "Would fluconazole interfere with her ARVs?" (ADR Decision 429)
 			"(?:does|will|would|could|can) " + D + " (?:interact|interfere) with (?:any of )?" + HER_MEDICATION_GROUP,
 			// "Will his TB preventive therapy interact with efavirenz?" — the group named first (ADR Decision 313)
-			"(?:does|do|will|would|could|can) " + HER_MEDICATION_GROUP + " interact with " + D,
+			// and beside her own drug, "Do her TB meds interact with her co-trimoxazole?" (ADR Decision 692)
+			"(?:does|do|will|would|could|can) " + HER_MEDICATION_GROUP + " interact with " + HER_D,
 			// "Fluconazole vs her ARVs - interaction?" (ADR Decision 433)
 			D + " (?:vs|versus|and|with) " + HER_MEDICATION_GROUP + " (?:any )?(?:drug )?interactions?",
 			// and with nothing after the group, "Cipro with her antacid?" — never "vs", which Decision 448 reads as asked safe

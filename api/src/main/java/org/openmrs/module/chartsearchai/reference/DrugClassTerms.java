@@ -250,7 +250,11 @@ final class DrugClassTerms {
 	private static final Pattern A_THING_OF_HERS = Pattern.compile("\\b(?:(?i:his|her|their|the patient's|this patient's)|"
 		// and her own name's: "Do Mary's ARVs interact with her TB drugs?" — never a saint's, which names a herb: "St John's
 		// wort" (ADR Decision 641)
-		+ "(?<!\\b(?:St|Saint)\\.? )\\p{Lu}\\p{Ll}+'s) (?=[\\p{L}])");
+		+ "(?<!\\b(?:St|Saint)\\.? )\\p{Lu}\\p{Ll}+'s"
+		// and a safer one of her groups if she needs a drug: "Is there a safer ARV if she needs rifampicin?" asks for one in
+		// place of her ARVs (ADR Decision 693)
+		+ "|(?i:(?<=there )(?:(?:a|an|any) )?(?:safer|better))(?= [\\p{L}]+(?: [\\p{L}]+)?(?: to (?:use|give))? (?i:if) (?i:she|he"
+		+ "|they|the patient) )) (?=[\\p{L}])");
 
 	/** A verb giving her something, before which "her" and a drug class is the class proposed for her and never one of her
 	 *  groups: "give her statins with her ARVs" proposes statins (ADR Decision 631). Her ARVs and TB drugs given her stay

@@ -31335,3 +31335,72 @@ lead: [Decision 685](#decision-685-which-drugs-to-avoid-giving-with-her-drug-is-
 
 Pinned by `ClinicianWordingsTest.whatInteractionsHerDrugHasIsWhatHerDrugInteractsWith`. Mutating the first shape's
 *"interactions"* or the second's *"interact"* reddens it on that shape's wording.
+
+## Decision 692: Her group asked about beside her own drug is her group beside the drug
+
+**Status: Accepted** (November 2026).
+[Decision 313](#decision-313-one-drug-asked-about-beside-a-named-group-of-her-medications-says-the-check-cannot-tell-which-orders-the-group-means)'s
+group-first shape, *"Do her TB meds interact with X?"*, also reads the drug named as hers: *"Do her TB meds interact with
+her co-trimoxazole?"*.
+
+### Context
+
+In the demo's thirty-fifth batch (18 patients, 144 cells, no errors), *"Do her TB meds interact with her
+co-trimoxazole?"* went to the model for every patient. 15 of the 18 answers said the records do not address it, among
+them 3 of the 4 patients SQL shows on both a TB drug and co-trimoxazole.
+
+### The decision
+
+The shape's drug slot takes a possessive. The answer is the one the drug named without *"her"* gets, under *"… is not one of this patient's
+active medications"* when she is not on it.
+
+### Measured
+
+Measured on the demo replica (8088): *"Do her TB meds interact with her co-trimoxazole?"* and *"Do her ARVs interact with
+her co-trimoxazole?"* asked of 10 batch-35 patients. SQL shows 4 of them on no co-trimoxazole and 5 on no TB drug.
+
+- Before: the model answered 17 cells and 3 timed out on the local model. No answer told a patient she is not on
+  co-trimoxazole. dd711d0b, on none, was given its caution with lamivudine, and dd94176b was told the interaction *"is a
+  reason to change a medication"*.
+- After: the module answered all 20. Each of the 4 is told *"Co-trimoxazole is not one of this patient's active
+  medications"*, each patient on no TB drug *"No TB drug is among this patient's active medications the drug data
+  identifies"*, and dd5558ed, on rifampicin, is given its two interactions with co-trimoxazole.
+
+Pinned by `ClinicianWordingsTest.herGroupBesideHerOwnDrugIsHerGroupBesideTheDrug`. Reverting the slot to the bare drug
+reddens it on *"Do her ARVs interact with her aspirin?"*. Removing the shape altogether does not: the residual reading then
+reads both wordings alike.
+
+## Decision 693: A safer one of her groups if she needs a drug is an alternative to the drug beside that group
+
+**Status: Accepted** (November 2026).
+*"Is there a safer ARV if she needs rifampicin?"* is
+[Decision 418](#decision-418-explaining-or-managing-an-interaction-or-an-alternative-to-a-drug-is-answered-with-what-the-check-found-under-a-lead-saying-what-it-does-not-do)'s
+alternative, answered over the group it names as
+[Decision 632](#decision-632-one-drug-asked-about-beside-a-group-of-her-medications-the-module-resolves-is-answered-over-that-group)
+answers *"Is there an alternative to rifampicin that doesn't interact with her ARVs?"*.
+
+### Context
+
+In the same batch the question went to the model for all 18 patients. 7 answers said the records do not address it, and 6
+led *"No — Rifampicin should not be given"* or the like, to patients whose prescriber has said she needs it.
+
+### The decision
+
+- `QueryScopeRouter`'s alternative shapes take *"is / are there (a / an / any) safer / better <group> (to use / give) if
+  she needs / has to take / must take / is starting <drug>"*.
+- `DrugClassTerms` reads the group after *"there (a) safer / better"*, in that form only, as one of hers, so it resolves
+  as *"her ARVs"* does. Without it the answer was over every medication she takes, under a lead withholding the drug.
+
+### Measured
+
+Measured on the demo replica (8088): *"Is there a safer ARV if she needs rifampicin?"* and *"Is there a better ARV if she
+has to take fluconazole?"* asked of the same 10 patients (20 cells, no errors).
+
+- Before: the model answered all 20. 11 said the records do not address it, and 8 led *"No"*, among them dd9d9d2c's *"No.
+  Rifampicin should not be given"*.
+- After: the module answered all 20, each under the lead choosing no alternative, with what the check relates between the
+  drug and her antiretrovirals. dd884b26, on none, is told *"No antiretroviral is among this patient's active medications
+  the drug data identifies"*.
+
+Pinned by `ClinicianWordingsTest.aSaferOneOfHerGroupsIfSheNeedsADrugIsAnAlternativeBesideThatGroup`. Mutating the
+router shape's *"safer|better"* or the group reading's *"there"* reddens it.

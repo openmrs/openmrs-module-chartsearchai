@@ -31030,3 +31030,42 @@ same on the build before this one, so this decision does not cause it.
 
 Pinned by `ClinicianWordingsTest.aDrugGivenWithHerGroupAtTheSameTimeOrWhileSheIsOnOneOfHersAreTheModulesQuestions`.
 Each of the three changes, mutated, reddens it.
+
+## Decision 684: Whether she needs any dose changes if a drug is added, and whether her drug will interact with anything new, are the module's questions
+
+**Status: Accepted** (November 2026). Two wordings a clinician typed on the demo join readings that already answer them.
+*"Does / will she need any dose changes / adjustments if I add / start X?"* joins
+[Decision 679](#decision-679-what-dose-adjustment-she-needs-if-a-drug-is-started-is-whether-any-dose-needs-adjusting)'s
+*"What dose adjustment does she need if I start X?"*, asked yes-or-no. *"Is her X going to interact with anything new
+(I prescribe)?"* joins
+[Decision 449](#decision-449-two-of-her-groups-that-clash-a-drug-of-hers-interacting-with-anything-and-a-drug-added-to-her-regimen-are-the-questions-they-spell)'s
+*"Does her X interact with anything?"*.
+
+### Context
+
+In the demo's twenty-sixth batch (18 patients, 144 cells, no errors), both went to the model for every patient:
+
+- *"Does she need any dose changes if I add rifampicin?"* The model answered with a verdict on adding the drug, mostly
+  *"No — Rifampicin should not be added"*, twice *"Rifampicin can be given, with one caution"*, a clearance the module
+  never gives. For a patient already on rifampicin in a four-drug TB order it answered with a duplicate-therapy finding.
+- *"Is her efavirenz going to interact with anything new I prescribe?"* SQL shows 5 of the 18 patients on efavirenz.
+  The model read her drug as a proposal: it told 4 of the other 13 *"No — Efavirenz should not be prescribed"*, and one
+  patient on efavirenz *"should not be continued"*. For two patients on efavirenz it said the records do not address
+  the question.
+
+### The decision
+
+- The dose shape: *"does / do / will / would she / he / they / the patient need / require any dose / dosage / dosing
+  adjustment(s) / change(s) if / when"* followed by Decision 679's `STARTS_A_DRUG` tail.
+- The interaction shape: *"is (her) X going to interact with anything new / else (I / we prescribe / give / add / start
+  (her))"*.
+
+### Measured
+
+Measured on the demo replica (8088): both questions asked of 10 batch-26 patients (20 cells, no errors). Before: the
+model answered all 20. After: the module answered all 20. For the 3 of the 10 that SQL shows on efavirenz, the answer
+states efavirenz is hers. For the other 7 it says efavirenz is not one of her active medications. The patient SQL shows
+on a rifampicin combination order is told rifampicin is already hers.
+
+Pinned by `ClinicianWordingsTest.doseChangesIfADrugIsAddedAndHerDrugInteractingWithAnythingNewAreTheModulesQuestions`.
+Each of the two shapes, mutated, reddens it.

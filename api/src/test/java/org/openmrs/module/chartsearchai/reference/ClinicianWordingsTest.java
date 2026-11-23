@@ -2316,6 +2316,28 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 	}
 
 	/**
+	 * Whether she needs any dose changes if a drug is added is whether any dose needs adjusting, and whether her drug is going
+	 * to interact with anything new is what her drug interacts with (ADR Decision 684). On the demo both went to the model
+	 * for all 18 patients, which answered the first "No — Rifampicin should not be added" and the second "No — Efavirenz
+	 * should not be prescribed", her own drug read as a proposal.
+	 */
+	@Test
+	public void doseChangesIfADrugIsAddedAndHerDrugInteractingWithAnythingNewAreTheModulesQuestions() {
+		String doses = ask("Do I need to adjust any doses if I start warfarin?");
+		assertNotNull(doses, "precondition: the module answers whether any dose needs adjusting");
+		for (String question : Arrays.asList("Does she need any dose changes if I add warfarin?",
+			"Will she need any dose adjustments if I start warfarin?", "Does the patient need any dosage changes if we give warfarin?")) {
+			assertEquals(doses, ask(question), question);
+		}
+		String hers = ask("Does her nevirapine interact with anything?");
+		assertNotNull(hers, "precondition: the module answers what her drug interacts with");
+		for (String question : Arrays.asList("Is her nevirapine going to interact with anything new I prescribe?",
+			"Is her nevirapine going to interact with anything new?", "Is her nevirapine going to interact with anything else I give her?")) {
+			assertEquals(hers, ask(question), question);
+		}
+	}
+
+	/**
 	 * A problem giving a drug "and her ARVs at the same time", whether it is dangerous to give a drug "while she is on" one
 	 * of hers, and "what drug interactions should I know about before starting" a drug — which of hers, never a "Yes" — are
 	 * the module's questions (ADR

@@ -963,6 +963,10 @@ public final class QueryScopeRouter {
 					+ "(?:takes|is taking|is on)",
 			// "Does her simvastatin interact with anything?" (ADR Decision 449)
 			"(?:does|will|would|could|can) (?:" + POSSESSIVE + " )?" + D + " interact with anything(?: else)?",
+			// "Is her efavirenz going to interact with anything new I prescribe?" — the model answered "No — Efavirenz should
+			// not be prescribed" for her own drug (ADR Decision 684)
+			"is (?:" + POSSESSIVE + " )?" + D + " going to interact with anything (?:new|else)(?: (?:i|we) (?:prescribe|give|add|start)"
+					+ "(?: " + PATIENT + ")?)?",
 			// "Will fluconazole interact with what she is taking?" (ADR Decision 445)
 			"(?:does|will|would|could|can) " + D + " interact with what (?:(?:she|he|they|the patient|this patient) (?:takes|is taking"
 					+ "|is on|are taking|are on)|she's (?:on|taking)|he's (?:on|taking)|they're (?:on|taking))(?: already| currently)?",
@@ -1070,6 +1074,10 @@ public final class QueryScopeRouter {
 			// drug, "No — Rifampicin should not be started" (ADR Decision 679)
 			"(?:what|which) (?:dose |dosage |dosing )(?:adjustments?|changes?) (?:does|do|would|will|might|is|are) (?:(?:she|he|they"
 					+ "|the patient|this patient) )?(?:need|require|needed|required) (?:if|when) " + STARTS_A_DRUG,
+			// "Does she need any dose changes if I add rifampicin?" — the same question asked yes-or-no; the model answered all
+			// 18 demo patients with a verdict on adding the drug, "No — Rifampicin should not be added" (ADR Decision 684)
+			"(?:does|do|will|would) (?:she|he|they|the patient|this patient) (?:need|require) any (?:dose |dosage |dosing )"
+					+ "(?:adjustments?|changes?) (?:if|when) " + STARTS_A_DRUG,
 			// "Is there no interaction between fluconazole and her meds?" — which interact, with no "Yes" or "No" (ADR Decision
 			// 406)
 			"(?:is|are) there no (?:drug )?interactions? (?:between " + D + " and " + POSSESSIVE + " " + MEDICATIONS + "|with " + D

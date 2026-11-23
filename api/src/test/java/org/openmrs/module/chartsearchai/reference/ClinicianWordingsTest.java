@@ -2316,6 +2316,22 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 	}
 
 	/**
+	 * Whether adding a drug could make her drug toxic is whether one drug changes the other (ADR Decision 687). On the demo
+	 * the model answered all 18 patients "Fluconazole can be given, with one caution", a clearance the module never gives,
+	 * and told two patients on no nevirapine "Nevirapine can be given".
+	 */
+	@Test
+	public void whetherAddingADrugCouldMakeHerDrugToxicIsWhetherOneChangesTheOther() {
+		String changes = ask("Will warfarin make her nevirapine less effective?");
+		assertNotNull(changes, "precondition: the module answers whether one drug changes the other");
+		for (String question : Arrays.asList("Could adding warfarin make her nevirapine toxic?",
+			"Could warfarin make her nevirapine toxic?", "Will starting warfarin make her nevirapine less effective?")) {
+			assertEquals(changes, ask(question), question);
+		}
+		assertEquals(ask("Will rifampicin make her ARVs less effective?"), ask("Will adding rifampicin make her ARVs toxic?"));
+	}
+
+	/**
 	 * What would happen if a drug WERE given is what happens if it is: "if I gave", "if she took" read as "if I give", "if
 	 * she takes" (ADR Decision 686). And checking her liver function if a drug is added is monitoring it. On the demo the
 	 * first went to the model for all 18 patients, which led every answer "No — Rifampicin should not be given", and told

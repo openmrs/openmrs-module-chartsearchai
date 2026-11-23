@@ -31150,3 +31150,36 @@ medications"*.
 
 Pinned by `ClinicianWordingsTest.whatWouldHappenIfADrugWereGivenAndCheckingHerLiverIfOneIsAddedAreTheModulesQuestions`,
 one wording per rewritten verb. Each rewrite and the monitoring change, mutated, reddens it.
+
+## Decision 687: Whether adding a drug could make her drug toxic is whether one drug changes the other
+
+**Status: Accepted** (November 2026).
+[Decision 431](#decision-431-an-abbreviation-a-monitoring-severity-or-effect-question-and-a-comparison-are-the-questions-they-spell)'s
+*"Will X make her Y less effective?"* also reads *"starting / giving / adding / prescribing X"*, as its group form
+already did. Both forms read *"toxic"*, beside *"more toxic"*.
+
+### Context
+
+In the demo's twenty-ninth batch (18 patients, 144 cells, no errors), *"Could adding fluconazole make her nevirapine
+toxic?"* went to the model for every patient. All 18 answers were clearances, *"Fluconazole can be given / added, with
+one caution"*, which the module never gives. SQL shows 4 of the 18 on no nevirapine. None of their answers said so,
+and 2 read *"Nevirapine can be given"*.
+
+### The decision
+
+- The pair shape: *"does / will / would / can / could / might (starting | giving | adding | prescribing) X make (her) Y
+  less effective / … / toxic"*.
+- `LESS_EFFECTIVE` gains *"toxic"*, read by this shape and by the group shape (*"Will adding rifampicin make her ARVs
+  toxic?"*).
+
+### Measured
+
+Measured on the demo replica (8088): *"Could adding fluconazole make her nevirapine toxic?"* and *"Could adding
+rifampicin make her ARVs toxic?"* asked of 10 batch-29 patients, the 2 that SQL shows on neither nevirapine nor
+efavirenz among them (20 cells, no errors). Before: the model answered all 20. It led 7 of the 10 group answers
+*"No"*/*"No —"* while describing the interaction, answering "could it make them toxic?" backwards. After: the module answered
+all 20, none leading "Yes" or "No". Each patient SQL shows on no nevirapine is told neither drug is hers. The two on no
+antiretroviral are told so, and every list of her antiretrovirals matches her active orders.
+
+Pinned by `ClinicianWordingsTest.whetherAddingADrugCouldMakeHerDrugToxicIsWhetherOneChangesTheOther`. The gerund
+prefix and the *"toxic"* alternative, each mutated, redden it.

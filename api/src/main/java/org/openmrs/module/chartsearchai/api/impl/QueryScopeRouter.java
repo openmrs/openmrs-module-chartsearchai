@@ -1975,7 +1975,8 @@ public final class QueryScopeRouter {
 			+ "|absorption|bioavailability|clearance|metabolism)";
 
 	/** What a drug may make of another, asked as an effect: "make her ARVs less effective" (ADR Decision 431). */
-	private static final String LESS_EFFECTIVE = "(?:less effective|ineffective|not work|stop working|less potent|more toxic|fail)";
+	private static final String LESS_EFFECTIVE = "(?:less effective|ineffective|not work|stop working|less potent|more toxic|toxic"
+			+ "|fail)";
 
 	/**
 	 * "Will fluconazole raise his warfarin levels?", "Does rifampicin reduce the effect of her nevirapine?", "Does
@@ -2368,8 +2369,10 @@ public final class QueryScopeRouter {
 			"(?:does|do|will|would|can|could|might) " + HER_D + " affect (?:the )?(?:" + POSSESSIVE + " )?" + D + "(?: " + MEASURE
 					+ ")?",
 			DOES_ONE_INTERFERE_WITH_THE_OTHER,
-			// "Will rifampicin make her nevirapine less effective?" (ADR Decision 431)
-			"(?:does|do|will|would|can|could|might) " + HER_D + " make " + HER_D + " " + LESS_EFFECTIVE,
+			// "Will rifampicin make her nevirapine less effective?" (ADR Decision 431); and "Could adding fluconazole make her
+			// nevirapine toxic?", which the model answered "Fluconazole can be given" (ADR Decision 687)
+			"(?:does|do|will|would|can|could|might) (?:starting |giving |adding |prescribing )?" + HER_D + " make " + HER_D + " "
+					+ LESS_EFFECTIVE,
 			// "Will giving rifampicin harm her nevirapine treatment?" (ADR Decision 448)
 			"(?:does|do|will|would|could|might|can) (?:giving|starting|adding|prescribing) " + HER_D + " (?:harm|affect|damage|"
 					+ "interfere with|compromise|undermine|weaken) " + HER_D + "(?: (?:treatment|therapy|regimen))?",

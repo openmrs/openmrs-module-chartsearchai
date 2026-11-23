@@ -31069,3 +31069,43 @@ on a rifampicin combination order is told rifampicin is already hers.
 
 Pinned by `ClinicianWordingsTest.doseChangesIfADrugIsAddedAndHerDrugInteractingWithAnythingNewAreTheModulesQuestions`.
 Each of the two shapes, mutated, reddens it.
+
+## Decision 685: Which drugs to avoid giving with her drug is what her drug interacts with
+
+**Status: Accepted** (November 2026). *"Are there any drugs I should avoid giving with her X?"*, *"Which drugs should I
+avoid / should be avoided / should not be given with her X?"*, *"Are there drugs to avoid with her X?"* and *"What should I
+avoid giving with her X?"* join
+[Decision 449](#decision-449-two-of-her-groups-that-clash-a-drug-of-hers-interacting-with-anything-and-a-drug-added-to-her-regimen-are-the-questions-they-spell)'s
+*"Does her X interact with anything?"*, as
+[Decision 684](#decision-684-whether-she-needs-any-dose-changes-if-a-drug-is-added-and-whether-her-drug-will-interact-with-anything-new-are-the-modules-questions)'s
+*"Is her X going to interact with anything new?"* did. The same wording without *"her"* already got that answer from
+the module. With *"her"* no reading admitted it.
+
+### Context
+
+In the demo's twenty-seventh batch (18 patients, 144 cells, no errors), *"Are there any drugs I should avoid giving with
+her nevirapine?"* went to the model for every patient. SQL shows 16 of the 18 on nevirapine. The model told one of them
+*"Yes — there are drugs to avoid giving with Nevirapine: lamivudine and stavudine"*, and another that she *"should avoid
+giving lamivudine and stavudine"*. Those are her own antiretrovirals, named off rows the drug data rates at no
+severity. It told both patients on no nevirapine *"No — Nevirapine should not be given with …"*. Five said the records
+do not address the question.
+
+### The decision
+
+Four shapes beside Decision 449's, each requiring a possessive before the drug. The which-drugs-to-avoid-in-her shapes
+([Decision 324](#decision-324-which-drugs-to-avoid-in-her-is-answered-with-her-recorded-drug-allergies-and-the-screen-of-her-medications))
+are untouched: they never name a drug.
+
+### Measured
+
+Measured on the demo replica (8088): *"Are there any drugs I should avoid giving with her nevirapine?"* and *"Which drugs
+should not be given with her efavirenz?"* asked of 10 batch-27 patients (20 cells, no errors). Before: the model answered
+all 20. After: the module answered all 20. Each answer states whether the drug is hers, and all 20 match her active
+orders in SQL.
+
+Residue: for a drug she is not on, the answer is Decision 449's and opens *"X is not one of this patient's active
+medications. Yes — X interacts with this patient's active medications"*. That is true, but the "Yes" is the lead of a
+yes-or-no question asked of a which-question.
+
+Pinned by `ClinicianWordingsTest.whichDrugsToAvoidGivingWithHerDrugIsWhatHerDrugInteractsWith`. Each of the four shapes,
+mutated, reddens it.

@@ -2316,6 +2316,24 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 	}
 
 	/**
+	 * Which drugs to avoid giving with her drug is what her drug interacts with (ADR Decision 685). On the demo the model
+	 * told one patient "Yes — there are drugs to avoid giving with Nevirapine: lamivudine and stavudine", her own
+	 * antiretrovirals, off rows the drug data rates at no severity, and two patients on no nevirapine "No — Nevirapine
+	 * should not be given with …".
+	 */
+	@Test
+	public void whichDrugsToAvoidGivingWithHerDrugIsWhatHerDrugInteractsWith() {
+		String hers = ask("Does her nevirapine interact with anything?");
+		assertNotNull(hers, "precondition: the module answers what her drug interacts with");
+		for (String question : Arrays.asList("Are there any drugs I should avoid giving with her nevirapine?",
+			"Which drugs should I avoid with her nevirapine?", "What drugs should be avoided with her nevirapine?",
+			"Are there drugs to avoid with her nevirapine?", "What should I avoid giving with her nevirapine?",
+			"Which drugs should not be given with her nevirapine?")) {
+			assertEquals(hers, ask(question), question);
+		}
+	}
+
+	/**
 	 * Whether she needs any dose changes if a drug is added is whether any dose needs adjusting, and whether her drug is going
 	 * to interact with anything new is what her drug interacts with (ADR Decision 684). On the demo both went to the model
 	 * for all 18 patients, which answered the first "No — Rifampicin should not be added" and the second "No — Efavirenz

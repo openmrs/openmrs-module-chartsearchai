@@ -967,6 +967,16 @@ public final class QueryScopeRouter {
 			// not be prescribed" for her own drug (ADR Decision 684)
 			"is (?:" + POSSESSIVE + " )?" + D + " going to interact with anything (?:new|else)(?: (?:i|we) (?:prescribe|give|add|start)"
 					+ "(?: " + PATIENT + ")?)?",
+			// "Are there any drugs I should avoid giving with her nevirapine?" — what her drug interacts with; the model told a
+			// demo patient "Yes — there are drugs to avoid giving with Nevirapine: lamivudine and stavudine", her own ARVs, off
+			// unrated rows, and two patients on no nevirapine "No — Nevirapine should not be given with …" (ADR Decision 685)
+			"(?:(?:are|is) there )?(?:any )?(?:drugs|medications|medicines|meds) (?:that )?(?:i|we) should (?:avoid|not give)"
+					+ " (?:giving |combining |using )?with " + POSSESSIVE + " " + D,
+			"(?:what|which) (?:drugs|medications|medicines|meds) should (?:(?:i|we) avoid (?:giving |combining |using )?|be avoided "
+					+ "|not be given )with " + POSSESSIVE + " " + D,
+			"(?:are|is) there (?:any )?(?:drugs|medications|medicines|meds) to avoid (?:giving |combining |using )?with "
+					+ POSSESSIVE + " " + D,
+			"what should (?:i|we) avoid (?:giving|combining|prescribing) with " + POSSESSIVE + " " + D,
 			// "Will fluconazole interact with what she is taking?" (ADR Decision 445)
 			"(?:does|will|would|could|can) " + D + " interact with what (?:(?:she|he|they|the patient|this patient) (?:takes|is taking"
 					+ "|is on|are taking|are on)|she's (?:on|taking)|he's (?:on|taking)|they're (?:on|taking))(?: already| currently)?",

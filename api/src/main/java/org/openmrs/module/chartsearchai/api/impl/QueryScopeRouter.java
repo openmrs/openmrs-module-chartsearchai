@@ -349,9 +349,14 @@ public final class QueryScopeRouter {
 		}
 		// "+" joins two names as "plus" does (ADR Decision 424): "rifampicin + efavirenz".
 		// "w/" is "with" and "w/o" "without", as a clinician abbreviates them (ADR Decision 431): "fluconazole w/ nevirapine ok?"
+		// "at the same time" is "together" (ADR Decision 683): "Is there a problem giving her clarithromycin and her ARVs at the
+		// same time?" went to the model, which counted her sulfamethoxazole among her ARVs. Never "at the same time each day",
+		// when she takes it, nor "at the same time as", which names what it is beside.
 		// "x 14 days" is "for 14 days", as a prescription writes a duration (ADR Decision 470).
 		// and its shorthand, "x14d", "x 2 wk" (ADR Decision 523).
 		String[] parts = text.toLowerCase(Locale.ROOT).replace("+", " plus ")
+				.replaceAll("(?<![\\p{L}\\p{N}])at the same time(?![\\p{L}\\p{N}])(?![\\s\\p{Punct}]*(?:each|every|as)(?![\\p{L}]))",
+						"together")
 				.replaceAll("(?<![\\p{L}\\p{N}])x\\s*(\\d+)\\s*(?:d|dys?)(?![\\p{L}])", " for $1 days ")
 				.replaceAll("(?<![\\p{L}\\p{N}])x\\s*(\\d+)\\s*(?:wk|wks)(?![\\p{L}])", " for $1 weeks ")
 				.replaceAll("(?<![\\p{L}\\p{N}])x\\s*(?=\\d+\\s*(?:days?|weeks?|months?)(?![\\p{L}]))", " for ")
@@ -1034,6 +1039,10 @@ public final class QueryScopeRouter {
 			// "If I start fluconazole, what interactions should I expect?" (ADR Decision 414)
 			"if (?:i|we) (?:start|give|add|prescribe) (?:" + PATIENT + " )?(?:on )?" + D + " what (?:drug )?interactions (?:should|"
 					+ "would|might|could|do) (?:i|we) expect",
+			// "What drug interactions should I know about before starting fluconazole?" — which of hers, never a "Yes"; the
+			// model answered 2 of 18 demo patients "No — Fluconazole should not be started" (ADR Decision 683)
+			"what (?:drug )?interactions (?:should|do|must|would) (?:i|we) (?:need to )?(?:know about|be aware of|consider|check)"
+					+ " (?:before|prior to) (?:starting|giving|adding|prescribing) (?:" + PATIENT + " )?(?:on )?" + D,
 			// "Why is rifampicin flagged?" — what the check found about it (ADR Decision 424)
 			"why is (?:" + POSSESSIVE + " )?" + D + " (?:flagged|highlighted|marked|showing a warning|a warning)",
 			// "Tell me about fluconazole" — what it does among her medications, with no "Yes" or "No" (ADR Decision 413)
@@ -2021,7 +2030,10 @@ public final class QueryScopeRouter {
 
 	private static final String DANGEROUS_TOGETHER = "(?:(?:is )?" + HER_D + " (?:dangerous|risky|unsafe|harmful|toxic"
 			+ "|contraindicated|a problem|problematic) (?:with|alongside|in combination with) " + HER_D + "|is it (?:dangerous|risky|unsafe|harmful"
-			+ "|a problem) to (?:combine|give|take|use) " + HER_D + " (?:and|with) " + HER_D + "(?: together)?|(?:could|would|will"
+			+ "|a problem) to (?:combine|give|take|use) " + HER_D + " (?:and|with"
+			// "Is it dangerous to give her rifampicin while she is on nevirapine?" (ADR Decision 683)
+			+ "|(?:while|when) (?:she's|he's|they're|(?:she|he|the patient|this patient) is|they are) (?:on|taking)) " + HER_D
+			+ "(?: together)?|(?:could|would|will"
 			+ "|might|can) " + HER_D + " cause (?:any )?(?:problems?|issues?|harm) (?:with|for|alongside) " + HER_D + "|(?:would"
 			+ "|will|could) " + HER_D + " be (?:harmful|dangerous|risky|unsafe|a problem) (?:with|alongside) " + HER_D
 			+ "|(?:is|are) (?:the combination of )?" + HER_D + " (?:and|with) " + HER_D + " (?:a )?(?:dangerous|risky|unsafe"

@@ -2316,6 +2316,30 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 	}
 
 	/**
+	 * A problem giving a drug "and her ARVs at the same time", whether it is dangerous to give a drug "while she is on" one
+	 * of hers, and "what drug interactions should I know about before starting" a drug — which of hers, never a "Yes" — are
+	 * the module's questions (ADR
+	 * Decision 683). On the demo each went to the model, which counted her sulfamethoxazole among "the patient's ARVs".
+	 */
+	@Test
+	public void aDrugGivenWithHerGroupAtTheSameTimeOrWhileSheIsOnOneOfHersAreTheModulesQuestions() {
+		String[][] pairs = {
+			{ "Is there a problem giving her warfarin and her ARVs at the same time?", "Is warfarin dangerous with her ARVs?" },
+			{ "Can I give her warfarin and her ARVs at the same time?", "Can I give her warfarin and her ARVs together?" },
+			{ "Is it dangerous to give her warfarin while she is on nevirapine?", "Is warfarin dangerous with her nevirapine?" },
+			{ "Is it risky to give warfarin while she's taking nevirapine?", "Is warfarin dangerous with her nevirapine?" },
+			{ "What drug interactions should I know about before starting warfarin?",
+				"Which of her medications interact with warfarin?" },
+			{ "What interactions should I be aware of before giving her warfarin?",
+				"Which of her medications interact with warfarin?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+	}
+
+	/**
 	 * ADR Decision 682: a problem giving two drugs "at the same time" is Decision 445's problem combining them, and her TB drugs
 	 * "given with" her ARVs is Decision 449's question of the two groups. On the demo the first was answered "No — Fluconazole
 	 * and Rifampicin should not be given together", its "No" answering "is there a problem?" backwards, for 13 of 13 patients;

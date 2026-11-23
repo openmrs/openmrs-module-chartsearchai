@@ -30979,3 +30979,54 @@ matches the active orders in SQL. None of the 10 is on fluconazole or rifampicin
 are told no antiretroviral is among her medications. The one on isoniazid is told how her TB drug and her ARVs relate.
 
 Pinned by `ClinicianWordingsTest.aProblemGivingTwoAtTheSameTimeAndOneGroupGivenWithAnotherAreTheModulesQuestions`.
+
+## Decision 683: A drug given with her group at the same time, one given while she is on another, and the interactions to know before starting one are the module's questions
+
+**Status: Accepted** (November 2026). Three readings widened to the wordings a clinician typed on the demo.
+`QueryScopeRouter.words` reads *"at the same time"* as *"together"*. The exceptions are *"at the same time each / every
+…"* (when she takes a drug) and *"at the same time as …"*. Every reading that already admits *"together"* now admits it.
+[Decision 433](#decision-433-whether-a-pair-is-to-be-avoided-dangerous-or-a-problem-is-answered-with-no-lead)'s
+*"Is it dangerous to give X with Y?"* also reads *"… while she is on Y"*, as
+[Decision 440](#decision-440-a-drug-started-while-she-is-on-another-one-potentiating-another-and-a-pair-mixed-are-the-questions-they-spell)'s
+together-shapes do. *"What (drug) interactions should I know about / be aware of before starting X?"* joins
+`WHICH_OF_HER_MEDICATIONS_INTERACT_SHAPES`, beside
+[Decision 414](#decision-414-technical-conditional-and-sequential-wordings-are-answered-as-the-questions-they-ask)'s
+*"If I start X, what interactions should I expect?"*. It asks which of hers, so its answer leads with no "Yes".
+
+### Context
+
+In the demo's twenty-fourth batch (18 patients, 144 cells, no errors), three wordings went to the model for every
+patient:
+
+- *"Is there a problem giving her clarithromycin and her ARVs at the same time?"* The model counted her
+  sulfamethoxazole among her ARVs twice: *"two of the patient's active ARV medications: … Nevirapine … Sulfamethoxazole"*.
+  It named her sulfamethoxazole, outside the group asked, on 6 of 18 patients. The same question ending *"together"* was already answered by
+  the module over her antiretrovirals.
+- *"Is it dangerous to give her rifampicin while she is on nevirapine?"* The model answered *"No — Rifampicin should not
+  be given"* 18 times. That "No" answers *"is it dangerous?"* backwards, the failure Decision 433 exists to prevent.
+- *"What drug interactions should I know about before starting fluconazole?"* The model told 2 patients *"No —
+  Fluconazole should not be started"* and gave no verdict to the others. It also recited the drug record's
+  unknown-severity rows for lamivudine and stavudine.
+
+### The decision
+
+- `words` rewrites *"at the same time"* to *"together"* before any shape reads it. The other spellings of *"at once"*
+  are left as they are.
+- `DANGEROUS_TOGETHER`'s *"is it dangerous / risky / unsafe / harmful / a problem to combine / give / take / use X …"*
+  joins the second drug with *"and"*, *"with"*, or *"while / when she's / she is / they are on / taking"*.
+- The new which-shape: *"what (drug) interactions should / do / must / would I (need to) know about / be aware of /
+  consider / check before / prior to starting / giving / adding / prescribing (her) X"*.
+
+### Measured
+
+Measured on the demo replica (8088): the three questions asked of 10 patients (30 cells, no errors). Before: the model
+answered all 30. After: the module answered all 30. None opens "Yes" or "No" over the fluconazole question. The
+rifampicin question withholds rifampicin for the 6 patients SQL shows on nevirapine. It says neither drug is hers for the
+other 4. Every list of her antiretrovirals matches her active orders in SQL.
+
+Residue: for the 2 patients on no antiretroviral, the group question answers over all her medications. It names her
+sulfamethoxazole rather than saying no antiretroviral is hers. *"Is clarithromycin dangerous with her ARVs?"* does the
+same on the build before this one, so this decision does not cause it.
+
+Pinned by `ClinicianWordingsTest.aDrugGivenWithHerGroupAtTheSameTimeOrWhileSheIsOnOneOfHersAreTheModulesQuestions`.
+Each of the three changes, mutated, reddens it.

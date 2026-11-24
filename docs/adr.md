@@ -31737,3 +31737,33 @@ stop?"* asked of 10 batch-47 patients (30 cells a run, no errors).
 
 Pinned by `ClinicianWordingsTest.whichMedToStopIsWhichOfHerMedicationsToStop`. Mutating either the cue or the noun
 reddens it.
+
+## Decision 704: Whether any med needs a dose change is whether any of her medications does
+
+**Status: Accepted** (November 2026).
+[Decision 609](#decision-609-listing-a-drugs-interactions-and-stopping-or-adjusting-because-of-interactions-are-the-modules-questions)'s
+dose question asked of *"any med"*, *"her"* unsaid.
+
+### Context
+
+In the demo's forty-eighth batch (18 patients, 144 cells, no errors), *"does any med need a dose change?"* went to the
+model for every patient. It told dd73fee9 *"Yes — a dose change is required for Efavirenz and Lopinavir / ritonavir"*,
+and two patients *"No medication requires a dose change"*. The module answers *"Do any of her drugs need dose
+adjustment?"* with the screen of her medications and chooses no dose. Decision 609's shapes needed *"of her"*.
+
+### The decision
+
+`NEED_CHANGING_SHAPES` reads *"do / does any (of (the / her)) med / meds / medication / medicine / drug need a / any dose
+/ dosing adjustment / change"*, with or without *"because of interactions"*.
+
+### Measured
+
+Measured on the demo replica (8088), the wording, *"Do any meds need dose changes?"* and *"Do any of her drugs need dose
+adjustment?"* asked of 10 batch-48 patients (30 cells a run, no errors).
+
+- Before: the model answered all 20 cells of the two wordings. The canonical wording was the module's for all 10.
+- After: all 20 get the canonical wording's module answer, which is unchanged for all 10. The after-run's querystore
+  reindex timed out on a loaded machine, so the answers were compared with their record numbers stripped.
+
+Pinned by `ClinicianWordingsTest.whetherAnyMedNeedsADoseChangeIsWhetherAnyOfHerMedicationsDoes`. Mutating the shape's
+noun reddens it.

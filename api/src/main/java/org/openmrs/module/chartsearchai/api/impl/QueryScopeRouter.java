@@ -4339,6 +4339,10 @@ public final class QueryScopeRouter {
 			"(?:does|do) " + SUBJECT + " need (?:a |any )?dos(?:e|ing) (?:adjustments?|changes?) (?:of|for|to|on) (?:any (?:of )?)?(?:"
 					+ POSSESSIVE + " )?(?:current |active |other )?(?:drugs?|medications?|meds|medicines?)"
 					+ BECAUSE_OF_INTERACTIONS,
+			// "Does any med need a dose change?", "Do any meds need dose changes?" — any of them, "her" unsaid; the model answered
+			// "Yes — a dose change is required for Efavirenz …" and "No medication requires a dose change" (ADR Decision 704)
+			"(?:do|does) any (?:of (?:the |" + POSSESSIVE + " )?)?(?:current |active )?(?:med|meds|medications?|medicines?|drugs?)"
+					+ " need (?:a |any )?dos(?:e|ing) (?:adjustments?|changes?)" + BECAUSE_OF_INTERACTIONS,
 			"should any of " + HER_MEDICATIONS + " be " + CHANGED,
 			// "Is there any drug she takes that I should stop now?", "Is there anything in her list I should stop?" — the model
 			// answered "No drug should be stopped" beside two Major interactions (ADR Decision 610)

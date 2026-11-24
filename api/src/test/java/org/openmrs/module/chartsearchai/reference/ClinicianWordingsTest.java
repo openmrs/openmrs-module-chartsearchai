@@ -2526,6 +2526,21 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 	}
 
 	/**
+	 * Whether any med needs a dose change is whether any of her medications does (ADR Decision 704): on the demo "does any
+	 * med need a dose change?" went to the model for all 18 patients, which told one "Yes — a dose change is required for
+	 * Efavirenz and Lopinavir / ritonavir" and two "No medication requires a dose change".
+	 */
+	@Test
+	public void whetherAnyMedNeedsADoseChangeIsWhetherAnyOfHerMedicationsDoes() {
+		String canonical = ask("Do any of her drugs need dose adjustment?");
+		assertNotNull(canonical, "precondition: the module answers whether any of her medications needs a dose change");
+		for (String question : Arrays.asList("does any med need a dose change?", "Does any drug need a dose adjustment?",
+			"Do any meds need dose changes?", "Do any medications need a dose adjustment because of interactions?")) {
+			assertEquals(canonical, ask(question), question);
+		}
+	}
+
+	/**
 	 * Which med to stop is which of her medications to stop (ADR Decision 703): on the demo "which med should i stop because
 	 * of interactions?" went to the model for 17 of 18 patients, which told one "Stavudine should be changed because it
 	 * interacts with Didanosine", another to change three antiretrovirals because each is in several of its orders, and

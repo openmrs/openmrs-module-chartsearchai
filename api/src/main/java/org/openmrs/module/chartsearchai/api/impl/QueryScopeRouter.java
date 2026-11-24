@@ -380,6 +380,9 @@ public final class QueryScopeRouter {
 				// A giving verb misspelt as clinicians type it is the verb: "giv", "gve", "prescibe" (ADR Decision 527).
 				// (Null while the class's own shapes are built, which spell no misspelling.)
 				word = MISSPELT_VERBS != null && MISSPELT_VERBS.containsKey(word) ? MISSPELT_VERBS.get(word) : word;
+				// "Probs" is problems, as the shapes spell it (ADR Decision 697): "any probs giving her ibuprofen with her current
+				// regimen?" went to the model, which answered "Ibuprofen can be given". Never "prob", which is also "probably".
+				word = "probs".equals(word) ? "problems" : word;
 				// "What's" is "what is", which the shapes spell (ADR Decision 423).
 				if ("what's".equals(word)) {
 					words.add("what");

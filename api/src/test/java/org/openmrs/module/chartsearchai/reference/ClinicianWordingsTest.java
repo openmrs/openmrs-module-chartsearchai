@@ -2316,6 +2316,23 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 	}
 
 	/**
+	 * "Probs" is problems (ADR Decision 697). On the demo the model answered all 18 patients "any probs giving her ibuprofen
+	 * with her current regimen?", among them "Ibuprofen can be given, with one caution", where the question with "problems"
+	 * is the module's.
+	 */
+	@Test
+	public void probsIsProblems() {
+		for (String drug : Arrays.asList("ibuprofen", "warfarin")) {
+			for (String question : Arrays.asList("any %s giving her " + drug + " with her current regimen?",
+				"Any %s if I give her " + drug + "?", "Any %s with " + drug + "?")) {
+				String problems = ask(String.format(question, "problems"));
+				assertNotNull(problems, "precondition: the module answers " + String.format(question, "problems"));
+				assertEquals(problems, ask(String.format(question, "probs")), String.format(question, "probs"));
+			}
+		}
+	}
+
+	/**
 	 * The biggest interaction risk on her list is the biggest interaction on it (ADR Decision 696). On the demo the model
 	 * answered all 18 patients.
 	 */

@@ -31498,3 +31498,32 @@ Measured on the demo replica (8088), the wording and *"What is the biggest inter
 - After: all 10 get the canonical wording's module answer.
 
 Pinned by `ClinicianWordingsTest.theBiggestInteractionRiskIsTheBiggestInteraction`. Mutating *" risks?"* reddens it.
+
+## Decision 697: "Probs" is problems
+
+**Status: Accepted** (November 2026).
+A clinician's shorthand *"probs"* is read as *"problems"*, as
+[Decision 527](#decision-527-a-giving-verb-misspelt-as-clinicians-type-it-is-the-verb) reads a misspelt giving verb as
+the verb.
+
+### Context
+
+On the demo, *"any probs giving her ibuprofen with her current regimen?"* went to the model for all 18 patients of the
+batch, and 9 of those answers opened *"Ibuprofen can be given"*. The same question with *"problems"* is the module's: the
+word *"probs"* fitted none of the shapes that spell *"problems"*.
+
+### The decision
+
+`QueryScopeRouter.words()` reads the token *"probs"* as *"problems"*, once, beside the misspelt verbs, rather than
+adding it to every shape that spells *"problems"*. Never *"prob"*, which is also *"probably"*.
+
+### Measured
+
+Measured on the demo replica (8088), the wording and its *"problems"* form asked of the same 10 patients (20 cells a run,
+no errors).
+
+- Before: the model answered all 10, 3 of them *"Ibuprofen can be given"*; the *"problems"* form was the module's for
+  all 10.
+- After: all 10 get the *"problems"* form's module answer.
+
+Pinned by `ClinicianWordingsTest.probsIsProblems`. Mutating *"probs"* in `words()` reddens it.

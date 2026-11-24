@@ -1419,7 +1419,7 @@ public class DrugReferenceInjector {
 				&& context.chartReadForSafety()
 				&& (noPairAboutHerOwn = composeNoPairAboutHerOwnMedication(herOwnQuestion, herOwnAsked, screenedSubstances,
 						findings, findingNumbers, herOwnExtent, theListsOwn, mappings, orderEntries, context,
-						reading.states(), unidentified.size(), orderRecordNumbers,
+						reading.states(), unidentified, orderRecordNumbers,
 						!orderRecordNumbers.isEmpty() ? orderRecordNumbers
 								: orderRecordNumbers(findingRecords != null ? findingRecords : new DrugOrderRecords(mappings),
 										context))) != null) {
@@ -8011,11 +8011,13 @@ public class DrugReferenceInjector {
 	private String composeNoPairAboutHerOwnMedication(String question, List<DrugReference> questionDrugs,
 			Set<Object> herSubstances, List<SafetyWarning> findings, List<Integer> findingNumbers, PairChipExtent extent,
 			Set<Object> theListsOwn, List<RecordMapping> mappings, List<DrugReference> orderEntries,
-			PatientClinicalContext context, boolean contraindicationsChecked, int unidentified,
-			Map<String, Integer> orderRecordNumbers, Map<String, Integer> herOrderRecords) {
+			PatientClinicalContext context, boolean contraindicationsChecked,
+			List<PatientClinicalContext.ActiveDrugOrder> unidentified, Map<String, Integer> orderRecordNumbers,
+			Map<String, Integer> herOrderRecords) {
 		// No pair found; whether any was listed below the floor matters only where she has another order to list it against,
-		// asked below — a product's below-floor rows are not read at all (ADR Decision 372).
-		if (extent == null || extent.getFound() != 0 || !contraindicationsChecked || unidentified != 0) {
+		// asked below — a product's below-floor rows are not read at all (ADR Decision 372). Beside an order the drug data
+		// cannot identify too, counting only what it identifies, Decision 161's line naming the rest (ADR Decision 702).
+		if (extent == null || extent.getFound() != 0 || !contraindicationsChecked) {
 			return null;
 		}
 		Set<Object> asked = new LinkedHashSet<Object>();
@@ -8053,7 +8055,7 @@ public class DrugReferenceInjector {
 		}
 		List<PatientClinicalContext.ActiveDrugOrder> otherOrders = new ArrayList<PatientClinicalContext.ActiveDrugOrder>();
 		for (PatientClinicalContext.ActiveDrugOrder order : context.getActiveDrugOrders()) {
-			if (ofIt.contains(order)) {
+			if (ofIt.contains(order) || unidentified.contains(order)) {
 				continue;
 			}
 			if (!order.hasStarted()) {
@@ -8061,6 +8063,7 @@ public class DrugReferenceInjector {
 			}
 			otherOrders.add(order);
 		}
+		String identified = unidentified.isEmpty() ? "" : " the drug data identifies";
 		// Her other MEDICATIONS: repeat orders of one prescription are one (ADR Decision 663).
 		int others = DrugSafetyValidator.prescriptionCount(otherOrders);
 		List<DrugReference> otherEntries = new ArrayList<DrugReference>();
@@ -8082,7 +8085,7 @@ public class DrugReferenceInjector {
 		if (others == 0) {
 			StringBuilder alone = new StringBuilder((asProduct != null ? asProduct.label
 					: DrugSafetyValidator.interactionSubject(questionDrugs, context).displayLabel()) + OWN_MEDICATION_LEAD + herOrders
-					+ ", and this patient has no other active medication to check it against.");
+					+ ", and this patient has no other active medication" + identified + " to check it against.");
 			for (Integer i : lines) {
 				alone.append("\n").append(findingLine(findings.get(i), findingNumbers.get(i), orderRecordNumbers,
 					herOrderRecords, true));
@@ -8107,7 +8110,7 @@ public class DrugReferenceInjector {
 		}
 		StringBuilder answer = new StringBuilder(DrugSafetyValidator.interactionSubject(questionDrugs, context).displayLabel() + OWN_MEDICATION_LEAD + herOrders
 				+ ". The interaction check relates it to none of this patient's " + others + " other active medication"
-				+ (others == 1 ? "" : "s") + ". [" + record.getIndex() + "]");
+				+ (others == 1 ? "" : "s") + identified + ". [" + record.getIndex() + "]");
 		for (Integer i : lines) {
 			answer.append("\n").append(findingLine(findings.get(i), findingNumbers.get(i), orderRecordNumbers,
 				herOrderRecords, true));

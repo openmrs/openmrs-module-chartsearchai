@@ -31668,3 +31668,40 @@ batch-42 patients (30 cells a run, no errors).
 
 Pinned by `ClinicianWordingsTest.anythingSheShouldNotTakeWithADrugIsWhatTheDrugInteractsWith`. Mutating each of the three
 shapes reddens it.
+
+## Decision 702: Her own drug related to none of her orders is answered beside an order the drug data cannot identify
+
+**Status: Accepted** (November 2026).
+[Decision 161](#decision-161-orders-the-drug-data-does-not-identify-are-named-rather-than-giving-the-question-up)'s
+answer beside an order the data cannot identify, carried to
+[Decision 206](#decision-206-her-own-drug-in-two-of-her-orders-is-no-interaction-with-her-other-medications-and-one-related-to-none-of-them-is-answered-as-hers)'s
+own drug related to none of her other orders, as Decisions 595 to 598 carried it to their paths.
+
+### Context
+
+On the demo, *"does her cotrimoxazole clash with anything?"* of a patient on co-trimoxazole and five vaccination orders
+went to the model. It answered *"Trimethoprim and sulfamethoxazole have interactions with the following drugs: 1.
+levobupivacaine (Major) …"*, reference rows for drugs she is not on, which
+[Decision 691](#decision-691-what-interactions-her-drug-has-is-what-her-drug-interacts-with) recorded as the model's
+error. `composeNoPairAboutHerOwnMedication` still returned nothing wherever any order of hers was one the drug data does
+not identify, a gate Decision 161 dropped from the proposal, screen and after-a-list paths.
+
+### The decision
+
+The gate is dropped. The answer counts her other medications the drug data identifies and says so: *"… and this patient
+has no other active medication the drug data identifies to check it against."*, or *"The interaction check relates it to
+none of this patient's 1 other active medication the drug data identifies."* Decision 161's line names the rest.
+
+### Measured
+
+Measured on the demo replica (8088), *"Does her cotrimoxazole interact with anything?"* and *"Is her cotrimoxazole safe
+with her other medications?"* asked of the 19 sweep patients on co-trimoxazole with a vaccination order, and 5 without
+one (48 cells a run, no errors).
+
+- Before: the model answered 18 of the 38 cells with a vaccination order, those of the 9 patients whose co-trimoxazole
+  is their only drug the data identifies. 17 of them listed reference rows for drugs she is not on.
+- After: the module answered all 38, each naming the orders it did not check. The 30 cells it already answered are
+  unchanged.
+
+Pinned by `OwnMedicationSafetyContextTest.herOwnDrugBesideAnOrderTheDataCannotIdentifyIsAnsweredForWhatItIdentifies`.
+Restoring the gate, or dropping *"the drug data identifies"*, reddens it.

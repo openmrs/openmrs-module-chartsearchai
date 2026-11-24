@@ -430,6 +430,45 @@ public class OwnMedicationSafetyContextTest extends BaseModuleContextSensitiveTe
 		}
 	}
 
+	/**
+	 * Her own drug the check relates to none of her other orders is answered beside an order the drug data cannot identify,
+	 * counting only what it identifies, Decision 161's line naming the rest (ADR Decision 702): on the demo "Does her
+	 * cotrimoxazole interact with anything?" of a patient on co-trimoxazole and five vaccination orders went to the model,
+	 * which listed reference rows for drugs she is not on.
+	 */
+	@Test
+	public void herOwnDrugBesideAnOrderTheDataCannotIdentifyIsAnsweredForWhatItIdentifies() throws IOException {
+		PatientClinicalContext.ActiveDrugOrder measles = DrugReferenceTestSupport.activeOrder("order-measles",
+			"Measles vaccination");
+		List<PatientClinicalContext.ActiveDrugOrder> alone = Arrays.asList(
+			DrugReferenceTestSupport.activeOrder("order-metformin-1", "Metformin 500mg"),
+			DrugReferenceTestSupport.activeOrder("order-metformin-2", "Metformin 500mg"), measles);
+		List<PatientClinicalContext.ActiveDrugOrder> beside = Arrays.asList(
+			DrugReferenceTestSupport.activeOrder("order-metformin-1", "Metformin 500mg"),
+			DrugReferenceTestSupport.activeOrder("order-metformin-2", "Metformin 500mg"),
+			DrugReferenceTestSupport.activeOrder("order-atorvastatin", "Atorvastatin 10mg"), measles);
+		for (String question : Arrays.asList("Is metformin safe with her other medications?",
+			"Does her metformin interact with anything?")) {
+			String answer = answerOver("chartsearchai-test/ddi-folded-caution-order.json", question, alone);
+			assertNotNull(answer, question + ": the module answers");
+			String[] lines = answer.split("\n");
+			assertEquals("Metformin is one of this patient's active medications (Metformin 500mg, 2 orders), and this patient has "
+					+ "no other active medication the drug data identifies to check it against.", lines[0],
+				question + " was: " + answer);
+			assertTrue(lines[lines.length - 1].startsWith("Not checked: 1 active order the drug data does not identify — Measles "
+					+ "vaccination."), question + " was: " + answer);
+
+			answer = answerOver("chartsearchai-test/ddi-folded-caution-order.json", question, beside);
+			assertNotNull(answer, question + ": the module answers");
+			lines = answer.split("\n");
+			assertTrue(lines[0].matches("Metformin is one of this patient's active medications \\(Metformin 500mg, 2 orders\\)\\. "
+					+ "The interaction check relates it to none of this patient's 1 other active medication the drug data "
+					+ "identifies\\. \\[\\d+\\]"), question + " was: " + answer);
+			assertTrue(lines[lines.length - 1].startsWith("Not checked: 1 active order the drug data does not identify — Measles "
+					+ "vaccination."), question + " was: " + answer);
+		}
+	}
+
 	@Test
 	public void herOwnDrugWithNoOtherMedicationToCheckItAgainstSaysSo() throws IOException {
 		// James Thompson holds two orders of metronidazole and nothing else: there is no other medication to relate it

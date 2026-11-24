@@ -11899,7 +11899,11 @@ public class DrugReferenceInjector {
 			if (ofRows.size() != 1) {
 				continue;
 			}
-			// A name of the substance itself — its row's, or an alias such as DDInter's "Rifampin" — says which it is already.
+			// A name of the substance itself — its row's, or an alias such as DDInter's "Rifampin" — says which it is already,
+			// which the test below answers: such a name names no other substance of the order. Not whether the display is one
+			// of the row's aliases, which DDInter's rxnorm names make a combination's too — rifampicin's carry "Isoniazid /
+			// pyrazinamide / rifampin", so "Isoniazid interacts with active order Isoniazid / pyrazinamide / rifampin" left
+			// its rifampicin unnamed, isoniazid against its own tablet (ADR Decision 700).
 			DrugReference row = DrugReference.canonicalRow(rows);
 			Set<String> itsNames = new HashSet<String>();
 			List<String> ofTheSubstance = new ArrayList<String>(row.getAliases());
@@ -11910,7 +11914,7 @@ public class DrugReferenceInjector {
 					itsNames.add(DrugReference.foldedLower(name.trim()));
 				}
 			}
-			if (row.getName() == null || itsNames.contains(DrugReference.foldedLower(partner.trim()))) {
+			if (row.getName() == null) {
 				continue;
 			}
 			// And only where the display names another substance the module resolved the chip's orders to — one of its

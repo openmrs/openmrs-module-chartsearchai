@@ -31596,3 +31596,44 @@ combination order carrying the same drug (26 cells a run, no errors).
 
 Pinned by `SubstanceInSeveralOrdersPairTest.aPartnerWitnessedByAnOrderOfItsOwnIsNotNamedByTheSubjectsOwnOrder`. Mutating
 `namedByAnOrderNotWitnessing` out of the guard reddens it.
+
+## Decision 700: A combination's display is no name of one of its substances
+
+**Status: Accepted** (November 2026).
+[Decision 288](#decision-288-each-line-about-her-combination-order-names-the-substance-it-is-about-and-what-the-interaction-with-one-of-its-drugs-is-takes-the-whole-order)'s
+substance named on a line about a combination order, where the knowledge base files the combination's name among the
+substance's own.
+
+### Context
+
+On the demo, *"Can I give her isoniazid?"* of a patient on *"Isoniazid / pyrazinamide / rifampin"* and *"Ethambutol and
+isoniazid"* read *"Isoniazid interacts with active order Isoniazid / pyrazinamide / rifampin — Minor."* That reads as
+isoniazid against its own tablet. The pair is her isoniazid against that tablet's rifampicin. Decision 288 names the
+substance where a line names the order by anything but the substance's own names. DDInter writes aliases from rxnorm
+names, and rifampicin's include *"Isoniazid / pyrazinamide / rifampin"*, so the combination's display counted as
+rifampicin's own name and the line said nothing more.
+
+### The decision
+
+`DrugReferenceInjector.interactingSubstancesOfSharedOrders` no longer asks whether the order's display is one of the
+substance's names. Its other test decides instead: the display names another substance the module resolved the chip's
+orders to. A name that is only the substance's, *"Rifampin"* or *"Levothyroxine sodium 75 mcg"*, still says nothing more.
+
+### Measured
+
+Measured on the demo replica (8088), *"Can I give her isoniazid?"*, *"Does her isoniazid interact with her other meds?"*
+and *"Can I give her rifampicin?"* asked of the 21 sweep patients on an isoniazid combination order (63 cells a run, no
+errors).
+
+- Before: 16 lines named an order carrying the subject and stated no substance. One was dd88589e's *"Rifampicin
+  (rifampin) interacts with active order Isoniazid / pyrazinamide / rifampin — Major."*, the pyrazinamide unnamed.
+- After: none. 31 answers changed, each by that clause alone, among them lines naming another combination the same way,
+  *"… active order Lamivudine / zidovudine (5 orders) — Moderate. The interacting substance is Zidovudine."*
+
+Residue: 14 lines name two partners in one,
+[Decision 99](#decision-99-one-mechanism-is-stated-once-naming-every-active-order-it-covers)'s merged mechanism, such as
+*"Isoniazid interacts with active order Stavudine (4 orders) and Ethambutol and isoniazid — Moderate."* Decision 288
+names no substance on a line of several partners, and these stay as they were.
+
+Pinned by `CombinationOrderLineContextTest.aLineNamingACombinationCarryingTheDrugAskedAboutNamesItsSubstance`. Restoring
+the alias test reddens it.

@@ -163,6 +163,33 @@ public class CombinationOrderLineContextTest extends BaseModuleContextSensitiveT
 	}
 
 	/**
+	 * A line naming a combination order that carries the drug asked about too still names the substance it is about (ADR
+	 * Decision 700): on the demo, patient dd97f86b, on "Isoniazid / pyrazinamide / rifampin" and "Ethambutol and
+	 * isoniazid", "Can I give her isoniazid?" read "Isoniazid interacts with active order Isoniazid / pyrazinamide /
+	 * rifampin — Minor.", isoniazid against its own tablet, where the pair is her isoniazid against that tablet's rifampin.
+	 */
+	@Test
+	public void aLineNamingACombinationCarryingTheDrugAskedAboutNamesItsSubstance() {
+		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
+			order("order-rhz", "Isoniazid / pyrazinamide / rifampin", "J04AC51", "768AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+				"Isoniazid / pyrazinamide / rifampin", "Rifampicin isoniazid and pyrazinamide", "Rifater"),
+			order("order-ei-1", "Ethambutol and isoniazid", "J04AM03", "160AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+				"Ethambutol and isoniazid", "Ethambutol / isoniazid", "Ethizide"),
+			order("order-ei-2", "Ethambutol and isoniazid", "J04AM03", "160AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+				"Ethambutol and isoniazid", "Ethambutol / isoniazid", "Ethizide"),
+			order("order-d4t", "Stavudine", "J05AF04", "1ae08332-8f70-4345-a793-3b6c9b0ff6bd", "Stavudine", "d4T", "Zerit"),
+			order("order-nvp", "Nevirapine", "J05AG01", "631AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", "Nevirapine", "NVP",
+				"Viramune"));
+		for (String question : new String[] { "Can I give her isoniazid?", "Does her isoniazid interact with her other meds?" }) {
+			String answer = askOver(question, orders);
+			String line = lineStarting(answer, "Isoniazid interacts with active order Isoniazid / pyrazinamide / rifampin — ");
+			assertTrue(line != null, "precondition: " + question + " was: " + answer);
+			assertTrue(line.matches(".*" + java.util.regex.Pattern.quote(NAMED) + "Rifamp(?:in|icin)\\.( \\[\\d+\\])+"),
+				question + " was: " + answer);
+		}
+	}
+
+	/**
 	 * Nor does a line naming a one-substance order by its display, its salt and its strength: on the 3.7.1 standalone
 	 * Brian Lopez's "Will omeprazole lower his levothyroxine absorption?" read "Omeprazole interacts with active order
 	 * Levothyroxine sodium 75 mcg — Moderate. The interacting substance is Levothyroxine." The order's display names no

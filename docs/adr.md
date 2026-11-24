@@ -31637,3 +31637,34 @@ names no substance on a line of several partners, and these stay as they were.
 
 Pinned by `CombinationOrderLineContextTest.aLineNamingACombinationCarryingTheDrugAskedAboutNamesItsSubstance`. Restoring
 the alias test reddens it.
+
+## Decision 701: Anything she should not take with a drug is what the drug interacts with
+
+**Status: Accepted** (November 2026).
+[Decision 685](#decision-685-which-drugs-to-avoid-giving-with-her-drug-is-what-her-drug-interacts-with)'s question, asked
+of what she should not take: *"Is there anything she shouldn't take with nevirapine?"* and *"What shouldn't she take with
+nevirapine?"* are *"Does nevirapine interact with anything?"*.
+
+### Context
+
+In the demo's forty-second batch (18 patients, 144 cells, no errors), *"is there anything she shouldnt take with
+nevirapine?"* went to the model for every patient, 14 of them on nevirapine in SQL. The model told each that the records
+do not address it. The module answers *"Does nevirapine interact with anything?"* for every patient.
+
+### The decision
+
+Three shapes beside Decision 685's: *"(is there) anything she shouldn't / shouldnt / should not / must not take / use /
+have / be given with X"*, *"what shouldn't she take with X"* and *"what should she not take with X"*. Never *"what should
+she take with X"*, which asks for no interaction. *"Is there anything the patient should avoid with X?"* already reached
+the module and needs no shape.
+
+### Measured
+
+Measured on the demo replica (8088), the two wordings and *"Does nevirapine interact with anything?"* asked of 10
+batch-42 patients (30 cells a run, no errors).
+
+- Before: the model answered all 20 cells of the two wordings, 15 of them that the records do not address it.
+- After: all 20 get the canonical wording's module answer, which is unchanged for all 10.
+
+Pinned by `ClinicianWordingsTest.anythingSheShouldNotTakeWithADrugIsWhatTheDrugInteractsWith`. Mutating each of the three
+shapes reddens it.

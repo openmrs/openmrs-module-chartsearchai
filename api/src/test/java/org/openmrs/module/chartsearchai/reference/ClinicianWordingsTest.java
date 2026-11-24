@@ -2526,6 +2526,23 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 	}
 
 	/**
+	 * Anything she should not take with a drug is what the drug interacts with (ADR Decision 701): on the demo "is there
+	 * anything she shouldnt take with nevirapine?" went to the model for all 18 patients, which answered each that the
+	 * records do not address it, 14 of them on nevirapine.
+	 */
+	@Test
+	public void anythingSheShouldNotTakeWithADrugIsWhatTheDrugInteractsWith() {
+		String canonical = ask("Does nevirapine interact with anything?");
+		assertNotNull(canonical, "precondition: the module answers what the drug interacts with");
+		for (String question : Arrays.asList("is there anything she shouldnt take with nevirapine?",
+			"Is there anything she shouldn't take with nevirapine?", "Is there anything she should not take with nevirapine?",
+			"What shouldn't she take with nevirapine?", "What should she not take with nevirapine?",
+			"Is there anything the patient should avoid with nevirapine?")) {
+			assertEquals(canonical, ask(question), question);
+		}
+	}
+
+	/**
 	 * Which drugs to avoid giving with her drug is what her drug interacts with (ADR Decision 685). On the demo the model
 	 * told one patient "Yes — there are drugs to avoid giving with Nevirapine: lamivudine and stavudine", her own
 	 * antiretrovirals, off rows the drug data rates at no severity, and two patients on no nevirapine "No — Nevirapine

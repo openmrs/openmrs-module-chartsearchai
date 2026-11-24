@@ -995,6 +995,13 @@ public final class QueryScopeRouter {
 			"(?:are|is) there (?:any )?(?:drugs|medications|medicines|meds) to avoid (?:giving |combining |using )?with "
 					+ POSSESSIVE + " " + D,
 			"what should (?:i|we) avoid (?:giving|combining|prescribing) with " + POSSESSIVE + " " + D,
+			// "Is there anything she shouldnt take with nevirapine?", "What shouldn't she take with nevirapine?" — what the drug
+			// interacts with; the model told all 18 demo patients the records do not address it (ADR Decision 701). Never
+			// "what should she take with …", which asks for no interaction.
+			"(?:is there )?anything (?:she|he|they|the patient|this patient) (?:shouldn't|shouldnt|should not|must not|mustn't)"
+					+ " (?:take|use|have|be given) with " + D,
+			"what (?:shouldn't|shouldnt) (?:she|he|they|the patient|this patient) (?:take|use|have) with " + D,
+			"what should (?:she|he|they|the patient|this patient) not (?:take|use|have) with " + D,
 			// "Will fluconazole interact with what she is taking?" (ADR Decision 445)
 			"(?:does|will|would|could|can) " + D + " interact with what (?:(?:she|he|they|the patient|this patient) (?:takes|is taking"
 					+ "|is on|are taking|are on)|she's (?:on|taking)|he's (?:on|taking)|they're (?:on|taking))(?: already| currently)?",

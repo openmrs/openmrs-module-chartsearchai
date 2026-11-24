@@ -31444,3 +31444,57 @@ her drug.
 
 Pinned by `ClinicianWordingsTest.adjustingHerDoseIfSheStartsAnotherIsAdjustingItWithTheOther`. Mutating the new
 alternative's *"if|when"* reddens it.
+
+## Decision 695: Her medications after "given" are no condition the question names
+
+**Status: Accepted** (November 2026).
+[Decision 394](#decision-394-a-proposal-asking-a-dose-naming-a-timing-or-a-condition-or-asking-for-a-reason-not-to-give-the-drug-is-answered-as-the-proposal-saying-what-was-not-weighed)'s
+condition, read from *"Is X safe given her kidney disease?"*, is never her medications: *"Is warfarin ok given her
+current meds?"* asks what *"Is warfarin ok with her current meds?"* asks.
+
+### Context
+
+In the demo's thirty-ninth batch (18 patients, 144 cells, no errors), the module answered *"Is warfarin ok given her
+current meds?"* for every patient and closed every answer with *"This check weighs only the conditions this patient's
+chart records, not the one the question names (current meds)."* The question names no condition.
+
+### The decision
+
+`QueryScopeRouter.statedConditionAsWritten` refuses a condition that is her medications, with or without the possessive,
+*"other"* or *"all"* before them. The proposal shape still admits the question, so its answer is the proposal's.
+
+### Measured
+
+Measured on the demo replica (8088), both wordings asked of 10 batch-39 patients (20 cells a run, no errors).
+
+- Before: all 10 *"given"* answers carried the condition line, and none equalled its *"with"* answer.
+- After: none carries it, and all 10 equal their *"with"* answers.
+
+Pinned by `ClinicianWordingsTest.herMedicationsAfterGivenAreNoConditionTheQuestionNames`. Mutating the lookahead's
+`MEDICATIONS` reddens it.
+
+## Decision 696: The biggest interaction risk on her list is the biggest interaction on it
+
+**Status: Accepted** (November 2026).
+[Decision 610](#decision-610-the-worst-interaction-a-drug-to-stop-now-spacing-a-drug-from-her-medications-and-two-more-wordings-are-the-modules-questions)'s
+worst interaction, also asked as its risk: *"What is the biggest interaction risk on her list?"*.
+
+### Context
+
+In the same batch, *"What is the biggest interaction risk on her list?"* went to the model for all 18 patients, the
+word *"risk"* after *"interaction"* fitting no shape. The model ranked the findings itself, the error Decision 610
+records.
+
+### The decision
+
+Decision 610's shape takes an optional *"risk"* or *"risks"* after the interaction noun.
+
+### Measured
+
+Measured on the demo replica (8088), the wording and *"What is the biggest interaction in her list?"* asked of the same
+10 patients (20 cells a run, no errors).
+
+- Before: the model answered all 10; the canonical wording was the module's for all 10.
+- After: all 10 get the canonical wording's module answer.
+
+Pinned by `ClinicianWordingsTest.theBiggestInteractionRiskIsTheBiggestInteraction`. Mutating *" risks?"* reddens it.

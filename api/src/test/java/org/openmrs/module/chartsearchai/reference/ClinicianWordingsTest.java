@@ -2316,6 +2316,41 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 	}
 
 	/**
+	 * The biggest interaction risk on her list is the biggest interaction on it (ADR Decision 696). On the demo the model
+	 * answered all 18 patients.
+	 */
+	@Test
+	public void theBiggestInteractionRiskIsTheBiggestInteraction() {
+		String screen = ask("What is the biggest interaction in her list?");
+		assertNotNull(screen, "precondition: the module answers the screen");
+		for (String question : Arrays.asList("What is the biggest interaction risk on her list?",
+			"What is the most serious interaction risk among her medications?", "What are the biggest drug interaction risks she has?")) {
+			assertEquals(screen, ask(question), question);
+		}
+	}
+
+	/**
+	 * A drug safe given her medications is a drug safe with them, and her medications are no condition the question names (ADR
+	 * Decision 695). On the demo the module closed all 18 of its answers to "Is warfarin ok given her current meds?"
+	 * with "This check weighs only the conditions this patient's chart records, not the one the question names
+	 * (current meds)."
+	 */
+	@Test
+	public void herMedicationsAfterGivenAreNoConditionTheQuestionNames() {
+		for (String[] pair : new String[][] {
+			{ "Is warfarin ok given her current meds?", "Is warfarin ok with her current meds?" },
+			{ "Is warfarin safe given her medications?", "Is warfarin safe with her medications?" },
+			{ "Is warfarin ok given her other meds?", "Is warfarin ok with her other meds?" } }) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+		// A condition the question names is still said not weighed (ADR Decision 394).
+		assertTrue(ask("Is warfarin safe given her kidney disease?").endsWith("\n"
+				+ DrugReferenceInjector.CONDITION_NOT_WEIGHED_OPENING + "kidney disease)."));
+	}
+
+	/**
 	 * Adjusting her drug's dose if she starts another is adjusting it if I start the other (ADR Decision 694). On the demo the
 	 * model answered all 18 patients "Efavirenz can be given", 16 of them on no efavirenz.
 	 */

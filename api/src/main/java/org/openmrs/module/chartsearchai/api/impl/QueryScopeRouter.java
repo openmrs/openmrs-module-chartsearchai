@@ -1627,7 +1627,9 @@ public final class QueryScopeRouter {
 			// screen states its Major interactions first; the model named Moderate cautions "the most dangerous" (ADR
 			// Decision 610)
 			"(?:what|which) (?:is|are) the (?:most (?:dangerous|serious|severe|important|significant|concerning|risky)|worst|"
-					+ "biggest|riskiest) (?:drug )?(?:interactions?|ddis?)(?: (?:in|on|among|between|of) (?:" + POSSESSIVE + " "
+					+ "biggest|riskiest) (?:drug )?(?:interactions?|ddis?)"
+					// and its risk, "What is the biggest interaction risk on her list?" (ADR Decision 696)
+					+ "(?: risks?)?(?: (?:in|on|among|between|of) (?:" + POSSESSIVE + " "
 					+ MEDICATIONS + "|the (?:drugs|medicines|medications) " + SUBJECT_TAKES + ")| (?:she|he|they|the patient|"
 					+ "this patient) (?:has|have))?",
 			// "Which of her drugs is the most dangerous combination?", "What is the most dangerous combination in her
@@ -2971,7 +2973,9 @@ public final class QueryScopeRouter {
 	 *  question writes it, or {@code null} (ADR Decision 394). */
 	public static String statedConditionAsWritten(String question, List<String> wordsWithTheDrugMarked) {
 		Matcher m = Pattern.compile("^is " + D + " (?:safe|ok|okay|appropriate|suitable)(?: (?:for|in) " + PATIENT
-				+ ")? " + GIVEN_A_CONDITION + "(?!.*allerg)(\\p{L}+(?: \\p{L}+){0,3})$")
+				+ ")? " + GIVEN_A_CONDITION + "(?!.*allerg)"
+				// never her medications, "given her current meds", which asks it with them (ADR Decision 695)
+				+ "(?!(?:" + POSSESSIVE + " )?(?:other |all )?" + MEDICATIONS + "$)(\\p{L}+(?: \\p{L}+){0,3})$")
 				.matcher(String.join(" ", wordsWithTheDrugMarked));
 		return m.find() ? asWritten(question, m.group(1)) : null;
 	}

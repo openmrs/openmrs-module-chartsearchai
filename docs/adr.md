@@ -31562,3 +31562,37 @@ and ARVs and 3 on ARVs alone (30 cells a run, no errors).
 
 Pinned by `HerMedicationGroupByClassTest.aDrugSheTakesBesideAGroupItIsNotOneOfIsSaidToBeHers`. Mutating
 `besideGroupsItIsNotOf` out of `itsOwnDuplicates` reddens it.
+
+## Decision 699: A partner witnessed by an order of its own is never named by an order carrying the subject
+
+**Status: Accepted** (November 2026).
+[Decision 486](#decision-486-two-substances-from-two-different-orders-are-a-pair-even-where-each-order-carries-both)'s
+naming rule for its second pass, held on the first.
+
+### Context
+
+On the demo, a patient on two "Ethambutol and isoniazid" orders and one "Ethambutol" order was told *"Isoniazid interacts
+with active order Ethambutol and isoniazid"*. That reads as one tablet against itself. The pair is real: her isoniazid
+against her separate ethambutol, the only order the first pass let witness the partner. The name came from the
+partner-name reconciliation, which named the co-medication by an order that also carries ethambutol: the subject's own
+combination. Decision 486 refused that reconciliation on its second pass for this reason, and the first pass had the same
+hazard wherever the partner is also in the subject's order.
+
+### The decision
+
+`DrugSafetyValidator.addActiveOrderPairInteractions` does not reconcile the partner's name where the order the
+reconciliation would print (`OrderPartner.namingOrder`) is not one of the orders the pass let witness the partner
+(`namedByAnOrderNotWitnessing`). The chip names the partner by the rule's own label, as the second pass does.
+
+### Measured
+
+Measured on the demo replica (8088), two screen wordings asked of the 13 sweep patients on a single-drug order and a
+combination order carrying the same drug (26 cells a run, no errors).
+
+- Before: 4 cells, of 2 patients, named a partner by an order carrying the subject: *"Isoniazid with Ethambutol and
+  isoniazid"*, and *"Rifampicin (rifampin) with … Isoniazid / pyrazinamide / rifampin"* of a patient whose only
+  rifampicin is that tablet, the pair being with the isoniazid of her other orders.
+- After: they name *"Ethambutol"* and *"Isoniazid"*. The other 22 cells are unchanged.
+
+Pinned by `SubstanceInSeveralOrdersPairTest.aPartnerWitnessedByAnOrderOfItsOwnIsNotNamedByTheSubjectsOwnOrder`. Mutating
+`namedByAnOrderNotWitnessing` out of the guard reddens it.

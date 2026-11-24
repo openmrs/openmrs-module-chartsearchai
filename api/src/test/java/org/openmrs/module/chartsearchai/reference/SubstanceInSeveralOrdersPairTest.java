@@ -132,6 +132,35 @@ public class SubstanceInSeveralOrdersPairTest extends BaseModuleContextSensitive
 			"an order carrying the subject too does not name its partner: " + chart.getText());
 	}
 
+	/**
+	 * A partner witnessed by an order of its own is never named by an order carrying the subject (ADR Decision 699), as
+	 * Decision 486 has it on its second pass: on the demo, patient dd8e9f42, on two "Ethambutol and isoniazid" orders and
+	 * one of "Ethambutol", was told "Isoniazid interacts with active order Ethambutol and isoniazid", a tablet against
+	 * itself, where the pair is her isoniazid against her separate ethambutol.
+	 */
+	@Test
+	public void aPartnerWitnessedByAnOrderOfItsOwnIsNotNamedByTheSubjectsOwnOrder() {
+		List<PatientClinicalContext.ActiveDrugOrder> orders = new ArrayList<PatientClinicalContext.ActiveDrugOrder>();
+		// As the demo's dictionary records them: the combination carries its concept's names and WHO ATC code, the
+		// ethambutol no code.
+		for (int i = 1; i <= 2; i++) {
+			orders.add(DrugReferenceTestSupport.activeOrder("order-ei-" + i, "Ethambutol and isoniazid",
+				new LinkedHashSet<String>(Arrays.asList("Ethambutol and isoniazid", "Ethambutol / isoniazid", "Ethizide")),
+				new LinkedHashSet<String>(Arrays.asList("J04AM03"))));
+		}
+		orders.add(DrugReferenceTestSupport.activeOrder("order-emb", "Ethambutol",
+			new LinkedHashSet<String>(Arrays.asList("Ethambutol")), new LinkedHashSet<String>()));
+		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(loaded())
+				.injectRecords(DrugReferenceTestSupport.oneRecordChart(), context(orders), "Any red flags with her meds?");
+
+		assertNotNull(chart.getModuleAnswer(), "the module answers");
+		assertTrue(chart.getText().contains("Isoniazid interacts with active order Ethambutol — "),
+			"her isoniazid against her separate ethambutol is found: " + chart.getText());
+		assertFalse(chart.getText().contains("Isoniazid interacts with active order Ethambutol and isoniazid"),
+			"an order carrying the subject too does not name its partner: " + chart.getText());
+		assertFalse(chart.getModuleAnswer().contains("Isoniazid with Ethambutol and isoniazid"), chart.getModuleAnswer());
+	}
+
 	private static DrugReferenceService loaded() {
 		return new DrugReferenceService();
 	}

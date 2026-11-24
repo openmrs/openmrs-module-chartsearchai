@@ -7398,6 +7398,26 @@ public class DrugSafetyValidator {
 	 * lookup that answered null there left this chip on {@link #partnerLabel} beside another chip about
 	 * the same prescription that reconciled, which is issue #339's own shape (review round 2).
 	 */
+	/**
+	 * Whether the co-medication {@code rule}'s partner is reconciled to takes its name from an order outside
+	 * {@code witnesses}, the orders the pair arm let witness the partner — one carrying the subject too, whose display
+	 * printed as the partner reads as a tablet against itself (ADR Decisions 486, 699).
+	 */
+	private static boolean namedByAnOrderNotWitnessing(SubjectRule rule, CoMedications coMedications,
+			List<PatientClinicalContext.ActiveDrugOrder> witnesses) {
+		OrderPartner partner = coMedications.partnerNaming(rule.partner);
+		if (partner == null || partner.namingOrder == null) {
+			return false;
+		}
+		for (PatientClinicalContext.ActiveDrugOrder witness : witnesses) {
+			if (witness == partner.namingOrder || witness.getUuid() != null
+					&& witness.getUuid().equals(partner.namingOrder.getUuid())) {
+				return false;
+			}
+		}
+		return true;
+	}
+
 	private ReconciledPartner reconciledPartnerFor(SubjectRule rule, SubstanceSubjects subjects,
 			CoMedications coMedications) {
 		OrderPartner partner = coMedications.partnerNaming(rule.partner);
@@ -10551,7 +10571,11 @@ public class DrugSafetyValidator {
 					// orders, so the prescription the reconciliation would name it by carries the subject too, and
 					// "Rifampicin interacts with active order Rifampicin and isoniazid" reads as a drug against itself.
 					// The rule's own label names the substance instead.
-					ReconciledPartner reconciled = ownOrdersWitness ? null
+					// Nor on the first, where the order the reconciliation would name the partner by is one this pass
+					// refused as its witness, carrying the subject too: "Isoniazid interacts with active order Ethambutol
+					// and isoniazid" of a patient whose ethambutol is also an order of its own (ADR Decision 699).
+					ReconciledPartner reconciled = ownOrdersWitness
+							|| namedByAnOrderNotWitnessing(matched, coMedications, partnerWitnesses) ? null
 							: reconciledPartnerFor(matched, subjects, coMedications);
 					// Asked of the name the chip is about to print, and of the orders THIS pass used: the
 					// subject's own orders name the subject, and only the orders activeOrdersOtherThan kept

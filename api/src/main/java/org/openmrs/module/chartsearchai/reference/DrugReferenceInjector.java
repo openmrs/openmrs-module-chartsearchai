@@ -10171,6 +10171,10 @@ public class DrugReferenceInjector {
 		boolean itsOrderSingle = false;
 		String othersOfTheGroups = null;
 		List<String> askedBesideOnly = null;
+		// A drug she takes, asked beside a group it is not one of, is hers there too: "Can she take co-trimoxazole with her ARVs?"
+		// of a patient on co-trimoxazole was told its Minor finding with her lamivudine alone, never that she takes it (ADR
+		// Decision 698).
+		boolean besideGroupsItIsNotOf = false;
 		if (asked != null) {
 			// The drug asked about against its groups' members, together: "Is fluconazole safe with his ARVs and TB drugs?"
 			// asks of fluconazole against either, and never of the groups against each other (ADR Decision 646).
@@ -10183,7 +10187,8 @@ public class DrugReferenceInjector {
 			// the drug alone, "Does ritonavir interact with his ARVs?" of a patient on lopinavir/ritonavir left out lopinavir's
 			// Major interaction with his nevirapine, which the drug's own answer states of its order (ADR Decisions 292, 646,
 			// 648).
-			if (!Collections.disjoint(asked.substances, ofTheGroups)) {
+			besideGroupsItIsNotOf = Collections.disjoint(asked.substances, ofTheGroups);
+			if (!besideGroupsItIsNotOf) {
 				Set<PatientClinicalContext.ActiveDrugOrder> itsOrders = new LinkedHashSet<PatientClinicalContext.ActiveDrugOrder>();
 				for (DrugReference entry : orderEntries) {
 					if (asked.substances.contains(entry.substanceGroupKey())) {
@@ -10272,8 +10277,9 @@ public class DrugReferenceInjector {
 		// (Decision 99) is stated over those of them it relates to the groups (ADR Decision 633) — "Efavirenz interacts with
 		// active order Rifampicin … and Sulfamethoxazole" named his co-trimoxazole in an answer about his TB drugs.
 		List<SafetyWarning> shown = new ArrayList<SafetyWarning>(findings);
-		// and, of a drug that is one of the group, the duplicates of its own orders (ADR Decision 648)
-		Set<Object> itsOwnDuplicates = othersOfTheGroups != null ? scope.get(0) : null;
+		// and, of a drug that is one of the group, the duplicates of its own orders (ADR Decision 648), as of one she takes
+		// beside a group it is not one of (ADR Decision 698)
+		Set<Object> itsOwnDuplicates = othersOfTheGroups != null || besideGroupsItIsNotOf ? scope.get(0) : null;
 		Predicate<SafetyWarning> relates = finding -> relatesToTheGroups(finding, orderEntries, scope, between, among)
 				|| itsOwnDuplicates != null && (finding.statesOrdersSharingASubstance() || finding.isAboutItsOwnOrders())
 						&& !Collections.disjoint(subjectSubstances(finding, orderEntries), itsOwnDuplicates);

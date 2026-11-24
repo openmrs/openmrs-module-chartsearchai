@@ -556,6 +556,34 @@ public class HerMedicationGroupByClassTest extends BaseModuleContextSensitiveTes
 		assertFalse(answer.contains("Trimethoprim"), "his co-trimoxazole is no ARV: " + answer);
 	}
 
+	/** A drug she already takes, asked beside a group of hers it is not one of, is said to be hers there, as a drug of the
+	 *  group is (ADR Decision 698): on the demo "Can she take co-trimoxazole with her ARVs?" was answered over her ARVs for
+	 *  the 7 of 18 patients already on co-trimoxazole with its Minor finding alone, never that she takes it. Proposed, as the
+	 *  finding that one order of hers carries the drug is raised only of a proposal (ADR Decision 129). */
+	@Test
+	public void aDrugSheTakesBesideAGroupItIsNotOneOfIsSaidToBeHers() {
+		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
+			DrugReferenceTestSupport.activeOrder("o1", "Lamivudine", "Lamivudine"),
+			DrugReferenceTestSupport.activeOrder("o2", "Stavudine", "Stavudine"),
+			DrugReferenceTestSupport.activeOrder("o3", "Nevirapine", "Nevirapine"),
+			DrugReferenceTestSupport.activeOrder("o4", "Trimethoprim and sulfamethoxazole", "Trimethoprim", "Sulfamethoxazole"),
+			DrugReferenceTestSupport.activeOrder("o5", "Warfarin", "Warfarin"));
+		for (String question : Arrays.asList("Can she take co-trimoxazole with her ARVs?",
+			"Is it safe to give her co-trimoxazole with her ARVs?", "Can I add co-trimoxazole to her ARVs?")) {
+			String answer = DrugReferenceTestSupport.injectorWithSafety(new DrugReferenceService()).injectRecords(
+				DrugReferenceTestSupport.oneRecordChart(), DrugReferenceTestSupport.ctx(40, null, new LinkedHashSet<String>(
+					Arrays.asList("Lamivudine", "Stavudine", "Nevirapine", "Trimethoprim", "Sulfamethoxazole", "Warfarin")), null,
+					null, null, orders), question).getModuleAnswer();
+			assertNotNull(answer, question);
+			assertTrue(answer.startsWith("Co-trimoxazole and this patient's antiretrovirals"), question + ": " + answer);
+			assertTrue(answer.contains("Sulfamethoxazole is already in active order Trimethoprim and sulfamethoxazole")
+					&& answer.contains("Trimethoprim is already in active order Trimethoprim and sulfamethoxazole"),
+				question + ": " + answer);
+			assertTrue(answer.contains("Trimethoprim interacts with active order Lamivudine — Minor."), question + ": " + answer);
+			assertFalse(answer.contains("Warfarin"), "her warfarin is no ARV: " + question + ": " + answer);
+		}
+	}
+
 	/** Whether to stop a drug he is not on is answered that there is no order of it to stop, and nothing of the drug's
 	 *  interactions is published beside that (ADR Decision 651): on the demo replica "Should I stop his dapsone?" of a
 	 *  patient on no dapsone carried six chips of dapsone against his medications. */

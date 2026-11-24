@@ -31527,3 +31527,38 @@ no errors).
 - After: all 10 get the *"problems"* form's module answer.
 
 Pinned by `ClinicianWordingsTest.probsIsProblems`. Mutating *"probs"* in `words()` reddens it.
+
+## Decision 698: A drug she takes, proposed beside a group of hers it is not one of, is told it is hers
+
+**Status: Accepted** (November 2026).
+[Decision 648](#decision-648-a-drug-that-is-one-of-her-group-is-asked-with-the-whole-order-it-is-taken-in-against-the-groups-other-members)'s
+duplicates of the drug's own orders, stated of a drug she takes beside a group it is not one of, as
+[Decision 129](#decision-129-a-question-proposing-a-drug-one-of-her-own-orders-carries-is-told-so-as-a-finding-and-after-the-question)
+tells any proposal of her own drug.
+
+### Context
+
+On the demo, *"Can she take co-trimoxazole with her ARVs?"* was answered over her ARVs
+([Decision 632](#decision-632-one-drug-asked-about-beside-a-group-of-her-medications-the-module-resolves-is-answered-over-that-group)).
+For the 7 of 18 patients already on co-trimoxazole, the answer stated its Minor finding with lamivudine and never that she
+takes it. The check had raised that finding: the answer over all her medications states it first. The group answer kept
+only what relates the drug to the group, and Decision 648 added a drug's own duplicates for a drug of the group alone.
+
+### The decision
+
+`DrugReferenceInjector.composeHerMedicationGroups` states the duplicates of the drug's own orders where the drug is no
+member of the groups it is asked beside, as it does for one that is. A drug she does not take has no such finding. Asked
+whether it is safe with her group or interacts with it, rather than proposed, one order of hers carrying it raises none
+(Decision 129), so those answers are unchanged.
+
+### Measured
+
+Measured on the demo replica (8088), three proposal wordings asked of 10 patients of batch 41, 7 of them on co-trimoxazole
+and ARVs and 3 on ARVs alone (30 cells a run, no errors).
+
+- Before: none of the 21 answers to the patients on co-trimoxazole said she takes it.
+- After: all 21 state both duplicates, every line of the answer before kept. The 9 answers to the patients on ARVs alone
+  are unchanged.
+
+Pinned by `HerMedicationGroupByClassTest.aDrugSheTakesBesideAGroupItIsNotOneOfIsSaidToBeHers`. Mutating
+`besideGroupsItIsNotOf` out of `itsOwnDuplicates` reddens it.

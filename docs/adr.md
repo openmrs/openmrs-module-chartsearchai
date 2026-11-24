@@ -31705,3 +31705,35 @@ one (48 cells a run, no errors).
 
 Pinned by `OwnMedicationSafetyContextTest.herOwnDrugBesideAnOrderTheDataCannotIdentifyIsAnsweredForWhatItIdentifies`.
 Restoring the gate, or dropping *"the drug data identifies"*, reddens it.
+
+## Decision 703: Which med to stop because of interactions is which of her medications to stop
+
+**Status: Accepted** (November 2026).
+[Decision 241](#decision-241-which-of-her-medications-should-i-stop-is-a-screen-in-either-voice)'s
+question asked with the singular *"med"*.
+
+### Context
+
+In the demo's forty-seventh batch (18 patients, 144 cells, no errors), *"which med should i stop because of
+interactions?"* went to the model for 17 of the 18 patients. It told dd55bf65 *"Stavudine should be changed because it
+interacts with Didanosine"*, and dd92fdaf to change three antiretrovirals because each is in several of its orders. It
+told five that no medication should be stopped. The module chooses no drug to stop and states the screen of her
+medications instead ([Decision 610](#decision-610-the-worst-interaction-a-drug-to-stop-now-spacing-a-drug-from-her-medications-and-two-more-wordings-are-the-modules-questions)).
+The plural *"meds"* was a cue for her medications and a noun of the change request, but the singular was neither.
+
+### The decision
+
+`QueryScopeRouter.MEDICATIONS_CUES` takes *"med"* as it takes *"meds"*, and `CHANGE_REQUEST`'s *"which … should I stop"*
+takes it as its noun. `MEDICATION_NOUN`, which the list-request reading also uses, is unchanged.
+
+### Measured
+
+Measured on the demo replica (8088), the wording, *"Which med should I stop?"* and *"Which of her medications should I
+stop?"* asked of 10 batch-47 patients (30 cells a run, no errors).
+
+- Before: the model answered 9 of 10 of the wording, each saying a drug should be stopped or changed, or can be given.
+  The other two wordings were the module's for all 10.
+- After: all 10 get the canonical wording's module answer. The other two are unchanged.
+
+Pinned by `ClinicianWordingsTest.whichMedToStopIsWhichOfHerMedicationsToStop`. Mutating either the cue or the noun
+reddens it.

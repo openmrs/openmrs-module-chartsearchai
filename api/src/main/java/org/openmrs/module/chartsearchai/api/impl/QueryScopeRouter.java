@@ -33,7 +33,8 @@ public final class QueryScopeRouter {
 	}
 
 	private static final Pattern MEDICATIONS_CUES = cues(
-			"medications?", "medicines?", "meds", "drugs?", "prescriptions?", "prescribed", "regimens?",
+			// "med" as "meds" is: "Which med should I stop?" (ADR Decision 703)
+			"medications?", "medicines?", "meds?", "drugs?", "prescriptions?", "prescribed", "regimens?",
 			// What she takes, as a clinician words it: "Is anything she takes interacting?" (ADR Decision 180)
 			"(?:she|he|they|the patient|this patient) (?:takes|is taking|are taking)");
 
@@ -4538,11 +4539,12 @@ public final class QueryScopeRouter {
 	/**
 	 * "Should I stop any of her medications?" — a change asked about ANY of them, which is what a screen informs; and
 	 * "Which of her medications should I stop?" or "… should be stopped?", the same change asked of WHICH of them (ADR
-	 * Decision 241), which the model answered by choosing a drug the data does not choose.
+	 * Decision 241), which the model answered by choosing a drug the data does not choose. And "which med", singular, which
+	 * the model answered "Stavudine should be changed because it interacts with Didanosine" (ADR Decision 703).
 	 */
 	private static final Pattern CHANGE_REQUEST = Pattern.compile("\\b(?:should|do|must|can) (?:i|we) (?:need to )?(?:stop|"
 			+ "change|discontinue|adjust|deprescribe|modify) (?:any|some)\\b|\\bwhich (?:of (?:her|his|their|the patient's|"
-			+ "this patient's) )?(?:current |active )?" + MEDICATION_NOUN + " (?:(?:should|do|must|can) (?:i|we) (?:need to )?"
+			+ "this patient's) )?(?:current |active )?(?:med|" + MEDICATION_NOUN + ") (?:(?:should|do|must|can) (?:i|we) (?:need to )?"
 			+ "(?:stop|change|discontinue|adjust|deprescribe|modify)|(?:should|must|need to|ought to) (?:be )?(?:stopped|changed"
 			+ "|discontinued|adjusted|deprescribed))\\b", Pattern.CASE_INSENSITIVE);
 

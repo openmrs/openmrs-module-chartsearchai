@@ -2526,6 +2526,22 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 	}
 
 	/**
+	 * Which med to stop is which of her medications to stop (ADR Decision 703): on the demo "which med should i stop because
+	 * of interactions?" went to the model for 17 of 18 patients, which told one "Stavudine should be changed because it
+	 * interacts with Didanosine", another to change three antiretrovirals because each is in several of its orders, and
+	 * several that no medication should be stopped.
+	 */
+	@Test
+	public void whichMedToStopIsWhichOfHerMedicationsToStop() {
+		String canonical = ask("Which of her medications should I stop?");
+		assertNotNull(canonical, "precondition: the module answers which of her medications to stop");
+		for (String question : Arrays.asList("which med should i stop because of interactions?", "Which med should I stop?",
+			"Which med should be stopped?", "which med should we discontinue?")) {
+			assertEquals(canonical, ask(question), question);
+		}
+	}
+
+	/**
 	 * Anything she should not take with a drug is what the drug interacts with (ADR Decision 701): on the demo "is there
 	 * anything she shouldnt take with nevirapine?" went to the model for all 18 patients, which answered each that the
 	 * records do not address it, 14 of them on nevirapine.

@@ -1539,10 +1539,11 @@ public final class QueryScopeRouter {
 					+ HER_MEDICATION_GROUP,
 			"(?:(?:are|is) there )?(?:any |an )?(?:drug )?interactions? between (?:any of )?" + HER_MEDICATION_GROUP + " and "
 					+ HER_D,
+			// and her own drug so combined, "Any problem combining her cotrimoxazole and her ARVs?" (ADR Decision 707)
 			"(?:(?:is|are) there )?any (?:problems?|issues?|concerns?|interactions?) (?:with |in )?(?:combining|mixing) "
-					+ HER_MEDICATION_GROUP + " (?:with|and) " + D,
+					+ HER_MEDICATION_GROUP + " (?:with|and) " + HER_D,
 			"(?:(?:is|are) there )?any (?:problems?|issues?|concerns?|interactions?) (?:with |in )?(?:combining|mixing|giving|"
-					+ "starting|adding|taking) " + D + " (?:with|to|and|alongside) " + HER_MEDICATION_GROUP,
+					+ "starting|adding|taking) " + HER_D + " (?:with|to|and|alongside) " + HER_MEDICATION_GROUP,
 			// "Is there a problem combining fluconazole with what she's already taking?" (ADR Decision 429)
 			"(?:(?:is|are) there )?(?:a|any) (?:problems?|issues?|concerns?|interactions?) (?:with |in )?(?:combining|mixing|giving|"
 					+ "starting|adding) " + D + " (?:with|to|alongside) what (?:she's|he's|they're|(?:she|he|the patient) is|they are) "

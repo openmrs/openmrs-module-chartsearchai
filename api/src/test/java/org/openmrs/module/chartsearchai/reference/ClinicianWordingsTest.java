@@ -2417,6 +2417,26 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 	}
 
 	/**
+	 * A problem combining her own drug with a group of her medications, "Any problem combining her cotrimoxazole and her
+	 * ARVs?", is the same question as of the drug unowned (ADR Decision 707). On the demo the model answered all 18
+	 * patients, 7 of them "Trimethoprim can be given", none saying that 6 of the 7 are on no co-trimoxazole.
+	 */
+	@Test
+	public void aProblemCombiningHerDrugWithHerGroupIsAProblemCombiningTheDrugWithIt() {
+		for (String group : Arrays.asList("ARVs", "TB meds")) {
+			String beside = ask("Any problem combining aspirin and her " + group + "?");
+			assertNotNull(beside, "precondition: the module answers a drug combined with her " + group);
+			assertEquals(beside, ask("any problem combining her aspirin and her " + group + "?"), group);
+			assertEquals(beside, ask("Are there any issues combining her aspirin with her " + group + "?"), group);
+			assertEquals(ask("Any problems combining her " + group + " with aspirin?"),
+				ask("Any problems combining her " + group + " with her aspirin?"), group);
+		}
+		assertEquals("Warfarin is not one of this patient's active medications.\n"
+				+ ask("Any problem combining warfarin and her ARVs?"),
+			ask("Any problem combining her warfarin and her ARVs?"));
+	}
+
+	/**
 	 * What interactions her drug has is what her drug interacts with (ADR Decision 691). On the demo the model answered
 	 * all 18 patients, 13 of them with reference rows for drugs none of them is on, and told none of the 8 on no
 	 * co-trimoxazole that she is not on it.

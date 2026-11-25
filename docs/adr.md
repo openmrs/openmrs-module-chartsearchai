@@ -31842,3 +31842,40 @@ errors).
 
 Pinned by `ClinicianWordingsTest.whetherToBeWorriedAboutHerDrugIsWhetherThereAreConcernsWithIt`. Removing the shape
 from either list reddens it.
+
+## Decision 707: A problem combining her drug with her group is a problem combining the drug with it
+
+**Status: Accepted** (November 2026).
+[Decision 271](#decision-271-one-drug-asked-about-beside-a-group-of-her-medications-is-asked-as-whether-it-interacts-with-them)'s
+*"Any problem combining X with her ARVs?"*, the drug named as hers, as
+[Decision 692](#decision-692-her-group-asked-about-beside-her-own-drug-is-her-group-beside-the-drug)
+carried its *"interact with"* shape.
+
+### Context
+
+In the demo's fifty-first batch (18 patients, 144 cells, no errors), *"any problem combining her cotrimoxazole and her
+ARVs?"* went to the model for all 18 patients. Seven answers were *"Trimethoprim can be given"*, and none said that 6
+of those 7 are on no co-trimoxazole. *"Any problem combining cotrimoxazole and her ARVs?"*, the drug not named as hers,
+is answered by the module over the drug and her antiretrovirals. The two combining shapes took the drug's name alone, so
+*"her"* before it fitted neither.
+
+### The decision
+
+Both combining shapes of `QueryScopeRouter.BESIDE_A_GROUP_OF_HER_MEDICATIONS_SHAPES` take the drug named as hers
+(`HER_D`): *"combining her X and (with, to) her …"* and *"combining her … with (and) her X"*. Of a drug she is not on,
+Decision 260's lead says so first.
+
+### Measured
+
+On the demo replica (8088), *"any problem combining her cotrimoxazole and her ARVs?"* and *"Any problems combining her
+ARVs with her cotrimoxazole?"*, with *"Any problem combining cotrimoxazole and her ARVs?"* as the control, asked of 10
+batch-51 patients (30 cells a run, no errors): five on co-trimoxazole, three on ARVs alone and two infants on no ARV.
+
+- Before: all 20 cells of the two wordings went to the model. 6 of the answers opened *"No"* and 3 said the drug *"can
+  be given"*. The control was the module's answer for all 10.
+- After: all 20 are the module's answer, the control's word for word with record numbers stripped. For the three
+  patients on no co-trimoxazole it follows Decision 260's lead. The control is unchanged. The two answers opening
+  *"No"* are the infants' *"No antiretroviral is among this patient's active medications …"*, as the control's are.
+
+Pinned by `ClinicianWordingsTest.aProblemCombiningHerDrugWithHerGroupIsAProblemCombiningTheDrugWithIt`. Taking the drug
+alone in either shape reddens it.

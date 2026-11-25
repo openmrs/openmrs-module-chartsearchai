@@ -685,6 +685,24 @@ public class HerMedicationGroupByClassTest extends BaseModuleContextSensitiveTes
 		}
 	}
 
+	/** A group of drugs named beside his groups by "and" alone — "his ARVs and contraceptives" — is something besides them,
+	 *  as Decision 656's herbal medicines are, never read as his (ADR Decision 705): on the demo "any interaction between
+	 *  her ARVs and contraceptives?" was answered with what the check relates among her ARVs for 17 of 18 patients, the
+	 *  contraceptives unsaid in all 18. His groups joined to each other, or a group of his own, keep their answers. */
+	@Test
+	public void aGroupOfDrugsJoinedToHisGroupsIsSomethingBesideThem() {
+		for (String question : new String[] { "any interaction between his ARVs and contraceptives?",
+				"Any interactions between his ARVs and vitamins?", "Do his ARVs and antacids interact?" }) {
+			String answer = askOfSeven(question).getModuleAnswer();
+			assertTrue(answer == null || !answer.contains("antiretrovirals ("), question + ": " + answer);
+		}
+		for (String question : new String[] { "Any interactions between his ARVs and TB drugs?",
+				"Do his ARVs interact with his TB drugs?" }) {
+			String answer = askOfSeven(question).getModuleAnswer();
+			assertTrue(answer != null && answer.startsWith("This patient's"), question + ": " + answer);
+		}
+	}
+
 	/** A word the question parts from her group with punctuation is the word said unchecked, never the two as one name (ADR
 	 *  Decision 657): "Any interactions with his ARVs, klarizom?" was told "arvs klarizom" is no drug name. */
 	@Test

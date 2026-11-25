@@ -9769,6 +9769,12 @@ public class DrugReferenceInjector {
 	 *  as well, "his previous ARVs" — names nothing else (ADR Decision 656). */
 	private static boolean namesNothingBesideHerGroups(String question, List<CrossReactivityGroup> carried) {
 		String unresolved = DrugClassTerms.unresolvedGroupOfHers(question, carried);
+		// Nor a group of drugs joined to Decision 630's groups by "and" alone, which unresolvedGroupOfHers leaves unsaid: "her
+		// ARVs and contraceptives" asked of contraceptives too, and was answered with what the check relates among her ARVs
+		// (ADR Decision 705). Beside another class it is said to be unresolved, as before.
+		if (unresolved == null && DrugClassTerms.groupOfDrugsJoinedToHers(question, carried) != null) {
+			return false;
+		}
 		String read = unresolved == null ? question : question.replaceAll("(?i)" + Pattern.quote(unresolved), "medications");
 		return QueryScopeRouter.namesNothingBesideHerMedications(DrugClassTerms.withHerGroupsAsHerMedications(read, carried));
 	}

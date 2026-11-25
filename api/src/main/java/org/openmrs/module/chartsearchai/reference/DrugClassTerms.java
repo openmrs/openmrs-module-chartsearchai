@@ -615,6 +615,20 @@ final class DrugClassTerms {
 	}
 
 	/**
+	 * The words of a group of drugs {@code question} joins to her groups by "and" alone, with no possessive of its own, that
+	 * the module does not resolve — "contraceptives" of "her ARVs and contraceptives" — or {@code null}. Such a group is
+	 * something besides hers (ADR Decision 705), as Decision 656 reads "his ARVs and herbal medicines".
+	 */
+	static String groupOfDrugsJoinedToHers(String question, List<CrossReactivityGroup> groups) {
+		for (ThingOfHers thing : thingsOfHers(question, groups)) {
+			if (thing.kind == ThingOfHers.Kind.UNRESOLVED && !thing.ownPossessive) {
+				return thing.name;
+			}
+		}
+		return null;
+	}
+
+	/**
 	 * Whether a set of normalized codes is in {@code group}, a key {@link #herMedicationGroupsNamed} returns: an {@link
 	 * #ATC_GROUP_OF_HER_MEDICATIONS} group, a curated group this module carries, or a class whose ATC group IS the class
 	 * ({@link #ATC_GROUP_OF_CLASS}) — the one use of a class's group, to say which of HER orders are in it (ADR Decisions

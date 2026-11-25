@@ -31767,3 +31767,39 @@ adjustment?"* asked of 10 batch-48 patients (30 cells a run, no errors).
 
 Pinned by `ClinicianWordingsTest.whetherAnyMedNeedsADoseChangeIsWhetherAnyOfHerMedicationsDoes`. Mutating the shape's
 noun reddens it.
+
+## Decision 705: A group of drugs joined to her groups by "and" is something besides them
+
+**Status: Accepted** (November 2026).
+[Decision 656](#decision-656-a-question-naming-something-besides-her-groups-is-not-answered-over-her-groups-alone)'s
+reading of *"his ARVs and herbal medicines"*, carried to a group named by its noun alone: *"her ARVs and
+contraceptives"*, *"… and vitamins"*, *"… and antacids"*.
+
+### Context
+
+In the demo's forty-ninth batch (18 patients, 144 cells, no errors), *"any interaction between her ARVs and
+contraceptives?"* was answered for 17 patients with what the check relates among her ARVs, and the eighteenth, on no
+antiretroviral, was told so. None of the 18 answers said the contraceptives were not checked. `DrugClassTerms.unresolvedGroupOfHers` reads a group the module does not resolve,
+joined by *"and"* to [Decision 631](#decision-631-a-class-of-her-medications-is-answered-over-that-class-and-a-group-the-module-cannot-resolve-is-said-to-be-unresolved)'s
+Decision 630 groups alone, as about those groups, so Decision 656's check never saw the word: reading her groups as her
+medications left nothing else named.
+
+### The decision
+
+`DrugReferenceInjector.namesNothingBesideHerGroups` refuses where such a joined group is named
+(`DrugClassTerms.groupOfDrugsJoinedToHers`), as it refuses *"herbal medicines"*. Beside another class, *"his statins and
+BP meds"*, a joined group is still said to be unresolved, as Decision 631 has it. Her groups joined to each other, *"her
+ARVs and TB drugs"*, are unchanged.
+
+### Measured
+
+Measured on the demo replica (8088), the three wordings and *"Any interactions between her ARVs and TB drugs?"* asked of
+10 batch-49 patients (40 cells a run, no errors).
+
+- Before: all 30 cells of the three wordings were answered over her ARVs alone, none naming the group asked about.
+- After: none is. The model answers each that the records do not address the interaction with the group it names, as it
+  answers *"Do her ARVs interact with contraceptives?"*. The 10 answers to her ARVs and TB drugs are unchanged, compared
+  with their record numbers stripped.
+
+Pinned by `HerMedicationGroupByClassTest.aGroupOfDrugsJoinedToHisGroupsIsSomethingBesideThem`. Disabling the check
+reddens it.

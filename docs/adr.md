@@ -32137,3 +32137,59 @@ patients.
   The control is unchanged on all 10, with no errors.
 
 Pinned by `ClinicianWordingsTest.anyIssueIfSheDrinksADrugIsWhetherSheCanDrinkIt`.
+
+## Decision 716: Ok to give a drug with what she is on is ok to give it with her medications
+
+**Status: Accepted** (November 2026).
+*"Is it ok (safe, fine) to give X with what she is on?"* reads as Decision 714 reads the proposals by *"can"*.
+
+### Context
+
+In the demo's fifty-ninth batch, *"is it ok to give ciprofloxacin with what she is on?"* went to the model for all 18
+patients. [Decision 714](#decision-714-a-drug-with-what-she-is-on-is-a-drug-with-her-medications) gave *"with what she is
+on"* to the proposals by *"can"*. The proposal *"Is it ok to give X?"* took no such tail.
+
+### The decision
+
+That proposal shape takes an optional *"with (alongside) what she is on"*, through `QueryScopeRouter.WHAT_SHE_IS_ON`.
+
+### Measured
+
+On the demo replica (8088), the wording, with *"Is it ok to give ciprofloxacin with her meds?"* as the control, asked of the
+same 10 patients.
+
+- Before: the wording went to the model for all 10. 5 answers said the records do not address (or settle) whether to give
+  it, and dd556606's opened *"No — Ciprofloxacin has unknown severity interactions"*.
+- After: all 10 are the module's answer, the control's word for word with record numbers stripped. The control is unchanged
+  on all 10, with no errors.
+
+Pinned by `ClinicianWordingsTest.okToGiveADrugWithWhatSheIsOnIsOkToGiveItWithHerMedications`.
+
+## Decision 717: The interactions to expect if she starts a drug are what to watch for
+
+**Status: Accepted** (November 2026).
+*"What interactions should I expect if she starts X?"* is the module's question about what to watch for.
+
+### Context
+
+In the demo's fifty-ninth batch, *"what interactions should i expect if she starts rifampicin?"* went to the model for all
+18 patients. 6 answers opened *"No — Rifampicin should not be started"*.
+[Decision 677](#decision-677-what-would-happen-if-she-took-a-drug-and-what-to-monitor-if-she-starts-one-are-the-modules-questions)
+made *"What should I monitor if she starts X?"* the module's, and the interactions she would meet are what that answer lists.
+
+### The decision
+
+Beside Decision 677's shape, *"what (drug) interactions should (would, might) I expect (anticipate, see) if (when)"* followed
+by `QueryScopeRouter.STARTS_A_DRUG`, which takes the patient starting it and the clinician giving it alike. Expecting
+anything but interactions, *"What INR should I expect"*, stays the model's.
+
+### Measured
+
+On the demo replica (8088), the wording, with *"What should I watch for if she starts rifampicin?"* as the control, asked of
+the same 10 patients.
+
+- Before: the wording went to the model for all 10, and 2 answers opened *"No."*.
+- After: all 10 are the module's answer, the control's word for word with record numbers stripped. The control is unchanged
+  on all 10, with no errors.
+
+Pinned by `ClinicianWordingsTest.interactionsToExpectIfADrugIsStartedIsWhatToWatchFor`.

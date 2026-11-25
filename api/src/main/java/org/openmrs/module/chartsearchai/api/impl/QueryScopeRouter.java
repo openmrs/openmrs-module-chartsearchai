@@ -708,7 +708,9 @@ public final class QueryScopeRouter {
 			// prednisone?", which this shape already admits.
 			// "Is it fine (alright) to give him paracetamol?" too (ADR Decision 357), and "advisable" (wise) (ADR Decision 361)
 			"is it (?:safe|ok|okay|appropriate|fine|alright|advisable|wise|acceptable) (?:for " + PATIENT + " )?to (?:(?:give|start|"
-					+ "prescribe|administer|add) (?:" + PATIENT + " )?(?:on )?|take )" + D + "(?: for " + PATIENT + ")?(?: now| today)?",
+					+ "prescribe|administer|add) (?:" + PATIENT + " )?(?:on )?|take )" + D + "(?: for " + PATIENT + ")?(?: now| today)?"
+					// and "… with what she is on" (ADR Decision 716)
+					+ "(?: (?:with|alongside) " + WHAT_SHE_IS_ON + ")?",
 			// "Is ibuprofen safe for her?", "Is ibuprofen appropriate for this patient?", "suitable" (ADR Decision 362), and "Is
 			// the fluconazole-nevirapine combination safe?" (ADR Decision 430)
 			"is (?:the )?" + D + " (?:(?:combination|combo) )?(?:safe|ok|okay|appropriate|suitable)(?: (?:for|in) " + PATIENT
@@ -1181,6 +1183,10 @@ public final class QueryScopeRouter {
 			// be given" (ADR Decision 677)
 			"what (?:should|do|would|must) (?:i|we) (?:need to )?(?:watch|look out|monitor|be careful)(?: for| about| of)? (?:if|"
 					+ "when) " + STARTS_A_DRUG,
+			// and the interactions to expect: "What interactions should I expect if she starts rifampicin?", which the model led
+			// "No — Rifampicin should not be started" (ADR Decision 717)
+			"what (?:drug )?interactions? (?:should|would|will|might|could|can|do) (?:i|we) (?:expect|anticipate|see) (?:if|when) "
+					+ STARTS_A_DRUG,
 			"(?:which|what) (?:of )?" + POSSESSIVE + " (?:other |current |active )?(?:medications|meds|medicines|drugs|"
 					// and "Which of her medications could interact with efavirenz?" (ADR Decision 672)
 					+ "prescriptions) (?:(?:could|might|may|would|will|can) )?(?:interact|interacts|interfere|interferes) with " + D,

@@ -3103,4 +3103,38 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		// A purpose the check does not weigh stays the model's.
 		assertNull(ask("Any problems if she drinks alcohol at the party?"));
 	}
+
+	/**
+	 * ADR Decision 716: "Is it ok to give X with what she is on?" is "Is it ok to give X with her meds?", the reading ADR
+	 * Decision 714 gave the proposals by "can". On the demo it went to the model for 18 of 18 patients.
+	 */
+	@Test
+	public void okToGiveADrugWithWhatSheIsOnIsOkToGiveItWithHerMedications() {
+		String[][] pairs = { { "is it ok to give ciprofloxacin with what she is on?", "Is it ok to give ciprofloxacin with her meds?" },
+			{ "Is it safe to give her warfarin with what she's taking?", "Is it safe to give warfarin with her medications?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+	}
+
+	/**
+	 * ADR Decision 717: "What interactions should I expect if she starts rifampicin?" is ADR Decision 677's "What should I
+	 * watch for if she starts rifampicin?". On the demo it went to the model for 18 of 18 patients, which led 6 "No —
+	 * Rifampicin should not be started", a verdict nobody asked for.
+	 */
+	@Test
+	public void interactionsToExpectIfADrugIsStartedIsWhatToWatchFor() {
+		String[][] pairs = { { "what interactions should i expect if she starts rifampicin?", "What should I watch for if she starts rifampicin?" },
+			{ "What drug interactions would we expect when he starts warfarin?", "What should I watch for if she starts warfarin?" },
+			{ "What interactions should I anticipate if I add warfarin?", "What should I watch for if I add warfarin?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+		// Expecting something that is not an interaction stays the model's.
+		assertNull(ask("What INR should I expect if she starts warfarin?"));
+	}
 }

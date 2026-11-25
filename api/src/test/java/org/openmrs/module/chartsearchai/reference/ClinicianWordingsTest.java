@@ -3062,4 +3062,45 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 			assertEquals(canonical, ask(pair[0]), pair[0]);
 		}
 	}
+
+	/**
+	 * ADR Decision 714: "with what she is on" is "with her medications", as ADR Decision 440 already reads it after "Will
+	 * fluconazole be okay". On the demo "Can she take doxycycline with what she is on?" went to the model for 18 of 18
+	 * patients, which answered one "The records do not address whether Doxycycline can be taken".
+	 */
+	@Test
+	public void aDrugWithWhatSheIsOnIsADrugWithHerMedications() {
+		String[][] pairs = { { "can she take doxycycline with what she is on?", "Can she take doxycycline with her meds?" },
+			{ "Can she take warfarin with what she's taking?", "Can she take warfarin with her meds?" },
+			{ "Can she drink alcohol with what she is currently on?", "Can she drink alcohol with her meds?" },
+			{ "Can I give her warfarin with what she is already taking?", "Can I give her warfarin with her medications?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+		// What she ate is not what she takes.
+		assertNull(ask("Can she take warfarin with what she ate?"));
+	}
+
+	/**
+	 * ADR Decision 715: "Any issue if she drinks alcohol with her meds?" is whether she can drink it with them. On the demo
+	 * it went to the model for 18 of 18 patients, which told patients on lamivudine, nevirapine and stavudine that ethanol
+	 * "has Major interactions with leflunomide, levacetylmethadol, lomitapide, metformin" — drugs none of them takes.
+	 */
+	@Test
+	public void anyIssueIfSheDrinksADrugIsWhetherSheCanDrinkIt() {
+		String[][] pairs = { { "any issue if she drinks alcohol with her meds?", "Can she drink alcohol with her meds?" },
+			{ "Any problems if she drinks alcohol?", "Can she drink alcohol?" },
+			// asked as a risk, it is led as one, and never "No —" (ADR Decision 299)
+			{ "Are there any issues if she takes warfarin with her medications?", "Any problems if I start her on warfarin?" },
+			{ "any concerns if she takes warfarin?", "Any problems if I start her on warfarin?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+		// A purpose the check does not weigh stays the model's.
+		assertNull(ask("Any problems if she drinks alcohol at the party?"));
+	}
 }

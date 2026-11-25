@@ -32071,3 +32071,69 @@ the same 10 patients (20 cells a run, no errors).
 
 Pinned by `ClinicianWordingsTest.aDrugSheStartsOnIsADrugSheStarts`. Taking the *"on"* alternative out of the fragment
 reddens it.
+
+## Decision 714: A drug with what she is on is a drug with her medications
+
+**Status: Accepted** (November 2026).
+The proposals of a drug beside her medications read *"with what she is on"* as *"with her medications"*.
+
+### Context
+
+In the demo's fifty-eighth batch, *"can she take doxycycline with what she is on?"* went to the model for all 18 patients.
+[Decision 440](#decision-440-a-drug-started-while-she-is-on-another-one-potentiating-another-and-a-pair-mixed-are-the-questions-they-spell)
+already read *"Will fluconazole be okay with what she's on?"* as a question about her medications. The proposal shapes of
+[Decision 300](#decision-300-four-more-wordings-of-questions-the-module-answers-reach-those-answers), *"Can she take (drink) X
+with her medications?"*, and of Decision 606, *"Can I give her X with her medications?"*, named her medications only by a
+possessive.
+
+### The decision
+
+`QueryScopeRouter.WHAT_SHE_IS_ON` is the wording Decision 440 spelled: *"what she is (already, currently) on (taking)"*. The
+three proposal shapes take it beside her medications and her group, and Decision 440's shape reads it from there.
+
+### Measured
+
+On the demo replica (8088), the wording, with *"Can she take doxycycline with her meds?"* as the control, asked of the same 10
+patients.
+
+- Before: the wording went to the model for all 10 (2 of them timed out). 4 of its answers opened *"No"*, among them
+  dd79b76a's *"No — doxycycline should not be taken with stavudine due to an unknown severity interaction"*. The module's
+  answer to the control is that the interaction data gives no rated reason to withhold doxycycline.
+- After: all 10 are the module's answer, the control's word for word with record numbers stripped. The control is unchanged
+  on all 10, with no errors.
+
+Pinned by `ClinicianWordingsTest.aDrugWithWhatSheIsOnIsADrugWithHerMedications`.
+
+## Decision 715: Any issue if she drinks a drug is whether she can drink it
+
+**Status: Accepted** (November 2026).
+*"Any issue if she drinks (takes) X with her meds?"* is the module's question about X beside her medications.
+
+### Context
+
+In the demo's fifty-eighth batch, *"any issue if she drinks alcohol with her meds?"* went to the model for all 18 patients.
+It told patients on lamivudine, nevirapine and stavudine alone that ethanol *"has Major interactions with leflunomide,
+levacetylmethadol, lomitapide, metformin"*, drugs none of them takes.
+[Decision 299](#decision-299-whether-a-drug-is-safe-with-her-medications-or-causes-problems-if-started-is-answered-as-its-proposal)
+made *"Any problems if I start her on X?"* the module's, but only with the clinician giving it.
+
+### The decision
+
+Beside Decision 299's shape, the risk proposals take *"any problems (issues, concerns, risks) if she takes (drinks, has, uses,
+eats, consumes) X"*, optionally *"with her medications"*, her group, or what she is on
+([Decision 714](#decision-714-a-drug-with-what-she-is-on-is-a-drug-with-her-medications)). Being asked as a risk, the
+answer opens as Decision 299's does and never *"No —"*. A purpose the check does not weigh, *"at the party"*, stays the
+model's.
+
+### Measured
+
+On the demo replica (8088), the wording, with *"Can she drink alcohol with her meds?"* as the control, asked of the same 10
+patients.
+
+- Before: the wording went to the model for all 10 (1 timed out).
+- After: all 10 are the module's answer, the control's word for word with record numbers stripped. 4 say the interaction
+  check relates ethanol to none of her 3 active medications; the rest name only drugs her orders hold: trimethoprim and
+  sulfamethoxazole, efavirenz, isoniazid, ethambutol, abacavir.
+  The control is unchanged on all 10, with no errors.
+
+Pinned by `ClinicianWordingsTest.anyIssueIfSheDrinksADrugIsWhetherSheCanDrinkIt`.

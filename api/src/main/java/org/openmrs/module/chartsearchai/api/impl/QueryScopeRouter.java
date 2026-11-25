@@ -594,8 +594,9 @@ public final class QueryScopeRouter {
 
 	/** Starting one drug, by her or by the speaker: "she starts X", "I start her on X", "she starts TB treatment with X"
 	 *  (ADR Decisions 674, 677). */
-	private static final String STARTS_A_DRUG = "(?:(?:she|he|they|the patient|this patient) (?:starts?|takes?|begins?|gets?|is "
-			+ "given|is started on) |(?:i|we) (?:start|give|add|prescribe) (?:" + PATIENT + " )?(?:on )?)(?:(?:\\p{L}+ )?(?:treatment|"
+	// "if she starts on warfarin" as "if she starts warfarin" (ADR Decision 713)
+	private static final String STARTS_A_DRUG = "(?:(?:she|he|they|the patient|this patient) (?:(?:starts?|begins?|gets?|goes) on|"
+			+ "starts?|takes?|begins?|gets?|is given|is started on) |(?:i|we) (?:start|give|add|prescribe) (?:" + PATIENT + " )?(?:on )?)(?:(?:\\p{L}+ )?(?:treatment|"
 			+ "therapy) (?:with|on) )?" + D;
 
 	/** The tail a screen question may close with: what the clinician should know, or worry, about. */
@@ -892,8 +893,9 @@ public final class QueryScopeRouter {
 					+ HER_MEDICATION_GROUP,
 			"(?:does|do) " + D + " (?:have|need) to be avoided(?: (?:for|in) " + PATIENT + "| (?:with|alongside) (?:any of )?"
 					+ HER_MEDICATION_GROUP + ")?",
-			// and of a drug named as hers, "Is her aspirin a problem with her other meds?" (ADR Decision 449)
-			"is (?:" + POSSESSIVE + " )?" + D + " (?:unsafe|not safe|dangerous|risky|harmful|a problem|problematic) (?:with|alongside|"
+			// and of a drug named as hers, "Is her aspirin a problem with her other meds?" (ADR Decision 449) — of a drug not
+			// named as hers, whether it causes problems with the group (ADR Decision 712)
+			"is " + POSSESSIVE + " " + D + " (?:unsafe|not safe|dangerous|risky|harmful|a problem|problematic) (?:with|alongside|"
 					+ "in combination with) (?:any of )?" + HER_MEDICATION_GROUP,
 			"(?:is|would) it (?:be )?(?:a bad idea|a mistake|unwise|inadvisable|not advisable|risky|dangerous|unsafe|harmful|wrong) to "
 					+ "(?:give|start|prescribe|administer|add|use) (?:" + PATIENT + " )?(?:on )?" + D + "(?: (?:to|for) " + PATIENT
@@ -2470,6 +2472,15 @@ public final class QueryScopeRouter {
 			// "Will fluconazole cause problems with her HIV drugs?" — whose "No" would say it will not (ADR Decision 433)
 			"(?:does|do|will|would|can|could|might) " + D + " cause (?:any )?(?:problems?|issues?|harm) (?:with|for|alongside) "
 					+ "(?:any of )?" + HER_MEDICATION_GROUP,
+			// and asked a problem with the group, "Is fluconazole a problem with her TB drugs?" — answered over all her
+			// medications, with nothing saying she is on no TB drug (ADR Decision 712)
+			"is " + D + " (?:unsafe|not safe|dangerous|risky|harmful|a problem|problematic) (?:with|alongside|in combination with) "
+					+ "(?:any of )?" + HER_MEDICATION_GROUP,
+			// "Would her ARVs be affected if I add phenytoin?" — the group affected, as the drug affecting it is; the model told
+			// an infant on no ARV "The records do not address how Phenytoin would affect Antiretroviral use" (ADR Decision 711)
+			"(?:would|will|could|might|may) (?:any of )?" + HER_MEDICATION_GROUP + " be (?:affected|impacted) (?:by (?:starting "
+					+ "|giving |adding )?" + D + "|(?:if|when) " + STARTS_A_DRUG + ")",
+			"(?:is|are) (?:any of )?" + HER_MEDICATION_GROUP + " (?:affected|impacted) by " + D,
 			// "Will rifampicin make her ARVs less effective?" (ADR Decision 431)
 			"(?:does|do|will|would|can|could|might) (?:starting |giving |adding )?" + D + " make (?:any of )?" + HER_MEDICATION_GROUP
 					+ " " + LESS_EFFECTIVE,

@@ -2665,6 +2665,62 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 	}
 
 	/**
+	 * ADR Decision 711: whether her ARVs would be affected if a drug is added is whether the drug affects them. On the demo
+	 * "would her ARVs be affected if i add phenytoin?" went to the model for 18 of 18 patients, which told an infant on no
+	 * ARV "The records do not address how Phenytoin would affect Antiretroviral use".
+	 */
+	@Test
+	public void herGroupAffectedIfADrugIsAddedIsWhetherTheDrugAffectsIt() {
+		for (String group : Arrays.asList("ARVs", "TB drugs")) {
+			String canonical = ask("Does warfarin affect her " + group + "?");
+			assertNotNull(canonical, "precondition: the module answers whether warfarin affects her " + group);
+			for (String question : Arrays.asList("would her " + group + " be affected if i add warfarin?",
+				"Will his " + group + " be affected if we start him on warfarin?", "Could her " + group + " be affected by warfarin?",
+				"Are her " + group + " affected by warfarin?")) {
+				assertEquals(canonical, ask(question), question);
+			}
+		}
+	}
+
+	/**
+	 * ADR Decision 712: a drug asked a problem, unsafe or dangerous with a group of hers is whether it causes problems with
+	 * the group (ADR Decision 433), of a group she is on none of as well. On the demo "is fluconazole a problem with her TB
+	 * drugs?" was answered over all of her medications for patients on no TB drug, with nothing saying she is on none.
+	 */
+	@Test
+	public void aDrugAProblemWithHerGroupIsWhetherItCausesProblemsWithIt() {
+		for (String group : Arrays.asList("TB drugs", "ARVs")) {
+			String canonical = ask("Will fluconazole cause problems with her " + group + "?");
+			assertNotNull(canonical, "precondition: the module answers whether fluconazole causes problems with her " + group);
+			for (String question : Arrays.asList("is fluconazole a problem with her " + group + "?",
+				"Is fluconazole unsafe with her " + group + "?", "Is fluconazole dangerous with his " + group + "?",
+				"Is fluconazole problematic alongside her " + group + "?")) {
+				assertEquals(canonical, ask(question), question);
+			}
+		}
+		// her medications as a whole stay the proposal over all of them
+		assertEquals(ask("Will fluconazole cause problems with her meds?"), ask("Is fluconazole a problem with her meds?"));
+	}
+
+	/**
+	 * ADR Decision 713: "if she starts on warfarin" is "if she starts warfarin", wherever a drug she starts is read. On the
+	 * demo "what should i watch for if she starts on warfarin?" went to the model for 18 of 18 patients, which told an infant
+	 * "No — Warfarin should not be started".
+	 */
+	@Test
+	public void aDrugSheStartsOnIsADrugSheStarts() {
+		String[][] pairs = { { "what should i watch for if she starts on warfarin?", "What should I watch for if she starts warfarin?" },
+			{ "What should I monitor when he is started on warfarin?", "What should I watch for if she starts warfarin?" },
+			{ "Does she need any dose changes if she starts on warfarin?", "Does she need any dose changes if she starts warfarin?" },
+			{ "Do I need to change her ARVs if she gets on warfarin?", "Do I need to change her ARVs if she starts warfarin?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+	}
+
+	/**
 	 * A problem giving a drug "and her ARVs at the same time", whether it is dangerous to give a drug "while she is on" one
 	 * of hers, and "what drug interactions should I know about before starting" a drug — which of hers, never a "Yes" — are
 	 * the module's questions (ADR

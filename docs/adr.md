@@ -31974,3 +31974,100 @@ no errors).
 
 Pinned by `ClinicianWordingsTest.anyOfHerDosesIfADrugIsAddedIsWhetherAnyDoseNeedsAdjusting`. Taking the doses
 alternative out of the shape reddens it.
+
+## Decision 711: Her group affected, if a drug is added, is whether the drug affects it
+
+**Status: Accepted** (November 2026).
+[Decision 281](#decision-281-whether-one-drug-changes-an-effect-of-a-group-of-her-medications-is-answered-with-neither-yes-nor-no)'s
+*"Does X affect her ARVs?"*, asked with the group as the subject.
+
+### Context
+
+In the demo's fifty-seventh batch (18 patients, 144 cells, no errors), *"would her ARVs be affected if i add
+phenytoin?"* went to the model for all 18 patients. It told the infant dd83c087, on no antiretroviral, *"The records do
+not address how Phenytoin would affect Antiretroviral use"*. *"Does phenytoin affect her ARVs?"* is the module's
+question, and says when no antiretroviral is among her medications. No shape read the group as the thing affected.
+
+### The decision
+
+`QueryScopeRouter.CHANGES_A_GROUP_OF_HER_MEDICATIONS_SHAPES` reads *"would (will, could, might, may) her … be affected
+(impacted) by X"*, *"… be affected if I add (she starts) X"* and *"are her … affected by X"*.
+
+### Measured
+
+On the demo replica (8088), the wording, with *"Does phenytoin affect her ARVs?"* as the control, asked of 10 batch-57
+patients (20 cells a run, no errors).
+
+- Before: the wording went to the model for all 10. The three patients on no antiretroviral (dd8e64d8, dd83c087,
+  dd8ecbb3) were never told so; the control tells them. dd9d9d2c's answer opened *"No."*.
+- After: all 10 are the module's answer, the control's word for word with record numbers stripped. The control is
+  unchanged on all 10.
+
+Pinned by `ClinicianWordingsTest.herGroupAffectedIfADrugIsAddedIsWhetherTheDrugAffectsIt`. Removing the two shapes
+reddens it.
+
+## Decision 712: A drug asked a problem with her group is whether it causes problems with the group
+
+**Status: Accepted** (November 2026).
+[Decision 433](#decision-433-whether-a-pair-is-to-be-avoided-dangerous-or-a-problem-is-answered-with-no-lead)'s
+*"Will X cause problems with her TB drugs?"*, asked *"Is X a problem with her TB drugs?"*.
+
+### Context
+
+In the demo's fifty-seventh batch, *"is fluconazole a problem with her TB drugs?"* was the module's answer for all 18
+patients. For the patients on no TB drug it was the proposal over all her medications, with nothing saying she is on no
+TB drug, where *"Will fluconazole cause problems with her TB drugs?"* says *"No TB drug is among this patient's active
+medications"*.
+[Decision 449](#decision-449-two-of-her-groups-that-clash-a-drug-of-hers-interacting-with-anything-and-a-drug-added-to-her-regimen-are-the-questions-they-spell)'s
+proposal shape read the drug *"unsafe, dangerous, a problem with"* the group whether or not it was named as hers, and as
+a proposal it was answered before any group was read.
+
+### The decision
+
+- Decision 449's shape takes only a drug named as hers, *"Is her aspirin a problem with her other meds?"*, its own case.
+- `QueryScopeRouter.CHANGES_A_GROUP_OF_HER_MEDICATIONS_SHAPES` reads *"is X unsafe (dangerous, risky, harmful, a
+  problem, problematic) with her …"*, as it reads *"Will X cause problems with her …"*. Her medications as a whole stay the
+  proposal over all of them, as they are for that wording.
+
+### Measured
+
+On the demo replica (8088), the wording, with *"Will fluconazole cause problems with her TB drugs?"* as the control,
+asked of the same 10 patients (20 cells a run, no errors).
+
+- Before: for the 7 patients on no TB drug the wording was answered over all of her medications, with no line saying she
+  takes none. For the 3 on a TB drug it was already the control's answer.
+- After: all 10 are the control's answer word for word with record numbers stripped. The control is unchanged on all 10.
+
+Pinned by `ClinicianWordingsTest.aDrugAProblemWithHerGroupIsWhetherItCausesProblemsWithIt`. Restoring Decision 449's
+shape to a drug not named as hers reddens it.
+
+## Decision 713: A drug she starts on is a drug she starts
+
+**Status: Accepted** (November 2026).
+Every shape reading a drug she starts, *"if she starts on X"* as *"if she starts X"*.
+
+### Context
+
+In the demo's fifty-seventh batch, *"what should i watch for if she starts on warfarin?"* went to the model for all 18
+patients. It told the infant dd83c087 *"No — Warfarin should not be started"*.
+[Decision 677](#decision-677-what-would-happen-if-she-took-a-drug-and-what-to-monitor-if-she-starts-one-are-the-modules-questions)
+made *"What should I monitor if she starts phenytoin?"* the module's. The shared fragment `QueryScopeRouter.STARTS_A_DRUG` it
+reads took *"she starts X"* and *"she is started on X"*, never *"she starts on X"*.
+
+### The decision
+
+`STARTS_A_DRUG` takes *"she starts (begins, gets, goes) on X"*. Every shape built on it gains the wording: what to monitor,
+whether a dose needs changing, whether to change her group.
+
+### Measured
+
+On the demo replica (8088), the wording, with *"What should I watch for if she starts warfarin?"* as the control, asked of
+the same 10 patients (20 cells a run, no errors).
+
+- Before: the wording went to the model for all 10, and 5 of its answers opened *"No"*, among them dda2e9a0's *"No. You
+  should watch for the following interactions with warfarin"*.
+- After: all 10 are the module's answer, the control's word for word with record numbers stripped. The control is
+  unchanged on all 10.
+
+Pinned by `ClinicianWordingsTest.aDrugSheStartsOnIsADrugSheStarts`. Taking the *"on"* alternative out of the fragment
+reddens it.

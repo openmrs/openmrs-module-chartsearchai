@@ -1109,8 +1109,10 @@ public final class QueryScopeRouter {
 			"(?:does|will|would|could|might) " + D + " (?:require|need|mean) (?:a |any )?(?:dose|dosage) (?:adjustments?|changes?) "
 					+ "(?:with|of|for|to|in) (?:any of )?" + POSSESSIVE + " (?:other )?" + MEDICATIONS,
 			// "Do I need to adjust any doses if I start rifampicin?" (ADR Decision 411)
+			// and any of her doses, "Should I reduce any of her doses if I add rifampicin?" (ADR Decision 710)
 			"(?:do|should|must) (?:i|we) (?:need to )?(?:adjust|change|reduce|increase|lower) any (?:doses?|of " + POSSESSIVE
-					+ " " + MEDICATIONS + "(?: doses?)?) if (?:i|we) (?:start|give|add|prescribe) (?:" + PATIENT + " )?(?:on )?" + D,
+					+ " (?:" + MEDICATIONS + "(?: doses?)?|(?:medication |medicine |drug )?doses)) if (?:i|we) (?:start|give|add|"
+					+ "prescribe) (?:" + PATIENT + " )?(?:on )?" + D,
 			// "What dose adjustment does she need if I start rifampicin?" — the model answered it with a verdict on starting the
 			// drug, "No — Rifampicin should not be started" (ADR Decision 679)
 			"(?:what|which) (?:dose |dosage |dosing )(?:adjustments?|changes?) (?:does|do|would|will|might|is|are) (?:(?:she|he|they"

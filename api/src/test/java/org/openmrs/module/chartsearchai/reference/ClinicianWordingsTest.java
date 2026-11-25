@@ -2650,6 +2650,21 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 	}
 
 	/**
+	 * ADR Decision 710: "Should I reduce any of her doses if I add rifampicin?" is whether any dose needs adjusting, as "any
+	 * doses" is. On the demo it went to the model for 18 of 18 patients, which answered "No — Rifampicin should not be
+	 * added".
+	 */
+	@Test
+	public void anyOfHerDosesIfADrugIsAddedIsWhetherAnyDoseNeedsAdjusting() {
+		String doses = ask("Do I need to adjust any doses if I start warfarin?");
+		assertNotNull(doses, "precondition: the module answers whether any dose needs adjusting");
+		for (String question : Arrays.asList("should i reduce any of her doses if i add warfarin?",
+			"Do I need to change any of his doses if I start warfarin?", "Should we adjust any of her medication doses if we add warfarin?")) {
+			assertEquals(doses, ask(question), question);
+		}
+	}
+
+	/**
 	 * A problem giving a drug "and her ARVs at the same time", whether it is dangerous to give a drug "while she is on" one
 	 * of hers, and "what drug interactions should I know about before starting" a drug — which of hers, never a "Yes" — are
 	 * the module's questions (ADR

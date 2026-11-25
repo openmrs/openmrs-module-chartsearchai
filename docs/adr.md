@@ -31941,3 +31941,36 @@ medications should I stop if I start rifampicin?"* as the control, asked of the 
   control is unchanged on all 10.
 
 Pinned by `ClinicianWordingsTest.whatToChangeIfADrugIsStartedIsWhichOfHersToStop`. Removing the two shapes reddens it.
+
+## Decision 710: Any of her doses, if a drug is added, is whether any dose needs adjusting
+
+**Status: Accepted** (November 2026).
+[Decision 684](#decision-684-whether-she-needs-any-dose-changes-if-a-drug-is-added-and-whether-her-drug-will-interact-with-anything-new-are-the-modules-questions)'s
+question, asked of *"any of her doses"*.
+
+### Context
+
+In the demo's fifty-sixth batch (18 patients, 144 cells, no errors), *"should i reduce any of her doses if i add
+rifampicin?"* went to the model for all 18 patients. Every answer opened with a verdict, none with a dose: 15 on
+giving rifampicin, such as *"No — Rifampicin should not be added"*, and 3 on her own nevirapine, such as *"No —
+Nevirapine should be avoided"*. *"Do I need to adjust any doses if I start rifampicin?"* is the
+module's. Its shape took *"any doses"* and *"any of her medications"*, not *"any of her doses"*.
+
+### The decision
+
+That shape of `QueryScopeRouter` takes *"any of her (medication, medicine, drug) doses"* as well.
+
+### Measured
+
+On the demo replica (8088), the wording, *"Should we adjust any of her medication doses if we add rifampicin?"*, and
+*"Do I need to adjust any doses if I start rifampicin?"* as the control, asked of 10 batch-56 patients (30 cells a run,
+no errors).
+
+- Before: all 20 cells of the two wordings went to the model. dd84c8de and dd652c34 are already on rifampicin, and
+  none of their four answers said so; the control's answer does. dd92fdaf was told rifampicin *"is a reason to withhold
+  Nevirapine"*.
+- After: all 20 are the module's answer, the control's word for word with record numbers stripped. The control is
+  unchanged on all 10.
+
+Pinned by `ClinicianWordingsTest.anyOfHerDosesIfADrugIsAddedIsWhetherAnyDoseNeedsAdjusting`. Taking the doses
+alternative out of the shape reddens it.

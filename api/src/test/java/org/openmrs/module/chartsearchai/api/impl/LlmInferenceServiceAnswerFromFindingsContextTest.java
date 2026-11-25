@@ -3065,6 +3065,27 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		}
 	}
 
+	/**
+	 * Interactions asked IN or ON her list are the screen, as those with or among her medications are (ADR Decision 708):
+	 * on the demo <em>"Are there any major interactions in her current list?"</em> went to the model for 18 of 18 patients,
+	 * and it told dd7993b1, whose one rated pair is Moderate, <em>"Yes — there is a major interaction: Lopinavir interacts
+	 * with Didanosine, a Moderate problem."</em>
+	 */
+	@Test
+	public void interactionsAskedInHerListAreTheScreen() throws Exception {
+		executeDataSet(WARFARIN_ORDER);
+		for (String question : new String[] { "Are there any major interactions in her current list?",
+				"Any interactions in her medication list?", "Any drug interactions on her med list?",
+				"Are there any serious interactions in her meds?", "any major interactions in his current medications?" }) {
+			RecordingProvider provider = new RecordingProvider();
+			ChartAnswer answer = serviceWith(provider).search(patient, question);
+
+			assertEquals(0, provider.calls, question + " — the module answers: " + answer.getAnswer());
+			assertTrue(answer.getAnswer().startsWith(WARFARIN_BOTTOM_LINE + "\n" + WARFARIN_SCREEN_OPENING),
+					question + " — the screen's bottom line, then its Major: " + answer.getAnswer());
+		}
+	}
+
 	/** A question about her SOCIAL interactions is not a request to screen her medications, though it names the noun a
 	 *  bare screen request does. */
 	@Test

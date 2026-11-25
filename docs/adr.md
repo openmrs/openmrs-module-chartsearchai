@@ -31879,3 +31879,65 @@ batch-51 patients (30 cells a run, no errors): five on co-trimoxazole, three on 
 
 Pinned by `ClinicianWordingsTest.aProblemCombiningHerDrugWithHerGroupIsAProblemCombiningTheDrugWithIt`. Taking the drug
 alone in either shape reddens it.
+
+## Decision 708: Interactions asked in her list are the screen
+
+**Status: Accepted** (November 2026).
+[Decision 180](#decision-180-more-screen-and-proposal-phrasings-are-the-modules-regimen-names-her-medications-and-contraindications-asks-for-a-screen)'s
+screen, asked of interactions *in* or *on* her medications as well as *with*, *between* and *among* them.
+
+### Context
+
+In the demo's fifty-fifth batch (18 patients, 144 cells, no errors), *"are there any major interactions in her current
+list?"* went to the model for all 18 patients. It told dd7993b1, whose one rated
+pair is Moderate, *"Yes — there is a major interaction: Lopinavir interacts with Didanosine, a Moderate problem."*
+*"Any major interactions?"* is the module's screen. The screen shape reading *"any (major) interactions with her
+medications"* took only *with*, *between* and *among* before her medications, so *"in her current list"* fitted no shape.
+
+### The decision
+
+That shape of `QueryScopeRouter.SCREEN_SHAPES` takes *in* and *on* as well.
+
+### Measured
+
+On the demo replica (8088), the wording, *"Any interactions in her medication list?"*, and *"Any major interactions?"* as
+the control, asked of 10 batch-55 patients (30 cells a run).
+
+- Before: the wording went to the model for all 10. Five cells errored (one timeout, four HTTP 500s); of the five
+  answers, dd6616cd's was *"Yes, there are major interactions recorded"*, though its pairs are Moderate and Minor. The
+  second wording was already the module's answer, the control's word for word.
+- After: all 20 cells of the two wordings are the module's answer, the control's word for word with record numbers
+  stripped, with no errors. The control is unchanged on all 10.
+
+Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.interactionsAskedInHerListAreTheScreen`. Taking *in* and *on*
+out of the shape reddens it.
+
+## Decision 709: What to change if a drug is started is which of hers to stop
+
+**Status: Accepted** (November 2026).
+[Decision 680](#decision-680-the-most-dangerous-combination-of-her-drugs-and-which-of-hers-to-stop-if-a-drug-is-added-are-the-modules-questions)'s
+*"If I add X, which of her medicines should I stop?"*, asked as what to change.
+
+### Context
+
+In the demo's fifty-fifth batch, *"if i start her on rifampicin what should i change?"* went to the model for all 18
+patients. It told dd8b571f *"No — Nevirapine should not be started"*, naming her own drug as the one proposed.
+
+### The decision
+
+`QueryScopeRouter` reads *"if I (we) add / give / start / prescribe (her) (on) X what should (do, would, must) I (we)
+(need to) change"* and *"what should I change if I start (her on) X"* as Decision 680's question. The module answers with
+the drug's findings over her orders, choosing none of hers to stop.
+
+### Measured
+
+On the demo replica (8088), the wording, *"What should I change if I start her on rifampicin?"*, and *"Which of her
+medications should I stop if I start rifampicin?"* as the control, asked of the same 10 patients (30 cells a run).
+
+- Before: all 20 cells of the two wordings went to the model; one errored (HTTP 500). Every one of the 19 answers opened
+  *"No"*, among them dd84d74a's *"No. The patient should be cautioned regarding the following interactions"*. The
+  control was the module's answer for all 10.
+- After: all 20 are the module's answer, the control's word for word with record numbers stripped, with no errors. The
+  control is unchanged on all 10.
+
+Pinned by `ClinicianWordingsTest.whatToChangeIfADrugIsStartedIsWhichOfHersToStop`. Removing the two shapes reddens it.

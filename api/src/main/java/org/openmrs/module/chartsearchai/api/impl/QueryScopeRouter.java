@@ -1132,6 +1132,12 @@ public final class QueryScopeRouter {
 			// Decision 680)
 			"if (?:i|we) (?:add|give|start|prescribe) (?:" + PATIENT + " )?(?:on )?" + D + " (?:which|what) of " + POSSESSIVE
 					+ " (?:medications|meds|medicines|drugs) should (?:i|we) (?:stop|discontinue|hold)",
+			// "If I start her on rifampicin what should I change?" — the same question, what to change; the model told
+			// dd8b571f "No — Nevirapine should not be started" (ADR Decision 709)
+			"if (?:i|we) (?:add|give|start|prescribe) (?:" + PATIENT + " )?(?:on )?" + D + " what (?:should|do|would|must) "
+					+ "(?:i|we) (?:need to )?change",
+			"what (?:should|do|would|must) (?:i|we) (?:need to )?change if (?:i|we) (?:add|give|start|prescribe) (?:" + PATIENT
+					+ " )?(?:on )?" + D,
 			// "What drugs should she avoid with fluconazole?" (ADR Decision 444)
 			"(?:what|which) (?:drugs|medications|medicines|meds) should (?:she|he|they|the patient|this patient|i|we) avoid "
 					+ "(?:taking |giving |combining |using )?(?:with|alongside|while on|while taking) " + D,
@@ -1602,9 +1608,10 @@ public final class QueryScopeRouter {
 			"(?:does|do) (?:she|he|they|the patient|this patient) have any " + QUALIFIER + "(?:drug )?(?:interactions?|ddis?)"
 					+ "(?: (?:between|among) " + POSSESSIVE + " " + MEDICATIONS + ")?" + KNOW_ABOUT,
 			// "Any DDIs?", "Any drug interactions I should worry about?", "Any DDIs with her current medications?", "Any
-			// clinically significant interactions?", "drug interactions?"
+			// clinically significant interactions?", "drug interactions?", and in or on her list, "Are there any major
+			// interactions in her current list?" (ADR Decision 708)
 			"(?:are there )?(?:any )?" + QUALIFIER + "(?:drug drug |drug |medication )?(?:interactions|interaction alerts|ddis?)"
-					+ "(?: (?:with|between|among) (?:" + POSSESSIVE + " " + MEDICATIONS + "|" + POSSESSIVE + " current treatment"
+					+ "(?: (?:with|between|among|in|on) (?:" + POSSESSIVE + " " + MEDICATIONS + "|" + POSSESSIVE + " current treatment"
 					+ "|the (?:drugs|medicines|medications) " + SUBJECT_TAKES + "))?" + KNOW_ABOUT,
 			// "Is she on any interacting drugs?", "Is anything she takes interacting?", "What are her drug interactions?"
 			"is (?:she|he|they|the patient|this patient) on any interacting (?:drugs|medications|medicines|meds)",

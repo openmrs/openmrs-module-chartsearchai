@@ -2298,6 +2298,22 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 	}
 
 	/**
+	 * ADR Decision 709: "If I start her on rifampicin what should I change?" is which of hers to stop if the drug is
+	 * started, ADR Decision 680's question. On the demo it went to the model for 18 of 18 patients, which told dd8b571f
+	 * "No — Nevirapine should not be started".
+	 */
+	@Test
+	public void whatToChangeIfADrugIsStartedIsWhichOfHersToStop() {
+		String which = ask("Which of her medications should I stop if I start warfarin?");
+		assertNotNull(which, "precondition: the module answers which of hers to stop");
+		for (String question : Arrays.asList("if i start her on warfarin what should i change?",
+			"If we start him on warfarin, what do we need to change?", "What should I change if I start her on warfarin?",
+			"If I add warfarin what should I change?")) {
+			assertEquals(which, ask(question), question);
+		}
+	}
+
+	/**
 	 * ADR Decision 681: "Should I change her efavirenz to something else?" is whether to stop it, of a drug she takes and of
 	 * one she does not. On the demo replica the model answered a patient on no efavirenz "No. Efavirenz should be withheld";
 	 * the module, asked to stop it, says she has no order of it.

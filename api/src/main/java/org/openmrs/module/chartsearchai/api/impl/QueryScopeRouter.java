@@ -1721,7 +1721,13 @@ public final class QueryScopeRouter {
 	private static final String ANY_INTERACTIONS_WITH_HER_D = "(?:(?:are|is) there )?any (?:drug )?(?:interactions?|problems?"
 			+ "|issues?|concerns?) with " + POSSESSIVE + " " + D;
 
-	private static final List<Pattern> ANY_INTERACTIONS_WITH_HER_D_SHAPES = shapes(ANY_INTERACTIONS_WITH_HER_D);
+	/** "Should I be worried about her efavirenz?" — {@link #ANY_INTERACTIONS_WITH_HER_D} asked as the clinician's worry, which
+	 *  the model answered "No — Efavirenz should not be given" for 10 of 18 demo patients (ADR Decision 706). */
+	private static final String WORRY_ABOUT_HER_D = "should (?:i|we) (?:worry|be worried|be concerned) about " + POSSESSIVE
+			+ " " + D;
+
+	private static final List<Pattern> ANY_INTERACTIONS_WITH_HER_D_SHAPES = shapes(ANY_INTERACTIONS_WITH_HER_D,
+			WORRY_ABOUT_HER_D);
 
 	/** "Is his klarizom safe?", "What interacts with his klarizom?" — a drug named as hers, asked whether it is safe or what
 	 *  interacts with it, the possessive right before the drug (ADR Decision 374). */
@@ -1951,7 +1957,7 @@ public final class QueryScopeRouter {
 			"does " + D + " cause (?:any )?(?:drug )?interactions? with (?:any of )?" + POSSESSIVE + " (?:other )?" + MEDICATIONS,
 			// "Any interactions with her metronidazole?", "Are there any problems with his lisinopril?" — her drug named as
 			// hers, the interactions or problems of it asked after (ADR Decision 237)
-			ANY_INTERACTIONS_WITH_HER_D,
+			ANY_INTERACTIONS_WITH_HER_D, WORRY_ABOUT_HER_D,
 			// "Can ibuprofen be taken by her with her other drugs?" of her own drug (ADR Decision 430)
 			"(?:can|could|may|should) " + D + " be (?:safely )?(?:given|taken|used|continued|combined)(?: (?:by|to|for) " + PATIENT
 					+ ")? (?:with|alongside) (?:any of )?" + POSSESSIVE + " (?:other )?" + MEDICATIONS,

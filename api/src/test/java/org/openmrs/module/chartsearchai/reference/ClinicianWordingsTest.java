@@ -2745,6 +2745,24 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		assertNull(ask("She wants to stop exercising."));
 	}
 
+	/**
+	 * "Should I be worried about her efavirenz?" is Decision 260's "Any concerns with her efavirenz?" (ADR Decision 706),
+	 * which says first that she is not on a drug she is not on. On the demo it went to the model, which answered "No —
+	 * Efavirenz should not be given" for 10 of 18 patients, a "No" a clinician reads as "no need to worry".
+	 */
+	@Test
+	public void whetherToBeWorriedAboutHerDrugIsWhetherThereAreConcernsWithIt() {
+		String[][] pairs = { { "should i be worried about her warfarin?", "Any concerns with her warfarin?" },
+			{ "Should we be concerned about his warfarin?", "Any concerns with her warfarin?" },
+			{ "Should I worry about her nevirapine?", "Any concerns with her nevirapine?" },
+			{ "Should I be worried about warfarin?", "Any reason to worry about warfarin?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+	}
+
 	private static String ask(String question) {
 		LinkedHashSet<String> names = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : ORDERS) {

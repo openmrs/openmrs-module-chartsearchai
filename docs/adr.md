@@ -31803,3 +31803,42 @@ Measured on the demo replica (8088), the three wordings and *"Any interactions b
 
 Pinned by `HerMedicationGroupByClassTest.aGroupOfDrugsJoinedToHisGroupsIsSomethingBesideThem`. Disabling the check
 reddens it.
+
+## Decision 706: Whether to worry about her drug is whether there are concerns with it
+
+**Status: Accepted** (November 2026).
+[Decision 237](#decision-237-any-interactions-with-her-x-about-her-own-drug-is-answered-as-hers)'s and
+[Decision 260](#decision-260-a-question-naming-as-hers-a-drug-she-is-not-on-says-she-is-not-on-it)'s *"Any concerns with
+her X?"*, asked as the clinician's own worry.
+
+### Context
+
+In the demo's fiftieth batch (18 patients, 144 cells, no errors), *"should i be worried about her efavirenz?"* went to
+the model for all 18 patients. Ten answers opened *"No — Efavirenz should not be given"*, a *"No"* a clinician reads as
+*"no need to worry"*, and two of the three patients on efavirenz were told *"Efavirenz can be given"* or that she *"can
+continue taking Efavirenz"*. No shape read the possessive: *"Should I be worried about efavirenz?"* is read by Decision 454's residual
+words, which a drug named as hers never reaches, since [Decision 655](#decision-655-a-drug-named-as-hers-that-she-is-not-on-is-never-proposed)
+keeps such a drug from being proposed.
+
+### The decision
+
+*"Should I (we) worry / be worried / be concerned about her X?"* (`QueryScopeRouter.WORRY_ABOUT_HER_D`) is one of
+Decision 237's shapes of her own drug and one of Decision 260's of a drug named as hers: about a drug she takes, her order
+is named with what relates it to her other medications; about one she does not, the answer says she is not on it and
+whether it interacts with her medications.
+
+### Measured
+
+On the demo replica (8088), the two wordings *"should i be worried about her efavirenz?"* and *"Should I worry about her
+nevirapine?"*, with *"Any concerns with her efavirenz?"* as the control, asked of 10 batch-50 patients (30 cells a run, no
+errors).
+
+- Before: all 20 cells of the two wordings went to the model. 14 of the 20 answers opened *"No"*, and 2 were *"Efavirenz
+  can be given"*, one of them to a patient on efavirenz. The control was the module's answer for all 10.
+- After: all 20 are the module's answer, none opening *"No"*. Each of the 10 answers to the efavirenz wording is the
+  control's, word for word with record numbers stripped, and the control is unchanged. Of a patient on nevirapine the
+  answer names her order and what relates it to her other medications; of one on efavirenz and no nevirapine it says
+  she is not on nevirapine and that nevirapine interacts with her efavirenz.
+
+Pinned by `ClinicianWordingsTest.whetherToBeWorriedAboutHerDrugIsWhetherThereAreConcernsWithIt`. Removing the shape
+from either list reddens it.

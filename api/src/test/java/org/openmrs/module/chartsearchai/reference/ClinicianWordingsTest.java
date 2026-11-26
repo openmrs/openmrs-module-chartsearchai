@@ -3137,4 +3137,57 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		// Expecting something that is not an interaction stays the model's.
 		assertNull(ask("What INR should I expect if she starts warfarin?"));
 	}
+
+	/**
+	 * ADR Decision 718: "interaction worries" (concerns) are interactions. On the demo "She needs carbamazepine, any
+	 * interaction worries?" went to the model for every patient it reached.
+	 */
+	@Test
+	public void interactionWorriesAreInteractions() {
+		String[][] pairs = { { "she needs carbamazepine, any interaction worries?", "She needs carbamazepine, any interactions?" },
+			{ "Any interaction worries?", "Any interactions?" },
+			{ "Any interaction concerns with her meds?", "Any interactions with her meds?" },
+			{ "Any interaction worries with carbamazepine?", "Any interactions with carbamazepine?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+	}
+
+	/**
+	 * ADR Decision 719: "What about giving her erythromycin with her ARVs?" is "Can I give her erythromycin with her ARVs?".
+	 * On the demo it went to the model for every patient it reached.
+	 */
+	@Test
+	public void whatAboutGivingADrugWithHerGroupIsWhetherToGiveIt() {
+		String[][] pairs = { { "what about giving her erythromycin with her ARVs?", "Can I give her erythromycin with her ARVs?" },
+			// and of a group she is on none of, the lead saying what it was checked against
+			{ "What about giving her erythromycin with her TB drugs?", "Can I give her erythromycin with her TB drugs?" },
+			{ "How about adding warfarin to her meds?", "Can I give her warfarin with her medications?" },
+			{ "What about starting her on warfarin with what she is on?", "Can I give her warfarin with her medications?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+		// Given with a meal is not given with her medications.
+		assertNull(ask("What about giving her warfarin with her dinner?"));
+	}
+
+	/**
+	 * ADR Decision 720: "Can her TB drugs be given with efavirenz?" is "Can efavirenz be given with her TB drugs?". On the
+	 * demo, patients on no TB drug were answered over all their medications, with nothing saying they are on none.
+	 */
+	@Test
+	public void herGroupGivenWithADrugIsTheDrugGivenWithHerGroup() {
+		String[][] pairs = { { "can her TB drugs be given with warfarin?", "Can warfarin be given with her TB drugs?" },
+			{ "Can her ARVs be taken with fluconazole?", "Can fluconazole be taken with her ARVs?" },
+			{ "Can his TB medications be safely given with warfarin?", "Can warfarin be given with her TB drugs?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+	}
 }

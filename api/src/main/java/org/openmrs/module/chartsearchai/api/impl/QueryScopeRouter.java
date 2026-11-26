@@ -427,6 +427,9 @@ public final class QueryScopeRouter {
 			+ "(?:already |currently )?(?:on|taking)";
 
 	/** What a thing's interactions with her medications are asked as (ADR Decision 473). */
+	/** "Interaction worries", "interaction concerns" — interactions, as a clinician worries about them (ADR Decision 718). */
+	private static final String INTERACTION_WORRIES = "interaction (?:worries|concerns|issues|problems|risks)";
+
 	private static final String ITS_INTERACTIONS = "(?:any )?(?:drug )?(?:interactions?|ddis?|issues?|problems?|clash(?:es)?)";
 
 	/**
@@ -685,6 +688,10 @@ public final class QueryScopeRouter {
 					// and the patient after the drug, and what is asked after: "Can I give klarizom to him with his ARVs, any
 					// interactions?" was answered with his ARVs' interactions (ADR Decision 642)
 					+ "(?: (?:are there |is there )?any (?:drug )?(?:interactions?|issues?|problems?|concerns?))?",
+			// "What about giving her erythromycin with her ARVs?", "How about adding warfarin to her meds?" — the same proposal,
+			// which the model answered for every patient it reached (ADR Decision 719)
+			"(?:what|how) about (?:giving|adding|starting|prescribing) (?:" + PATIENT + " )?(?:on )?" + D + " (?:with|alongside|to) "
+					+ "(?:any of )?(?:" + POSSESSIVE + " (?:other )?" + MEDICATIONS + "|" + HER_MEDICATION_GROUP + "|" + WHAT_SHE_IS_ON + ")",
 			// "Can this patient take warfarin?", "Can she take ibuprofen?", "Can she drink alcohol?" (ADR Decision 268)
 			"(?:can|could|may|should) (?:she|he|they|the patient|this patient) (?:also )?(?:safely )?(?:take|start|be given|be started on"
 					// and "Can she get fluconazole?" (ADR Decision 431), and "Can she eat ginger?", answered by the model "Ginger
@@ -1033,8 +1040,8 @@ public final class QueryScopeRouter {
 			// "Any interactions with his lisinopril?", "Are there any drug interactions with rifampicin?" — the model told a
 			// patient on no medication "interactions with Lisinopril are recorded: ketoconazole (Major) …" (ADR Decision 338);
 			// and "Any problems with her metronidazole?", answered from the same check (ADR Decision 339)
-			"(?:(?:are|is) there )?any (?:drug )?(?:interactions?|problems?|probs?|issues?|concerns?) with (?:" + POSSESSIVE + " )?"
-					+ D,
+			"(?:(?:are|is) there )?any (?:drug )?(?:interactions?|problems?|probs?|issues?|concerns?|" + INTERACTION_WORRIES + ") with (?:"
+					+ POSSESSIVE + " )?" + D,
 			// "Is there a problem with her isoniazid and her other medicines?" — led "No — there are several safety findings";
 			// for a patient on no isoniazid the model recited its reference record's Major partners (ADR Decision 612)
 			"is there (?:a|any) problem with (?:" + POSSESSIVE + " )?" + D + " and (?:any of )?" + POSSESSIVE + " (?:other )?"
@@ -1634,7 +1641,9 @@ public final class QueryScopeRouter {
 			// "Any DDIs?", "Any drug interactions I should worry about?", "Any DDIs with her current medications?", "Any
 			// clinically significant interactions?", "drug interactions?", and in or on her list, "Are there any major
 			// interactions in her current list?" (ADR Decision 708)
-			"(?:are there )?(?:any )?" + QUALIFIER + "(?:drug drug |drug |medication )?(?:interactions|interaction alerts|ddis?)"
+			// and "Any interaction worries?" (ADR Decision 718)
+			"(?:are there )?(?:any )?" + QUALIFIER + "(?:drug drug |drug |medication )?(?:interactions|interaction alerts|ddis?|"
+					+ INTERACTION_WORRIES + ")"
 					+ "(?: (?:with|between|among|in|on) (?:" + POSSESSIVE + " " + MEDICATIONS + "|" + POSSESSIVE + " current treatment"
 					+ "|the (?:drugs|medicines|medications) " + SUBJECT_TAKES + "))?" + KNOW_ABOUT,
 			// "Is she on any interacting drugs?", "Is anything she takes interacting?", "What are her drug interactions?"
@@ -1824,10 +1833,18 @@ public final class QueryScopeRouter {
 			// preventive therapy?" (ADR Decision 313)
 			"(?:can|could|may) (?:i give " + PATIENT + "|(?:he|she|they|the patient|this patient) (?:take|have|use)) " + D
 					+ " (?:and|with|alongside) " + HER_MEDICATION_GROUP + "(?: together)?",
+			// and "What about giving her erythromycin with her ARVs?", so a group she is on none of is said to have left the
+			// drug checked against all her medications (ADR Decision 719)
+			"(?:what|how) about (?:giving|adding|starting|prescribing) (?:" + PATIENT + " )?(?:on )?" + D + " (?:with|alongside|to) "
+					+ "(?:any of )?" + HER_MEDICATION_GROUP,
 			// "Can fluconazole be given with her HIV medicines?" (ADR Decision 426)
 			// and "Can fluconazole be taken by her with her other drugs?" (ADR Decision 429)
 			"(?:can|could|may|should) " + D + " be (?:safely )?(?:given|taken|used|started|combined)(?: (?:by|to|for) " + PATIENT
-					+ ")? (?:with|alongside) (?:any of )?" + HER_MEDICATION_GROUP);
+					+ ")? (?:with|alongside) (?:any of )?" + HER_MEDICATION_GROUP,
+			// and the group the subject, "Can her TB drugs be given with efavirenz?" — answered over all her medications, with
+			// nothing saying she is on no TB drug (ADR Decision 720)
+			"(?:can|could|may|should) " + HER_MEDICATION_GROUP + " be (?:safely )?(?:given|taken|used|combined)(?: (?:by|to|for) "
+					+ PATIENT + ")? (?:with|alongside|together with) " + D);
 
 	/**
 	 * Whether a question asks whether its one drug is safe with her medications — <em>"Is ibuprofen safe with her current
@@ -3345,6 +3362,8 @@ public final class QueryScopeRouter {
 		"problems", "problematic", "concern", "concerns", "risk", "risks", "risky", "contraindicated", "contraindication",
 		"contraindications", "worried", "worry", "worrying", "harm", "harmful", "hurt", "toxic", "dangerous", "danger",
 		"unsafe",
+		// "She needs carbamazepine, any interaction worries?" (ADR Decision 718)
+		"worries",
 		// "Would fluconazole be a mistake?", "Is fluconazole a bad idea?", "Is fluconazole hazardous for her?", "Is there a
 		// downside to fluconazole?" (ADR Decision 456)
 		"mistake", "bad", "hazardous", "downside", "downsides", "unwise", "inadvisable",

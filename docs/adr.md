@@ -32193,3 +32193,103 @@ the same 10 patients.
   on all 10, with no errors.
 
 Pinned by `ClinicianWordingsTest.interactionsToExpectIfADrugIsStartedIsWhatToWatchFor`.
+
+## Decision 718: Interaction worries are interactions
+
+**Status: Accepted** (November 2026).
+*"Interaction worries"* (concerns, issues, problems, risks) are asked as interactions.
+
+### Context
+
+In the demo's sixtieth batch, *"she needs carbamazepine, any interaction worries?"* went to the model for all 18 patients.
+*"She needs carbamazepine, any interactions?"* was already the module's. The residual reading took *"worry"*, *"worried"*
+and *"worrying"* as words of harm, but not *"worries"*. The screen shape took *"interactions"* and *"interaction alerts"*,
+and the shape asking of one drug took *"any interactions (problems, concerns) with X"*, but neither took *"interaction
+worries"*.
+
+### The decision
+
+`QueryScopeRouter.INTERACTION_WORRIES` is *"interaction worries (concerns, issues, problems, risks)"*. The screen shape and
+*"any … with X"* take it beside *"interactions"*, and the residual reading's words of harm take *"worries"*.
+
+### Measured
+
+On the demo replica (8088), the wording, with *"She needs carbamazepine, any interactions?"* as the control, asked of the same
+10 patients.
+
+- Before: the wording went to the model for all 10, and 3 answers opened *"No"*. Among them was dd9eeef6's *"No — a caution
+  to note regarding Carbamazepine and Nevirapine"*.
+- After: all 10 are the module's answer, the control's word for word with record numbers stripped. The control is unchanged
+  on all 10, with no errors.
+
+Pinned by `ClinicianWordingsTest.interactionWorriesAreInteractions`.
+
+## Decision 719: What about giving her a drug with her group is whether to give it
+
+**Status: Accepted** (November 2026).
+*"What (how) about giving (adding, starting, prescribing) her X with (to) her medications"*, her group, or what she is on, is
+the proposal *"Can I give her X with …"*.
+
+### Context
+
+In the demo's sixtieth batch, *"what about giving her erythromycin with her ARVs?"* went to the model for all 18 patients.
+[Decision 609](#decision-609-listing-a-drugs-interactions-and-stopping-or-adjusting-because-of-interactions-are-the-modules-questions)
+took *"What about X, any interactions with her medications?"*, but no shape took *"what about giving X"*.
+
+### The decision
+
+Two shapes take the wording.
+
+- The proposal shapes take it beside Decision 606's *"Can I give her X with her medications?"*.
+- `SAFE_WITH_HER_MEDICATIONS_SHAPES` takes it with a group, beside
+  [Decision 313](#decision-313-one-drug-asked-about-beside-a-named-group-of-her-medications-says-the-check-cannot-tell-which-orders-the-group-means)'s
+  *"Can I give her X with her TB preventive therapy?"*. So a patient on none of the group is told, as under
+  [Decision 646](#decision-646-one-drug-beside-groups-of-her-medications-the-module-resolves-is-answered-over-them-and-no-lead-says-it-cannot-tell-which-they-are),
+  that the drug was checked against all her medications.
+
+A first cut added only the proposal shape. On the replica it matched the control for 8 of 10 patients and dropped that lead
+for the 2 on no ARV, which the second shape restores. A meal, *"with her dinner"*, is not her medications and stays the
+model's.
+
+### Measured
+
+On the demo replica (8088), the wording, with *"Can I give her erythromycin with her ARVs?"* as the control, asked of the same
+10 patients.
+
+- Before: the wording went to the model for all 10, and 5 answers opened *"No"*. dd889a25's named a caution with
+  ivosidenib, which she does not take.
+- After: all 10 are the module's answer, the control's word for word with record numbers stripped. The 2 patients on no ARV
+  are among them. The control is unchanged on all 10, with no errors.
+
+Pinned by `ClinicianWordingsTest.whatAboutGivingADrugWithHerGroupIsWhetherToGiveIt`.
+
+## Decision 720: Her group given with a drug is the drug given with her group
+
+**Status: Accepted** (November 2026).
+*"Can her TB drugs be given (taken, used, combined) with X?"* is *"Can X be given with her TB drugs?"*.
+
+### Context
+
+In the demo's sixtieth batch, *"can her TB drugs be given with efavirenz?"* was the module's for all 18 patients, but over all
+their medications. Patients on no TB drug got efavirenz's findings against their other orders, with nothing saying they are
+on none. [Decision 712](#decision-712-a-drug-asked-a-problem-with-her-group-is-whether-it-causes-problems-with-the-group)
+found the same defect for *"Is fluconazole a problem with her TB drugs?"*. `SAFE_WITH_HER_MEDICATIONS_SHAPES` took the drug
+as the subject, *"Can fluconazole be given with her HIV medicines?"*, but never the group.
+
+### The decision
+
+`SAFE_WITH_HER_MEDICATIONS_SHAPES` takes the group as the subject: *"can her G be (safely) given (taken, used, combined)
+with (alongside, together with) X"*.
+
+### Measured
+
+On the demo replica (8088), the wording, with *"Can efavirenz be given with her TB drugs?"* as the control, asked of the same
+10 patients.
+
+- Before: all 10 got the module's answer over all their medications. For the 8 patients on no TB drug, none of these
+  answers said so.
+- After: all 10 are the control's answer word for word with record numbers stripped. The 8 patients on no TB drug get *"No
+  TB drug is among this patient's active medications the drug data identifies."*. The 2 on isoniazid, or on rifampicin
+  and isoniazid, get efavirenz against those alone. The control is unchanged on all 10, with no errors.
+
+Pinned by `ClinicianWordingsTest.herGroupGivenWithADrugIsTheDrugGivenWithHerGroup`.

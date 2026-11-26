@@ -32524,3 +32524,67 @@ As Decision 726, with *"What should I change if I start her on ketoconazole?"* a
   with no errors. The control is word for word the live demo's on all 10.
 
 Pinned by `ClinicianWordingsTest.adjustAnythingBeforeStartingADrugIsWhatToChangeIfItIsStarted`.
+
+## Decision 728: What will happen to her medications if a drug is added is what happens if it is added to them
+
+**Status: Accepted** (November 2026).
+*"What will happen to her ARVs if I add rifabutin?"* and *"What would happen to his meds if he starts fluconazole?"* are
+[Decision 670](#decision-670-what-happens-if-she-takes-a-drug-with-a-group-of-hers-is-the-drug-asked-beside-that-group)'s
+*"What happens if I add X to her ARVs?"* and *"What happens if he takes X with his meds?"*.
+
+### Context
+
+In the demo's sixty-fourth batch, *"what will happen to her ARVs if i add rifabutin?"* went to the model for all 18
+patients. 14 answers led that rifabutin *"can be added"*, *"can be given"* or *"The drug can be given"*, and 2 led *"No —
+Rifabutin should not be added"*. One, to a patient on lamivudine, nevirapine, stavudine and trimethoprim/sulfamethoxazole,
+led *"Nevirapine can be given"*, naming her own drug in place of the one asked about. Another, to a patient on no
+antiretroviral, said *"The records do not address the safety of adding Rifabutin"*. Decision 670's shapes put her
+medications after the drug and never before it.
+
+### The decision
+
+Beside Decision 670's shapes, the router takes *"what (happens, would happen, will happen) to"* her medications or a group of
+hers, then *"if"* or *"when"* and a verb starting the drug, read as every other *"if she starts"* shape reads it.
+
+### Measured
+
+On the replica, over the first 10 patients of the sixty-fourth batch's sample, with *"What happens if I add rifabutin to her
+ARVs?"* as the control.
+
+- Before: none of 10 went to the module (none of 18 on the live demo), while the control went to the module for all 10.
+- After: all 10 went to the module and are the control's answer word for word with record numbers stripped, with no errors.
+  The control is word for word its answer before on all 10. The patient on no antiretroviral is told the check relates
+  rifabutin to none of her medications the drug data identifies.
+
+Pinned by `ClinicianWordingsTest.whatHappensToHerMedicationsIfADrugIsAddedIsWhatHappensIfItIsAdded`.
+
+## Decision 729: What she takes is what she is taking
+
+**Status: Accepted** (November 2026).
+*"Is warfarin going to be a problem with what she takes?"* is *"Is warfarin going to be a problem with her meds?"*, and
+*"what she takes"* is [Decision 714](#decision-714-a-drug-with-what-she-is-on-is-a-drug-with-her-medications)'s *"what she is
+taking"* wherever the router reads that.
+
+### Context
+
+In the demo's sixty-fourth batch, *"is warfarin going to be a problem with what she takes?"* went to the model for all 18
+patients. 11 answers led that warfarin *"can be given"*, a clearance the module never gives. 2 led *"No — Warfarin should
+not be given with Sulfamethoxazole"*, and the rest led *"Yes, there are potential problems"* or listed them. The shape
+[Decision 391](#decision-391-eight-wordings-a-clinician-types-are-answered-as-the-questions-they-ask) added took only her
+medications after *"a problem with"*, and Decision 714's *"what she is on"* had no *"what she takes"*.
+
+### The decision
+
+`WHAT_SHE_IS_ON` also takes *"what she takes"*, *"what he takes"*, *"what the patient takes"* and *"what they take"*, with
+*"already"* or *"currently"* allowed before the verb. Decision 391's *"would X be a problem with"* shape takes
+`WHAT_SHE_IS_ON` beside her medications.
+
+### Measured
+
+As Decision 728, with *"Is warfarin going to be a problem with her meds?"* as the control.
+
+- Before: none of 10 went to the module (none of 18 on the live demo), while the control went to the module for all 10.
+- After: all 10 went to the module and are the control's answer word for word with record numbers stripped, with no errors.
+  The control is word for word its answer before on all 10.
+
+Pinned by `ClinicianWordingsTest.whatSheTakesIsWhatSheIsTaking`.

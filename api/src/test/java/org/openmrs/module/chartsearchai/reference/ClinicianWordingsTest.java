@@ -3304,4 +3304,36 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 			assertEquals(canonical, ask(pair[0]), pair[0]);
 		}
 	}
+
+	/**
+	 * "What will happen to her ARVs if I add rifabutin?" is "What happens if I add rifabutin to her ARVs?" — the model told
+	 * a demo patient "Nevirapine can be given" (ADR Decision 728).
+	 */
+	@Test
+	public void whatHappensToHerMedicationsIfADrugIsAddedIsWhatHappensIfItIsAdded() {
+		String[][] pairs = { { "what will happen to her ARVs if i add rifabutin?", "What happens if I add rifabutin to her ARVs?" },
+			{ "What would happen to his meds if he starts fluconazole?", "What happens if he takes fluconazole with his meds?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+	}
+
+	/**
+	 * "Is warfarin going to be a problem with what she takes?" is "Is warfarin going to be a problem with her meds?" — "what
+	 * she takes" is "what she is taking" (ADR Decision 729).
+	 */
+	@Test
+	public void whatSheTakesIsWhatSheIsTaking() {
+		String[][] pairs = { { "is warfarin going to be a problem with what she takes?",
+				"Is warfarin going to be a problem with her meds?" },
+			{ "Would amiodarone be a problem with what she's on?", "Would amiodarone be a problem with her current meds?" },
+			{ "Any problems if she starts phenytoin with what she takes?", "Any problems if she starts phenytoin with her meds?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+	}
 }

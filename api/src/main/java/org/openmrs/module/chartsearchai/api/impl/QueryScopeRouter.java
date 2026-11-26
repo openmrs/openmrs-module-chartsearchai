@@ -422,9 +422,11 @@ public final class QueryScopeRouter {
 	private static final String HER_MEDICATIONS_AS_A_WHOLE = POSSESSIVE + " (?:other |current |active |usual |regular )?"
 			+ "(?:medications|meds|medicines|prescriptions|drugs|regimen|treatment|treatments|arvs|tablets|pills)";
 
-	/** "What she is on", "what she's taking" — her medications as a clinician words them (ADR Decisions 440, 714). */
-	private static final String WHAT_SHE_IS_ON = "what (?:she's|he's|they're|(?:she|he|the patient|this patient) is|they are) "
-			+ "(?:already |currently )?(?:on|taking)";
+	/** "What she is on", "what she's taking" — her medications as a clinician words them (ADR Decisions 440, 714) — and
+	 *  "what she takes" (ADR Decision 729). */
+	private static final String WHAT_SHE_IS_ON = "what (?:(?:she's|he's|they're|(?:she|he|the patient|this patient) is|they are) "
+			+ "(?:already |currently )?(?:on|taking)|(?:she|he|the patient|this patient) (?:already |currently )?takes|they "
+			+ "(?:already |currently )?take)";
 
 	/** What a thing's interactions with her medications are asked as (ADR Decision 473). */
 	/** "Interaction worries", "interaction concerns" — interactions, as a clinician worries about them (ADR Decision 718). */
@@ -868,6 +870,10 @@ public final class QueryScopeRouter {
 					+ PATIENT + " )?(?:on )?)" + D
 					+ " (?:with|alongside|together with|to|while (?:on|taking)) (?:any of )?(?:" + POSSESSIVE + " (?:other )?"
 					+ MEDICATIONS + "|" + HER_MEDICATION_GROUP + ")",
+			// "What will happen to her ARVs if I add rifabutin?" — the model told a demo patient "Nevirapine can be given"
+			// (ADR Decision 728)
+			"what (?:happens|would happen|will happen) to (?:" + POSSESSIVE + " (?:other )?" + MEDICATIONS + "|"
+					+ HER_MEDICATION_GROUP + ") (?:if|when) " + STARTS_A_DRUG,
 			// "What are the risks of adding erythromycin to her current treatment?" — the model led it "No —" or "can be given",
 			// a lead on what was asked as a risk (ADR Decision 671)
 			"what (?:are|is) the (?:risks?|dangers?) of (?:adding|giving|starting|prescribing) (?:" + PATIENT + " )?(?:on )?" + D
@@ -1836,8 +1842,9 @@ public final class QueryScopeRouter {
 			"(?:what|how) about " + D + " (?:(?:is there )?any )?(?:problems?|issues?|concerns?) with (?:any of )?" + POSSESSIVE
 					+ " (?:other )?" + MEDICATIONS,
 			// "Would amiodarone be a problem with her current meds?" (ADR Decision 391)
+			// and "Is warfarin going to be a problem with what she takes?" (ADR Decision 729)
 			"(?:(?:would|will|could|might|is) " + D + " (?:be )?|is " + D + " going to be )(?:a problem|an issue|a concern|problematic)"
-					+ " (?:with|for) (?:any of )?" + POSSESSIVE + " (?:other )?" + MEDICATIONS,
+					+ " (?:with|for) (?:(?:any of )?" + POSSESSIVE + " (?:other )?" + MEDICATIONS + "|" + WHAT_SHE_IS_ON + ")",
 			// "fluconazole - safe w/ her current meds?", "Fluconazole ok? She's on ARVs" (ADR Decision 432)
 			D + " (?:safe|ok|okay|fine) (?:with|alongside) (?:any of )?(?:" + POSSESSIVE + " (?:other )?" + MEDICATIONS + "|"
 					+ HER_MEDICATION_GROUP + ")",

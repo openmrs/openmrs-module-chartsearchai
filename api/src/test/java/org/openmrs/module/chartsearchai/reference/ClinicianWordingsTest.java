@@ -3272,4 +3272,36 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 			assertEquals(canonical, ask(pair[0]), pair[0]);
 		}
 	}
+
+	/**
+	 * "Any drug clashes if she starts carbamazepine?" is "Any problems if I start her on carbamazepine?" — the model told demo
+	 * patients "Carbamazepine can be started" (ADR Decision 726).
+	 */
+	@Test
+	public void anyClashesIfSheStartsADrugIsAnyProblemsIfItIsStarted() {
+		String[][] pairs = { { "any drug clashes if she starts carbamazepine?", "Any problems if I start her on carbamazepine?" },
+			{ "Any clashes if I start her on fluconazole?", "Any problems if I start her on fluconazole?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+	}
+
+	/**
+	 * "Should I adjust anything before starting her on ketoconazole?" is "What should I change if I start her on
+	 * ketoconazole?" — the model told demo patients "Ketoconazole can be started" (ADR Decision 727).
+	 */
+	@Test
+	public void adjustAnythingBeforeStartingADrugIsWhatToChangeIfItIsStarted() {
+		String[][] pairs = { { "should i adjust anything before starting her on ketoconazole?",
+				"What should I change if I start her on ketoconazole?" },
+			{ "Do I need to change anything if I add rifampicin?", "What should I change if I add rifampicin?" },
+			{ "Should we adjust anything when giving her fluconazole?", "What should I change if I give her fluconazole?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+	}
 }

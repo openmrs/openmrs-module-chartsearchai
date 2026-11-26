@@ -32462,3 +32462,65 @@ ethambutol and isoniazid.
 
 Pinned by `ClinicianWordingsTest.safeForHerToTakeADrugWithHerGroupIsWhetherSheCanTakeIt`, for a patient on none of the group, and
 `DrugBesideHerMedicationGroupTest.safeForHerToTakeADrugWithHerGroupIsAnsweredOverTheGroup`, for a patient on them.
+
+## Decision 726: Any drug clashes if she starts a drug are any problems if it is started
+
+**Status: Accepted** (November 2026).
+*"Any drug clashes if she starts carbamazepine?"* and *"Any clashes if I start her on fluconazole?"* are
+[Decision 299](#decision-299-whether-a-drug-is-safe-with-her-medications-or-causes-problems-if-started-is-answered-as-its-proposal)'s
+*"Any problems if I start her on X?"*.
+
+### Context
+
+In the demo's sixty-third batch, *"any drug clashes if she starts carbamazepine?"* went to the model for all 18 patients. 11
+answers said carbamazepine *"can be started"* or *"can be given"*, a clearance the module never gives. The shape that
+[Decision 721](#decision-721-any-concerns-if-she-starts-a-drug-are-any-problems-if-it-is-started) last widened took problems,
+issues, concerns, risks and interaction worries, never clashes.
+
+### The decision
+
+That shape takes *"(drug) clash(es)"* beside them.
+
+### Measured
+
+The *"before"* is the live demo, running the build before this decision, in the sixty-third batch: none of 18 went to the
+module. The *"after"* is the demo replica (8088), with *"Any problems if I start her on carbamazepine?"* as the control, asked
+of 10 of the batch's patients.
+
+- After: all 10 went to the module and are the control's answer word for word with record numbers stripped, with no errors.
+- The control, asked of the same 10 patients on the live demo, is word for word the replica's answer on all 10. So this
+  decision leaves it unchanged.
+
+Pinned by `ClinicianWordingsTest.anyClashesIfSheStartsADrugIsAnyProblemsIfItIsStarted`.
+
+## Decision 727: Whether to adjust anything before starting a drug is what to change if it is started
+
+**Status: Accepted** (November 2026).
+*"Should I adjust anything before starting her on ketoconazole?"*, *"Do I need to change anything if I add rifampicin?"* and
+*"Should we adjust anything when giving her fluconazole?"* are
+[Decision 709](#decision-709-what-to-change-if-a-drug-is-started-is-which-of-hers-to-stop)'s *"What should I change if I start
+her on X?"*.
+
+### Context
+
+In the demo's sixty-third batch, *"should i adjust anything before starting her on ketoconazole?"* went to the model for all
+18 patients. 14 answers said ketoconazole *"can be started"* or *"can be given"*. The other 4 led *"No — Ketoconazole should
+not be started"*. One of those, to a patient on lamivudine/zidovudine and nelfinavir, called its interaction with
+lamivudine/zidovudine *"a Major problem"*. Decision 709's shapes asked *"what should I change"* and never *"should I change
+anything"*.
+
+### The decision
+
+Beside Decision 709's shapes, the router takes *"(should, do, must, would) I (need to) (adjust, change, modify) anything"*,
+then *"before"*, *"when"* or *"if"* with a verb starting the drug: *"starting"*, *"giving"*, *"adding"* or *"prescribing"*, or
+*"I start"*, *"I give"*, *"I add"* or *"I prescribe"*.
+
+### Measured
+
+As Decision 726, with *"What should I change if I start her on ketoconazole?"* as the control.
+
+- Before: none of 18 went to the module on the live demo.
+- After: all 10 went to the module on the replica and are the control's answer word for word with record numbers stripped,
+  with no errors. The control is word for word the live demo's on all 10.
+
+Pinned by `ClinicianWordingsTest.adjustAnythingBeforeStartingADrugIsWhatToChangeIfItIsStarted`.

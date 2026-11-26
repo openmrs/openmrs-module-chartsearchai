@@ -881,7 +881,9 @@ public final class QueryScopeRouter {
 			// with leflunomide and metformin (ADR Decision 715)
 			// and if she starts it, "Any interaction concerns if she starts phenytoin?", which the model led "No — Phenytoin
 			// should not be started" (ADR Decision 721)
-			"(?:(?:is|are) there )?any (?:problems?|issues?|concerns?|risks?|" + INTERACTION_WORRIES + ") if (?:(?:she|he|they|the "
+			// and "Any drug clashes if she starts carbamazepine?" — the model told demo patients "Carbamazepine can be
+			// started" (ADR Decision 726)
+			"(?:(?:is|are) there )?any (?:problems?|issues?|concerns?|risks?|(?:drug )?clash(?:es)?|" + INTERACTION_WORRIES + ") if (?:(?:she|he|they|the "
 					+ "patient|this patient) (?:drinks|has|uses|eats|consumes) " + D + "|" + STARTS_A_DRUG + ")"
 					+ "(?: (?:with|alongside|while (?:on|taking)) (?:any of )?(?:"
 					+ POSSESSIVE + " (?:other )?" + MEDICATIONS + "|" + HER_MEDICATION_GROUP + "|" + WHAT_SHE_IS_ON + "))?",
@@ -1175,6 +1177,11 @@ public final class QueryScopeRouter {
 					+ "(?:i|we) (?:need to )?change",
 			"what (?:should|do|would|must) (?:i|we) (?:need to )?change if (?:i|we) (?:add|give|start|prescribe) (?:" + PATIENT
 					+ " )?(?:on )?" + D,
+			// "Should I adjust anything before starting her on ketoconazole?", "Do I need to change anything if I add
+			// rifampicin?" — the model told demo patients "Ketoconazole can be started" (ADR Decision 727)
+			"(?:should|do|must|would) (?:i|we) (?:need to )?(?:adjust|change|modify) anything (?:(?:before|when|if) (?:starting|"
+					+ "giving|adding|prescribing)|(?:before|when|if) (?:i|we) (?:start|give|add|prescribe)) (?:" + PATIENT + " )?(?:on )?"
+					+ D,
 			// "What drugs should she avoid with fluconazole?" (ADR Decision 444)
 			"(?:what|which) (?:drugs|medications|medicines|meds) should (?:she|he|they|the patient|this patient|i|we) avoid "
 					+ "(?:taking |giving |combining |using )?(?:with|alongside|while on|while taking) " + D,

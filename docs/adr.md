@@ -32588,3 +32588,63 @@ As Decision 728, with *"Is warfarin going to be a problem with her meds?"* as th
   The control is word for word its answer before on all 10.
 
 Pinned by `ClinicianWordingsTest.whatSheTakesIsWhatSheIsTaking`.
+
+## Decision 730: A drug causing trouble with a group of hers is a drug causing problems with it
+
+**Status: Accepted** (November 2026).
+*"Could simvastatin cause trouble with her ARVs?"* is
+[Decision 433](#decision-433-whether-a-pair-is-to-be-avoided-dangerous-or-a-problem-is-answered-with-no-lead)'s *"Will
+simvastatin cause problems with her ARVs?"*.
+
+### Context
+
+In the demo's sixty-fifth batch, *"could simvastatin cause trouble with her ARVs?"* went to the model for all 18 patients. 6
+answers led that simvastatin *"can be given"*, a clearance the module never gives. One, to a patient on lamivudine both alone
+and in lamivudine/nevirapine/stavudine, led with her duplicate lamivudine and not with simvastatin. One, to a patient on no
+antiretroviral, said *"The records do not address"* it. Decision 433's shape took *"problems"*, *"issues"* and *"harm"* and
+never *"trouble"*.
+
+### The decision
+
+Decision 433's *"X cause problems with"* a group of hers also takes *"trouble"*.
+
+### Measured
+
+On the replica, over the first 10 patients of the sixty-fifth batch's sample and the two patients whose answers the context
+names, with *"Will simvastatin cause problems with her ARVs?"* as the control.
+
+- Before: none of 12 went to the module (none of 18 on the live demo), while the control went to the module for all 12.
+- After: all 12 went to the module and are the control's answer word for word with record numbers stripped, with no errors.
+  The control is word for word its answer before on all 12. The patient on no antiretroviral is told none is among her medications the drug data
+  identifies.
+
+Pinned by `ClinicianWordingsTest.causeTroubleWithHerGroupIsCauseProblemsWithIt`.
+
+## Decision 731: How a drug will affect another is whether it affects it
+
+**Status: Accepted** (November 2026).
+*"How will rifampicin affect her nevirapine?"* and *"How does fluconazole affect her efavirenz?"* are
+[Decision 248](#decision-248-will-x-affect-her-y-asks-whether-the-two-interact)'s *"Will rifampicin affect her nevirapine?"*,
+as [Decision 671](#decision-671-how-a-drug-affects-her-medications-which-of-hers-not-to-combine-with-it-continuing-them-with-it-and-the-risks-of-adding-it-are-the-modules-questions)
+made *"How does rifampicin affect her ARVs?"* the question without *"how"*.
+
+### Context
+
+In the demo's sixty-fifth batch, *"how will rifampicin affect her nevirapine?"* went to the model for all 18 patients. 12
+answers led *"No — Rifampicin should not be given"*. 2 led *"No — Nevirapine should not be given"*, both to patients on no
+nevirapine: one on efavirenz, and one already on rifampicin and isoniazid.
+
+### The decision
+
+`DOES_ONE_INTERACT_WITH_THE_OTHER` takes *"how"* before its *"does X affect Y"* and *"will X interact with Y"* forms.
+
+### Measured
+
+As Decision 730, with *"Will rifampicin affect her nevirapine?"* as the control.
+
+- Before: none of 12 went to the module (none of 18 on the live demo), while the control went to the module for all 12.
+- After: all 12 went to the module and are the control's answer word for word with record numbers stripped, with no errors.
+  The control is word for word its answer before on all 12. The patient on rifampicin and no nevirapine is told nevirapine is not one of her
+  medications and rifampicin is, and the patient on efavirenz that neither is.
+
+Pinned by `ClinicianWordingsTest.howWillADrugAffectAnotherIsWhetherItAffectsIt`.

@@ -3336,4 +3336,35 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 			assertEquals(canonical, ask(pair[0]), pair[0]);
 		}
 	}
+
+	/**
+	 * "Could simvastatin cause trouble with her ARVs?" is "Will simvastatin cause problems with her ARVs?" — the model
+	 * answered one demo patient on her duplicate lamivudine and told one on no ARV "The records do not address" it (ADR
+	 * Decision 730).
+	 */
+	@Test
+	public void causeTroubleWithHerGroupIsCauseProblemsWithIt() {
+		String[][] pairs = { { "could simvastatin cause trouble with her ARVs?", "Will simvastatin cause problems with her ARVs?" },
+			{ "Would fluconazole cause any trouble with his TB drugs?", "Would fluconazole cause any problems with his TB drugs?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+	}
+
+	/**
+	 * "How will rifampicin affect her nevirapine?" is "Will rifampicin affect her nevirapine?" — the model told a demo
+	 * patient on rifampicin and no nevirapine "No — Nevirapine should not be given" (ADR Decision 731).
+	 */
+	@Test
+	public void howWillADrugAffectAnotherIsWhetherItAffectsIt() {
+		String[][] pairs = { { "how will rifampicin affect her nevirapine?", "Will rifampicin affect her nevirapine?" },
+			{ "How does fluconazole affect her efavirenz?", "Does fluconazole affect her efavirenz?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+	}
 }

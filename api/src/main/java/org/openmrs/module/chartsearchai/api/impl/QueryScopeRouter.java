@@ -2068,7 +2068,9 @@ public final class QueryScopeRouter {
 	/** "Does ibuprofen interact with celecoxib?", "Do her ibuprofen and celecoxib interact?" — a question whether two drugs
 	 *  INTERACT (ADR Decisions 203, 218, 233); and "Will fluconazole affect her warfarin?", which asks the same (ADR
 	 *  Decision 248), as does "Do clarithromycin and simvastatin clash?" (ADR Decision 256). */
-	private static final String DOES_ONE_INTERACT_WITH_THE_OTHER = "(?:(?:does|do|will|would|can) " + HER_D
+	private static final String DOES_ONE_INTERACT_WITH_THE_OTHER = "(?:(?:how )?(?:does|do|will|would|can) " + HER_D
+			// "How will rifampicin affect her nevirapine?" — the model told a patient on rifampicin and no nevirapine "No —
+			// Nevirapine should not be given" (ADR Decision 731)
 			// and "Does fluconazole mix well with nevirapine?" (ADR Decision 429)
 			+ " (?:interact with|affect|clash with|mix (?:well )?with|go (?:well )?with) " + HER_D + "|(?:do|will|would|can) " + HER_D + " and " + HER_D
 			+ " (?:interact|clash)(?: with (?:each other|one another))?"
@@ -2534,7 +2536,8 @@ public final class QueryScopeRouter {
 					+ "|lower|reduce|change|alter|potentiate|affect) (?:the " + MEASURE + " of )?(?:any of )?" + HER_MEDICATION_GROUP
 					+ "(?: " + MEASURE + ")?",
 			// "Will fluconazole cause problems with her HIV drugs?" — whose "No" would say it will not (ADR Decision 433)
-			"(?:does|do|will|would|can|could|might) " + D + " cause (?:any )?(?:problems?|issues?|harm) (?:with|for|alongside) "
+			// and "Could simvastatin cause trouble with her ARVs?" (ADR Decision 730)
+			"(?:does|do|will|would|can|could|might) " + D + " cause (?:any )?(?:problems?|issues?|harm|trouble) (?:with|for|alongside) "
 					+ "(?:any of )?" + HER_MEDICATION_GROUP,
 			// and asked a problem with the group, "Is fluconazole a problem with her TB drugs?" — answered over all her
 			// medications, with nothing saying she is on no TB drug (ADR Decision 712)

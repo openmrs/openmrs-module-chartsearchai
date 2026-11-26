@@ -32648,3 +32648,61 @@ As Decision 730, with *"Will rifampicin affect her nevirapine?"* as the control.
   medications and rifampicin is, and the patient on efavirenz that neither is.
 
 Pinned by `ClinicianWordingsTest.howWillADrugAffectAnotherIsWhetherItAffectsIt`.
+
+## Decision 732: Whether a drug goes with her medications is whether she can take it with them
+
+**Status: Accepted** (November 2026).
+*"Can clarithromycin go with what she is taking?"*, *"Does fluconazole go with her ARVs?"* and *"Would erythromycin go ok with
+her meds?"* are [Decision 714](#decision-714-a-drug-with-what-she-is-on-is-a-drug-with-her-medications)'s *"Can she take X
+with what she is taking?"*, *"Can she take X with her ARVs?"* and *"Can she take X with her meds?"*.
+
+### Context
+
+In the demo's sixty-sixth batch, *"can clarithromycin go with what she is taking?"* went to the model for all 18 patients,
+and all 18 answers led *"Clarithromycin can be given"*, a clearance the module never gives. The router read *"go with"* only
+between two named drugs.
+
+### The decision
+
+Beside Decision 714's shape, the router takes *"(can, could, will, would, does, do) X go"*, then optionally *"well"*, *"ok"*,
+*"okay"* or *"fine"*, then *"with"* or *"alongside"* her medications, a group of hers, or what she is on.
+
+### Measured
+
+On the replica, over the first 10 patients of the sixty-sixth batch's sample and the patient on efavirenz and rifampicin, with
+*"Can she take clarithromycin with what she is taking?"* as the control.
+
+- Before: none of 11 went to the module (none of 18 on the live demo), while the control went to the module for all 11.
+- After: all 11 went to the module and are the control's answer word for word with record numbers stripped, with no errors.
+  The control is word for word its answer before on all 11.
+
+Pinned by `ClinicianWordingsTest.canADrugGoWithHerMedicationsIsWhetherSheCanTakeItWithThem`.
+
+## Decision 733: Whether her group will work if a drug is started is whether the drug affects it
+
+**Status: Accepted** (November 2026).
+*"Will her ARVs work if I give her rifampicin?"* and *"Will his ARVs still work if he starts carbamazepine?"* are
+[Decision 711](#decision-711-her-group-affected-if-a-drug-is-added-is-whether-the-drug-affects-it)'s *"Would her ARVs be
+affected if I give her rifampicin?"*.
+
+### Context
+
+In the demo's sixty-sixth batch, *"will her ARVs work if i give her rifampicin?"* went to the model for all 18 patients. 16
+answers led *"No — Rifampicin should not be given"*. 2 led *"Rifampicin can be given"*: one to a patient on no antiretroviral,
+and one to a patient on efavirenz who was already on rifampicin.
+
+### The decision
+
+Beside Decision 711's shapes, the router takes *"(would, will, could, might, may, do, does)"* a group of hers, *"work"* with
+*"still"* allowed before it, then *"if"* or *"when"* and a verb starting the drug.
+
+### Measured
+
+As Decision 732, with *"Would her ARVs be affected if I give her rifampicin?"* as the control.
+
+- Before: none of 11 went to the module (none of 18 on the live demo), while the control went to the module for all 11.
+- After: all 11 went to the module and are the control's answer word for word with record numbers stripped, with no errors.
+  The control is word for word its answer before on all 11. The patient on no antiretroviral is told none is among her medications the drug data
+  identifies.
+
+Pinned by `ClinicianWordingsTest.willHerGroupWorkIfADrugIsStartedIsWhetherItIsAffected`.

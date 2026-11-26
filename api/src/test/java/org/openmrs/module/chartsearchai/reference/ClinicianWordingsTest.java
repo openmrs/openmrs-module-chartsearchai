@@ -3367,4 +3367,37 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 			assertEquals(canonical, ask(pair[0]), pair[0]);
 		}
 	}
+
+	/**
+	 * "Can clarithromycin go with what she is taking?" is "Can she take clarithromycin with what she is taking?" — the model
+	 * led every demo patient "Clarithromycin can be given" (ADR Decision 732).
+	 */
+	@Test
+	public void canADrugGoWithHerMedicationsIsWhetherSheCanTakeItWithThem() {
+		String[][] pairs = { { "can clarithromycin go with what she is taking?",
+				"Can she take clarithromycin with what she is taking?" },
+			{ "Does fluconazole go with her ARVs?", "Can she take fluconazole with her ARVs?" },
+			{ "Would erythromycin go ok with her meds?", "Can she take erythromycin with her meds?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+	}
+
+	/**
+	 * "Will her ARVs work if I give her rifampicin?" is "Would her ARVs be affected if I give her rifampicin?" — the model
+	 * told a demo patient on no antiretroviral "Rifampicin can be given" (ADR Decision 733).
+	 */
+	@Test
+	public void willHerGroupWorkIfADrugIsStartedIsWhetherItIsAffected() {
+		String[][] pairs = { { "will her ARVs work if i give her rifampicin?",
+				"Would her ARVs be affected if I give her rifampicin?" },
+			{ "Will his ARVs still work if he starts carbamazepine?", "Would his ARVs be affected if he starts carbamazepine?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+	}
 }

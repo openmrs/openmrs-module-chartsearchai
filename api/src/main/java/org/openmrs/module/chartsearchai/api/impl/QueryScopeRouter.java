@@ -671,6 +671,10 @@ public final class QueryScopeRouter {
 					// and "with what she is on" (ADR Decision 714)
 					+ " (?:with|alongside|while (?:on|taking)) " + "(?:" + POSSESSIVE + " " + MEDICATIONS + "|" + HER_MEDICATION_GROUP + "|"
 					+ WHAT_SHE_IS_ON + ")",
+			// "Can clarithromycin go with what she is taking?", "Does fluconazole go with her ARVs?" — the model led every demo
+			// patient "Clarithromycin can be given" (ADR Decision 732)
+			"(?:can|could|will|would|does|do) " + D + " go (?:well |ok |okay |fine )?(?:with|alongside) (?:" + POSSESSIVE + " (?:other )?"
+					+ MEDICATIONS + "|" + HER_MEDICATION_GROUP + "|" + WHAT_SHE_IS_ON + ")",
 			"is it (?:safe|ok|okay) for (?:her|him|them|the patient|this patient) to (?:drink|have|take|consume) " + D
 					// and "with what she is on" (ADR Decision 714)
 					+ " (?:with|alongside|while (?:on|taking)) " + "(?:" + POSSESSIVE + " " + MEDICATIONS + "|" + HER_MEDICATION_GROUP + "|"
@@ -2553,6 +2557,10 @@ public final class QueryScopeRouter {
 			"(?:would|will|could|might|may) (?:any of )?" + HER_MEDICATION_GROUP + " be (?:affected|impacted) (?:by (?:starting "
 					+ "|giving |adding )?" + D + "|(?:if|when) " + STARTS_A_DRUG + ")",
 			"(?:is|are) (?:any of )?" + HER_MEDICATION_GROUP + " (?:affected|impacted) by " + D,
+			// "Will her ARVs work if I give her rifampicin?" — the model told a patient on no antiretroviral "Rifampicin can be
+			// given" (ADR Decision 733)
+			"(?:would|will|could|might|may|do|does) (?:any of )?" + HER_MEDICATION_GROUP + " (?:still )?work (?:if|when) "
+					+ STARTS_A_DRUG,
 			// "Will rifampicin make her ARVs less effective?" (ADR Decision 431)
 			"(?:does|do|will|would|can|could|might) (?:starting |giving |adding )?" + D + " make (?:any of )?" + HER_MEDICATION_GROUP
 					+ " " + LESS_EFFECTIVE,

@@ -254,7 +254,10 @@ final class DrugClassTerms {
 		// and a safer one of her groups if she needs a drug: "Is there a safer ARV if she needs rifampicin?" asks for one in
 		// place of her ARVs (ADR Decision 693)
 		+ "|(?i:(?<=there )(?:(?:a|an|any) )?(?:safer|better))(?= [\\p{L}]+(?: [\\p{L}]+)?(?: to (?:use|give))? (?i:if) (?i:she|he"
-		+ "|they|the patient) )) (?=[\\p{L}])");
+		+ "|they|the patient) ))"
+		// never "her" before "to": the pronoun of "Is it safe for her to take fluconazole with her TB drugs?", which names
+		// nothing of hers (ADR Decision 725)
+		+ " (?!(?i:to) )(?=[\\p{L}])");
 
 	/** A verb giving her something, before which "her" and a drug class is the class proposed for her and never one of her
 	 *  groups: "give her statins with her ARVs" proposes statins (ADR Decision 631). Her ARVs and TB drugs given her stay

@@ -32356,3 +32356,109 @@ same 10 patients.
 
 Pinned by `ClinicianWordingsTest.couldADrugBeAProblemWithHerGroupIsWhetherItIsOne`. Decision 391's wording stays pinned by
 `ClinicianWordingsTest.eachWordingIsAnsweredAsTheQuestionItAsks`.
+
+## Decision 723: Are there interactions with her drug is any interactions with it
+
+**Status: Accepted** (November 2026).
+*"Are there interaction worries with her nevirapine?"*, *"Are there interactions with her nevirapine?"* and *"Is there an
+interaction concern with his warfarin?"* are
+[Decision 338](#decision-338-any-interactions-with-his-x-asks-whether-x-interacts-with-his-medications)'s *"Any
+interactions with her X?"*.
+
+### Context
+
+In the demo's sixty-second batch, *"are there interaction worries with her nevirapine?"* went to the model for all 18
+patients. Decision 338's shape, which [Decision 718](#decision-718-interaction-worries-are-interactions) taught *"interaction
+worries"*, takes the question only with *"any"*.
+
+### The decision
+
+Beside Decision 338's shape, the router takes *"are there"* or *"is there (an)"* with interactions, or with an interaction
+worry, concern, issue, problem or risk, *"with her X"*, with no *"any"*. Only interactions: *"are there problems with her
+nevirapine"* may ask about its side effects or her adherence.
+
+### Measured
+
+On the demo replica (8088), the wording, with *"Any interactions with her nevirapine?"* as the control, asked of 10 patients
+of the sixty-second batch.
+
+- Before: none went to the module. 3 answers led *"No"*. One, to a patient on efavirenz and no nevirapine, was *"No —
+  Nevirapine should not be given"*.
+- After: all 10 are the control's answer word for word with record numbers stripped. The control is unchanged on all 10, with
+  no errors.
+
+Pinned by `ClinicianWordingsTest.areThereInteractionsWithHerDrugIsAnyInteractionsWithIt`.
+
+## Decision 724: Any changes if she starts a drug are any dose changes if it is started
+
+**Status: Accepted** (November 2026).
+*"Does she need any changes if she starts rifabutin?"* and *"Will he need any medication changes if I add rifampicin?"* are
+[Decision 684](#decision-684-whether-she-needs-any-dose-changes-if-a-drug-is-added-and-whether-her-drug-will-interact-with-anything-new-are-the-modules-questions)'s
+*"Does she need any dose changes if …?"*.
+
+### Context
+
+In the demo's sixty-second batch, *"does she need any changes if she starts rifabutin?"* went to the model for all 18
+patients. The model answered several with a clearance the module never gives, *"Rifabutin can be started"*. Decision 684's
+shape required *"dose"*, *"dosage"* or *"dosing"* before *"changes"*.
+
+### The decision
+
+Decision 684's shape takes *"medication"*, *"medicine"* or *"treatment"* changes, or *"changes"* alone. The condition still
+names a drug she starts, so the changes asked about are to her regimen.
+
+### Measured
+
+On the demo replica (8088), the wording, with *"Does she need any dose changes if she starts rifabutin?"* as the control,
+asked of the same 10 patients as Decision 723.
+
+- Before: none went to the module. 5 answers cleared the drug, *"Rifabutin can be given"* or *"No changes are required"*.
+- After: all 10 are the control's answer word for word with record numbers stripped. The control is unchanged on all 10, with
+  no errors.
+
+Pinned by `ClinicianWordingsTest.anyChangesIfSheStartsADrugIsAnyDoseChanges`.
+
+## Decision 725: Is it safe for her to take a drug with her group is whether she can take it with the group
+
+**Status: Accepted** (November 2026).
+*"Is it safe (ok) for her to take X with her G?"*, for G a group of her medications, is
+[Decision 313](#decision-313-one-drug-asked-about-beside-a-named-group-of-her-medications-says-the-check-cannot-tell-which-orders-the-group-means)'s
+*"Can she take X with her G?"*.
+
+### Context
+
+In the demo's sixty-second batch, *"is it safe for her to take doxycycline with her TB drugs?"* was read by
+[Decision 300](#decision-300-four-more-wordings-of-questions-the-module-answers-reach-those-answers)'s take-or-drink proposal,
+whose tail takes a group as it takes her medications whole. So the drug was answered over all her medications. Patients on no
+TB drug were given its unrated rows against their ARVs, with nothing saying it had been checked against them all. A patient
+on ethambutol and isoniazid got the same answer, never one over her TB drugs.
+
+### The decision
+
+- `SAFE_WITH_HER_MEDICATIONS_SHAPES` takes the wording with a group, as
+  [Decision 719](#decision-719-what-about-giving-her-a-drug-with-her-group-is-whether-to-give-it) did *"What about giving her
+  X with her G?"*. The wording is still a proposal. So, under
+  [Decision 649](#decision-649-one-drug-beside-a-group-of-hers-she-has-none-of-is-told-she-has-none)'s third bullet, a patient
+  on none of the group keeps the proposal's answer. That answer now leads *"This check checked X against all of this
+  patient's active medications."*. A first cut expected *"No TB drug is among …"*, which Decision 649 gives only to a question
+  that is not a proposal.
+- `DrugClassTerms`' reading of what a question names as hers no longer takes *"her"* before *"to"*. That *"her"* is the
+  pronoun of *"for her to take"*, and was read as naming *"to take doxycycline"* as hers. That one false thing kept every such
+  question from the answer over her group, the patient on TB drugs included.
+
+### Measured
+
+On the demo replica (8088), the wording, with *"Can she take doxycycline with her TB drugs?"* as the control, asked of the same
+10 patients as Decision 723. The patients' active medications were checked by SQL: 9 are on no TB drug, and 1 is on
+ethambutol and isoniazid.
+
+- Before: none matched the control, and none led with what the drug was checked against.
+- With the router shape alone: 9 matched, and all 10 led *"This check checked Doxycycline against all …"*. The patient on TB
+  drugs was still answered over all her medications. The control told her *"The interaction check relates Doxycycline to
+  none of this patient's TB drugs (Ethambutol and isoniazid)."*.
+- With the pronoun fix: all 10 are the control's answer word for word with record numbers stripped. *"Is it ok for him to take
+  fluconazole with his ARVs?"*, against *"Can he take fluconazole with his ARVs?"*, matched on all 10 throughout, since all 10
+  are on ARVs. Both controls are unchanged, with no errors.
+
+Pinned by `ClinicianWordingsTest.safeForHerToTakeADrugWithHerGroupIsWhetherSheCanTakeIt`, for a patient on none of the group, and
+`DrugBesideHerMedicationGroupTest.safeForHerToTakeADrugWithHerGroupIsAnsweredOverTheGroup`, for a patient on them.

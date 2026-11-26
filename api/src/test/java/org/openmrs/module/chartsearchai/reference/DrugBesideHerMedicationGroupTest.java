@@ -9,6 +9,7 @@
  */
 package org.openmrs.module.chartsearchai.reference;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -79,6 +80,22 @@ public class DrugBesideHerMedicationGroupTest extends BaseModuleContextSensitive
 			assertTrue(answer.contains("\nRifampicin (rifampin) interacts with active order Nevirapine — Major."),
 				question + " was: " + answer);
 			assertTrue(!answer.contains("No —") && !answer.contains("Yes —"), question + " was: " + answer);
+		}
+	}
+
+	/**
+	 * "Is it safe for her to take fluconazole with her TB drugs?", of a patient on them, is "Can she take fluconazole with her
+	 * TB drugs?": answered over her TB drugs. On the demo replica a patient on ethambutol and isoniazid was answered over all
+	 * her medications — the "her" of "for her to take" was read as naming something of hers (ADR Decision 725).
+	 */
+	@Test
+	public void safeForHerToTakeADrugWithHerGroupIsAnsweredOverTheGroup() {
+		String canonical = ask("Can she take fluconazole with her TB drugs?");
+		assertNotNull(canonical, "precondition: the module answers the canonical");
+		assertTrue(canonical.startsWith("Fluconazole and this patient's TB drugs ("), "precondition: " + canonical);
+		for (String question : new String[] { "Is it safe for her to take fluconazole with her TB drugs?",
+			"Is it ok for her to take fluconazole with her TB treatment?" }) {
+			assertEquals(canonical, ask(question), question);
 		}
 	}
 

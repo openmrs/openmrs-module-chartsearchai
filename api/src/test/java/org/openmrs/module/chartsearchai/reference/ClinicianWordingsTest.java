@@ -3224,4 +3224,52 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 			assertEquals(canonical, ask(pair[0]), pair[0]);
 		}
 	}
+
+	/**
+	 * "Are there interaction worries with her nevirapine?" is "Any interactions with her nevirapine?" — the model led 3 of 10
+	 * replica patients "No", one on no nevirapine "No — Nevirapine should not be given" (ADR Decision 723).
+	 */
+	@Test
+	public void areThereInteractionsWithHerDrugIsAnyInteractionsWithIt() {
+		String[][] pairs = { { "are there interaction worries with her nevirapine?", "Any interactions with her nevirapine?" },
+			{ "Are there interactions with her nevirapine?", "Any interactions with her nevirapine?" },
+			{ "is there an interaction concern with his warfarin?", "Any interactions with his warfarin?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+	}
+
+	/**
+	 * "Does she need any changes if she starts rifabutin?" is "Does she need any dose changes if I add rifabutin?" — the model
+	 * told demo patients "Rifabutin can be started" (ADR Decision 724).
+	 */
+	@Test
+	public void anyChangesIfSheStartsADrugIsAnyDoseChanges() {
+		String[][] pairs = { { "does she need any changes if she starts rifabutin?", "Does she need any dose changes if she starts rifabutin?" },
+			{ "Will he need any medication changes if I add rifampicin?", "Will he need any dose changes if I add rifampicin?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+	}
+
+	/**
+	 * "Is it safe for her to take doxycycline with her TB drugs?" is "Can she take doxycycline with her TB drugs?" — demo patients
+	 * on no TB drug were answered over all their medications, with nothing saying it was checked against them all (ADR Decision
+	 * 725).
+	 */
+	@Test
+	public void safeForHerToTakeADrugWithHerGroupIsWhetherSheCanTakeIt() {
+		String[][] pairs = { { "is it safe for her to take doxycycline with her TB drugs?", "Can she take doxycycline with her TB drugs?" },
+			{ "Is it ok for him to take fluconazole with his ARVs?", "Can he take fluconazole with his ARVs?" },
+			{ "Is it safe for her to take warfarin with her TB drugs?", "Can she take warfarin with her TB drugs?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+	}
 }

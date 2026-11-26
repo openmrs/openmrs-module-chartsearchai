@@ -1045,6 +1045,11 @@ public final class QueryScopeRouter {
 			// and "Any problems with her metronidazole?", answered from the same check (ADR Decision 339)
 			"(?:(?:are|is) there )?any (?:drug )?(?:interactions?|problems?|probs?|issues?|concerns?|" + INTERACTION_WORRIES + ") with (?:"
 					+ POSSESSIVE + " )?" + D,
+			// "Are there interaction worries with her nevirapine?" — the same question with no "any"; the model led 3 of 10
+			// replica patients "No", one on no nevirapine "No — Nevirapine should not be given" (ADR Decision 723).
+			// Interactions only: "are there problems with her nevirapine" may ask about side effects or adherence.
+			"(?:are there (?:drug )?(?:interactions|interaction (?:worries|concerns|issues|problems|risks))|is there (?:an? )?(?:drug )?"
+					+ "(?:interaction|interaction (?:worry|concern|issue|problem|risk))) with " + POSSESSIVE + " " + D,
 			// "Is there a problem with her isoniazid and her other medicines?" — led "No — there are several safety findings";
 			// for a patient on no isoniazid the model recited its reference record's Major partners (ADR Decision 612)
 			"is there (?:a|any) problem with (?:" + POSSESSIVE + " )?" + D + " and (?:any of )?" + POSSESSIVE + " (?:other )?"
@@ -1147,8 +1152,10 @@ public final class QueryScopeRouter {
 					+ "|the patient|this patient) )?(?:need|require|needed|required) (?:if|when) " + STARTS_A_DRUG,
 			// "Does she need any dose changes if I add rifampicin?" — the same question asked yes-or-no; the model answered all
 			// 18 demo patients with a verdict on adding the drug, "No — Rifampicin should not be added" (ADR Decision 684)
-			"(?:does|do|will|would) (?:she|he|they|the patient|this patient) (?:need|require) any (?:dose |dosage |dosing )"
-					+ "(?:adjustments?|changes?) (?:if|when) " + STARTS_A_DRUG,
+			// And "Does she need any changes if she starts rifabutin?", "Will he need any medication changes if I add
+			// rifampicin?" — the model told demo patients "Rifabutin can be started" (ADR Decision 724)
+			"(?:does|do|will|would) (?:she|he|they|the patient|this patient) (?:need|require) any (?:dose |dosage |dosing |"
+					+ "medication |medicine |treatment )?(?:adjustments?|changes?) (?:if|when) " + STARTS_A_DRUG,
 			// "Is there no interaction between fluconazole and her meds?" — which interact, with no "Yes" or "No" (ADR Decision
 			// 406)
 			"(?:is|are) there no (?:drug )?interactions? (?:between " + D + " and " + POSSESSIVE + " " + MEDICATIONS + "|with " + D
@@ -1840,6 +1847,10 @@ public final class QueryScopeRouter {
 			// drug checked against all her medications (ADR Decision 719)
 			"(?:what|how) about (?:giving|adding|starting|prescribing) (?:" + PATIENT + " )?(?:on )?" + D + " (?:with|alongside|to) "
 					+ "(?:any of )?" + HER_MEDICATION_GROUP,
+			// and "Is it safe for her to take doxycycline with her TB drugs?" — read as Decision 300's proposal of her
+			// medications whole, patients on no TB drug were answered over all of them with nothing saying so (ADR Decision 725)
+			"is it (?:safe|ok|okay) for " + PATIENT + " to (?:take|have|use) " + D + " (?:with|alongside) (?:any of )?"
+					+ HER_MEDICATION_GROUP,
 			// "Can fluconazole be given with her HIV medicines?" (ADR Decision 426)
 			// and "Can fluconazole be taken by her with her other drugs?" (ADR Decision 429)
 			"(?:can|could|may|should) " + D + " be (?:safely )?(?:given|taken|used|started|combined)(?: (?:by|to|for) " + PATIENT

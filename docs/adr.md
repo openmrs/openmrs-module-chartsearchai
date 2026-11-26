@@ -32706,3 +32706,37 @@ As Decision 732, with *"Would her ARVs be affected if I give her rifampicin?"* a
   identifies.
 
 Pinned by `ClinicianWordingsTest.willHerGroupWorkIfADrugIsStartedIsWhetherItIsAffected`.
+
+## Decision 734: Any warnings for a drug with her medications are any warnings for it
+
+**Status: Accepted** (November 2026).
+*"Any warnings for itraconazole with what she takes?"* and *"Are there any cautions with giving fluconazole alongside her
+meds?"* are
+[Decision 434](#decision-434-whether-to-avoid-a-drug-whether-it-is-a-mistake-or-ruled-out-and-whether-a-pair-is-contraindicated-are-answered-with-no-lead)'s
+*"Any warnings for itraconazole?"* and *"Are there any cautions with giving fluconazole?"*: the drug is checked against all of
+her medications either way.
+
+### Context
+
+In the demo's sixty-seventh batch, *"any warnings for itraconazole with what she takes?"* went to the model for all 18
+patients. 14 answers cleared itraconazole: 13 led *"Itraconazole can be given"* and one *"The drug can be given"*, a
+clearance the module never gives. One, to a patient on no antiretroviral, gave an *"Unknown severity"* interaction with
+trimethoprim. The other seven questions of the batch were the module's for all 18 patients.
+
+### The decision
+
+Decision 434's *"any (red flags, warnings, cautions, precautions) (with, for, about) X"* also takes *"with"* or
+*"alongside"* her medications, or what she is on, after the drug.
+
+### Measured
+
+On the replica, over the first 10 patients of the sixty-seventh batch's sample, with *"Any warnings for itraconazole?"* and
+*"Are there any cautions with giving fluconazole?"* as the controls.
+
+- Before: none of 10 went to the module for either wording (none of 18 on the live demo for the first), while both controls
+  went to the module for all 10.
+- After: all 10 went to the module for both wordings and are their control's answer word for word with record numbers
+  stripped, with no errors. Both controls are word for word their answers before on all 10. The patient on no
+  antiretroviral is told the data lists itraconazole against her trimethoprim and sulfamethoxazole with no severity on file.
+
+Pinned by `ClinicianWordingsTest.anyWarningsForADrugWithHerMedicationsIsAnyWarningsForIt`.

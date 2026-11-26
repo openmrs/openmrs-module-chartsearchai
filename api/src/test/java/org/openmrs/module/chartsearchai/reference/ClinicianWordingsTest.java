@@ -3400,4 +3400,19 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 			assertEquals(canonical, ask(pair[0]), pair[0]);
 		}
 	}
+
+	/**
+	 * "Any warnings for itraconazole with what she takes?" is "Any warnings for itraconazole?" — the model led 13 of 18 demo
+	 * patients "Itraconazole can be given" (ADR Decision 734).
+	 */
+	@Test
+	public void anyWarningsForADrugWithHerMedicationsIsAnyWarningsForIt() {
+		String[][] pairs = { { "any warnings for itraconazole with what she takes?", "Any warnings for itraconazole?" },
+			{ "Are there any cautions with giving fluconazole alongside her meds?", "Are there any cautions with giving fluconazole?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+	}
 }

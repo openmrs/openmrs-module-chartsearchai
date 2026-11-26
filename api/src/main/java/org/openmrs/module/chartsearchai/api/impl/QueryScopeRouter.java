@@ -955,7 +955,10 @@ public final class QueryScopeRouter {
 			"is there (?:a |any )?reason to be (?:careful|cautious) (?:with|about) (?:giving )?" + D + "(?: (?:for|in) " + PATIENT
 					+ ")?",
 			"(?:are there )?any (?:red flags|warnings|cautions|precautions) (?:with|for|about) (?:giving )?" + D + "(?: (?:for|in) "
-					+ PATIENT + ")?",
+					+ PATIENT + ")?"
+					// and "… with what she takes" — the model led 13 of 18 demo patients "Itraconazole can be given" (ADR
+					// Decision 734)
+					+ "(?: (?:with|alongside) (?:any of )?(?:" + POSSESSIVE + " (?:other )?" + MEDICATIONS + "|" + WHAT_SHE_IS_ON + "))?",
 			// "Is there a serious interaction between fluconazole and her ARVs?" — a grade a "Yes" would claim of every finding
 			"(?:is|are) there (?:a |an |any )?(?:clinically )?(?:dangerous|serious|major|significant|severe|important|relevant) "
 					+ "(?:drug )?interactions? between " + D + " and (?:any of )?" + HER_MEDICATION_GROUP,

@@ -99,6 +99,21 @@ public class DrugBesideHerMedicationGroupTest extends BaseModuleContextSensitive
 		}
 	}
 
+	/**
+	 * "Does fluconazole go with her TB drugs?" and "What about fluconazole and her TB drugs?" are "Can she take fluconazole
+	 * with her TB drugs?" for a patient on a TB drug too: answered over the group (ADR Decision 737).
+	 */
+	@Test
+	public void aDrugGoingWithHerGroupIsAnsweredOverTheGroup() {
+		String canonical = ask("Can she take fluconazole with her TB drugs?");
+		assertNotNull(canonical, "precondition: the module answers the canonical");
+		assertTrue(canonical.startsWith("Fluconazole and this patient's TB drugs ("), "precondition: " + canonical);
+		for (String question : new String[] { "Does fluconazole go with her TB drugs?",
+			"What about fluconazole and her TB drugs?" }) {
+			assertEquals(canonical, ask(question), question);
+		}
+	}
+
 	private static String ask(String question) {
 		return ask(question, DrugReferenceTestSupport.activeOrder("order-rhze",
 			"Rifampicin isoniazid pyrazinamide and ethambutol 150/75/400/275mg"));

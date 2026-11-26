@@ -698,6 +698,10 @@ public final class QueryScopeRouter {
 			// which the model answered for every patient it reached (ADR Decision 719)
 			"(?:what|how) about (?:giving|adding|starting|prescribing) (?:" + PATIENT + " )?(?:on )?" + D + " (?:with|alongside|to) "
 					+ "(?:any of )?(?:" + POSSESSIVE + " (?:other )?" + MEDICATIONS + "|" + HER_MEDICATION_GROUP + "|" + WHAT_SHE_IS_ON + ")",
+			// and the drug with no verb, "What about simvastatin and her HIV meds?" — the model led two demo patients
+			// "Simvastatin can be given" (ADR Decision 737)
+			"(?:what|how) about " + D + " (?:and|with|alongside) (?:" + POSSESSIVE + " (?:other )?" + MEDICATIONS + "|"
+					+ HER_MEDICATION_GROUP + "|" + WHAT_SHE_IS_ON + ")",
 			// "Can this patient take warfarin?", "Can she take ibuprofen?", "Can she drink alcohol?" (ADR Decision 268)
 			"(?:can|could|may|should) (?:she|he|they|the patient|this patient) (?:also )?(?:safely )?(?:take|start|be given|be started on"
 					// and "Can she get fluconazole?" (ADR Decision 431), and "Can she eat ginger?", answered by the model "Ginger
@@ -874,6 +878,10 @@ public final class QueryScopeRouter {
 					+ PATIENT + " )?(?:on )?)" + D
 					+ " (?:with|alongside|together with|to|while (?:on|taking)) (?:any of )?(?:" + POSSESSIVE + " (?:other )?"
 					+ MEDICATIONS + "|" + HER_MEDICATION_GROUP + ")",
+			// "What if I give her fluconazole on top of her ARVs?" — the model led 12 of 18 demo patients "Fluconazole can be
+			// given" (ADR Decision 735)
+			"what if (?:i|we) (?:give|add|start|prescribe) (?:" + PATIENT + " )?(?:on )?" + D + " (?:with|alongside|together with|"
+					+ "on top of|to) (?:any of )?(?:" + POSSESSIVE + " (?:other )?" + MEDICATIONS + "|" + HER_MEDICATION_GROUP + ")",
 			// "What will happen to her ARVs if I add rifabutin?" — the model told a demo patient "Nevirapine can be given"
 			// (ADR Decision 728)
 			"what (?:happens|would happen|will happen) to (?:" + POSSESSIVE + " (?:other )?" + MEDICATIONS + "|"
@@ -1096,7 +1104,10 @@ public final class QueryScopeRouter {
 			D + " (?:with|and) " + POSSESSIVE + " " + MEDICATIONS);
 
 	/** An alternative to one drug, asked for (ADR Decision 418): no finding chooses one, and the answer says so. */
-	private static final String AN_ALTERNATIVE_TO = "(?:(?:is|are) there (?:a |an |any )?(?:safer |better )?alternatives? (?:to|for) (?:"
+	private static final String AN_ALTERNATIVE_TO = "(?:(?:is|are) there (?:a |an |any )?(?:(?:safer |better )?alternatives? (?:to|for)|"
+			// "Is there a safer option than rifampicin for her?" — the model told 7 of 18 demo patients "The records do not
+			// address" it (ADR Decision 736)
+			+ "(?:safer|better) (?:options?|alternatives?|choices?) than) (?:"
 			+ POSSESSIVE + " )?" + D + "(?: (?:for|in) " + PATIENT + ")?"
 			// "Is there an alternative to rifampicin that doesn't interact with her ARVs?" (ADR Decision 427)
 			+ "(?: (?:that|which) (?:does not|doesn't|doesnt|won't|will not|wouldn't|would not) interact with (?:any of )?" + POSSESSIVE
@@ -1868,6 +1879,11 @@ public final class QueryScopeRouter {
 			// drug checked against all her medications (ADR Decision 719)
 			"(?:what|how) about (?:giving|adding|starting|prescribing) (?:" + PATIENT + " )?(?:on )?" + D + " (?:with|alongside|to) "
 					+ "(?:any of )?" + HER_MEDICATION_GROUP,
+			// and with no verb of giving, "What about fluconazole and her TB drugs?" (ADR Decision 737)
+			"(?:what|how) about " + D + " (?:and|with|alongside) " + HER_MEDICATION_GROUP,
+			// and "Does fluconazole go with her TB drugs?" — answered over all her medications with nothing saying so when
+			// she is on no TB drug (ADR Decision 737)
+			"(?:can|could|will|would|does|do) " + D + " go (?:well |ok |okay |fine )?(?:with|alongside) " + HER_MEDICATION_GROUP,
 			// and "Is it safe for her to take doxycycline with her TB drugs?" — read as Decision 300's proposal of her
 			// medications whole, patients on no TB drug were answered over all of them with nothing saying so (ADR Decision 725)
 			"is it (?:safe|ok|okay) for " + PATIENT + " to (?:take|have|use) " + D + " (?:with|alongside) (?:any of )?"

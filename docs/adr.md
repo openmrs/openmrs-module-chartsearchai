@@ -32740,3 +32740,99 @@ On the replica, over the first 10 patients of the sixty-seventh batch's sample, 
   antiretroviral is told the data lists itraconazole against her trimethoprim and sulfamethoxazole with no severity on file.
 
 Pinned by `ClinicianWordingsTest.anyWarningsForADrugWithHerMedicationsIsAnyWarningsForIt`.
+
+## Decision 735: What if I give her a drug on top of her group is what happens if I give it with them
+
+**Status: Accepted** (November 2026).
+*"What if I give her fluconazole on top of her ARVs?"* and *"What if we add rifampicin to his meds?"* are
+[Decision 670](#decision-670-what-happens-if-she-takes-a-drug-with-a-group-of-hers-is-the-drug-asked-beside-that-group)'s
+*"What happens if I give her fluconazole with her ARVs?"* and *"What happens if we add rifampicin to his meds?"*.
+
+### Context
+
+In the demo's sixty-eighth batch, *"what if i give her fluconazole on top of her ARVs?"* went to the model for all 18
+patients. 12 answers led *"Fluconazole can be given"*, a clearance the module never gives, and one said *"The records do not
+address"* it. The router read *"what if I give her X"* only with nothing after the drug.
+
+### The decision
+
+Beside Decision 670's shapes, the router takes *"what if (I, we) (give, add, start, prescribe)"* the drug, then *"with"*,
+*"alongside"*, *"together with"*, *"on top of"* or *"to"* her medications or a group of hers.
+
+### Measured
+
+On the replica, over the first 10 patients of the sixty-eighth batch's sample and the patient on no antiretroviral, with
+*"What happens if I give her fluconazole with her ARVs?"* and *"What happens if we add rifampicin to his meds?"* as the
+controls.
+
+- Before: none of 11 went to the module for either wording (none of 18 on the live demo for the first), while both controls
+  went to the module for all 11.
+- After: all 11 went to the module for both wordings and are their control's answer word for word with record numbers
+  stripped, with no errors. Both controls are word for word their answers before on all 11.
+
+Pinned by `ClinicianWordingsTest.whatIfIGiveADrugOnTopOfHerGroupIsWhatHappensIfIGiveItWithThem`.
+
+## Decision 736: A safer option than a drug is an alternative to it
+
+**Status: Accepted** (November 2026).
+*"Is there a safer option than rifampicin for her?"* and *"Are there any better options than fluconazole?"* are
+[Decision 418](#decision-418-explaining-or-managing-an-interaction-or-an-alternative-to-a-drug-is-answered-with-what-the-check-found-under-a-lead-saying-what-it-does-not-do)'s
+*"Is there a safer alternative to rifampicin for her?"*: what the check found, under a lead saying it does not choose an
+alternative.
+
+### Context
+
+In the demo's sixty-eighth batch, *"is there a safer option than rifampicin for her?"* went to the model for all 18 patients.
+7 answers said *"The records do not address"* it, 9 led *"No — Rifampicin should not be given"*, and one led *"Rifampicin
+can be given"*. None said that nothing in the chart chooses an alternative.
+
+### The decision
+
+`AN_ALTERNATIVE_TO` also takes *"(safer, better) (option, alternative, choice) than"* the drug.
+
+### Measured
+
+As Decision 735, with *"Is there a safer alternative to rifampicin for her?"* as the control.
+
+- Before: none of 11 went to the module (none of 18 on the live demo), while the control went to the module for all 11.
+- After: all 11 went to the module and are the control's answer word for word with record numbers stripped, with no errors.
+  The control is word for word its answer before on all 11.
+
+Pinned by `ClinicianWordingsTest.aSaferOptionThanADrugIsAnAlternativeToIt`.
+
+## Decision 737: What about a drug and her group is what about giving it with them
+
+**Status: Accepted** (November 2026).
+*"What about simvastatin and her HIV meds?"* and *"How about erythromycin and her medications?"* are
+[Decision 719](#decision-719-what-about-giving-her-a-drug-with-her-group-is-whether-to-give-it)'s *"What about giving her
+simvastatin with her HIV meds?"*.
+
+### Context
+
+In the demo's sixty-eighth batch, *"what about simvastatin and her HIV meds?"* went to the model for all 18 patients. 2
+answers led *"Simvastatin can be given"*, 2 led *"No — Simvastatin should not be given"*, and one said *"The records do not
+address"* it. Decision 719's shape needed a verb of giving before the drug.
+
+### The decision
+
+Beside Decision 719's shape, the router takes *"(what, how) about"* the drug, then *"and"*, *"with"* or *"alongside"* her
+medications, a group of hers, or what she is on.
+
+Its group form also joins Decision 719's in `SAFE_WITH_HER_MEDICATIONS_SHAPES`, so a patient on none of the group is told the
+drug was checked against all her medications. The first cut left it out: on the replica, the patient on no antiretroviral got
+Decision 719's answer without that lead. [Decision 732](#decision-732-whether-a-drug-goes-with-her-medications-is-whether-she-can-take-it-with-them)'s
+*"Does fluconazole go with her TB drugs?"* had the same gap, missed because its measurement asked *"what she is taking"* and
+no group. Its group form joins the list too.
+
+### Measured
+
+As Decision 735, with *"What about giving her simvastatin with her HIV meds?"* as the control.
+
+- Before: none of 11 went to the module (none of 18 on the live demo), while the control went to the module for all 11.
+- After: all 11 went to the module and are the control's answer word for word with record numbers stripped, with no errors.
+  The control is word for word its answer before on all 11. The first cut matched on 10; the eleventh was the patient
+  on no antiretroviral the decision names.
+
+Pinned by `ClinicianWordingsTest.whatAboutADrugAndHerGroupIsWhatAboutGivingItWithThem`, the TB-drug pair of
+`ClinicianWordingsTest.canADrugGoWithHerMedicationsIsWhetherSheCanTakeItWithThem`, and, for a patient on a TB drug,
+`DrugBesideHerMedicationGroupTest.aDrugGoingWithHerGroupIsAnsweredOverTheGroup`.

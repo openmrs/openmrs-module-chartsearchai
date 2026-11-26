@@ -3377,7 +3377,9 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 		String[][] pairs = { { "can clarithromycin go with what she is taking?",
 				"Can she take clarithromycin with what she is taking?" },
 			{ "Does fluconazole go with her ARVs?", "Can she take fluconazole with her ARVs?" },
-			{ "Would erythromycin go ok with her meds?", "Can she take erythromycin with her meds?" } };
+			{ "Would erythromycin go ok with her meds?", "Can she take erythromycin with her meds?" },
+			// a group she is on none of: this patient takes no TB drug (ADR Decision 737)
+			{ "Does fluconazole go with her TB drugs?", "Can she take fluconazole with her TB drugs?" } };
 		for (String[] pair : pairs) {
 			String canonical = ask(pair[1]);
 			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
@@ -3409,6 +3411,55 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 	public void anyWarningsForADrugWithHerMedicationsIsAnyWarningsForIt() {
 		String[][] pairs = { { "any warnings for itraconazole with what she takes?", "Any warnings for itraconazole?" },
 			{ "Are there any cautions with giving fluconazole alongside her meds?", "Are there any cautions with giving fluconazole?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+	}
+
+	/**
+	 * "What if I give her fluconazole on top of her ARVs?" is "What happens if I give her fluconazole with her ARVs?" — the
+	 * model led 12 of 18 demo patients "Fluconazole can be given" (ADR Decision 735).
+	 */
+	@Test
+	public void whatIfIGiveADrugOnTopOfHerGroupIsWhatHappensIfIGiveItWithThem() {
+		String[][] pairs = { { "what if i give her fluconazole on top of her ARVs?", "What happens if I give her fluconazole with her ARVs?" },
+			{ "What if we add rifampicin to his meds?", "What happens if we add rifampicin to his meds?" },
+			// a group she is on none of: this patient takes no TB drug
+			{ "What if I give her fluconazole with her TB drugs?", "What happens if I give her fluconazole with her TB drugs?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+	}
+
+	/**
+	 * "Is there a safer option than rifampicin for her?" is "Is there a safer alternative to rifampicin for her?" — the model
+	 * told 7 of 18 demo patients "The records do not address" it (ADR Decision 736).
+	 */
+	@Test
+	public void aSaferOptionThanADrugIsAnAlternativeToIt() {
+		String[][] pairs = { { "is there a safer option than rifampicin for her?", "Is there a safer alternative to rifampicin for her?" },
+			{ "Are there any better options than fluconazole?", "Are there any better alternatives to fluconazole?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+	}
+
+	/**
+	 * "What about simvastatin and her HIV meds?" is "What about giving her simvastatin with her HIV meds?" — the model led
+	 * two demo patients "Simvastatin can be given" and told one "The records do not address" it (ADR Decision 737).
+	 */
+	@Test
+	public void whatAboutADrugAndHerGroupIsWhatAboutGivingItWithThem() {
+		String[][] pairs = { { "what about simvastatin and her HIV meds?", "What about giving her simvastatin with her HIV meds?" },
+			{ "How about erythromycin and her medications?", "How about giving her erythromycin with her medications?" },
+			// a group she is on none of: this patient takes no TB drug
+			{ "What about fluconazole and her TB drugs?", "What about giving her fluconazole with her TB drugs?" } };
 		for (String[] pair : pairs) {
 			String canonical = ask(pair[1]);
 			assertNotNull(canonical, "precondition: the module answers " + pair[1]);

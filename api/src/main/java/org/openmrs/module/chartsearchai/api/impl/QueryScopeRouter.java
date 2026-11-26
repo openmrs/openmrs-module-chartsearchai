@@ -879,8 +879,11 @@ public final class QueryScopeRouter {
 			// "Any issue if she drinks alcohol with her meds?" — she would take it herself, as the proposal "Can she drink
 			// alcohol with her medications?" has her; the model told patients on neither that ethanol has Major interactions
 			// with leflunomide and metformin (ADR Decision 715)
-			"(?:(?:is|are) there )?any (?:problems?|issues?|concerns?|risks?) if (?:she|he|they|the patient|this patient) "
-					+ "(?:takes|drinks|has|uses|eats|consumes) " + D + "(?: (?:with|alongside|while (?:on|taking)) (?:any of )?(?:"
+			// and if she starts it, "Any interaction concerns if she starts phenytoin?", which the model led "No — Phenytoin
+			// should not be started" (ADR Decision 721)
+			"(?:(?:is|are) there )?any (?:problems?|issues?|concerns?|risks?|" + INTERACTION_WORRIES + ") if (?:(?:she|he|they|the "
+					+ "patient|this patient) (?:drinks|has|uses|eats|consumes) " + D + "|" + STARTS_A_DRUG + ")"
+					+ "(?: (?:with|alongside|while (?:on|taking)) (?:any of )?(?:"
 					+ POSSESSIVE + " (?:other )?" + MEDICATIONS + "|" + HER_MEDICATION_GROUP + "|" + WHAT_SHE_IS_ON + "))?",
 			// "Any problem giving her ibuprofen?", "Are there any concerns with starting ibuprofen?"
 			"(?:(?:is|are) there )?any (?:problems?|issues?|concerns?) (?:with )?(?:giving|starting|prescribing|adding) (?:"
@@ -2512,6 +2515,11 @@ public final class QueryScopeRouter {
 			// medications, with nothing saying she is on no TB drug (ADR Decision 712)
 			"is " + D + " (?:unsafe|not safe|dangerous|risky|harmful|a problem|problematic) (?:with|alongside|in combination with) "
 					+ "(?:any of )?" + HER_MEDICATION_GROUP,
+			// and as what it could be, "Could efavirenz be a problem with her TB treatment?" (ADR Decision 722) — of a group, and
+			// never her medications whole, whose "Would amiodarone be a problem with her current meds?" ADR Decision 391 answers
+			"(?:would|will|could|might|may) " + D + " be (?:unsafe|not safe|dangerous|risky|harmful|a problem|problematic|an issue|"
+					+ "a concern) (?:with|alongside|in combination with) (?:any of )?(?!" + POSSESSIVE + " (?:other )?" + MEDICATIONS
+					+ "$)" + HER_MEDICATION_GROUP,
 			// "Would her ARVs be affected if I add phenytoin?" — the group affected, as the drug affecting it is; the model told
 			// an infant on no ARV "The records do not address how Phenytoin would affect Antiretroviral use" (ADR Decision 711)
 			"(?:would|will|could|might|may) (?:any of )?" + HER_MEDICATION_GROUP + " be (?:affected|impacted) (?:by (?:starting "

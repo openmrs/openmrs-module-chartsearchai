@@ -32293,3 +32293,66 @@ On the demo replica (8088), the wording, with *"Can efavirenz be given with her 
   and isoniazid, get efavirenz against those alone. The control is unchanged on all 10, with no errors.
 
 Pinned by `ClinicianWordingsTest.herGroupGivenWithADrugIsTheDrugGivenWithHerGroup`.
+
+## Decision 721: Any concerns if she starts a drug are any problems if it is started
+
+**Status: Accepted** (November 2026).
+*"Any (interaction) concerns if she starts X?"* is the risk proposal *"Any problems if I start her on X?"*.
+
+### Context
+
+In the demo's sixty-first batch, *"any interaction concerns if she starts phenytoin?"* went to the model for all 18 patients,
+and 2 answers opened *"No"*, saying phenytoin should not be started.
+[Decision 715](#decision-715-any-issue-if-she-drinks-a-drug-is-whether-she-can-drink-it) took *"any issue if she takes
+(drinks) X"*, but neither *"starts"* nor *"interaction concerns"*.
+
+### The decision
+
+Decision 715's shape takes `QueryScopeRouter.STARTS_A_DRUG` beside her drinking, having, using, eating or consuming X. Its
+nouns take `INTERACTION_WORRIES` ([Decision 718](#decision-718-interaction-worries-are-interactions)) beside *"problems,
+issues, concerns, risks"*.
+
+### Measured
+
+On the demo replica (8088), the wording, with *"Any problems if I start her on phenytoin?"* as the control, asked of the same
+10 patients.
+
+- Before: the wording went to the model for all 10, and 3 answers opened *"No"*. Among them was dd7993b1's *"No. Phenytoin
+  should not be started because it interacts with the active order Lopinavir / ritonavir"*.
+- After: all 10 are the module's answer, the control's word for word with record numbers stripped. The control is unchanged
+  on all 10, with no errors.
+
+Pinned by `ClinicianWordingsTest.anyConcernsIfSheStartsADrugIsAnyProblemsIfItIsStarted`.
+
+## Decision 722: Could a drug be a problem with her group is whether it is one
+
+**Status: Accepted** (November 2026).
+*"Could (would, will, might) X be a problem (an issue, a concern) with her G?"* is
+[Decision 712](#decision-712-a-drug-asked-a-problem-with-her-group-is-whether-it-causes-problems-with-the-group)'s *"Is X a
+problem with her G?"*, of a group and never her medications whole.
+
+### Context
+
+In the demo's sixty-first batch, *"could efavirenz be a problem with her TB treatment?"* was answered over all her
+medications. Patients on no TB drug were not told they are on none. Decision 712's shape took only *"is X …"*.
+
+### The decision
+
+Beside Decision 712's shape, `CHANGES_A_GROUP_OF_HER_MEDICATIONS_SHAPES` takes *"(would, will, could, might, may) X be"* with
+the same complements. A first cut admitted *"her (current) meds"* as the group, and the full suite reddened the four tests
+pinning [Decision 391](#decision-391-eight-wordings-a-clinician-types-are-answered-as-the-questions-they-ask)'s *"Would
+amiodarone be a problem with her current meds?"*, whose answer leads *"No —"*. A negative lookahead keeps her medications
+whole out of the shape.
+
+### Measured
+
+On the demo replica (8088), the wording, with *"Is efavirenz a problem with her TB treatment?"* as the control, asked of the
+same 10 patients.
+
+- Before: 3 answers matched the control, those of the 3 patients on a TB drug. The 7 on none got efavirenz's findings over
+  all their medications, with nothing saying they are on no TB drug.
+- After: all 10 are the control's answer word for word with record numbers stripped. The 7 get *"No TB drug is among this
+  patient's active medications the drug data identifies."*. The control is unchanged on all 10, with no errors.
+
+Pinned by `ClinicianWordingsTest.couldADrugBeAProblemWithHerGroupIsWhetherItIsOne`. Decision 391's wording stays pinned by
+`ClinicianWordingsTest.eachWordingIsAnsweredAsTheQuestionItAsks`.

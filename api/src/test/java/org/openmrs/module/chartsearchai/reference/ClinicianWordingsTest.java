@@ -3190,4 +3190,38 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 			assertEquals(canonical, ask(pair[0]), pair[0]);
 		}
 	}
+
+	/**
+	 * ADR Decision 721: "Any interaction concerns if she starts phenytoin?" is ADR Decision 299's "Any problems if I start
+	 * her on phenytoin?". On the demo it went to the model for 18 of 18 patients, which led 2 "No — Phenytoin should not
+	 * be started".
+	 */
+	@Test
+	public void anyConcernsIfSheStartsADrugIsAnyProblemsIfItIsStarted() {
+		String[][] pairs = { { "any interaction concerns if she starts phenytoin?", "Any problems if I start her on phenytoin?" },
+			{ "any concerns if she starts phenytoin?", "Any problems if I start her on phenytoin?" },
+			{ "Any issues if he is started on warfarin?", "Any problems if I start her on warfarin?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+	}
+
+	/**
+	 * ADR Decision 722: "Could efavirenz be a problem with her TB treatment?" is ADR Decision 712's "Is efavirenz a problem
+	 * with her TB treatment?". On the demo it was answered over all her medications, with nothing saying she is on no TB
+	 * drug.
+	 */
+	@Test
+	public void couldADrugBeAProblemWithHerGroupIsWhetherItIsOne() {
+		String[][] pairs = { { "could efavirenz be a problem with her TB treatment?", "Is efavirenz a problem with her TB treatment?" },
+			{ "could warfarin be a problem with her TB drugs?", "Is warfarin a problem with her TB drugs?" },
+			{ "Would warfarin be an issue with her ARVs?", "Is warfarin a problem with her ARVs?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+	}
 }

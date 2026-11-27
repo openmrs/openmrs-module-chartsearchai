@@ -3484,4 +3484,36 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 			assertEquals(canonical, ask(pair[0]), pair[0]);
 		}
 	}
+
+	/**
+	 * "Could rifampicin make her nevirapine useless?" is "Will rifampicin make her nevirapine less effective?" — the model led
+	 * three demo patients "No — Nevirapine should not be given" (ADR Decision 739).
+	 */
+	@Test
+	public void makeHerDrugUselessIsMakeItLessEffective() {
+		String[][] pairs = { { "could rifampicin make her nevirapine useless?", "Could rifampicin make her nevirapine less effective?" },
+			{ "Will rifampicin make her efavirenz not as effective?", "Will rifampicin make her efavirenz less effective?" },
+			{ "Could rifampicin make her ARVs useless?", "Could rifampicin make her ARVs less effective?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+	}
+
+	/**
+	 * "Can phenytoin be used with what he is on?" is "Can he take phenytoin with what he is on?" — the model led every demo
+	 * patient "Phenytoin can be used" (ADR Decision 740).
+	 */
+	@Test
+	public void canADrugBeUsedWithWhatSheIsOnIsWhetherSheCanTakeIt() {
+		String[][] pairs = { { "can phenytoin be used with what he is on?", "Can he take phenytoin with what he is on?" },
+			{ "Can fluconazole be given with what she takes?", "Can she take fluconazole with what she takes?" },
+			{ "Could erythromycin be safely used with her meds?", "Can she take erythromycin with her meds?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+	}
 }

@@ -32872,3 +32872,63 @@ the controls.
   nevirapine and stavudine is told of nevirapine's finding alone.
 
 Pinned by `ClinicianWordingsTest.whichOfHerDrugsClashWithADrugIsWhichInteractWithIt`.
+
+## Decision 739: A drug making hers useless is a drug making it less effective
+
+**Status: Accepted** (November 2026).
+*"Could rifampicin make her nevirapine useless?"*, *"Will rifampicin make her efavirenz not as effective?"* and *"Could
+rifampicin make her ARVs useless?"* are
+[Decision 431](#decision-431-an-abbreviation-a-monitoring-severity-or-effect-question-and-a-comparison-are-the-questions-they-spell)'s
+and [Decision 687](#decision-687-whether-adding-a-drug-could-make-her-drug-toxic-is-whether-one-drug-changes-the-other)'s
+*"… make her nevirapine less effective?"*.
+
+### Context
+
+In the demo's seventy-first batch, *"could rifampicin make her nevirapine useless?"* went to the model for all 18 patients.
+15 answers led *"No — Rifampicin should not be given"* or *"No, Rifampicin could substantially …"*. The other 3, all to
+patients on efavirenz and no nevirapine, led *"No — Nevirapine should not be given"*, withholding a drug the patient was not
+on.
+
+### The decision
+
+`LESS_EFFECTIVE` also takes *"useless"*, *"not as effective"*, *"not effective"* and *"weaker"*.
+
+### Measured
+
+On the replica, over the first 10 patients of the seventy-first batch's sample, two of them on efavirenz and no nevirapine,
+and a patient on a TB drug, with *"Could rifampicin make her nevirapine less effective?"* as the control.
+
+- Before: none of 11 went to the module (none of 18 on the live demo), while the control went to the module for all 11.
+- After: all 11 went to the module and are the control's answer word for word with record numbers stripped, with no errors.
+  The control is word for word its answer before on all 11. A patient on efavirenz is told neither rifampicin nor nevirapine is one of her
+  medications, and what the check relates between them.
+
+Pinned by `ClinicianWordingsTest.makeHerDrugUselessIsMakeItLessEffective`.
+
+## Decision 740: Whether a drug can be used with what she is on is whether she can take it with it
+
+**Status: Accepted** (November 2026).
+*"Can phenytoin be used with what he is on?"* and *"Can fluconazole be given with what she takes?"* are
+[Decision 714](#decision-714-a-drug-with-what-she-is-on-is-a-drug-with-her-medications)'s *"Can he take phenytoin with what he
+is on?"*.
+
+### Context
+
+In the demo's seventy-first batch, *"can phenytoin be used with what he is on?"* went to the model for all 18 patients, and
+all 18 answers led *"Phenytoin can be used"*, a clearance the module never gives. The passive *"can X be used with"* was read
+only before a group of hers or her medications.
+
+### The decision
+
+Beside Decision 714's shape, the router takes *"(can, could, may, should) X be (safely) (given, taken, used, started,
+combined)"*, then *"with"* or *"alongside"* what she is on.
+
+### Measured
+
+As Decision 739, with *"Can he take phenytoin with what he is on?"* as the control.
+
+- Before: none of 11 went to the module (none of 18 on the live demo), while the control went to the module for all 11.
+- After: all 11 went to the module and are the control's answer word for word with record numbers stripped, with no errors.
+  The control is word for word its answer before on all 11.
+
+Pinned by `ClinicianWordingsTest.canADrugBeUsedWithWhatSheIsOnIsWhetherSheCanTakeIt`.

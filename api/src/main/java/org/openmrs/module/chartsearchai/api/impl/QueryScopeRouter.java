@@ -671,6 +671,10 @@ public final class QueryScopeRouter {
 					// and "with what she is on" (ADR Decision 714)
 					+ " (?:with|alongside|while (?:on|taking)) " + "(?:" + POSSESSIVE + " " + MEDICATIONS + "|" + HER_MEDICATION_GROUP + "|"
 					+ WHAT_SHE_IS_ON + ")",
+			// "Can phenytoin be used with what he is on?" — the model led every demo patient "Phenytoin can be used" (ADR
+			// Decision 740)
+			"(?:can|could|may|should) " + D + " be (?:safely )?(?:given|taken|used|started|combined)(?: (?:by|to|for) " + PATIENT
+					+ ")? (?:with|alongside) " + WHAT_SHE_IS_ON,
 			// "Can clarithromycin go with what she is taking?", "Does fluconazole go with her ARVs?" — the model led every demo
 			// patient "Clarithromycin can be given" (ADR Decision 732)
 			"(?:can|could|will|would|does|do) " + D + " go (?:well |ok |okay |fine )?(?:with|alongside) (?:" + POSSESSIVE + " (?:other )?"
@@ -2112,7 +2116,8 @@ public final class QueryScopeRouter {
 
 	/** What a drug may make of another, asked as an effect: "make her ARVs less effective" (ADR Decision 431). */
 	private static final String LESS_EFFECTIVE = "(?:less effective|ineffective|not work|stop working|less potent|more toxic|toxic"
-			+ "|fail)";
+			// and "useless", "not as effective" (ADR Decision 739)
+			+ "|fail|useless|not as effective|not effective|weaker)";
 
 	/**
 	 * "Will fluconazole raise his warfarin levels?", "Does rifampicin reduce the effect of her nevirapine?", "Does

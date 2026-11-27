@@ -32993,3 +32993,47 @@ As Decision 741, with *"Does erythromycin interact with her medications?"* as th
   The control is word for word its answer before on all 11.
 
 Pinned by `ClinicianWordingsTest.interactBadlyWithHerMedicationsIsInteractWithThem`.
+
+## Decision 743: The risks of a drug with a group she is on none of say the drug was checked against all her medications
+
+**Status: Accepted** (November 2026).
+*"What are the dangers of giving clarithromycin with her ARVs?"*, *"What happens if I give her fluconazole with her ARVs?"*
+and *"What if I give her erythromycin on top of her ARVs?"* tell a patient on no antiretroviral that the drug was checked
+against all her medications, as [Decision 719](#decision-719-what-about-giving-her-a-drug-with-her-group-is-whether-to-give-it)
+and [Decision 725](#decision-725-is-it-safe-for-her-to-take-a-drug-with-her-group-is-whether-she-can-take-it-with-the-group)
+have their shapes say it.
+
+### Context
+
+On the replica measuring
+[Decision 741](#decision-741-the-dangers-of-combining-a-drug-with-her-medications-are-the-dangers-of-giving-it-with-them),
+a patient on vaccines and trimethoprim/sulfamethoxazole, and no antiretroviral, was asked the dangers of giving clarithromycin
+with her ARVs. She was told of its finding with her sulfamethoxazole, with nothing saying she is on no ARV. Decisions 670's,
+671's and 735's shapes were not among `SAFE_WITH_HER_MEDICATIONS_SHAPES`, whose group-only shapes carry that line.
+
+### The decision
+
+The group forms of Decision 671's *"what are the (risks, dangers) of (giving, …) X with"* a group of hers, Decision 670's
+*"what happens if … X with"* one, and
+[Decision 735](#decision-735-what-if-i-give-her-a-drug-on-top-of-her-group-is-what-happens-if-i-give-it-with-them)'s *"what if
+I give her X on top of"* one join `SAFE_WITH_HER_MEDICATIONS_SHAPES`. Each keeps its own lead below that line: a question of
+risks still answers with no *"Yes"* or *"No"*.
+
+### Measured
+
+On the replica, over the sample of Decision 741, asking *"What are the dangers of giving clarithromycin with her ARVs?"*,
+*"What happens if I give her fluconazole with her ARVs?"*, *"What if I give her erythromycin on top of her ARVs?"* and, as the
+control, *"What about giving her simvastatin with her ARVs?"*.
+
+- Before and after: all 44 answers went to the module, with no errors. 3 changed, all for the patient on no antiretroviral.
+  Each of the three wordings now opens *"This check checked X against all of this patient's active medications."*, and the
+  rest of each answer is unchanged. The control is unchanged on all 11, as is every other patient's answer.
+
+`DrugBesideAResolvedGroupTest.whatHappensIfHeTakesADrugWithAGroupOfHisIsAnsweredOverThatGroup` had pinned Decision 670's
+answer for a group he is on none of as the proposal's answer word for word, with no such line. That predates Decision 719
+carrying [Decision 646](#decision-646-one-drug-beside-groups-of-her-medications-the-module-resolves-is-answered-over-them-and-no-lead-says-it-cannot-tell-which-they-are)'s
+line to a drug asked beside a group, and it read red under this decision. It now pins the proposal's answer word for word
+below the line.
+
+Pinned by `ClinicianWordingsTest.aGroupSheIsOnNoneOfLeavesTheDrugCheckedAgainstAllHerMedications`, that test and, for a
+patient on a TB drug, `DrugBesideHerMedicationGroupTest.theRisksOfADrugWithHerGroupAreAnsweredOverTheGroup`.

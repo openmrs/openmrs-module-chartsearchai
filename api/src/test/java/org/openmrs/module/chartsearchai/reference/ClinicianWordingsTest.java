@@ -3553,4 +3553,24 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 			assertEquals(canonical, ask(pair[0]), pair[0]);
 		}
 	}
+
+	/**
+	 * The risks of giving a drug with a group she is on none of, what happens if it is given with them, and what if it is,
+	 * say the drug was checked against all her medications, as "What about giving her fluconazole with her TB drugs?" does:
+	 * this patient takes no TB drug (ADR Decision 743). Each keeps its own lead below that line.
+	 */
+	@Test
+	public void aGroupSheIsOnNoneOfLeavesTheDrugCheckedAgainstAllHerMedications() {
+		String lead = "This check checked Fluconazole against all of this patient's active medications.\n";
+		String canonical = ask("What about giving her fluconazole with her TB drugs?");
+		assertNotNull(canonical, "precondition: the module answers the canonical");
+		assertTrue(canonical.startsWith(lead), "precondition: " + canonical);
+		for (String question : new String[] { "What are the dangers of giving fluconazole with her TB drugs?",
+			"What are the risks of adding fluconazole to her TB drugs?", "What happens if I give her fluconazole with her TB drugs?",
+			"What if I give her fluconazole on top of her TB drugs?" }) {
+			String answer = ask(question);
+			assertNotNull(answer, question);
+			assertTrue(answer.startsWith(lead), question + ": " + answer);
+		}
+	}
 }

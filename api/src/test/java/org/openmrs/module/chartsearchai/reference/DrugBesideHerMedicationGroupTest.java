@@ -114,6 +114,20 @@ public class DrugBesideHerMedicationGroupTest extends BaseModuleContextSensitive
 		}
 	}
 
+	/**
+	 * The risks of giving a drug with her TB drugs, what happens if it is given with them, and what if it is, are answered
+	 * over her TB drugs for a patient on one (ADR Decision 743).
+	 */
+	@Test
+	public void theRisksOfADrugWithHerGroupAreAnsweredOverTheGroup() {
+		for (String question : new String[] { "What are the dangers of giving fluconazole with her TB drugs?",
+			"What happens if I give her fluconazole with her TB drugs?", "What if I give her fluconazole on top of her TB drugs?" }) {
+			String answer = ask(question);
+			assertNotNull(answer, question);
+			assertTrue(answer.startsWith("Fluconazole and this patient's TB drugs ("), question + ": " + answer);
+		}
+	}
+
 	private static String ask(String question) {
 		return ask(question, DrugReferenceTestSupport.activeOrder("order-rhze",
 			"Rifampicin isoniazid pyrazinamide and ethambutol 150/75/400/275mg"));

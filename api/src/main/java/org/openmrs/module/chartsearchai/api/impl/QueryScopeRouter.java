@@ -1891,6 +1891,17 @@ public final class QueryScopeRouter {
 			// drug checked against all her medications (ADR Decision 719)
 			"(?:what|how) about (?:giving|adding|starting|prescribing) (?:" + PATIENT + " )?(?:on )?" + D + " (?:with|alongside|to) "
 					+ "(?:any of )?" + HER_MEDICATION_GROUP,
+			// and the risks of giving it with the group, what happens if it is given with them, and what if it is: "What are
+			// the dangers of giving clarithromycin with her ARVs?" told a patient on no ARV of her cotrimoxazole with nothing
+			// saying she is on none (ADR Decision 743)
+			"what (?:are|is) the (?:risks?|dangers?) of (?:adding|giving|starting|prescribing|combining|using|taking|mixing) (?:"
+					+ PATIENT + " )?(?:on )?" + D + " (?:with|alongside|together with|to) (?:any of )?" + HER_MEDICATION_GROUP,
+			"what (?:happens|would happen|will happen) (?:if|when) (?:(?:she|he|they|the patient|this patient) (?:takes?|took|is given|"
+					+ "are given|was given|were given|gets?|got|starts?|started|uses?|used) |(?:i|we) (?:give|add|start|prescribe) (?:"
+					+ PATIENT + " )?(?:on )?)" + D
+					+ " (?:with|alongside|together with|to|while (?:on|taking)) (?:any of )?" + HER_MEDICATION_GROUP,
+			"what if (?:i|we) (?:give|add|start|prescribe) (?:" + PATIENT + " )?(?:on )?" + D + " (?:with|alongside|together with|"
+					+ "on top of|to) (?:any of )?" + HER_MEDICATION_GROUP,
 			// and with no verb of giving, "What about fluconazole and her TB drugs?" (ADR Decision 737)
 			"(?:what|how) about " + D + " (?:and|with|alongside) " + HER_MEDICATION_GROUP,
 			// and "Does fluconazole go with her TB drugs?" — answered over all her medications with nothing saying so when

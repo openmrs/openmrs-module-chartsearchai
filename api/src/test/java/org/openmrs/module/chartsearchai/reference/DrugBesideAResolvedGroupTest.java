@@ -85,7 +85,8 @@ public class DrugBesideAResolvedGroupTest extends BaseModuleContextSensitiveTest
 					+ " — nothing outside his TB drugs: " + answer);
 		}
 		// and beside a group none of his orders is in, the proposal's own answer, as "What happens if I give him fluconazole?"
-		// is (ADR Decisions 251, 402, 649) — never the model's "The records do not address …"
+		// is (ADR Decisions 251, 402, 649) — never the model's "The records do not address …" — under the line saying the
+		// drug was checked against all his medications, as a group he is on none of leaves it (ADR Decisions 646, 719, 743)
 		List<PatientClinicalContext.ActiveDrugOrder> noArvs = Arrays.asList(
 			DrugReferenceTestSupport.activeOrder("order-rif", "Rifampicin"),
 			DrugReferenceTestSupport.activeOrder("order-sim", "Simvastatin"));
@@ -93,7 +94,8 @@ public class DrugBesideAResolvedGroupTest extends BaseModuleContextSensitiveTest
 		assertNotNull(proposed, "precondition: the module answers what giving it does");
 		for (String question : Arrays.asList("What happens if he takes fluconazole with his ARVs?",
 			"What happens if I give him fluconazole with his ARVs?")) {
-			assertEquals(proposed, ask(question, noArvs).getModuleAnswer(), question);
+			assertEquals("This check checked Fluconazole against all of this patient's active medications.\n" + proposed,
+				ask(question, noArvs).getModuleAnswer(), question);
 		}
 	}
 

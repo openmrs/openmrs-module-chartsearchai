@@ -32932,3 +32932,64 @@ As Decision 739, with *"Can he take phenytoin with what he is on?"* as the contr
   The control is word for word its answer before on all 11.
 
 Pinned by `ClinicianWordingsTest.canADrugBeUsedWithWhatSheIsOnIsWhetherSheCanTakeIt`.
+
+## Decision 741: The dangers of combining a drug with her medications are the dangers of giving it with them
+
+**Status: Accepted** (November 2026).
+*"What are the dangers of combining clarithromycin with her ARVs?"* and *"What are the risks of using fluconazole with her
+meds?"* are
+[Decision 671](#decision-671-how-a-drug-affects-her-medications-which-of-hers-not-to-combine-with-it-continuing-them-with-it-and-the-risks-of-adding-it-are-the-modules-questions)'s
+*"What are the dangers of giving X with her ARVs?"*.
+
+### Context
+
+In the demo's seventy-second batch, *"what are the dangers of combining clarithromycin with her ARVs?"* went to the model for
+all 18 patients. 9 answers led that clarithromycin *"can be given"* or *"can be combined"*. One, to a patient on rifampicin,
+efavirenz and lamivudine/zidovudine, counted rifampicin among her ARVs. One, to a patient on no antiretroviral, said *"The
+records do not address"* it. Decision 671's shape read *"adding"*, *"giving"*, *"starting"* and *"prescribing"* only.
+
+### The decision
+
+Decision 671's *"what are the (risks, dangers) of"* also takes *"combining"*, *"using"*, *"taking"* and *"mixing"*.
+
+### Measured
+
+On the replica, over the first 10 patients of the seventy-second batch's sample and the patient on rifampicin, with *"What are
+the dangers of giving clarithromycin with her ARVs?"* as the control.
+
+- Before: none of 11 went to the module (none of 18 on the live demo), while the control went to the module for all 11.
+- After: all 11 went to the module and are the control's answer word for word with record numbers stripped, with no errors.
+  The control is word for word its answer before on all 11. The patient on rifampicin is told the check's findings for her antiretrovirals,
+  lamivudine/zidovudine and efavirenz, with rifampicin not among them.
+
+Pinned by `ClinicianWordingsTest.theDangersOfCombiningADrugWithHerGroupAreTheDangersOfGivingIt`.
+
+## Decision 742: A drug interacting badly with her medications is a drug interacting with them
+
+**Status: Accepted** (November 2026).
+*"Does erythromycin interact badly with her medications?"* and *"Will fluconazole interact negatively with his ARVs?"* are
+*"Does erythromycin interact with her medications?"* and *"Will fluconazole interact with his ARVs?"*, read by
+[Decision 396](#decision-396-a-question-about-one-drug-in-a-wording-no-shape-fits-made-only-of-the-words-such-questions-are-made-of-is-answered-as-the-proposal-or-the-interaction)'s
+reading of a question made only of known words.
+
+### Context
+
+In the demo's seventy-second batch, *"does erythromycin interact badly with her medications?"* went to the model for all 18
+patients. 9 answers led *"Erythromycin can be given"*, a clearance the module never gives. *"Badly"* was a word that
+reading did not know, so the question was left to the model.
+
+### The decision
+
+`RESIDUAL_INTERACTS` also takes *"badly"*, *"negatively"*, *"adversely"* and *"dangerously"*, as
+[Decision 536](#decision-536-screening-a-drug-and-a-drug-messing-with-her-medications-ask-its-interactions) added *"mess"* and
+*"conflict"*: words read only where every other word of the question is known.
+
+### Measured
+
+As Decision 741, with *"Does erythromycin interact with her medications?"* as the control.
+
+- Before: none of 11 went to the module (none of 18 on the live demo), while the control went to the module for all 11.
+- After: all 11 went to the module and are the control's answer word for word with record numbers stripped, with no errors.
+  The control is word for word its answer before on all 11.
+
+Pinned by `ClinicianWordingsTest.interactBadlyWithHerMedicationsIsInteractWithThem`.

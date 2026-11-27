@@ -892,7 +892,10 @@ public final class QueryScopeRouter {
 					+ HER_MEDICATION_GROUP + ") (?:if|when) " + STARTS_A_DRUG,
 			// "What are the risks of adding erythromycin to her current treatment?" — the model led it "No —" or "can be given",
 			// a lead on what was asked as a risk (ADR Decision 671)
-			"what (?:are|is) the (?:risks?|dangers?) of (?:adding|giving|starting|prescribing) (?:" + PATIENT + " )?(?:on )?" + D
+			// and "What are the dangers of combining clarithromycin with her ARVs?" — the model led 9 of 18 demo patients
+			// "Clarithromycin can be given" or "can be combined" (ADR Decision 741)
+			"what (?:are|is) the (?:risks?|dangers?) of (?:adding|giving|starting|prescribing|combining|using|taking|mixing) (?:"
+					+ PATIENT + " )?(?:on )?" + D
 					+ " (?:with|alongside|together with|to) (?:any of )?(?:" + POSSESSIVE + " (?:other )?" + MEDICATIONS + "|"
 					+ HER_MEDICATION_GROUP + ")",
 			// "Any problems if I start her on ibuprofen?", "Are there any issues if I give her ibuprofen?" (ADR Decision 299)
@@ -3372,7 +3375,10 @@ public final class QueryScopeRouter {
 		"interacting", "interaction", "interactions", "ddi", "ddis", "clash", "clashes", "clashing", "disturb", "disturbs",
 		// "Screen fluconazole", "Will fluconazole mess with her meds?", "Does fluconazole conflict with her meds?" — read only
 		// where every other word is known, so the everyday senses of these words stay the model's (ADR Decision 536)
-		"screen", "screening", "mess", "messes", "interfere", "interferes", "conflict", "conflicts"));
+		"screen", "screening", "mess", "messes", "interfere", "interferes", "conflict", "conflicts",
+		// "Does erythromycin interact badly with her medications?" — how it interacts, which no finding answers apart from
+		// whether it does; the model led 9 of 18 demo patients "Erythromycin can be given" (ADR Decision 742)
+		"badly", "negatively", "adversely", "dangerously"));
 
 	/** The words a question about her medications, or groups of them read as her medications, may be made of beside the
 	 *  residual reading's own (ADR Decision 656): how they are asked of one another, and how much a finding matters. */

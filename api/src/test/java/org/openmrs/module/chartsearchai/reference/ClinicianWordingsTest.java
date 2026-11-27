@@ -3516,4 +3516,41 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 			assertEquals(canonical, ask(pair[0]), pair[0]);
 		}
 	}
+
+	/**
+	 * "What are the dangers of combining clarithromycin with her ARVs?" is "What are the dangers of giving clarithromycin with
+	 * her ARVs?" — the model led 9 of 18 demo patients "Clarithromycin can be given" or "can be combined" (ADR Decision 741).
+	 */
+	@Test
+	public void theDangersOfCombiningADrugWithHerGroupAreTheDangersOfGivingIt() {
+		String[][] pairs = { { "what are the dangers of combining clarithromycin with her ARVs?",
+				"What are the dangers of giving clarithromycin with her ARVs?" },
+			{ "What are the risks of using fluconazole with her meds?", "What are the risks of giving fluconazole with her meds?" },
+			// a group she is on none of: this patient takes no TB drug
+			{ "What are the dangers of combining fluconazole with her TB drugs?",
+				"What are the dangers of giving fluconazole with her TB drugs?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+	}
+
+	/**
+	 * "Does erythromycin interact badly with her medications?" is "Does erythromycin interact with her medications?" — the
+	 * model led 9 of 18 demo patients "Erythromycin can be given" (ADR Decision 742).
+	 */
+	@Test
+	public void interactBadlyWithHerMedicationsIsInteractWithThem() {
+		String[][] pairs = { { "does erythromycin interact badly with her medications?",
+				"Does erythromycin interact with her medications?" },
+			{ "Will fluconazole interact negatively with his ARVs?", "Will fluconazole interact with his ARVs?" },
+			// a group she is on none of: this patient takes no TB drug
+			{ "Does fluconazole interact badly with her TB drugs?", "Does fluconazole interact with her TB drugs?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+	}
 }

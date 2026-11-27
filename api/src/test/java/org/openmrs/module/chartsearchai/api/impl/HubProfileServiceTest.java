@@ -39,11 +39,11 @@ public class HubProfileServiceTest extends BaseModuleContextSensitiveTest {
 
 	@org.junit.jupiter.api.BeforeEach
 	public void enableTheHub() {
-		Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_PROVIDERS_ENABLED, "bundled,hub");
+		Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_PROVIDERS_ENABLED, "hub");
 	}
 
-	// The picker would offer profiles of a provider that require() refuses, so a Hub that is configured but not
-	// enabled lists nothing and is not asked.
+	// The picker would offer profiles of a provider that require() refuses, so a Hub that is not
+	// the active system provider lists nothing and is not asked.
 	@Test
 	public void profilesAreNotListedForAHubThatIsNotEnabled() throws Exception {
 		java.util.concurrent.atomic.AtomicInteger asked = new java.util.concurrent.atomic.AtomicInteger();
@@ -66,6 +66,15 @@ public class HubProfileServiceTest extends BaseModuleContextSensitiveTest {
 					() -> new HubProfileService().listProfiles());
 			assertTrue(failure.getMessage().contains(ChartSearchAiConstants.GP_PROVIDERS_ENABLED), failure.getMessage());
 			assertEquals(0, asked.get(), "a Hub that is not enabled is not asked for its profiles");
+
+			// Even if both appear in providers.enabled, bundled wins when default is bundled.
+			Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_PROVIDERS_ENABLED, "bundled,hub");
+			Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_DEFAULT_PROVIDER, "bundled");
+			org.openmrs.api.APIException inactiveFailure = assertThrows(org.openmrs.api.APIException.class,
+					() -> new HubProfileService().listProfiles());
+			assertTrue(inactiveFailure.getMessage().contains(ChartSearchAiConstants.GP_PROVIDERS_ENABLED),
+					inactiveFailure.getMessage());
+			assertEquals(0, asked.get(), "a Hub that is not active is not asked for its profiles");
 		}
 		finally {
 			server.stop(0);
@@ -74,10 +83,20 @@ public class HubProfileServiceTest extends BaseModuleContextSensitiveTest {
 
 	@SuppressWarnings("unchecked")
 	@Test
-	public void listProfilesRelaysHubMetadataWithoutCuratingIt() throws Exception {
-		String response = "{\"object\":\"list\",\"data\":[{"
-				+ "\"id\":\"single-e4b-checked\",\"label\":\"Fast checked E4B\","
-				+ "\"staged\":true,\"validation\":true,\"default\":true}]}";
+	public void listProfilesJoinsClientPresetsWithHubBackingModelsAndKeepsConfiguredDefaultStrict() throws Exception {
+		String response = "{\"object\":\"list\","
+				+ "\"data\":["
+				+ "{\"id\":\"gemma-4-12b\",\"available\":true,\"backend_metadata\":{\"context_window\":16384}},"
+				+ "{\"id\":\"gemma-26b\",\"available\":true,\"backend_metadata\":{\"context_window\":24576}},"
+				+ "{\"id\":\"gemma-e4b\",\"available\":true,\"backend_metadata\":{\"context_window\":16384}},"
+				+ "{\"id\":\"qwen3.5-9b\",\"available\":true}"
+				+ "],"
+				+ "\"execution_modes\":{"
+				+ "\"quick\":{\"indepth\":false,\"stages\":[\"answer\"]},"
+				+ "\"standard\":{\"indepth\":true,\"stages\":[\"answer\",\"indepth\"]},"
+				+ "\"verified\":{\"indepth\":true,\"stages\":[\"answer\",\"answer_validation\",\"indepth\"]}"
+				+ "}"
+				+ "}";
 		HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
 		server.createContext("/v1/models", exchange -> {
 			byte[] body = response.getBytes(StandardCharsets.UTF_8);
@@ -88,16 +107,117 @@ public class HubProfileServiceTest extends BaseModuleContextSensitiveTest {
 		});
 		server.start();
 		try {
+			Context.getAdministrationService().setGlobalProperty("chartsearchai.hub.presets", "");
 			Context.getAdministrationService().setGlobalProperty(
 					ChartSearchAiConstants.GP_HUB_ENDPOINT_URL,
 					"http://localhost:" + server.getAddress().getPort() + "/v1/chat/completions");
 			Map<String, Object> payload = new HubProfileService().listProfiles();
 			List<Map<String, Object>> profiles = (List<Map<String, Object>>) payload.get("data");
-			assertEquals(1, profiles.size());
-			assertEquals("Fast checked E4B", profiles.get(0).get("label"));
+			assertEquals(4, profiles.size());
+			assertEquals("gemma-4-12b", profiles.get(0).get("id"));
+			assertEquals("Gemma 4 12B", profiles.get(0).get("label"));
 			assertTrue((Boolean) profiles.get(0).get("default"));
+			assertTrue((Boolean) profiles.get(0).get("available"));
+			assertFalse((Boolean) profiles.get(0).get("indepth"));
+			assertFalse((Boolean) profiles.get(0).get("validation"));
+			assertEquals(16384, profiles.get(0).get("context_window"));
+			assertEquals("gemma-4-26b", profiles.get(1).get("id"));
+			assertEquals("Gemma 4 26B", profiles.get(1).get("label"));
+			assertFalse((Boolean) profiles.get(1).get("default"));
+			assertTrue((Boolean) profiles.get(1).get("available"));
+			assertFalse((Boolean) profiles.get(1).get("indepth"));
+			assertFalse((Boolean) profiles.get(1).get("validation"));
+			assertEquals(24576, profiles.get(1).get("context_window"));
+			assertEquals("gemma-4-e4b", profiles.get(2).get("id"));
+			assertEquals("Gemma 4 E4B (Fast)", profiles.get(2).get("label"));
+			assertFalse((Boolean) profiles.get(2).get("default"));
+			assertTrue((Boolean) profiles.get(2).get("available"));
+			assertFalse((Boolean) profiles.get(2).get("indepth"));
+			assertFalse((Boolean) profiles.get(2).get("validation"));
+			assertEquals("qwen-3.5-9b", profiles.get(3).get("id"));
+			assertEquals("Qwen 3.5 9B", profiles.get(3).get("label"));
+			assertFalse((Boolean) profiles.get(3).get("default"));
+			assertTrue((Boolean) profiles.get(3).get("available"));
+			assertFalse((Boolean) profiles.get(3).get("indepth"));
+			assertFalse((Boolean) profiles.get(3).get("validation"));
+			assertEquals("gemma-4-12b", new HubProfileService().resolveDefaultProfileId());
+
+			// Custom catalog where the default preset is unavailable: discovery keeps default=true on
+			// the configured default preset (never promotes fallback), while runtime default falls back.
+			String customPresets = "["
+					+ "{\"id\":\"gemma-4-12b\",\"label\":\"Gemma 4 12B\",\"default\":false,\"model\":\"gemma-4-12b\","
+					+ "\"execution\":{\"mode\":\"quick\",\"preset_id\":\"gemma-4-12b\"}},"
+					+ "{\"id\":\"unavailable-default\",\"label\":\"Primary\",\"default\":true,\"model\":\"missing-model\","
+					+ "\"execution\":{\"mode\":\"quick\",\"preset_id\":\"unavailable-default\"}}"
+					+ "]";
+			Context.getAdministrationService().setGlobalProperty("chartsearchai.hub.presets", customPresets);
+			Map<String, Object> fallbackPayload = new HubProfileService().listProfiles();
+			List<Map<String, Object>> fallbackProfiles = (List<Map<String, Object>>) fallbackPayload.get("data");
+			assertEquals(2, fallbackProfiles.size());
+			assertTrue((Boolean) fallbackProfiles.get(0).get("available"));
+			assertFalse((Boolean) fallbackProfiles.get(0).get("default"),
+					"discovery metadata must not promote fallback presets to default=true");
+			assertFalse((Boolean) fallbackProfiles.get(1).get("available"));
+			assertTrue((Boolean) fallbackProfiles.get(1).get("default"));
+			assertEquals("gemma-4-12b", new HubProfileService().resolveDefaultProfileId());
+
+			Context.getAdministrationService().setGlobalProperty("chartsearchai.hub.presets", "");
 		}
 		finally {
+			Context.getAdministrationService().setGlobalProperty("chartsearchai.hub.presets", "");
+			server.stop(0);
+		}
+	}
+
+	@SuppressWarnings("unchecked")
+	@Test
+	public void missingBackingOrVerifierModelMarksAffectedPresetUnavailableWithoutBlockingReadyPresets() throws Exception {
+		String response = "{\"object\":\"list\","
+				+ "\"data\":[{\"id\":\"gemma-4-12b\",\"available\":true},{\"id\":\"gemma-e4b\",\"available\":true}],"
+				+ "\"execution_modes\":{\"quick\":{},\"verified\":{}}}";
+		HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
+		server.createContext("/v1/models", exchange -> {
+			byte[] body = response.getBytes(StandardCharsets.UTF_8);
+			exchange.sendResponseHeaders(200, body.length);
+			try (OutputStream output = exchange.getResponseBody()) {
+				output.write(body);
+			}
+		});
+		server.start();
+		try {
+			Context.getAdministrationService().setGlobalProperty("chartsearchai.hub.presets", "");
+			Context.getAdministrationService().setGlobalProperty(
+					ChartSearchAiConstants.GP_HUB_ENDPOINT_URL,
+					"http://localhost:" + server.getAddress().getPort() + "/v1/chat/completions");
+			Map<String, Object> payload = new HubProfileService().listProfiles();
+			List<Map<String, Object>> profiles = (List<Map<String, Object>>) payload.get("data");
+			assertEquals(4, profiles.size());
+			assertTrue((Boolean) profiles.get(0).get("available"));
+			assertFalse((Boolean) profiles.get(1).get("available"));
+			assertTrue(((List<?>) profiles.get(1).get("unavailable_reasons"))
+					.contains("model_unavailable:gemma-26b"));
+			assertTrue((Boolean) profiles.get(2).get("available"));
+			assertFalse((Boolean) profiles.get(3).get("available"));
+			assertTrue(((List<?>) profiles.get(3).get("unavailable_reasons"))
+					.contains("model_unavailable:qwen3.5-9b"));
+
+			String verifiedPresets = "["
+					+ "{\"id\":\"gemma-4-12b\",\"label\":\"Gemma 4 12B\",\"default\":true,\"model\":\"gemma-4-12b\","
+					+ "\"execution\":{\"mode\":\"quick\",\"preset_id\":\"gemma-4-12b\"}},"
+					+ "{\"id\":\"verified\",\"label\":\"Verified\",\"default\":false,\"model\":\"gemma-4-12b\","
+					+ "\"execution\":{\"mode\":\"verified\",\"preset_id\":\"verified\",\"verifier_model\":\"qwen3.5-9b\"}}"
+					+ "]";
+			Context.getAdministrationService().setGlobalProperty("chartsearchai.hub.presets", verifiedPresets);
+			Map<String, Object> verifiedPayload = new HubProfileService().listProfiles();
+			List<Map<String, Object>> verifiedProfiles = (List<Map<String, Object>>) verifiedPayload.get("data");
+			assertEquals(2, verifiedProfiles.size());
+			assertTrue((Boolean) verifiedProfiles.get(0).get("available"));
+			assertFalse((Boolean) verifiedProfiles.get(1).get("available"));
+			assertTrue(((List<?>) verifiedProfiles.get(1).get("unavailable_reasons"))
+					.contains("verifier_model_unavailable:qwen3.5-9b"));
+		}
+		finally {
+			Context.getAdministrationService().setGlobalProperty("chartsearchai.hub.presets", "");
 			server.stop(0);
 		}
 	}

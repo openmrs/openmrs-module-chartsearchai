@@ -9,6 +9,7 @@ package org.openmrs.module.chartsearchai.web.rest;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -23,18 +24,25 @@ import java.util.concurrent.atomic.AtomicInteger;
 import javax.servlet.ServletOutputStream;
 import com.sun.net.httpserver.HttpServer;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.function.Consumer;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.io.TempDir;
+import org.openmrs.api.db.hibernate.DbSessionFactory;
 import org.openmrs.module.chartsearchai.api.impl.DefaultPatientAccessCheck;
+import org.openmrs.module.chartsearchai.api.provider.BundledClinicalAnswerProvider;
 import org.openmrs.module.chartsearchai.api.provider.HubClinicalAnswerProvider;
 import org.openmrs.module.chartsearchai.api.provider.HttpHubStreamTransport;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -52,7 +60,6 @@ import org.openmrs.module.chartsearchai.api.conversation.ConversationDAO;
 import org.openmrs.module.chartsearchai.api.conversation.ConversationService;
 import org.openmrs.module.chartsearchai.api.provider.AccountContext;
 import org.openmrs.module.chartsearchai.api.provider.AnswerEnvelope;
-import org.openmrs.module.chartsearchai.api.provider.BundledClinicalAnswerProvider;
 import org.openmrs.module.chartsearchai.api.provider.CancellationSignal;
 import org.openmrs.module.chartsearchai.api.provider.ClinicalAnswerProvider;
 import org.openmrs.module.chartsearchai.api.provider.ClinicalAnswerProviderRegistry;
@@ -67,8 +74,19 @@ import org.openmrs.module.chartsearchai.api.provider.TurnResult;
 import org.openmrs.module.chartsearchai.model.ChartSearchAuditLog;
 import org.openmrs.module.chartsearchai.model.ClinicalConversation;
 import org.openmrs.module.chartsearchai.model.ClinicalConversationTurn;
+import org.openmrs.module.querystore.QueryStoreConstants;
+import org.openmrs.module.querystore.api.impl.QueryStoreServiceImpl;
+import org.openmrs.module.querystore.backend.BackendStore;
+import org.openmrs.module.querystore.backend.BackendStoreSelector;
+import org.openmrs.module.querystore.backend.JdbcSupport;
+import org.openmrs.module.querystore.backend.lucene.LuceneBackendStore;
+import org.openmrs.module.querystore.bootstrap.BootstrapServiceImpl;
+import org.openmrs.module.querystore.bootstrap.BootstrapStatus;
+import org.openmrs.module.querystore.embedding.EmbeddingProvider;
 import org.openmrs.web.test.jupiter.BaseModuleWebContextSensitiveTest;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.test.util.ReflectionTestUtils;
 
 /** Real controller-to-Hibernate/audit join. Inference alone is replaced by deterministic events. */
 public class ProviderStreamPersistenceTest extends BaseModuleWebContextSensitiveTest {
@@ -84,6 +102,17 @@ public class ProviderStreamPersistenceTest extends BaseModuleWebContextSensitive
 
 	@Autowired
 	private ClinicalAnswerProviderRegistry providerRegistry;
+
+	@Autowired
+	@Qualifier("queryStoreService")
+	private QueryStoreServiceImpl queryStore;
+
+	@Autowired
+	@Qualifier("bootstrapService")
+	private BootstrapServiceImpl bootstrap;
+
+	@Autowired
+	private DbSessionFactory dbSessionFactory;
 
 	// Request-level: the handlers behind GET /providers and GET /models, not their payload helpers.
 	@Test
@@ -246,6 +275,12 @@ public class ProviderStreamPersistenceTest extends BaseModuleWebContextSensitive
 
 	private volatile int peerStatus = 503;
 
+	private volatile String modelsBody = "{\"object\":\"list\","
+			+ "\"data\":[{\"id\":\"gemma-4-12b\",\"available\":true},{\"id\":\"qwen3.5-9b\",\"available\":true}],"
+			+ "\"execution_modes\":{\"quick\":{},\"standard\":{},\"verified\":{}}}";
+
+	private volatile int modelsStatus = 200;
+
 	private volatile JsonNode receivedRequest;
 
 	private final AtomicInteger peerRequests = new AtomicInteger();
@@ -330,6 +365,16 @@ public class ProviderStreamPersistenceTest extends BaseModuleWebContextSensitive
 				exchange.close();
 			}
 		});
+		peer.createContext("/v1/models", exchange -> {
+			byte[] bytes = modelsBody.getBytes(StandardCharsets.UTF_8);
+			exchange.getResponseHeaders().set("Content-Type", "application/json");
+			exchange.sendResponseHeaders(modelsStatus, bytes.length == 0 ? -1 : bytes.length);
+			try {
+				exchange.getResponseBody().write(bytes);
+			} finally {
+				exchange.close();
+			}
+		});
 		peer.start();
 		Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_PROVIDERS_ENABLED, "hub");
 		Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_HUB_ENDPOINT_URL,
@@ -338,6 +383,7 @@ public class ProviderStreamPersistenceTest extends BaseModuleWebContextSensitive
 		controller.setConversationService(conversations);
 		controller.setAuditLogService(auditLogs);
 		controller.setPatientAccessCheck(new DefaultPatientAccessCheck());
+		controller.setHubProfileService(new org.openmrs.module.chartsearchai.api.impl.HubProfileService());
 		controller.setProviderRegistry(new ClinicalAnswerProviderRegistry(Collections.singletonList(
 				new HubClinicalAnswerProvider(new HttpHubStreamTransport()))));
 		return controller;
@@ -417,7 +463,8 @@ public class ProviderStreamPersistenceTest extends BaseModuleWebContextSensitive
 		controller.chatStream(requestBody(patient), response);
 		assertEquals(1, peerRequests.get());
 		assertEquals(patient.getUuid(), receivedRequest.path("patient").asText());
-		assertEquals("product-profile-a", receivedRequest.path("model").asText());
+		assertEquals("gemma-4-12b", receivedRequest.path("model").asText());
+		assertEquals("gemma-4-12b", receivedRequest.path("execution").path("preset_id").asText());
 		assertTrue(response.getContentAsString().contains("event: turn_error"));
 		Context.flushSession();
 		Context.clearSession();
@@ -672,7 +719,7 @@ public class ProviderStreamPersistenceTest extends BaseModuleWebContextSensitive
 		body.put("question", "What is recorded?");
 		body.put("provider", "hub");
 		body.put("mode", "query_scoped");
-		body.put("profile", "product-profile-a");
+		body.put("profile", "gemma-4-12b");
 		return body;
 	}
 
@@ -690,6 +737,373 @@ public class ProviderStreamPersistenceTest extends BaseModuleWebContextSensitive
 		return new ProviderDescriptor("bundled", "Bundled", true, true, true,
 				Collections.singletonList(ProviderMode.QUERY_SCOPED),
 				Collections.singleton(ProviderCapability.ANSWER), null);
+	}
+
+	@Test
+	@SuppressWarnings("unchecked")
+	public void legacySearchWarmupAndOverridesEnforceSingleSystemProvider() throws Exception {
+		ChartSearchAiRestController controller = requestController();
+		Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_PROVIDERS_ENABLED, "bundled,hub");
+		Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_DEFAULT_PROVIDER, "hub");
+		controller.setProviderRegistry(new ClinicalAnswerProviderRegistry(Arrays.asList(
+				new BundledClinicalAnswerProvider(null),
+				new HubClinicalAnswerProvider(new HttpHubStreamTransport()))));
+		Patient patient = Context.getPatientService().getPatient(2);
+
+		ResponseEntity<Object> providersResponse = controller.listProviders();
+		assertEquals(200, providersResponse.getStatusCode().value());
+		Map<String, Object> providersBody = (Map<String, Object>) providersResponse.getBody();
+		assertEquals(Boolean.FALSE, providersBody.get("pickerVisible"));
+		assertEquals("hub", providersBody.get("defaultProvider"));
+		assertEquals(1, ((List<?>) providersBody.get("providers")).size());
+
+		Map<String, String> searchBody = new HashMap<>();
+		searchBody.put("patient", patient.getUuid());
+		searchBody.put("question", "What meds?");
+		ResponseEntity<Object> searchResponse = controller.search(searchBody);
+		assertEquals(409, searchResponse.getStatusCode().value());
+		assertEquals("provider_not_enabled",
+				new ObjectMapper().valueToTree(searchResponse.getBody()).path("problemCode").asText());
+
+		MockHttpServletResponse searchStreamResponse = new MockHttpServletResponse();
+		controller.searchStream(searchBody, searchStreamResponse);
+		assertEquals(409, searchStreamResponse.getStatus());
+		assertEquals("provider_not_enabled",
+				new ObjectMapper().readTree(searchStreamResponse.getContentAsString()).path("problemCode").asText());
+
+		Map<String, String> warmupBody = new HashMap<>();
+		warmupBody.put("patient", patient.getUuid());
+		assertEquals(204, controller.warmup(warmupBody).getStatusCode().value());
+
+		Map<String, String> bundledOverride = new HashMap<>();
+		bundledOverride.put("patient", patient.getUuid());
+		bundledOverride.put("provider", "bundled");
+		ResponseEntity<Object> chatNewOverride = controller.chatNew(bundledOverride);
+		assertEquals(400, chatNewOverride.getStatusCode().value());
+		assertEquals("provider_not_enabled",
+				new ObjectMapper().valueToTree(chatNewOverride.getBody()).path("problemCode").asText());
+
+		bundledOverride.put("question", "Any allergies?");
+		MockHttpServletResponse chatStreamOverride = new MockHttpServletResponse();
+		controller.chatStream(bundledOverride, chatStreamOverride);
+		assertTrue(chatStreamOverride.getContentAsString().contains("event: turn_error"));
+		assertTrue(chatStreamOverride.getContentAsString().contains("provider_not_enabled"),
+				chatStreamOverride.getContentAsString());
+	}
+
+	@Test
+	public void omittedHubProfileResolvesDefaultAndFailsExplicitlyWhenUnavailable() throws Exception {
+		ChartSearchAiRestController controller = requestController();
+		Patient patient = Context.getPatientService().getPatient(2);
+		Context.getAdministrationService().setGlobalProperty("chartsearchai.hub.presets", "");
+		modelsStatus = 200;
+		modelsBody = "{\"object\":\"list\","
+				+ "\"data\":[{\"id\":\"gemma-4-12b\",\"available\":true},{\"id\":\"qwen3.5-9b\",\"available\":true}],"
+				+ "\"execution_modes\":{\"quick\":{},\"standard\":{},\"verified\":{}}}";
+		peerStatus = 200;
+		peerBody = "event: done\ndata: {\"answer\":\"Resolved default answer.\",\"references\":[]}\n\n";
+
+		Map<String, String> noProfileBody = new HashMap<>();
+		noProfileBody.put("patient", patient.getUuid());
+		noProfileBody.put("question", "What conditions?");
+		MockHttpServletResponse response = new MockHttpServletResponse();
+		controller.chatStream(noProfileBody, response);
+
+		assertEquals(1, peerRequests.get(), response.getContentAsString());
+		assertEquals("gemma-4-12b", receivedRequest.path("model").asText());
+		assertEquals("gemma-4-12b", receivedRequest.path("execution").path("preset_id").asText());
+		assertTrue(response.getContentAsString().contains("Resolved default answer."));
+
+		peerRequests.set(0);
+		Context.getAdministrationService().setGlobalProperty("chartsearchai.hub.presets", "["
+				+ "{\"id\":\"quick\",\"label\":\"Quick answer\",\"default\":false,\"model\":\"gemma-4-4b\","
+				+ "\"execution\":{\"mode\":\"quick\",\"preset_id\":\"quick\"}},"
+				+ "{\"id\":\"standard\",\"label\":\"Standard answer\",\"default\":true,\"model\":\"gemma-4-12b\","
+				+ "\"execution\":{\"mode\":\"standard\",\"preset_id\":\"standard\"}}"
+				+ "]");
+		modelsBody = "{\"object\":\"list\","
+				+ "\"data\":[{\"id\":\"gemma-4-4b\",\"available\":true}],"
+				+ "\"execution_modes\":{\"quick\":{},\"standard\":{}}}";
+		MockHttpServletResponse fallbackProfileResponse = new MockHttpServletResponse();
+		try {
+			controller.chatStream(noProfileBody, fallbackProfileResponse);
+			assertEquals(1, peerRequests.get(), fallbackProfileResponse.getContentAsString());
+			assertEquals("gemma-4-4b", receivedRequest.path("model").asText());
+			assertEquals("quick", receivedRequest.path("execution").path("preset_id").asText());
+
+			peerRequests.set(0);
+			modelsBody = "{\"object\":\"list\",\"data\":[]}";
+			MockHttpServletResponse emptyModelsResponse = new MockHttpServletResponse();
+			controller.chatStream(noProfileBody, emptyModelsResponse);
+
+			assertEquals(0, peerRequests.get(), "unavailable Hub models must fail before calling completions");
+			assertTrue(emptyModelsResponse.getContentAsString().contains("event: turn_error"));
+			assertTrue(emptyModelsResponse.getContentAsString().contains("profiles_unavailable"),
+					emptyModelsResponse.getContentAsString());
+		}
+		finally {
+			Context.getAdministrationService().setGlobalProperty("chartsearchai.hub.presets", "");
+		}
+	}
+
+	@Test
+	public void ephemeralChatTurnStreamsWithoutSessionOrHistoryWhileAuditing() throws Exception {
+		ChartSearchAiRestController controller = requestController();
+		Patient patient = Context.getPatientService().getPatient(2);
+		peerStatus = 200;
+		peerBody = "event: done\ndata: {\"answer\":\"Prior chat answer.\",\"references\":[]}\n\n";
+
+		Map<String, String> initialTurn = requestBody(patient);
+		initialTurn.put("question", "Earlier chat question?");
+		MockHttpServletResponse initialResponse = new MockHttpServletResponse();
+		controller.chatStream(initialTurn, initialResponse);
+		assertEquals(1, peerRequests.get());
+		ClinicalConversation existing = conversations.getLatestActiveConversation(patient);
+		assertNotNull(existing);
+		assertEquals(1, conversations.getTurns(existing).size());
+
+		peerRequests.set(0);
+		receivedRequest = null;
+		peerBody = "event: done\ndata: {\"answer\":\"Ephemeral hub answer.\",\"references\":[],\"inputTokens\":42,\"outputTokens\":12}\n\n";
+		Map<String, Object> ephemeralJson = new ObjectMapper().readValue(
+				"{\"patient\":\"" + patient.getUuid()
+						+ "\",\"question\":\"Transient omnibar question?\",\"ephemeral\":true}",
+				new TypeReference<Map<String, Object>>() {});
+		MockHttpServletResponse ephemeralResponse = new MockHttpServletResponse();
+		ChartSearchAiRestController.class
+				.getMethod("chatStream", Map.class, javax.servlet.http.HttpServletResponse.class)
+				.invoke(controller, ephemeralJson, ephemeralResponse);
+
+		assertEquals(1, peerRequests.get(), ephemeralResponse.getContentAsString());
+		assertEquals("gemma-4-12b", receivedRequest.path("model").asText());
+		assertEquals("gemma-4-12b", receivedRequest.path("execution").path("preset_id").asText());
+		assertEquals(1, receivedRequest.path("messages").size(), "ephemeral turn must send no prior turns");
+		assertTrue(receivedRequest.path("context").path("session").isNull());
+
+		ByteArrayOutputStream sseBytes = new ByteArrayOutputStream();
+		sseBytes.write(ephemeralResponse.getContentAsByteArray());
+		JsonNode started = eventPayload(sseBytes, "turn_started");
+		assertNotNull(started);
+		assertTrue(started.has("session") && started.get("session").isNull(), started.toString());
+		assertFalse(started.path("messageId").asText().isEmpty(), started.toString());
+
+		List<JsonNode> terminals = terminalPayloads(sseBytes);
+		assertEquals(1, terminals.size());
+		JsonNode done = terminals.get(0);
+		assertTrue(done.has("session") && done.get("session").isNull(), done.toString());
+		assertEquals(started.path("messageId").asText(), done.path("messageId").asText());
+		assertTrue(done.path("auditLogId").isIntegralNumber(), done.toString());
+		int auditId = done.path("auditLogId").asInt();
+
+		Context.flushSession();
+		Context.clearSession();
+		ClinicalConversation after = conversations.getLatestActiveConversation(patient);
+		assertEquals(existing.getUuid(), after.getUuid());
+		assertEquals(1, conversations.getTurns(after).size(), "ephemeral turn must not append conversation turns");
+
+		ChartSearchAuditLog audit = auditLogs.getAuditLog(auditId);
+		assertNotNull(audit);
+		assertNull(audit.getConversationUuid());
+		assertNotNull(audit.getRequestId());
+		assertEquals("hub", audit.getProviderId());
+		assertEquals("query_scoped", audit.getProviderMode());
+		assertEquals("Transient omnibar question?", audit.getQuestion());
+		assertEquals("Ephemeral hub answer.", audit.getAnswer());
+		assertEquals(Integer.valueOf(42), audit.getInputTokens());
+		assertEquals(Integer.valueOf(12), audit.getOutputTokens());
+	}
+
+	@Test
+	public void ephemeralBundledTurnAuditsWithoutCreatingConversationHistory(@TempDir Path indexRoot) throws Exception {
+		Patient patient = Context.getPatientService().getPatient(2);
+		String databaseMode = JdbcSupport.inTransaction(dbSessionFactory, conn -> {
+			try (java.sql.Statement statement = conn.createStatement()) {
+				String mode;
+				try (java.sql.ResultSet result = statement.executeQuery(
+						"SELECT VALUE FROM INFORMATION_SCHEMA.SETTINGS WHERE NAME='MODE'")) {
+					result.next();
+					mode = result.getString(1);
+				}
+				statement.execute("SET MODE MySQL");
+				statement.execute("CREATE TABLE IF NOT EXISTS querystore_bootstrap_progress ("
+						+ "resource_type VARCHAR(100) PRIMARY KEY, status VARCHAR(30), cursor_date_changed TIMESTAMP,"
+						+ "cursor_uuid VARCHAR(100), documents_indexed BIGINT, started_at TIMESTAMP, completed_at TIMESTAMP,"
+						+ "failure_message VARCHAR(4096), backend VARCHAR(30))");
+				return mode;
+			}
+		});
+		BackendStore previousBackend = (BackendStore) ReflectionTestUtils.getField(queryStore, "backend");
+		EmbeddingProvider previousEmbedding = (EmbeddingProvider) ReflectionTestUtils.getField(queryStore, "embeddingProvider");
+		EmbeddingProvider previousBootstrapEmbedding = (EmbeddingProvider) ReflectionTestUtils.getField(bootstrap, "embeddingProvider");
+		BackendStoreSelector previousSelector = (BackendStoreSelector) ReflectionTestUtils.getField(bootstrap, "backendSelector");
+		LuceneBackendStore backend = new LuceneBackendStore(indexRoot);
+
+		Map<String, String> previousGps = new LinkedHashMap<>();
+		String[] gpKeys = {
+				ChartSearchAiConstants.GP_PROVIDERS_ENABLED,
+				ChartSearchAiConstants.GP_LLM_ENGINE,
+				ChartSearchAiConstants.GP_LLM_REMOTE_ENDPOINT_URL,
+				ChartSearchAiConstants.GP_LLM_REMOTE_MODEL_NAME,
+				ChartSearchAiConstants.GP_CHART_MODE,
+				ChartSearchAiConstants.GP_EMBEDDING_PRE_FILTER,
+				ChartSearchAiConstants.GP_GROUNDING_ENABLED,
+				ChartSearchAiConstants.GP_PROGRESSIVE_REASONING_ENABLED,
+				QueryStoreConstants.GP_BACKEND
+		};
+		for (String key : gpKeys) {
+			previousGps.put(key, Context.getAdministrationService().getGlobalProperty(key));
+		}
+
+		try {
+			queryStore.setBackend(backend);
+			queryStore.setEmbeddingProvider(null);
+			bootstrap.setEmbeddingProvider(new EmbeddingProvider() {
+				@Override public int getDimensions() { return 8; }
+				@Override public float[] embed(String text) { return new float[8]; }
+			});
+			bootstrap.setBackendSelector(new BackendStoreSelector(Collections.singletonMap("lucene", backend)));
+			Context.getAdministrationService().setGlobalProperty(QueryStoreConstants.GP_BACKEND, "lucene");
+			for (String type : bootstrap.getResourceTypeNames()) {
+				bootstrap.resyncType(type);
+				assertEquals(BootstrapStatus.COMPLETED, bootstrap.getStatus(type).getStatus(), type);
+			}
+
+			peerRequests.set(0);
+			receivedRequest = null;
+			ObjectMapper mapper = new ObjectMapper();
+			String contentJson = "{\"reasoning\":\"Checked chart records.\",\"answer\":\"Ephemeral bundled answer.\",\"citations\":[]}";
+			String ssePayload = "data: {\"choices\":[{\"delta\":{\"content\":"
+					+ mapper.writeValueAsString(contentJson) + "}}]}\n\n"
+					+ "data: {\"choices\":[{\"delta\":{}}],\"usage\":{\"prompt_tokens\":31,\"completion_tokens\":9}}\n\n"
+					+ "data: [DONE]\n\n";
+			peer = HttpServer.create(new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0), 0);
+			peer.createContext("/v1/chat/completions", exchange -> {
+				if ("GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+					byte[] ok = "{}".getBytes(StandardCharsets.UTF_8);
+					exchange.getResponseHeaders().set("Content-Type", "application/json");
+					exchange.sendResponseHeaders(200, ok.length);
+					try {
+						exchange.getResponseBody().write(ok);
+					} finally {
+						exchange.close();
+					}
+					return;
+				}
+				peerRequests.incrementAndGet();
+				receivedRequest = mapper.readTree(exchange.getRequestBody());
+				byte[] bytes = ssePayload.getBytes(StandardCharsets.UTF_8);
+				exchange.getResponseHeaders().set("Content-Type", "text/event-stream");
+				exchange.sendResponseHeaders(200, bytes.length);
+				try {
+					exchange.getResponseBody().write(bytes);
+				} finally {
+					exchange.close();
+				}
+			});
+			peer.start();
+
+			String endpointUrl = "http://" + peer.getAddress().getAddress().getHostAddress()
+					+ ":" + peer.getAddress().getPort() + "/v1/chat/completions";
+			Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_PROVIDERS_ENABLED, "bundled");
+			Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_LLM_ENGINE,
+					ChartSearchAiConstants.LLM_ENGINE_REMOTE);
+			Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_LLM_REMOTE_ENDPOINT_URL,
+					endpointUrl);
+			Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_LLM_REMOTE_MODEL_NAME,
+					"bundled-test-model");
+			Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_CHART_MODE,
+					ChartSearchAiConstants.CHART_MODE_FULL_CHART);
+			Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_EMBEDDING_PRE_FILTER, "false");
+			Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_GROUNDING_ENABLED, "false");
+			Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_PROGRESSIVE_REASONING_ENABLED,
+					"false");
+
+			ClinicalConversation existing = conversations.startNew(patient, "bundled", ProviderMode.FULL_CHART_STABLE);
+			ChartSearchAiRestController controller = new ChartSearchAiRestController();
+			controller.setConversationService(conversations);
+			controller.setAuditLogService(auditLogs);
+			controller.setPatientAccessCheck(new DefaultPatientAccessCheck());
+			controller.setProviderRegistry(providerRegistry);
+
+			Map<String, String> body = new HashMap<>();
+			body.put("patient", patient.getUuid());
+			body.put("question", "What labs exist?");
+			body.put("ephemeral", "true");
+			MockHttpServletResponse response = new MockHttpServletResponse();
+			controller.chatStream(body, response);
+
+			assertEquals(200, response.getStatus(), response.getContentAsString());
+			assertEquals(1, peerRequests.get(), response.getContentAsString());
+			assertEquals(2, receivedRequest.path("messages").size(),
+					"ephemeral bundled turn must send system + user messages with no prior conversation turns");
+
+			ByteArrayOutputStream sseBytes = new ByteArrayOutputStream();
+			sseBytes.write(response.getContentAsByteArray());
+			JsonNode started = eventPayload(sseBytes, "turn_started");
+			assertNotNull(started, response.getContentAsString());
+			assertTrue(started.has("session") && started.get("session").isNull(), started.toString());
+			assertFalse(started.path("messageId").asText().isEmpty(), started.toString());
+
+			List<JsonNode> terminals = terminalPayloads(sseBytes);
+			assertEquals(1, terminals.size(), response.getContentAsString());
+			JsonNode done = terminals.get(0);
+			assertEquals("Ephemeral bundled answer.", done.path("answer").asText(), done.toString());
+			assertTrue(done.has("session") && done.get("session").isNull(), done.toString());
+			assertEquals(started.path("messageId").asText(), done.path("messageId").asText());
+			assertTrue(done.path("auditLogId").isIntegralNumber(), done.toString());
+			int auditId = done.path("auditLogId").asInt();
+
+			Context.flushSession();
+			Context.clearSession();
+			ClinicalConversation after = conversations.getLatestActiveConversation(patient);
+			assertNotNull(after);
+			assertEquals(existing.getUuid(), after.getUuid());
+			assertTrue(conversations.getTurns(after).isEmpty(),
+					"ephemeral bundled turn must not append turns to existing conversation");
+
+			ChartSearchAuditLog audit = auditLogs.getAuditLog(auditId);
+			assertNotNull(audit);
+			assertNull(audit.getConversationUuid());
+			assertNotNull(audit.getRequestId());
+			assertEquals("bundled", audit.getProviderId());
+			assertEquals(ProviderMode.FULL_CHART_STABLE.getWireName(), audit.getProviderMode());
+			assertEquals(ChartSearchAiConstants.SEARCH_MODE_FULL_CHART, audit.getSearchMode());
+			assertEquals("Ephemeral bundled answer.", audit.getAnswer());
+			assertEquals(Integer.valueOf(31), audit.getInputTokens());
+			assertEquals(Integer.valueOf(9), audit.getOutputTokens());
+		} finally {
+			if (peer != null) {
+				peer.stop(0);
+				peer = null;
+			}
+			for (Map.Entry<String, String> entry : previousGps.entrySet()) {
+				Context.getAdministrationService().setGlobalProperty(
+						entry.getKey(), entry.getValue() != null ? entry.getValue() : "");
+			}
+			queryStore.setBackend(previousBackend);
+			queryStore.setEmbeddingProvider(previousEmbedding);
+			bootstrap.setEmbeddingProvider(previousBootstrapEmbedding);
+			bootstrap.setBackendSelector(previousSelector);
+			backend.close();
+			if (databaseMode != null) {
+				JdbcSupport.inTransaction(dbSessionFactory, conn -> {
+					try (java.sql.Statement statement = conn.createStatement()) {
+						statement.execute("SET MODE " + databaseMode);
+					}
+					return null;
+				});
+			}
+		}
+	}
+
+	private static JsonNode eventPayload(ByteArrayOutputStream output, String eventType) throws Exception {
+		String target = "event: " + eventType + "\n";
+		for (String frame : output.toString(StandardCharsets.UTF_8.name()).split("\n\n")) {
+			if (frame.startsWith(target)) {
+				return new ObjectMapper().readTree(frame.substring(frame.indexOf("data: ") + 6).trim());
+			}
+		}
+		return null;
 	}
 
 	private static List<JsonNode> terminalPayloads(ByteArrayOutputStream output) throws Exception {

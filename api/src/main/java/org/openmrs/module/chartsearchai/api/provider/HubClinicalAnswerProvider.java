@@ -47,6 +47,8 @@ public class HubClinicalAnswerProvider implements ClinicalAnswerProvider {
 
 	public static final String PROBLEM_PROFILE_REQUIRED = "profile_required";
 
+	public static final String PROBLEM_MODEL_NOT_FOUND = "model_not_found";
+
 	public static final String PROBLEM_HUB_NOT_CONFIGURED = "hub_not_configured";
 
 	public static final String PROBLEM_HUB_STREAM_INCOMPLETE = "hub_stream_incomplete";
@@ -107,7 +109,8 @@ public class HubClinicalAnswerProvider implements ClinicalAnswerProvider {
 				: ChartSearchAiConstants.GP_HUB_ENDPOINT_URL + " must end with /v1/chat/completions";
 		boolean ready = unavailableReason == null;
 		Set<ProviderCapability> capabilities = EnumSet.of(ProviderCapability.ANSWER,
-				ProviderCapability.ANSWER_CHECK, ProviderCapability.ANSWER_REVIEW, ProviderCapability.INDEPTH,
+				ProviderCapability.TOKEN_STREAMING, ProviderCapability.ANSWER_CHECK,
+				ProviderCapability.ANSWER_REVIEW, ProviderCapability.INDEPTH,
 				ProviderCapability.GROUNDING, ProviderCapability.DRUG_SAFETY,
 				ProviderCapability.STRUCTURED_BLOCKS, ProviderCapability.MULTI_TURN_CONTEXT);
 		return new ProviderDescriptor(PROVIDER_ID, "Med-Agent Hub", true, ready, false,
@@ -134,15 +137,28 @@ public class HubClinicalAnswerProvider implements ClinicalAnswerProvider {
 		if (profileId == null || profileId.trim().isEmpty()) {
 			return failed(events, sequence, request.getMode(), PROBLEM_PROFILE_REQUIRED);
 		}
+		HubPresetCatalog catalog;
+		try {
+			catalog = HubPresetCatalog.load(gp(ChartSearchAiConstants.GP_HUB_PRESETS, ""));
+		}
+		catch (IllegalArgumentException e) {
+			log.warn("Invalid {} configuration: {}", ChartSearchAiConstants.GP_HUB_PRESETS, e.getMessage());
+			return failed(events, sequence, request.getMode(), PROBLEM_HUB_NOT_CONFIGURED);
+		}
+		HubPreset preset = catalog.findById(profileId.trim());
+		if (preset == null) {
+			return failed(events, sequence, request.getMode(), PROBLEM_MODEL_NOT_FOUND);
+		}
 		// The Hub reads the chart as its own QueryStore account, so it cannot leave out what this
 		// caller may not read; until it can be told what to omit, such a caller cannot use it.
 		if (queryStoreWithholdsFromCaller()) {
 			return failed(events, sequence, request.getMode(), PROBLEM_PROVIDER_NOT_PERMITTED);
 		}
 
-		HubCallRequest call = new HubCallRequest(endpoint, profileId.trim(),
+		HubCallRequest call = new HubCallRequest(endpoint, preset.getModel(),
 				request.getPatient().getUuid(), request.getConversationId(), request.getRequestId(),
-				request.getQuestion(), request.getPriorClinicalTurns(), request.getAccountContext());
+				request.getQuestion(), request.getPriorClinicalTurns(), request.getAccountContext(),
+				effectiveExecution(preset.getExecution(), request.getInDepth()));
 
 		AtomicReference<AnswerEnvelope> latestAnswer = new AtomicReference<>();
 		AtomicReference<String> streamError = new AtomicReference<>();
@@ -316,6 +332,17 @@ public class HubClinicalAnswerProvider implements ClinicalAnswerProvider {
 			doneSeen[0] = true;
 			return;
 		}
+		if ("answer_delta".equals(event)) {
+			if (!emitted.contains(TurnEventType.ANSWER_DONE) && wire.getPayload() != null) {
+				Object delta = wire.getPayload().get("delta");
+				if (delta instanceof String && !((String) delta).isEmpty()) {
+					events.accept(TurnEvent.delta(TurnEventType.ANSWER_DELTA,
+							sequence.getAndIncrement(), PROVIDER_ID, (String) delta));
+					emitted.add(TurnEventType.ANSWER_DELTA);
+				}
+			}
+			return;
+		}
 		TurnEventType type = mapEvent(event);
 		if (type == null) {
 			return;
@@ -435,6 +462,30 @@ public class HubClinicalAnswerProvider implements ClinicalAnswerProvider {
 		}
 		endpoint = endpoint.trim();
 		return endpoint.isEmpty() ? null : endpoint;
+	}
+
+	static Map<String, Object> effectiveExecution(Map<String, Object> presetExecution,
+			Boolean inDepthOverride) {
+		if (inDepthOverride == null) {
+			return presetExecution;
+		}
+		Map<String, Object> out = presetExecution == null
+				? new LinkedHashMap<>()
+				: new LinkedHashMap<>(presetExecution);
+		String rawMode = out.get("mode") instanceof String
+				? ((String) out.get("mode")).trim().toLowerCase()
+				: "";
+		if (Boolean.TRUE.equals(inDepthOverride)) {
+			if (rawMode.isEmpty() || "quick".equals(rawMode)) {
+				out.put("mode", "standard");
+			} else if ("fast_checked".equals(rawMode)) {
+				out.put("mode", "verified");
+			}
+			out.put("indepth", Boolean.TRUE);
+		} else {
+			out.put("indepth", Boolean.FALSE);
+		}
+		return out;
 	}
 
 	@SuppressWarnings("unchecked")

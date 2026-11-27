@@ -32836,3 +32836,39 @@ As Decision 735, with *"What about giving her simvastatin with her HIV meds?"* a
 Pinned by `ClinicianWordingsTest.whatAboutADrugAndHerGroupIsWhatAboutGivingItWithThem`, the TB-drug pair of
 `ClinicianWordingsTest.canADrugGoWithHerMedicationsIsWhetherSheCanTakeItWithThem`, and, for a patient on a TB drug,
 `DrugBesideHerMedicationGroupTest.aDrugGoingWithHerGroupIsAnsweredOverTheGroup`.
+
+## Decision 738: Which of hers clash with a drug is which of them interact with it
+
+**Status: Accepted** (November 2026).
+*"Which of her drugs clash with ketoconazole?"*, *"Which of his meds could conflict with rifampicin?"* and *"Which of her ARVs
+clash with rifampicin?"* are
+[Decision 672](#decision-672-which-of-her-medications-could-interact-with-a-drug-is-which-of-them-interact-with-it)'s and
+[Decision 432](#decision-432-when-she-started-a-drug-is-her-record-a-fragment-a-plan-a-pair-at-once-and-a-group-of-hers-are-the-questions-they-spell)'s
+*"Which of her drugs interact with ketoconazole?"* and *"Which of her ARVs interact with rifampicin?"*.
+
+### Context
+
+In the demo's seventieth batch, *"which of her drugs clash with ketoconazole?"* went to the model for all 18 patients. 6
+answers, all to patients on lamivudine, nevirapine and stavudine, said all three clash with ketoconazole. Only nevirapine has
+an interaction finding with it there. One, to a patient on rifampicin, efavirenz, lopinavir/ritonavir and more, named rifampicin
+twice, as its combination order and as rifampin. The other seven questions of the batch were the module's for all 18
+patients.
+
+### The decision
+
+Decision 672's *"which of her medications (could) interact with"* and Decision 432's *"which of her ARVs interact with"* also
+take *"clash"* and *"conflict"*, and Decision 432's also takes the modal Decision 672's does.
+
+### Measured
+
+On the replica, over the first 10 patients of the seventieth batch's sample, one of them on rifampicin and isoniazid and no
+antiretroviral, and a patient on no antiretroviral, with *"Which of her drugs interact with ketoconazole?"* and *"Which of her ARVs interact with rifampicin?"* as
+the controls.
+
+- Before: none of 11 went to the module for either wording (none of 18 on the live demo for the first), while both controls
+  went to the module for all 11.
+- After: all 11 went to the module for both wordings and are their control's answer word for word with record numbers
+  stripped, with no errors. Both controls are word for word their answers before on all 11. A patient on lamivudine,
+  nevirapine and stavudine is told of nevirapine's finding alone.
+
+Pinned by `ClinicianWordingsTest.whichOfHerDrugsClashWithADrugIsWhichInteractWithIt`.

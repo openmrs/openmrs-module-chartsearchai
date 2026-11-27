@@ -1237,7 +1237,10 @@ public final class QueryScopeRouter {
 					+ STARTS_A_DRUG,
 			"(?:which|what) (?:of )?" + POSSESSIVE + " (?:other |current |active )?(?:medications|meds|medicines|drugs|"
 					// and "Which of her medications could interact with efavirenz?" (ADR Decision 672)
-					+ "prescriptions) (?:(?:could|might|may|would|will|can) )?(?:interact|interacts|interfere|interferes) with " + D,
+					// and "Which of her drugs clash with ketoconazole?" — the model told a patient on lamivudine, nevirapine and
+					// stavudine that all three clash with it (ADR Decision 738)
+					+ "prescriptions) (?:(?:could|might|may|would|will|can) )?(?:interact|interacts|interfere|interferes|clash|"
+					+ "clashes|conflict|conflicts) with " + D,
 			"which of " + POSSESSIVE + " (?:medications|meds|medicines|drugs) (?:is|are) the problems? with " + D,
 			// "Which of her drugs should not be combined with clarithromycin?" — the model told one patient "Efavirenz should
 			// not be combined with clarithromycin due to a Moderate interaction" (ADR Decision 671)
@@ -1507,7 +1510,9 @@ public final class QueryScopeRouter {
 
 	/** "Which of her ARVs interact with rifampicin?" — which of a group of hers interact with one drug (ADR Decision 432). */
 	private static final List<Pattern> WHICH_OF_A_GROUP_INTERACT_SHAPES = shapes("(?:which|what) of " + HER_MEDICATION_GROUP
-			+ " (?:interact|interacts|interfere|interferes) with " + D,
+			// and "Which of her ARVs clash with rifampicin?" (ADR Decision 738)
+			+ " (?:(?:could|might|may|would|will|can) )?(?:interact|interacts|interfere|interferes|clash|clashes|conflict|"
+			+ "conflicts) with " + D,
 			// "Which of her ARVs is affected by rifampicin?" — the model told one patient "Efavirenz can be given" (ADR Decision
 			// 674)
 			"(?:which|what) of " + HER_MEDICATION_GROUP + " (?:is|are|(?:would|will|could|might|may) be) (?:affected|impacted) by "

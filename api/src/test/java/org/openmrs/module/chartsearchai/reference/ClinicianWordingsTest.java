@@ -3466,4 +3466,22 @@ public class ClinicianWordingsTest extends BaseModuleContextSensitiveTest {
 			assertEquals(canonical, ask(pair[0]), pair[0]);
 		}
 	}
+
+	/**
+	 * "Which of her drugs clash with ketoconazole?" is "Which of her drugs interact with ketoconazole?" — the model told a
+	 * demo patient on lamivudine, nevirapine and stavudine that all three clash with it (ADR Decision 738).
+	 */
+	@Test
+	public void whichOfHerDrugsClashWithADrugIsWhichInteractWithIt() {
+		String[][] pairs = { { "which of her drugs clash with ketoconazole?", "Which of her drugs interact with ketoconazole?" },
+			{ "Which of his meds could conflict with rifampicin?", "Which of his meds could interact with rifampicin?" },
+			{ "Which of her ARVs clash with rifampicin?", "Which of her ARVs interact with rifampicin?" },
+			// a group she is on none of: this patient takes no TB drug
+			{ "Which of her TB drugs clash with fluconazole?", "Which of her TB drugs interact with fluconazole?" } };
+		for (String[] pair : pairs) {
+			String canonical = ask(pair[1]);
+			assertNotNull(canonical, "precondition: the module answers " + pair[1]);
+			assertEquals(canonical, ask(pair[0]), pair[0]);
+		}
+	}
 }
